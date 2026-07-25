@@ -1,0 +1,78 @@
+"use client";
+
+import { useLocale } from "@/lib/i18n/locale-context";
+
+const id = {
+  pageTitle: "Pesanan",
+  orderCount: (n: number) => `${n} pesanan`,
+  tabAll: "Semua",
+  tabPending: "Menunggu",
+  tabConfirmed: "Terkonfirmasi",
+  tabCancelled: "Dibatalkan",
+  orderConfirmed: "Pesanan dikonfirmasi",
+  orderCancelled: "Pesanan dibatalkan",
+  confirmNotifDescription: "Notifikasi akses terbuka dikirim ke email dan WhatsApp siswa.",
+  colCode: "Kode",
+  colStudent: "Siswa",
+  colProduct: "Produk",
+  colTotal: "Total",
+  colMethod: "Metode",
+  colDate: "Tanggal",
+  colStatus: "Status",
+  paymentGatewayShort: "Gateway",
+  paymentWalletShort: "Saldo",
+  paymentManualShort: "Manual",
+  paymentGatewayLong: "Payment Gateway",
+  paymentWalletLong: "Saldo (Wallet)",
+  paymentManualLong: "Transfer Manual",
+  emptyTitle: "Tidak ada pesanan",
+  cancel: "Batalkan",
+  confirmPayment: "Konfirmasi Pembayaran",
+  close: "Tutup",
+  detailStudent: "Siswa",
+  detailTotal: "Total",
+  detailMethod: "Metode",
+  detailStatus: "Status",
+  proofUploadedBy: "Diunggah oleh siswa saat checkout",
+  proofNotUploaded: "Belum ada bukti transfer diunggah.",
+};
+
+const en: typeof id = {
+  pageTitle: "Orders",
+  orderCount: (n: number) => `${n} orders`,
+  tabAll: "All",
+  tabPending: "Pending",
+  tabConfirmed: "Confirmed",
+  tabCancelled: "Cancelled",
+  orderConfirmed: "Order confirmed",
+  orderCancelled: "Order cancelled",
+  confirmNotifDescription: "Access notification sent to the student's email and WhatsApp.",
+  colCode: "Code",
+  colStudent: "Student",
+  colProduct: "Product",
+  colTotal: "Total",
+  colMethod: "Method",
+  colDate: "Date",
+  colStatus: "Status",
+  paymentGatewayShort: "Gateway",
+  paymentWalletShort: "Wallet",
+  paymentManualShort: "Manual",
+  paymentGatewayLong: "Payment Gateway",
+  paymentWalletLong: "Wallet Balance",
+  paymentManualLong: "Manual Transfer",
+  emptyTitle: "No orders",
+  cancel: "Cancel",
+  confirmPayment: "Confirm Payment",
+  close: "Close",
+  detailStudent: "Student",
+  detailTotal: "Total",
+  detailMethod: "Method",
+  detailStatus: "Status",
+  proofUploadedBy: "Uploaded by the student at checkout",
+  proofNotUploaded: "No transfer proof uploaded yet.",
+};
+
+export function useOrdersT() {
+  const { locale } = useLocale();
+  return locale === "en" ? en : id;
+}

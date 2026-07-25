@@ -1,0 +1,17 @@
+{
+  "name": "bimbel-tryout-export",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "setup": "npx playwright install chromium",
+    "export:docs": "node export-docs.mjs",
+    "export:mockup": "node export-mockup.mjs",
+    "export:rab-cloud": "node export-rab-cloud.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0"
+  },
+  "devDependencies": {
+    "marked": "^15.0.0"
+  }
+}

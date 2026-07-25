@@ -1,0 +1,14 @@
+.DS_Store
+.idea/
+
+# Local secrets — .env.example is the tracked template.
+.env
+.env.local
+api/.env
+
+# Go build output
+api/bin/
+api/tmp/
+
+# Vendored deps for the mockup export scripts
+requirement/export-mockup/node_modules/

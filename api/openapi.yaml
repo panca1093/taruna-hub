@@ -1,0 +1,175 @@
+openapi: 3.0.3
+info:
+  title: Taruna Eduka — Tryout Platform API
+  version: 0.1.0
+  description: |
+    Source of truth for the HTTP contract. The typed TypeScript client consumed by `web/`
+    is generated from this file, so a breaking change here surfaces as a compile error in
+    the frontend rather than a runtime surprise.
+
+    Scope today is slice S0 (walking skeleton). Later slices extend this file; they do not
+    fork it.
+
+servers:
+  - url: http://localhost:8081
+    description: Local development
+
+tags:
+  - name: system
+    description: Liveness and readiness probes
+  - name: identity
+    description: The signed-in user
+
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      summary: Liveness probe
+      description: Reports process health only. Does not touch the database by design.
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /readyz:
+    get:
+      tags: [system]
+      summary: Readiness probe
+      description: Reports whether this instance can serve traffic, including database reachability.
+      responses:
+        "200":
+          description: Ready to serve
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ready
+        "503":
+          description: A dependency is unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: unavailable
+                  reason:
+                    type: string
+                    example: database unreachable
+
+  /api/v1/me:
+    get:
+      tags: [identity]
+      summary: Current user
+      description: |
+        Returns the signed-in user.
+
+        **S0 only:** the caller is resolved from the `X-Demo-User` header (email or phone),
+        falling back to the seeded student. Slice S1 replaces this with a JWT bearer token
+        and removes the header entirely.
+      parameters:
+        - in: header
+          name: X-Demo-User
+          required: false
+          schema:
+            type: string
+          description: Dev-only identity override. Removed in S1.
+          example: naila@example.com
+      responses:
+        "200":
+          description: The current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  schemas:
+    User:
+      type: object
+      required: [id, name, email, phone, role, balance]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Naila Ramadhani
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+          description: Either email or phone is always present (FR-AUTH-01).
+        role:
+          type: string
+          enum: [student, operator, admin]
+        balance:
+          type: number
+          format: double
+          description: Wallet balance in IDR.
+          example: 150000
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable identifier. Switch on this, never on `message`.
+              enum:
+                - bad_request
+                - unauthorized
+                - forbidden
+                - not_found
+                - conflict
+                - validation_failed
+                - internal_error
+            message:
+              type: string
+              description: Human-readable, Indonesian, safe to show to end users.
+            fields:
+              type: object
+              additionalProperties:
+                type: string
+              description: Present on validation_failed — maps field name to reason.
+            request_id:
+              type: string
+              description: Correlates with the server log line for this request.
+
+  responses:
+    Unauthorized:
+      description: No valid identity on the request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"

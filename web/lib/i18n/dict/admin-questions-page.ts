@@ -1,0 +1,108 @@
+"use client";
+
+import { useLocale } from "@/lib/i18n/locale-context";
+
+const id = {
+  filterAllType: "Semua tipe",
+  filterAllDifficulty: "Semua kesulitan",
+  filterAllProgram: "Semua program",
+  questionType: {
+    pg: "Pilihan Ganda",
+    pg_multi: "PG Kompleks",
+    isian: "Isian Singkat",
+    benar_salah: "Benar/Salah",
+  },
+  difficulty: {
+    easy: "Mudah",
+    medium: "Sedang",
+    hard: "Sulit",
+  },
+  title: "Bank Soal",
+  description: (n: number) => `${n} soal tersimpan`,
+  bulkImport: "Import Massal",
+  addQuestion: "Tambah Soal",
+  emptyTitle: "Tidak ada soal yang cocok",
+  emptyDescription: "Coba ubah filter atau tambah soal baru.",
+  columns: {
+    id: "ID Soal",
+    content: "Soal",
+    program: "Program",
+    subject: "Mapel",
+    type: "Tipe",
+    difficulty: "Kesulitan",
+    weight: "Bobot",
+  },
+  editTitle: "Edit Soal",
+  createTitle: "Tambah Soal",
+  cancel: "Batal",
+  saveQuestion: "Simpan Soal",
+  importedToast: (count: number) => `${count} soal berhasil diimpor`,
+  previewTitle: "Preview Soal",
+  close: "Tutup",
+  editQuestion: "Edit Soal",
+  correctAnswer: "Jawaban benar",
+  optionWeighted: "bobot per opsi",
+  weightLabel: (n: number) => `bobot ${n}`,
+  explanation: "Pembahasan",
+  deleteTitle: "Hapus soal ini?",
+  deleteDescription: "Soal yang sudah dipakai di tryout aktif sebaiknya tidak dihapus.",
+  confirmDelete: "Ya, Hapus",
+  toastUpdated: "Soal diperbarui",
+  toastCreated: "Soal ditambahkan ke bank soal",
+  toastDeleted: "Soal dihapus",
+};
+
+const en: typeof id = {
+  filterAllType: "All types",
+  filterAllDifficulty: "All difficulty",
+  filterAllProgram: "All programs",
+  questionType: {
+    pg: "Multiple Choice",
+    pg_multi: "Complex MC",
+    isian: "Short Answer",
+    benar_salah: "True/False",
+  },
+  difficulty: {
+    easy: "Easy",
+    medium: "Medium",
+    hard: "Hard",
+  },
+  title: "Question Bank",
+  description: (n: number) => `${n} questions saved`,
+  bulkImport: "Bulk Import",
+  addQuestion: "Add Question",
+  emptyTitle: "No matching questions",
+  emptyDescription: "Try changing the filters or add a new question.",
+  columns: {
+    id: "Question ID",
+    content: "Question",
+    program: "Program",
+    subject: "Subject",
+    type: "Type",
+    difficulty: "Difficulty",
+    weight: "Weight",
+  },
+  editTitle: "Edit Question",
+  createTitle: "Add Question",
+  cancel: "Cancel",
+  saveQuestion: "Save Question",
+  importedToast: (count: number) => `${count} questions imported successfully`,
+  previewTitle: "Question Preview",
+  close: "Close",
+  editQuestion: "Edit Question",
+  correctAnswer: "Correct answer",
+  optionWeighted: "per-option weight",
+  weightLabel: (n: number) => `weight ${n}`,
+  explanation: "Explanation",
+  deleteTitle: "Delete this question?",
+  deleteDescription: "Questions already used in an active tryout should not be deleted.",
+  confirmDelete: "Yes, Delete",
+  toastUpdated: "Question updated",
+  toastCreated: "Question added to bank",
+  toastDeleted: "Question deleted",
+};
+
+export function useAdminQuestionsPageT() {
+  const { locale } = useLocale();
+  return locale === "en" ? en : id;
+}

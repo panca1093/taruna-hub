@@ -1,0 +1,164 @@
+@import "tailwindcss";
+@import "@heroui/react/styles";
+
+/* ---------------------------------------------------------------------- */
+/* Design tokens — Tryout Platform                                        */
+/* Cool-neutral Notion base + indigo->violet "countdown ring" accent.     */
+/* ---------------------------------------------------------------------- */
+
+@theme inline {
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-accent-2: var(--accent-2);
+  --color-ring-start: var(--ring-start);
+  --color-ring-end: var(--ring-end);
+}
+
+:root,
+.light,
+[data-theme="light"] {
+  --radius: 0.375rem;
+
+  /* Base */
+  --background: oklch(0.9812 0.0025 258);
+  --foreground: oklch(0.2242 0.019 267);
+
+  --surface: oklch(1 0 0);
+  --surface-foreground: var(--foreground);
+  --surface-secondary: oklch(0.965 0.0035 258);
+  --surface-secondary-foreground: var(--foreground);
+  --surface-tertiary: oklch(0.9425 0.0045 258);
+  --surface-tertiary-foreground: var(--foreground);
+
+  --overlay: oklch(1 0 0);
+  --overlay-foreground: var(--foreground);
+
+  --muted: oklch(0.535 0.017 264);
+
+  --default: oklch(0.945 0.004 258);
+  --default-foreground: var(--foreground);
+
+  /* Accent: indigo -> violet gradient pair */
+  --accent: oklch(0.549 0.2116 265.6);
+  --accent-2: oklch(0.596 0.196 293.7);
+  --accent-foreground: oklch(0.99 0 0);
+  --ring-start: oklch(0.549 0.2116 265.6);
+  --ring-end: oklch(0.596 0.196 293.7);
+
+  --field-background: oklch(1 0 0);
+  --field-foreground: var(--foreground);
+  --field-placeholder: var(--muted);
+  --field-border: var(--border);
+
+  --success: oklch(0.6534 0.1567 156.7);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.7723 0.1585 73.7);
+  --warning-foreground: oklch(0.2242 0.019 267);
+  --danger: oklch(0.6288 0.2116 20.6);
+  --danger-foreground: oklch(0.99 0 0);
+
+  --segment: oklch(1 0 0);
+  --segment-foreground: var(--foreground);
+
+  --border: oklch(0.9091 0.0055 258);
+  --separator: oklch(0.928 0.0045 258);
+  --focus: var(--accent);
+  --link: var(--accent);
+
+  --backdrop: oklch(0.2 0.01 267 / 45%);
+}
+
+.dark,
+[data-theme="dark"] {
+  --background: oklch(0.1791 0.0075 264);
+  --foreground: oklch(0.9481 0.0025 258);
+
+  --surface: oklch(0.2242 0.0075 264);
+  --surface-foreground: var(--foreground);
+  --surface-secondary: oklch(0.2603 0.0075 264);
+  --surface-tertiary: oklch(0.2965 0.0075 264);
+
+  --overlay: oklch(0.2413 0.0075 264);
+  --overlay-foreground: var(--foreground);
+
+  --muted: oklch(0.635 0.012 258);
+
+  --default: oklch(0.2965 0.0065 264);
+  --default-foreground: var(--foreground);
+
+  --accent: oklch(0.652 0.199 265.6);
+  --accent-2: oklch(0.688 0.183 293.7);
+  --accent-foreground: oklch(0.1 0 0);
+  --ring-start: oklch(0.652 0.199 265.6);
+  --ring-end: oklch(0.688 0.183 293.7);
+
+  --field-background: oklch(0.2603 0.0075 264);
+  --field-foreground: var(--foreground);
+  --field-border: var(--border);
+
+  --warning: oklch(0.8022 0.1451 76.6);
+  --warning-foreground: oklch(0.16 0.01 267);
+  --danger: oklch(0.671 0.1988 22.5);
+  --danger-foreground: oklch(0.1 0 0);
+
+  --segment: oklch(0.2965 0.0075 264);
+  --segment-foreground: var(--foreground);
+
+  --border: oklch(0.2965 0.0075 264);
+  --separator: oklch(0.2684 0.0075 264);
+  --focus: var(--accent);
+  --link: var(--accent);
+
+  --backdrop: oklch(0 0 0 / 65%);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Component tightening — pill defaults read consumer-app, not ops tool.  */
+/* Unlayered rules outrank HeroUI's layer(components) by cascade-layer    */
+/* precedence, so this is a safe, permanent override (not a specificity   */
+/* hack).                                                                 */
+/* ---------------------------------------------------------------------- */
+
+.button {
+  border-radius: var(--radius-lg);
+}
+.chip {
+  border-radius: var(--radius-md);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Signature: the countdown ring gradient + supporting utilities          */
+/* ---------------------------------------------------------------------- */
+
+@utility text-gradient {
+  background: linear-gradient(135deg, var(--ring-start), var(--ring-end));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+@utility bg-gradient-ring {
+  background: linear-gradient(135deg, var(--ring-start), var(--ring-end));
+}
+
+@utility bg-grid {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 30%, transparent);
+}
