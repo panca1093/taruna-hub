@@ -1,5 +1,6 @@
 .DS_Store
 .idea/
+.claude/
 
 # Local secrets — .env.example is the tracked template.
 .env
@@ -11,4 +12,10 @@ api/bin/
 api/tmp/
 
 # Vendored deps for the mockup export scripts
-requirement/export-mockup/node_modules/
+requirement/export-mockup/
+
+# requirement docs
+requirement/RAB.md
+requirement/rab-cloud.md
+requirement/rab-cloud.pdf
+
