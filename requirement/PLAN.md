@@ -1,555 +1,675 @@
-# Delivery Plan — Platform Tryout Online (Taruna Eduka)
+# Taruna Eduka Full-scope Delivery Plan
 
-**Versi:** 1.0 · **Tanggal:** 2026-07-23 · **Basis:** PRD v1.2, RAB v1.3
-**Target Go-Live:** 3 Agustus 2026
+**Version:** 2.0 · **Date:** 2026-10-09 · **Status:** draft for review
+**Basis:** [PRD v1.3](PRD.md), [architecture](ARCHITECTURE.md), [reconciliation/traceability](RECONCILIATION.md).
+**Supersedes:** plan v1.0 at Git `4f2246a`; its July schedule and August go-live assumptions are historical.
 
----
+**Goal:** Deliver all 161 numbered PRD requirements plus its unnumbered question, scoring and non-functional requirements through verifiable vertical slices.
 
-## 1. Cara Baca Dokumen Ini
+**Architecture:** One host-aware Next.js application and one Go application deployed as API/worker. PostgreSQL owns money, access, answers/results and River jobs; Redis is derived state; MinIO/GCS stores authorized assets.
 
-Task dipecah **vertikal per fungsi & alur pengguna**, bukan horizontal per layer teknologi.
-Artinya: tidak ada task "bikin semua tabel DB", "bikin semua endpoint", "bikin semua halaman".
-Satu slice = satu kemampuan yang bisa dipakai orang, lengkap dari migration → endpoint → layar → integrasi → bisa didemo.
+**Tech stack:** Existing Go 1.26.3 / Echo v4 / pgx v5 / raw SQL / golang-migrate; Next.js 16.2.9 / React 19 / HeroUI / Tailwind v4; PostgreSQL / Redis / River / MinIO-GCS / Midtrans. New integration versions are pinned during their owning slice after compatibility verification.
 
-Setiap slice punya struktur sama:
+**For implementers:** This is a delivery plan at slice level, not a claim that each future function/wire schema is already specified. Before coding a slice, review its architecture constraints, resolve its listed decision gates, define its OpenAPI/migration contract and write a focused test-first implementation checklist. Native execution is the default; delegation, commits, pushes, deployment and production mutation require their applicable user authorization. No application implementation occurs as part of this document task.
 
-| Bagian | Isi |
-|---|---|
-| **Outcome** | Satu kalimat: siapa bisa melakukan apa setelah slice ini selesai |
-| **DB** | Migration yang dibutuhkan slice ini saja |
-| **BE** | Endpoint + service Go untuk slice ini saja |
-| **FE** | Halaman/komponen yang disentuh — mayoritas sudah ada sebagai mockup, tinggal disambung |
-| **Integrasi** | Sambungan FE↔BE dan/atau pihak ketiga |
-| **AC** | Kriteria selesai yang bisa diverifikasi, bukan "sudah jalan" |
+## 1. Global constraints and completion rule
 
-**Aturan slice:** tidak ada slice yang dianggap selesai kalau hanya BE-nya jadi. Selesai = bisa didemo dari browser.
+- Full PRD v1.3 scope remains in the plan. Incremental staging demos do not remove later requirements from release acceptance.
+- Business rules belong in services; repositories require scope and perform persistence. Follow existing layering without creating packages for single-use helpers.
+- Shared schema; tenant scope from validated host; JWT tenant must match; master is visible read-only, not a null-tenant authorization escape.
+- Money/grants/critical jobs commit atomically; gateway side effects happen outside database locks; all retries preserve business identity.
+- Unified tests/access/session roots; separate typed answers/results. Snapshot content and scoring at assignment/admission as specified by the architecture.
+- Server deadlines, stable session randomization, exactly one result per completed session, distinct accepted/pending answers, no hidden grace policy.
+- All three payment methods, self-service top-ups, item-package expansion, PDF and XLSX/CSV remain required; post-MVP features remain excluded.
+- Current application baseline is `4f2246a`; P00 is partially implemented. Existing build/type/Go checks passed in the 2026-10-08 scan, lint had 16 errors/2 warnings, and browser/database integration was unverified. Those are dated observations, not fresh certification.
+- A slice is complete only after a real browser/API/database demo, meaningful unit/integration cases, tenant/role adversarial checks, and its required provider/file-output verification pass.
+- Every changed API is defined in `api/openapi.yaml`; regenerate client and enforce drift checks. Read installed Next.js documentation before frontend code changes.
+- Go commands use `GOROOT=/opt/homebrew/Cellar/go/1.26.3/libexec` on this workstation and a writable cache. Run Next build and browser checks sequentially to protect `.next` state.
 
----
+## 2. Review focus
 
-## 2. Titik Awal (per 2026-07-23)
+1. **Scope escape:** Host/token/guessed-ID/cache/job/asset mismatches must never disclose or mutate a foreign tenant; owned by every slice, especially P01/P04/P06.
+2. **Repeated or uncertain payment:** Concurrent review, duplicated webhook and create-timeout must never duplicate a debit/credit/grant; P12–P15.
+3. **Closed/offline/competing tabs:** Deadlines keep running, retries do not rewind answers or consume extra quota, and finalization happens once; P16/P18.
+4. **Content changes:** Master/package/product edits cannot rewrite bought access, assigned questions or historical results; P07–P10/P13/P16/P18.
+5. **Loss of derived/async state:** Redis loss and worker restart preserve authoritative ranking and queued critical work; P02/P17/P20/P21/P23.
 
-| Bagian | Status | Catatan |
+## 3. Slice map and dependencies
+
+Sizes are relative risk/work (M/L/XL), **not promised days or money**. A slice completion depends on its listed predecessors; independent work may overlap only with agreed interfaces. P15 precedes P14 in execution order.
+
+| Slice | Capability | Size | Prerequisites |
+|---|---|---|---|
+| [P00](#p00) | Foundation health and integration baseline | M | None |
+| [P01](#p01) | Tenant-safe bootstrap | M | P00 |
+| [P02](#p02) | Durable jobs and delivery transport | M | P00 |
+| [P03](#p03) | Real tenant accounts and sessions | L | P01, P02 |
+| [P04](#p04) | Tenant onboarding, branding and support context | L | P03 |
+| [P05](#p05) | Master and tenant curriculum | M | P04 |
+| [P06](#p06) | Authorized asset upload and download | M | P03, P04 |
+| [P07](#p07) | Question bank and imports | L | P05, P06 |
+| [P08](#p08) | Tryout builder with frozen assignments | M | P07 |
+| [P09](#p09) | Kecermatan item packages | L | P05, P06 |
+| [P10](#p10) | Kecermatan builder and deterministic generator | L | P09 |
+| [P11](#p11) | Catalog, products and tenant landing | M | P04, P08, P10 |
+| [P12](#p12) | Wallet ledger and staff adjustments | M | P03, P04 |
+| [P13](#p13) | Manual and wallet checkout with enrollment | L | P02, P06, P11, P12 |
+| [P14](#p14) | Gateway orders and top-ups | L | P13, P15 |
+| [P15](#p15) | Self-service manual top-up and review | M | P02, P06, P12 |
+| [P16](#p16) | Tryout runtime and immediate basic result | XL | P08, P13 |
+| [P17](#p17) | Tryout history, ranking and controlled review | L | P16 |
+| [P18](#p18) | Kecermatan attempts, quota and full results | XL | P10, P13 |
+| [P19](#p19) | Monitoring and violation timelines | M | P16, P17 |
+| [P20](#p20) | Asynchronous tryout PDF | M | P02, P06, P08 |
+| [P21](#p21) | Result dashboards and CSV/XLSX exports | M | P02, P06, P17, P18 |
+| [P22](#p22) | Student operations and platform financial recap | M | P04, P13, P14, P17, P18 |
+| [P23](#p23) | Full-scope certification and release | XL | P00, P01, P02, P03, P04, P05, P06, P07, P08, P09, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20, P21, P22 |
+
+Representative prerequisite chains:
+
+- Tryout: P00 → P01 → P03 → P04 → P05 → P07 → P08 → P11 → P13 → P16 → P17 → P23.
+- Kecermatan: P04 → P05/P06 → P09 → P10 → P11 → P13 → P18 → P23.
+- Gateway finance: P03 → P12 → P15; P11/P12 → P13; P13/P15 → P14 → P23.
+- Durable notifications: P00 → P02 → P03, without a reverse dependency on authentication.
+
+These are dependency chains, not a duration-based critical path. Staffing, detailed estimates and provider onboarding determine the calendar critical path.
+
+## 4. Vertical delivery slices
+
+For every slice, use this verification loop:
+
+- [ ] Resolve listed business/contract gates and record the reviewed decision.
+- [ ] Define only this slice's OpenAPI, migrations, DTOs and permission boundaries.
+- [ ] Write reproducing/behavioral cases for its acceptance scenarios; confirm failure before implementation.
+- [ ] Implement the minimum backend/frontend/integration change and remove that domain's production mock path.
+- [ ] Verify scenarios with real persistence/providers/artifacts as required; document commands, fixture, results and limitations.
+- [ ] Demonstrate from the browser and check predecessor/scope invariants; update slice status after evidence passes.
+
+<a id="p00"></a>
+
+### P00 — Foundation health and integration baseline
+
+**Status:** partial baseline; acceptance not complete · **Size:** M · **Depends:** None
+
+**Outcome:** A developer can start a fresh local stack and demonstrate a real scoped browser/API/PostgreSQL round trip.
+
+**DB / backend / integration:** Existing API config/probes/error handling, initial schema, Compose, web API client, CI. Preserve applied migration history; add migrations rather than rewriting shared history.
+
+**Files / frontend:** api/internal/config, handler, httpx; api/Makefile; docker-compose.yml; .github/workflows/ci.yml; web/lib/api; web/app/dev/api-check.
+
+**Interfaces:** Produces consistent errors/request IDs, liveness/readiness, migration workflow, generated contract check. No demo identity in staging/production; a local demo identity is explicitly isolated until P03.
+
+**Acceptance scenarios:**
+
+- [ ] Fresh database migrations and local fixtures succeed; browser renders a database user, not a mock.
+- [ ] Production-mode request cannot use X-Demo-User or fallback identity.
+- [ ] Returned 401/500 is logged as its actual status; required development headers pass preflight if demo mode remains.
+- [ ] Go build/vet/race tests, TypeScript/build and lint are enforced in CI; generated schema drift fails.
+
+**Decision / verification gate:** Direct browser/database verification; existing lint failures and no-running-container baseline are addressed here.
+
+<a id="p01"></a>
+
+### P01 — Tenant-safe bootstrap
+
+**Status:** planned · **Size:** M · **Depends:** P00
+
+**Outcome:** Two tenant hosts resolve independently and the initial platform/tenant identities can be provisioned without a public privilege-escalation path.
+
+**DB / backend / integration:** Add tenants and role/null-tenant constraints; replace global identifier uniqueness with tenant indexes and platform partial indexes. Scoped repository entry points and host validation.
+
+**Files / frontend:** api/migrations; api/internal/model/user.go; repository/user.go; service/user.go; handler/me.go; httpx; explicit development seed/bootstrap command.
+
+**Interfaces:** Produces validated tenant scope, master/platform scope and initial account provisioning. P03 supplies interactive authentication; no open public admin-bootstrap endpoint.
+
+**Acceptance scenarios:**
+
+- [ ] Tenant A and B can contain the same email/phone; duplicates inside A fail.
+- [ ] Unknown host, misleading suffix, reserved slug and spoofed forwarding header do not select a tenant.
+- [ ] Child/root repository probes cannot return tenant B resources under A scope.
+- [ ] Existing data is inventoried; any ownership migration uses an explicit mapping and preserves IDs.
+
+**Decision / verification gate:** Bootstrap credentials remain local/secret; production provisioning is an explicit operational action.
+
+<a id="p02"></a>
+
+### P02 — Durable jobs and delivery transport
+
+**Status:** planned · **Size:** M · **Depends:** P00
+
+**Outcome:** A committed business event survives a worker restart and reaches the configured email/WhatsApp provider.
+
+**DB / backend / integration:** River schema/migrations, worker entry point, thin transaction-aware dispatch, notification logs, provider adapters, protected secret handling. Delivery transport precedes user-event templates to remove the former auth/notification cycle.
+
+**Files / frontend:** api/cmd/worker; api/internal/infra; service notification/event handling; adapter notifier; api/migrations; Compose worker configuration.
+
+**Interfaces:** Produces durable enqueue in caller transaction, channel delivery outcomes, retries/discards and redacted logs. Consumes database only; entity-specific templates are added with owning slices.
+
+**Acceptance scenarios:**
+
+- [ ] Rollback business transaction leaves neither state nor job.
+- [ ] Kill worker after enqueue; restart sends the committed job; provider failure is visible and recoverable.
+- [ ] Duplicate event/channel identity is suppressed; ambiguous provider timeout is recorded without claiming exactly-once delivery.
+- [ ] Unconfigured WhatsApp is marked unavailable, never delivered; expired reset/OTP messages are not sent.
+
+**Decision / verification gate:** D16 provider/secret decisions; bounded retry policy must be specified and tested before slice sign-off.
+
+<a id="p03"></a>
+
+### P03 — Real tenant accounts and sessions
+
+**Status:** planned · **Size:** L · **Depends:** P01, P02
+
+**Outcome:** Students and staff authenticate in their own tenant and recover accounts through the approved channel.
+
+**DB / backend / integration:** JWT access/rotating refresh, server idle tracking, bcrypt, reset token single use, OTP if retained; tenant/role/resource guards. Define auth OpenAPI schemas first.
+
+**Files / frontend:** api/internal/handler/me.go; service/user.go; repository/user.go; new auth files and migrations; web/lib/session-context.tsx; login/staff/register/forgot-password; require-role.
+
+**Interfaces:** Consumes validated host scope and notifier; produces authenticated principal and audited session. Disable role-switching UI for integrated production.
+
+**Acceptance scenarios:**
+
+- [ ] Register/login with email and phone, including identical identifiers in two tenants; foreign-tenant JWT is rejected.
+- [ ] Password/reset/refresh/OTP expiration and reuse tests include concurrent requests and brute-force limits.
+- [ ] Operator cannot mutate programs/users/settings under the agreed D02 matrix; direct API is tested.
+- [ ] Reload/refresh/logout/idle expiry and active-exam policy behave as specified; secrets are absent from logs.
+
+**Decision / verification gate:** D01 OTP and phone-only recovery; D02 privileges; D13 token/idle policy. Auth cannot be signed off with phone signup silently removed.
+
+<a id="p04"></a>
+
+### P04 — Tenant onboarding, branding and support context
+
+**Status:** planned · **Size:** L · **Depends:** P03
+
+**Outcome:** Platform Admin onboards a school, provisions its first Admin, and enters a tenant for audited troubleshooting.
+
+**DB / backend / integration:** Platform tenant CRUD, slug validation/immutability, active state, first-admin transaction, branding/settings, scoped support session. Draft domain deployment contract from D06.
+
+**Files / frontend:** Tenant/platform handlers/services/repositories and migrations; new web/app/platform pages; web/app/admin/settings; host-aware web layout.
+
+**Interfaces:** Consumes platform authentication; produces active tenant configuration/support context. Root marketing and tenant routing remain one deployment.
+
+**Acceptance scenarios:**
+
+- [ ] Create school and first Admin together; retry does not duplicate either; slug cannot be renamed or use reserved names.
+- [ ] Paused tenant is unavailable to tenant/public users but accessible to actual Platform Admin support.
+- [ ] Support mutations retain platform actor and target tenant in audit, without impersonating a student.
+- [ ] Tenant A branding/settings never appears on B across sequential requests or cache reuse.
+
+**Decision / verification gate:** D06 host/first-slug/root content; D15 in-flight paused-tenant operations.
+
+<a id="p05"></a>
+
+### P05 — Master and tenant curriculum
+
+**Status:** planned · **Size:** M · **Depends:** P04
+
+**Outcome:** Staff choose authorized master/tenant programs, subjects and chapters; Admin maintains the tenant hierarchy.
+
+**DB / backend / integration:** Curriculum ownership and references, master read-only/copy lineage, deletion guards and role-scoped CRUD.
+
+**Files / frontend:** api curriculum model/repository/service/handler and migrations; web/app/admin/programs; platform master curriculum pages.
+
+**Interfaces:** Produces master-plus-own curriculum selections with origin markers. Operator may read authorized dropdowns but cannot mutate programs.
+
+**Acceptance scenarios:**
+
+- [ ] Master visible in A/B, tenant A content invisible to B; tenant cannot mutate master.
+- [ ] Admin copies master hierarchy into own content; later master changes do not change the copy.
+- [ ] Delete referenced program/subject/chapter is rejected clearly; cross-owner hierarchy links are rejected.
+- [ ] Create chapter and use it in the editor without manual page reload.
+
+**Decision / verification gate:** Includes FR-ADM-PRG and shared-content semantics; copy is explicit and never live synchronization.
+
+<a id="p06"></a>
+
+### P06 — Authorized asset upload and download
+
+**Status:** planned · **Size:** M · **Depends:** P03, P04
+
+**Outcome:** Users upload allowed images/proofs and only authorized users retrieve protected assets.
+
+**DB / backend / integration:** MinIO/GCS adapter, staged/finalized object metadata, purpose/tenant/actor ownership, public branding versus private exam/proof/export access.
+
+**Files / frontend:** api adapter storage and asset handlers/services/migrations; web upload controls used by builders and student orders.
+
+**Interfaces:** Produces asset references and scoped upload/finalize/download operations, not permanently public URLs for private files.
+
+**Acceptance scenarios:**
+
+- [ ] Validate actual image type and maximum 5MB; incorrect type/oversize files fail before attachment.
+- [ ] Tenant B cannot attach, finalize or download A assets; client path/purpose does not change owner.
+- [ ] Private objects are not anonymously readable; authorized access expires and is not cached publicly.
+- [ ] Abandoned previews clean up safely without deleting referenced frozen assets.
+
+**Decision / verification gate:** Storage credentials and final authorization must be verified in staging, not just mocked.
+
+<a id="p07"></a>
+
+### P07 — Question bank and imports
+
+**Status:** planned · **Size:** L · **Depends:** P05, P06
+
+**Outcome:** Staff create four question types or import real documents and maintain tenant/master content safely.
+
+**DB / backend / integration:** Question/options validation, immutable revisions, master copy, filtering, templates, actual XLSX/CSV/DOCX parsing and confirmed import commit.
+
+**Files / frontend:** Question files and migrations; web/app/admin/questions; components/admin/question-editor, import-questions-modal and rich-text-editor; platform master bank.
+
+**Interfaces:** Produces immutable question versions and authorized content selections. Uses curriculum and assets; option weights follow stable option IDs.
+
+**Acceptance scenarios:**
+
+- [ ] All four types gradeable; weighted-option mode only pg; absent points default to 1 and blank response earns no default credit.
+- [ ] Tenant copy survives master edit; current assignments retain old question/scoring/explanation revision.
+- [ ] Upload malformed and valid rows, see real errors, confirm exact accepted set per D08; retry creates no duplicates.
+- [ ] LaTeX/images preview correctly; filters/IDs work; HTML and spreadsheet-formula input is handled safely.
+
+**Decision / verification gate:** D08 import commit policy; D04 difficulty weights. No hardcoded import preview counts as done.
+
+<a id="p08"></a>
+
+### P08 — Tryout builder with frozen assignments
+
+**Status:** planned · **Size:** M · **Depends:** P07
+
+**Outcome:** Staff assemble tenant tryouts with ordered subtests, dates, explanation release and shuffle settings.
+
+**DB / backend / integration:** Unified tests plus tryout details/subtests/question assignments; immutable assigned revisions, validation and full edit/delete lock after first attempt.
+
+**Files / frontend:** Test/tryout files and migrations; components/admin/tryout-builder and question-picker-drawer; web/app/admin/tryouts.
+
+**Interfaces:** Produces a playable tryout definition and versions for P11/P16/P20. Both master and own questions may be assigned, another tenant content may not.
+
+**Acceptance scenarios:**
+
+- [ ] Subtest/question order, durations, date/release fields and randomization flags survive reload.
+- [ ] Invalid date window or empty playable definition cannot be published.
+- [ ] First session locks every editable field/delete; master update never changes assigned content.
+- [ ] A tenant cannot assign another tenant question or mutate master through the builder.
+
+**Decision / verification gate:** D04 scoring configuration ownership/normalization; original-order PDF input is preserved.
+
+<a id="p09"></a>
+
+### P09 — Kecermatan item packages
+
+**Status:** planned · **Size:** L · **Depends:** P05, P06
+
+**Outcome:** Staff manage authorized symbol/image/emoji/shape sources with real preview and safe imports.
+
+**DB / backend / integration:** Packages and frozen revisions; CSV/TXT/XLSX symbol inputs, palette/paste, multi-image/ZIP staging, content-hash dedup, emoji catalog/assets, shapes, master copy.
+
+**Files / frontend:** New package model/service/handlers/migrations; new web/app/admin/item-packages; platform master package view; shared file controls.
+
+**Interfaces:** Produces deduplicated versioned source pools and ephemeral column preview. Include emoji in schema despite the PRD data-model omission.
+
+**Acceptance scenarios:**
+
+- [ ] ZIP traversal/symlink/nested archive/oversize/corrupt/duplicate files produce per-element reasons; preview changes no live package.
+- [ ] Confirmation inserts accepted elements only; master mutation by tenant and foreign-tenant package use are rejected.
+- [ ] Used package delete/shrink below any referencing test threshold fails; existing frozen assets remain renderable.
+- [ ] Emoji is catalog-only and consistent across devices; pasted emoji in symbols fails with guidance; preview does not consume quota.
+
+**Decision / verification gate:** D02 operator package permissions; D09 bounded extraction/session size and emoji licenses.
+
+<a id="p10"></a>
+
+### P10 — Kecermatan builder and deterministic generator
+
+**Status:** planned · **Size:** L · **Depends:** P09
+
+**Outcome:** Staff build valid tests and preview the repeated-column mechanism before publication.
+
+**DB / backend / integration:** Unified tests plus kecermatan details/package links; bounded server generator, source selection, globally unique elements per column and N/2 snapshot replay.
+
+**Files / frontend:** Kecermatan definition/generator files and migrations; components/admin/kecermatan-builder; web/app/admin/kecermatan.
+
+**Interfaces:** Produces frozen generation configuration for P11/P18. No student response exposes scoring keys/future snapshots.
+
+**Acceptance scenarios:**
+
+- [ ] Reject odd or fewer than 10 columns, fewer than 50 questions, item length outside 1–5, nonpositive duration and insufficient pool.
+- [ ] Across each column reference set no element repeats within/across items or mix sources.
+- [ ] Columns k and k+N/2 have identical references/questions/subset ordering, with separate answer keys per column identity.
+- [ ] Reject edit/delete after a session exists; supported char/number/symbol/image/emoji/shape/mix sources render.
+
+**Decision / verification gate:** D09 generator limits; generation policy is fixed by content snapshots, not a client RNG.
+
+<a id="p11"></a>
+
+### P11 — Catalog, products and tenant landing
+
+**Status:** planned · **Size:** M · **Depends:** P04, P08, P10
+
+**Outcome:** Each school publishes all three product types and students see its real branded landing/catalog.
+
+**DB / backend / integration:** Products/product_tests, active status, price/display fields, tenant-local filters and public landing statistics/featured products.
+
+**Files / frontend:** Product/catalog services/handlers/migrations; web/app/page.tsx; catalog/detail; admin/products; platform landing routing.
+
+**Interfaces:** Produces purchasable validated product IDs and test membership. Complete scope includes kecermatan products, not only a tryout-first interim demo.
+
+**Acceptance scenarios:**
+
+- [ ] Individual exactly one tryout, bundle intended set, kecermatan one matching test and positive included attempts.
+- [ ] Inactive product is hidden publicly; active products/filter/detail contain only resolved tenant data.
+- [ ] Deactivate product and verify landing/catalog update without deploy; sequential A/B requests show correct branding/content.
+- [ ] Root CTAs target approved hosts; mobile landing meets reviewed accessibility/performance checks; download copy matches D11.
+
+**Decision / verification gate:** D06 root featured-product ownership/domain routing; D11 landing download promise.
+
+<a id="p12"></a>
+
+### P12 — Wallet ledger and staff adjustments
+
+**Status:** planned · **Size:** M · **Depends:** P03, P04
+
+**Outcome:** Students view exact running balances and authorized staff make audited adjustments.
+
+**DB / backend / integration:** Exact numeric balance projection, signed immutable ledger, balance-after/source/actor metadata, row locking and adjustment validation.
+
+**Files / frontend:** Wallet service/repository/handlers and migrations; web/app/student/wallet; admin student adjustment controls.
+
+**Interfaces:** Produces one transaction-aware wallet movement path consumed by checkout/top-ups. Financial source uniqueness is independent of cache.
+
+**Acceptance scenarios:**
+
+- [ ] Concurrent debits/credits serialize; ledger sum equals projection and every balance-after is consistent.
+- [ ] Adjustment requires a reason; actor kind/identity distinguish student, provider and staff/platform support.
+- [ ] Duplicate source/operation creates one entry; rollback leaves projection/ledger unchanged.
+- [ ] Student and staff lists cannot see another tenant/user wallet; migrated opening balances have explicit entries.
+
+**Decision / verification gate:** D12 precision/rounding/negative balance; no float write path.
+
+<a id="p13"></a>
+
+### P13 — Manual and wallet checkout with enrollment
+
+**Status:** planned · **Size:** L · **Depends:** P02, P06, P11, P12
+
+**Outcome:** Students purchase through manual transfer or wallet and receive the correct access after confirmation.
+
+**DB / backend / integration:** Order snapshots, proofs/review/cancellation, unified enrollment plus source grants, retry safety, actor audit and durable order/access notifications.
+
+**Files / frontend:** Order/enrollment service/repositories/handlers/migrations; web/app/checkout; student/orders/tryouts; admin/orders.
+
+**Interfaces:** Produces pending/confirmed/cancelled orders and idempotent access issuance for P14/P16/P18; repeat kecermatan purchase adds quota to same aggregate.
+
+**Acceptance scenarios:**
+
+- [ ] Insufficient wallet balance creates no debit/confirmed order/grant; mid-transaction failure rolls back all.
+- [ ] Repeated checkout/review creates one debit/grant per source; manual cancel opens no access.
+- [ ] Proof belongs to requesting student/tenant; staff sees/reviews only own tenant orders.
+- [ ] Bundle grants every purchased test; repeat kecermatan purchase preserves history on same enrollment; correct email/WA events enqueue atomically.
+
+**Decision / verification gate:** D05 expiry/credit aggregation and D12 money policy; external delivery success is verified through P02.
+
+<a id="p14"></a>
+
+### P14 — Gateway orders and top-ups
+
+**Status:** planned · **Size:** L · **Depends:** P13, P15
+
+**Outcome:** Verified Midtrans success confirms purchases or credits top-ups exactly once across tenants.
+
+**DB / backend / integration:** Globally unique provider references, separate payment attempts/events, signed amount-checked notifications, ambiguous-create/status recovery and exception reconciliation.
+
+**Files / frontend:** adapter Midtrans; payment/webhook service/repository/handlers/migrations; checkout gateway action/status; top-up gateway flow.
+
+**Interfaces:** Consumes order/top-up models and wallet/grant services. Webhook is provider-authenticated and resolves tenant from stored reference.
+
+**Acceptance scenarios:**
+
+- [ ] Sandbox purchase and top-up succeed; return URL alone cannot grant access or credit.
+- [ ] Replay notification three times and reorder pending/success events: one money movement/grant and no state downgrade.
+- [ ] Wrong signature/reference/amount/fraud status does not confirm; ambiguous create timeout does not make a second payment.
+- [ ] Late paid cancellation, rejected top-up, chargeback and paused-tenant events retain evidence and follow approved D07/D15 policy.
+
+**Decision / verification gate:** D07 late/reversal cases; D15 paused operations; D16 one platform-owned merchant account.
+
+<a id="p15"></a>
+
+### P15 — Self-service manual top-up and review
+
+**Status:** planned · **Size:** M · **Depends:** P02, P06, P12
+
+**Outcome:** Students request a top-up and staff approve or reject it with a complete audit trail.
+
+**DB / backend / integration:** Separate topup_requests, minimum tenant amount, proof ownership, reviewed actor/reason and idempotent credit.
+
+**Files / frontend:** Top-up service/repository/handlers/migrations; student/wallet and orders history; new admin top-ups view.
+
+**Interfaces:** Produces top-up entity/payment target for P14; top-ups never fake a product order or grant a test.
+
+**Acceptance scenarios:**
+
+- [ ] Below-minimum value fails server validation; valid request remains pending without credit.
+- [ ] Two concurrent approvals create one credit; reject requires reason and creates none.
+- [ ] Student sees own status/history and staff filters tenant requests; proof access obeys ownership.
+- [ ] Gateway extension uses the same business credit invariant while keeping provider evidence distinct.
+
+**Decision / verification gate:** D12 amount policy. Listed before P14 in execution order despite stable numeric slice labels.
+
+<a id="p16"></a>
+
+### P16 — Tryout runtime and immediate basic result
+
+**Status:** planned · **Size:** XL · **Depends:** P08, P13
+
+**Outcome:** Students complete repeatable tryouts with server timing, saved answers, stable shuffles and immediate persisted scores.
+
+**DB / backend / integration:** Unified sessions/parts, versioned snapshots, answer sequencing/retry, deadline scan/finalization, active-session uniqueness, subtest transition and scoring core.
+
+**Files / frontend:** Session/runtime/scoring files and migrations; web/lib/tryout-session; student/tryout overview/subtest/result; typed API client.
+
+**Interfaces:** Produces exactly one completed result per session and transactional score sum/count for P17. Gateway readiness is a full-release gate, not needed to demo a wallet-funded runtime.
+
+**Acceptance scenarios:**
+
+- [ ] Concurrent start/resume consumes one active session/attempt number; reload retains snapshot and accepted answers.
+- [ ] Background/closed tab and device clock changes cannot extend deadline; synchronized expiry meets ±5s under the agreed normal workload.
+- [ ] Late/stale/reordered answer writes are rejected; submit retry is idempotent; direct access cannot return to a submitted subtest.
+- [ ] Seeded shuffle fixtures preserve option points and session order; all four question types and weighted-option grading match hand calculations; score appears at completion.
+
+**Decision / verification gate:** D04 score rules and D10 expiry/offline policy. Include server-accepted versus unsent browser-answer indicators.
+
+<a id="p17"></a>
+
+### P17 — Tryout history, ranking and controlled review
+
+**Status:** planned · **Size:** L · **Depends:** P16
+
+**Outcome:** Students review all attempts and tenant-local average-based rankings without premature explanation access.
+
+**DB / backend / integration:** Result/history queries, revision-aware average leaderboard, Redis fallback/rebuild, IRT prevalidation and explanation release gating.
+
+**Files / frontend:** Result/leaderboard services/repositories; web student result/history and admin results; Redis adapter.
+
+**Interfaces:** Consumes persisted completed results; produces authoritative tenant/test ranking and staff filters/IRT indicators.
+
+**Acceptance scenarios:**
+
+- [ ] Scores 60/80/100 rank with average 80; no foreign-tenant participant enters ranking.
+- [ ] Missing/stale Redis or lost cache event returns/rebuilds correct PostgreSQL average; tied scores follow D04.
+- [ ] Before explanation release inspect raw API and asset links: no hidden key/explanation leaks; after release own completed attempt review succeeds.
+- [ ] IRT threshold fixtures count approved distinct students/question revisions correctly; weighted scoring remains unchanged.
+
+**Decision / verification gate:** D04 counts/ties/global weights; current rank is distinguished from any historical result rank.
+
+<a id="p18"></a>
+
+### P18 — Kecermatan attempts, quota and full results
+
+**Status:** planned · **Size:** XL · **Depends:** P10, P13
+
+**Outcome:** Students consume purchased credits once, complete repeated timed columns, and inspect confirmed composite results/history.
+
+**DB / backend / integration:** Atomic quota admission, snapshot persistence/replay, server column/transition deadlines, typed answers/results, zero/wrong distinction and scoring-version capture.
+
+**Files / frontend:** Kecermatan session/result files and migrations; web/lib/kecermatan-session; student kecermatan overview/attempt/result; admin kecermatan results.
+
+**Interfaces:** Consumes generator/credits; produces per-column and total counts, speed/accuracy/endurance/final scores plus full review. No fullscreen/violations/ranking.
+
+**Acceptance scenarios:**
+
+- [ ] Concurrent/retried start consumes exactly one credit; zero quota redirects to purchase; resume does not consume again.
+- [ ] Second half exactly replays first-half content while storing independent answers and does not announce repetition.
+- [ ] Expiry records unanswered as kosong; closed-tab/resume and transition tests cannot reset timers.
+- [ ] Client-approved N=10 and N>10 fixtures, zero-attempt/zero-first-half/overflow cases and rounding validate all four scores; detailed review reproduces the exact attempt.
+
+**Decision / verification gate:** D03 scoring is a full-scope completion gate; D05 abandoned quota; D10 transitions. A provisional UI label alone is insufficient.
+
+<a id="p19"></a>
+
+### P19 — Monitoring and violation timelines
+
+**Status:** planned · **Size:** M · **Depends:** P16, P17
+
+**Outcome:** Staff see active tryouts and retained violation history through 30-second polling.
+
+**DB / backend / integration:** Tenant-scoped active-session queries, fullscreen/screenshot event append and historical timeline links.
+
+**Files / frontend:** Violation/monitoring service/repository/handlers; web/app/admin/monitoring; runtime warning overlay; admin/student result links as permitted.
+
+**Interfaces:** Produces persisted tryout-only violation evidence. Monitoring reads database state; events only invalidate derived views.
+
+**Acceptance scenarios:**
+
+- [ ] Starting/completing session appears/disappears within a 30-second refresh; history remains after completion.
+- [ ] Fullscreen exit/detectable screenshot shows warning and records timestamp while timer keeps running.
+- [ ] Tenant A cannot list B active/finished sessions or timeline by guessed ID.
+- [ ] Polling 50 active sessions meets ≤500ms p95 in the documented fixture; kecermatan has no violations or fullscreen enforcement.
+
+**Decision / verification gate:** Fullscreen availability is browser-dependent; test supported desktop/mobile paths and explicitly describe best-effort behavior.
+
+<a id="p20"></a>
+
+### P20 — Asynchronous tryout PDF
+
+**Status:** planned · **Size:** M · **Depends:** P02, P06, P08
+
+**Outcome:** Authorized staff download a printable tryout with rendered math/images and no answers.
+
+**DB / backend / integration:** question_exports, durable render job, original assigned revision/order, bounded renderer, private artifact/status/ready notification.
+
+**Files / frontend:** PDF worker/artifact services/migrations; web tryout builder/list export control and job status/download.
+
+**Interfaces:** Produces admin/operator-only PDF artifacts, isolated by tenant and original definition revision.
+
+**Acceptance scenarios:**
+
+- [ ] PDF has title, subtest name/duration, numbering, original option order, images/math and school/date footer.
+- [ ] Inspect render input and output: no keys/explanations; shuffle settings do not change PDF order.
+- [ ] Worker restart completes/retries one artifact without cross-tenant download or arbitrary URL/file fetch.
+- [ ] Multi-page math/image fixture renders legibly; failure is visible; ready notification arrives.
+
+**Decision / verification gate:** D11 scope/copy alignment. Student and kecermatan PDFs remain unapproved post-MVP/open requests.
+
+<a id="p21"></a>
+
+### P21 — Result dashboards and CSV/XLSX exports
+
+**Status:** planned · **Size:** M · **Depends:** P02, P06, P17, P18
+
+**Outcome:** Staff filter results and download real spreadsheet reports for their tenant.
+
+**DB / backend / integration:** Snapshot/cut-off export requests, durable report worker, protected artifacts and scoped list/detail filters for both test types.
+
+**Files / frontend:** Result export files/migrations; web/app/admin/results and kecermatan-results; shared artifact status view.
+
+**Interfaces:** Produces CSV/XLSX tryout exports required by FR-ADM-RES-04 and complete kecermatan dashboard. Kecermatan spreadsheet export can be added only if separately requested.
+
+**Acceptance scenarios:**
+
+- [ ] Filter tryout/program returns expected rows and IRT flag; kecermatan shows counts/composites/final score/date/quota.
+- [ ] CSV/XLSX use same tenant/report cut-off; XLSX numbers are numeric and text cannot execute formulas.
+- [ ] Tenant B cannot request/read A report or reuse A download link endpoint; revoked authorization blocks new link issuance.
+- [ ] Worker failure/retry leaves one logical report with visible status; large export does not block API request.
+
+**Decision / verification gate:** No additional kecermatan-export feature is inferred from the tryout export requirement.
+
+<a id="p22"></a>
+
+### P22 — Student operations and platform financial recap
+
+**Status:** planned · **Size:** M · **Depends:** P04, P13, P14, P17, P18
+
+**Outcome:** Staff administer agreed student capabilities/grants and Platform Admin sees cross-tenant summaries for manual revenue sharing.
+
+**DB / backend / integration:** Account lifecycle/deactivation, user CRUD, active enrollment view/manual grants, audit, tenant/platform aggregates.
+
+**Files / frontend:** User/admin-student/platform-report services/handlers/migrations; web/admin/users, students and platform dashboard/report pages.
+
+**Interfaces:** Consumes finance/runtime history; produces audited operations, tenant-only revenue reports, platform tenant counts/status and global transaction recap.
+
+**Acceptance scenarios:**
+
+- [ ] Approved Operator versus Admin CRUD matrix holds in UI and direct API; deletion/deactivation preserves financial/history links.
+- [ ] Manual grant without order records actor/reason and opens only intended test; enrollment listing reflects exact active access.
+- [ ] Tenant Admin sees own orders/revenue; Platform Admin sees counts/value per tenant/period without automated settlement.
+- [ ] Support grant/user/financial action keeps actual platform actor; count/report queries are scoped and paginated.
+
+**Decision / verification gate:** D02 operator student operations; D14 deletion/retention. No per-tenant merchant credentials or settlement engine.
+
+<a id="p23"></a>
+
+### P23 — Full-scope certification and release
+
+**Status:** planned · **Size:** XL · **Depends:** P00, P01, P02, P03, P04, P05, P06, P07, P08, P09, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20, P21, P22
+
+**Outcome:** The full platform passes client UAT, isolation/financial/runtime checks and the named production-capacity/restore gates.
+
+**DB / backend / integration:** Staging/production configuration, trusted host routing/TLS, resource sizing, provider verification, runbooks, backups, metrics/alerts, migration and rollback rehearsal.
+
+**Files / frontend:** Deployment/operational docs and configuration; CI integration/browser/load checks; scoped defect fixes only.
+
+**Interfaces:** Consumes every complete slice and resolved release decision. Produces signed-off evidence, actual deployment versions/resources and a newly agreed launch date.
+
+**Acceptance scenarios:**
+
+- [ ] Run every numbered FR acceptance plus question/scoring/NFR cases from RECONCILIATION; all full-scope release gates pass.
+- [ ] 1,000 aggregate CCU workload with 10,000 registered-user dataset meets non-exam ≤500ms p95, question load ≤1s and deadline lag ±5s; publish workload/error thresholds/resources.
+- [ ] Restore daily-backup fixture and private asset references into isolated environment; prove 30-day retention and approved RPO/RTO recovery steps.
+- [ ] Test cross-tenant adversarial paths, real notification channels, merchant sandbox-to-production configuration, rate limits under legitimate exam traffic and incompatible-version rollback risks.
+
+**Decision / verification gate:** No 3 August 2026 promise or old RAB is reused; provider stubs/provisional scoring/mock data cannot pass full-scope UAT.
+
+## 5. Full-scope requirement coverage
+
+[RECONCILIATION.md §4](RECONCILIATION.md#4-requirement-traceability) contains one row for each of the 161 FR IDs, each linked to an architecture section and owning slice. Its additional rows cover question types, all scoring modes, the PRD schema/event/cache conventions and all non-functional requirements. Multiple slices can jointly satisfy one requirement; no slice can claim a feature complete because its UI exists.
+
+## 6. Integration acquisition and release dependencies
+
+| Dependency | First needed | Completion evidence |
 |---|---|---|
-| `web/` mockup | **±85% UI** | 34 route, ~12.9k LOC, Next.js 16 + HeroUI. Seluruh data dari `lib/mock-data.ts` (in-memory) |
-| Backend Go | **0%** | Belum ada `go.mod`, migration, atau service apapun |
-| Integrasi pihak ketiga | **0%** | Midtrans, WhatsApp, email, object storage belum tersambung |
-| Landing page | **Selesai (UI)** | Sudah pakai branding asli, tinggal dipisah deploy + disuapi data produk asli |
-
-**Konsekuensi perencanaan:** kerjaan FE mayoritas adalah *mengganti sumber data*, bukan membangun layar dari nol.
-Ini menurunkan risiko FE tapi memindahkan hampir seluruh bobot pekerjaan ke BE + integrasi.
-
-### 2.1 Gap FE yang sudah terkonfirmasi dari audit kode
-
-Delapan item ini bukan temuan baru untuk dibahas ulang — sudah dialokasikan ke slice-nya masing-masing di bawah:
-
-| Gap | Slice |
-|---|---|
-| Randomisasi soal & opsi (FR-TRY-14/15, FR-ADM-TRY-06/07) — 0%, tidak ada di types maupun builder | S7, S8 |
-| Checkout tidak persist apapun (`setSubmitted(true)` saja) | S5 |
-| Window `active_from`/`active_until` tidak di-enforce | S8 |
-| Export hasil CSV saja, PRD minta Excel/CSV | S9 |
-| Tidak ada upload gambar di editor soal | S6 |
-| Tombol edit user tanpa handler | S1 |
-| Riwayat saldo belum punya ledger sendiri | S5 |
-| `lib/types.ts` masih pisah `Tryout`/`KecermatanTest`, belum ikut unifikasi PRD §8 | S0 |
-
----
-
-## 3. Peta Slice
-
-```
-MODUL RAB 1 — Fondasi & Auth (Rp 7.5jt, Minggu 1–2)
-  S0  Walking Skeleton & Kontrak API          [enabler]
-  S1  Akun & Sesi
-  S2  Notifikasi (Email + WhatsApp)
-  S3  Program & Struktur Materi
-  S4  Landing Page Production
-
-MODUL RAB 2 — Katalog & Transaksi (Rp 13.5jt, Minggu 1–2)
-  S5  Produk & Katalog
-  S6  Checkout, Pembayaran & Enrollment
-
-MODUL RAB 3 — Tryout Engine (Rp 28.5jt, Minggu 3–4)
-  S7  Bank Soal
-  S8  Tryout Builder
-  S9  Pengerjaan Tryout & Proctoring        ← risiko tertinggi
-  S10 Hasil, Scoring & Ranking
-  S11 Live Monitoring
-
-MODUL RAB 4 — Tes Kecermatan (Rp 7.5jt, Minggu 3–4)
-  S12 Kecermatan End-to-End
-
-MINGGU 5 — UAT & Go-Live
-  S13 Hardening, Load Test & Rilis
-```
-
-### Dependency
-
-```
-S0 ──┬─> S1 ──┬─> S2
-     │        ├─> S3 ──> S7 ──> S8 ──> S9 ──> S10 ──> S11
-     │        └─> S5 ──> S6 ──┬─> S9
-     │                        └─> S12
-     └─> S4
-S13 <── semua
-```
-
-Jalur kritis: **S0 → S1 → S3 → S7 → S8 → S9 → S10**. Slice di jalur ini tidak bisa diparalelkan tanpa menambah orang.
-
----
-
-## 4. Slice
-
-### S0 — Walking Skeleton & Kontrak API
-**Modul 1** · **Depends:** — · **Size:** M · **FR:** — (enabler)
-
-> **Outcome:** Satu request nyata mengalir dari browser → Echo → Postgres → balik ke layar, dan seluruh slice berikutnya punya pola yang tinggal diikuti.
-
-Ini satu-satunya slice yang horizontal, dan sengaja dibuat setipis mungkin: ia membuktikan diri lewat satu endpoint asli (`/healthz` + `GET /me`), bukan lewat kerangka kosong.
-
-- **DB**
-  - Scaffold `golang-migrate`, konvensi penamaan migration, database lokal via Docker Compose (Postgres + Redis + MinIO)
-  - Migration `0001_init`: `users`, `programs` (minimal, cukup untuk auth + smoke test)
-- **BE**
-  - Repo Go: layout `model → repository → service → handler/server` + `infra`, `adapter` (sesuai PRD §7)
-  - Echo v4 + pgx/v5 pool, config loader, structured logging, request ID, panic recovery
-  - Error envelope seragam (kode + pesan) supaya FE tidak perlu menebak bentuk error per endpoint
-  - `GET /healthz`, `GET /api/v1/me`
-- **FE**
-  - **Selaraskan `lib/types.ts` dengan PRD §8**: satukan `Tryout`+`KecermatanTest` → `Test`, `Enrollment`+`KecermatanEnrollment` → `Enrollment`, `TryoutSession` → `TestSession`. Dikerjakan sekarang selagi konsumen tipe masih sedikit — kalau ditunda, sentuhannya melebar ke seluruh slice
-  - Buat seam `lib/api/` sebagai satu-satunya pintu data; `lib/mock-data.ts` dipindah ke belakang seam ini supaya bisa dicabut per-domain, bukan sekaligus
-- **Integrasi**
-  - Kontrak OpenAPI 3.0 sebagai sumber kebenaran; generate typed client TS untuk FE
-  - `.env` + config untuk dev/staging/prod
-  - CI: `go build`, `go vet`, `go test`, `next build`, lint
-- **AC**
-  - `docker compose up` → stack lokal jalan dari nol tanpa langkah manual
-  - Halaman FE memanggil `GET /api/v1/me` lewat typed client dan menampilkan hasil asli dari Postgres
-  - `go test ./...` dan `next build` hijau di CI
-
----
-
-### S1 — Akun & Sesi
-**Modul 1** · **Depends:** S0, **S2 (pengiriman email OTP)** · **Size:** M→L · **FR:** FR-AUTH-01…05
-
-> **Outcome:** Siswa bisa daftar & masuk pakai email atau nomor HP; admin bisa mengelola akun siswa dan operator dari dashboard.
-
-> **Perubahan scope dari PRD (2026-07-23):** PRD §7 menyatakan "JWT (tanpa OTP — tidak diperlukan untuk skala ini)". Klien/owner memutuskan **OTP tetap dipakai**, dikirim via email lebih dulu (WhatsApp menyusul setelah provider ditetapkan). Ini menambah S1 ±1 langkah dan membuat S1 bergantung pada S2, yang tadinya sebaliknya — lihat catatan dependency di bawah.
-
-- **DB**
-  - Lengkapi `users`: `phone` unik-nullable, `password_hash`, `role`, `balance`, `verified_at`
-  - `password_reset_tokens` (token hash, expiry, single-use)
-  - `otp_codes` — kode hash, tujuan (`register`/`login`/`reset`), expiry, jumlah percobaan, `consumed_at`
-- **BE**
-  - `POST /auth/register`, `POST /auth/login` (identifier = email **atau** phone), `POST /auth/refresh`, `POST /auth/logout`
-  - `POST /auth/forgot-password`, `POST /auth/reset-password`
-  - **OTP:** `POST /auth/otp/request`, `POST /auth/otp/verify` — kode disimpan ter-hash (bukan plaintext), sekali pakai, expiry pendek, cooldown kirim ulang, kunci setelah N percobaan gagal
-  - bcrypt, JWT access + refresh, auto-logout saat idle
-  - Middleware role guard: `student` / `operator` / `admin`
-  - `GET/POST/PATCH/DELETE /admin/users` — admin-only
-- **FE**
-  - Sambungkan `/login`, `/login/staff`, `/register`, `/forgot-password` ke endpoint asli
-  - `lib/session-context.tsx`: ganti user mock dengan sesi JWT nyata + refresh diam-diam
-  - `components/require-role.tsx`: guard berbasis klaim token, bukan role mock
-  - **Perbaiki tombol edit user di `app/admin/users/page.tsx`** (saat ini tanpa handler)
-- **Integrasi**
-  - Cabut `currentStudent` / `currentOperator` / `currentAdmin` dari mock-data
-  - Interceptor 401 → refresh sekali → kalau gagal, lempar ke `/login`
-- **AC**
-  - Daftar pakai nomor HP → login pakai nomor HP yang sama → berhasil
-  - Operator membuka URL admin-only (`/admin/programs`, `/admin/users`) → ditolak
-  - Reset password: token sekali pakai, dan tidak bisa dipakai lagi setelah dikonsumsi
-  - Admin bisa membuat, **mengedit**, dan menghapus akun operator maupun siswa
-  - OTP: kode kedaluwarsa tepat waktu, tidak bisa dipakai dua kali, dan brute-force 6-digit terkunci setelah N percobaan
-  - Kode OTP **tidak pernah** muncul di log aplikasi
-
----
-
-### S2 — Notifikasi (Email + WhatsApp)
-**Modul 1** · **Depends:** S1 · **Size:** M · **FR:** FR-NOT-01…04
-
-> **Outcome:** Event penting (pesanan, akses terbuka, reset password) mengirim email + WhatsApp, dan tetap terkirim walau proses sempat mati.
-
-Dibangun lebih awal daripada pemakainya, supaya slice S6/S9/S12 tinggal `Publish(event)` tanpa menyentuh infrastruktur lagi.
-
-- **DB**
-  - Schema `river` terpisah dari schema bisnis (PRD §7.1)
-  - `notification_logs` — audit siapa dikirimi apa, kapan, status akhir
-- **BE**
-  - In-process event bus pola Mediator: `Publish(event)` → handler terdaftar
-  - **Event kritikal**: handler hanya insert job River **di transaction yang sama** dengan perubahan state bisnis — job tercatat kalau dan hanya kalau transaction commit
-  - **Event non-kritikal**: jalan in-memory, boleh hilang
-  - River worker: retry + backoff, retention cleanup job `completed`/`discarded`
-  - Template email: konfirmasi pesanan, akses terbuka, reset password, **kode OTP**
-- **FE**
-  - (tidak ada layar baru)
-- **Integrasi**
-  - **Pengirim email — diputuskan 2026-07-23:** pakai akun email milik owner (`panggilsaya.saiful@gmail.com`) lebih dulu untuk dev & UAT, supaya S1/S6 tidak menunggu akses DNS domain klien.
-    **Batasannya harus disadari dan dijadwalkan penggantiannya:** Gmail membatasi ±500 kirim/hari, dan email transaksional dari domain gmail.com tanpa SPF/DKIM atas nama Taruna Eduka rawan masuk spam — tepat pada email yang paling tidak boleh hilang (OTP & konfirmasi pembayaran). **Cukup untuk dev/UAT, tidak cukup untuk go-live.** Migrasi ke domain klien + provider transaksional masuk S13 sebagai syarat rilis, bukan opsional
-  - Interface `adapter/notifier` dari awal, supaya penggantian pengirim nanti hanya mengganti satu implementasi
-  - **Provider WhatsApp — belum ditentukan, lihat §6 Keputusan Terbuka #1.** Sampai diputuskan, implementasi no-op di balik interface yang sama supaya slice lain tidak terblokir
-- **AC**
-  - Matikan worker → picu event kritikal → nyalakan worker → notifikasi tetap terkirim
-  - Rollback transaction bisnis → job notifikasi ikut tidak ada (buktikan dengan test)
-  - Job gagal 3× masuk `discarded` dan tercatat di `notification_logs`, tidak retry selamanya
-
----
-
-### S3 — Program & Struktur Materi
-**Modul 1** · **Depends:** S1 · **Size:** S · **FR:** FR-ADM-PRG-01, FR-ADM-PRG-02
-
-> **Outcome:** Admin menyusun Program → Mata Pelajaran → Bab Materi, yang jadi sumber dropdown saat membuat soal.
-
-- **DB** — `programs`, `program_subjects`, `subject_chapters`
-- **BE** — CRUD bertingkat, **admin-only** (Operator ditolak — perubahan dari v1.0); guard hapus kalau program masih dipakai soal/tryout/produk
-- **FE** — `app/admin/programs/page.tsx` disambung ke API asli
-- **Integrasi** — cabut `programs` dari mock-data; dropdown di editor soal (S7) baca dari sini
-- **AC**
-  - Operator kena 403 di seluruh endpoint program
-  - Hapus program yang masih punya soal → ditolak dengan pesan jelas, bukan error 500
-  - Bab materi muncul di dropdown editor soal setelah dibuat, tanpa reload manual
-
----
-
-### S4 — Landing Page Production
-**Modul 1** · **Depends:** S0 · **Size:** S · **FR:** FR-LAND-01…06
-
-> **Outcome:** Halaman promosi tayang di domain utama dengan produk unggulan yang asli, bukan hardcoded.
-
-UI-nya sudah jadi. Kerjaannya adalah pemisahan deploy + sumber data.
-
-- **BE** — `GET /public/products?featured=true` (tanpa auth, cache-able)
-- **FE** — pisahkan build/deploy landing dari aplikasi tryout; produk unggulan & jumlah program tarik dari API
-- **Integrasi** — pemetaan domain (lihat §6 Keputusan Terbuka #2); CTA "Lihat Katalog" mengarah lintas-domain dengan benar
-- **AC**
-  - Produk unggulan berubah di landing setelah admin menonaktifkan produk, tanpa deploy ulang
-  - Lighthouse mobile ≥ 90 untuk Performance & Accessibility
-  - Tautan portal internal (Operator/Admin) di footer mengarah ke host aplikasi yang benar
-
----
-
-### S5 — Produk & Katalog
-**Modul 2** · **Depends:** S1, S3 · **Size:** M · **FR:** FR-CAT-01…05, FR-ADM-PRD-01…03
-
-> **Outcome:** Operator membuat produk (individual/bundle/kecermatan) dan produk itu langsung muncul di katalog publik untuk dilihat siswa.
-
-Sengaja satu slice: "produk dibuat" tanpa "produk terlihat" bukan kemampuan yang bisa didemo.
-
-- **DB** — `products`, `product_tests` (junction tunggal hasil unifikasi PRD §8, termasuk `included_attempts` untuk tipe kecermatan)
-- **BE**
-  - Publik: `GET /catalog` (filter per program, hanya `is_active`), `GET /catalog/:id`
-  - Admin: CRUD produk, toggle aktif/nonaktif
-  - Validasi per tipe: `individual` = tepat 1 test; `bundle` = N test; `kecermatan` = 1 test + `included_attempts` wajib
-- **FE** — `app/catalog`, `app/catalog/[id]`, `app/admin/products` disambung ke API
-- **Integrasi** — cabut `products` dari mock-data; upload cover image ke object storage (MinIO lokal / GCS prod)
-- **AC**
-  - Produk nonaktif tidak muncul di katalog publik, tapi tetap terlihat di dashboard admin
-  - Filter program mengembalikan hanya produk program tersebut
-  - Produk bundle menampilkan seluruh tryout anggotanya di halaman detail
-  - Bikin produk kecermatan tanpa mengisi `included_attempts` → ditolak validasi
-
----
-
-### S6 — Checkout, Pembayaran & Enrollment
-**Modul 2** · **Depends:** S2, S5 · **Size:** L · **FR:** FR-PAY-A-01…03, FR-PAY-C-01…04, FR-PAY-W-01…03, FR-PAY-01/02, FR-ADM-ORD-01…03
-
-> **Outcome:** Siswa memilih salah satu dari 3 metode pembayaran, membayar, dan aksesnya terbuka — otomatis (gateway/saldo) atau setelah admin konfirmasi (manual).
-
-Slice terberat di Modul 2, dan gap FE terbesar saat ini: checkout sekarang murni tampilan, tidak menyimpan apapun.
-
-- **DB**
-  - `orders` (status, `payment_mode`, `payment_proof_url`, `confirmed_at`)
-  - `enrollments` — generik: `active_until` **dan** `attempts_purchased`/`attempts_used` sama-sama nullable, dipakai sesuai tipe produk
-  - `wallet_transactions` — ledger `topup`/`deduction`, sumber kebenaran saldo
-- **BE**
-  - `POST /orders` — satu endpoint, tiga cabang `payment_mode`
-  - **Gateway:** buat transaksi Midtrans → simpan `snap_token`; `POST /webhooks/midtrans` verifikasi signature, **idempotent** (webhook boleh datang berkali-kali), `confirmed` → terbitkan enrollment
-  - **Manual:** order `pending` → siswa unggah bukti → admin konfirmasi/batalkan
-  - **Saldo:** potong saldo & terbitkan enrollment **dalam satu transaction**; tolak kalau saldo kurang. Saldo dihitung dari ledger, bukan kolom yang di-update terpisah
-  - Penerbitan enrollment terpusat di satu service — dipanggil ketiga jalur, supaya aturan akses tidak bercabang tiga
-  - Admin: daftar pesanan + filter status, konfirmasi, batalkan, lihat bukti transfer, top-up saldo siswa (**admin & operator**)
-  - Publish event kritikal ke S2 pada `confirmed`
-- **FE**
-  - **Tulis ulang `app/checkout/[id]/page.tsx`** supaya benar-benar membuat order (saat ini hanya `setSubmitted(true)`)
-  - Redirect Midtrans Snap + halaman status kembali
-  - Unggah bukti transfer di `app/student/orders`
-  - **Halaman riwayat saldo** dari `wallet_transactions` (saat ini top-up hanya menumpang di daftar pesanan)
-  - `app/admin/orders` disambung ke API
-- **Integrasi**
-  - Midtrans sandbox → produksi: server key, verifikasi signature, penanganan webhook telat/duplikat
-  - Object storage untuk bukti transfer: validasi tipe & ukuran (maks 5MB)
-- **AC**
-  - Tiga metode masing-masing menghasilkan enrollment yang **identik bentuknya** — sisanya hanya beda jalur
-  - Kirim webhook Midtrans yang sama 3× → tepat 1 enrollment, saldo/status tidak berubah di kirim ke-2 dan ke-3
-  - Bayar pakai saldo saat saldo kurang → ditolak, dan **tidak ada** baris ledger yang tercipta
-  - Simulasikan gagal di tengah pembayaran saldo → saldo utuh, tidak ada enrollment yatim
-  - Admin membatalkan pesanan pending → akses tidak pernah terbuka
-  - Setelah `confirmed`, siswa melihat paketnya di "Paket Belajar Saya" dan menerima email + WhatsApp
-
----
-
-### S7 — Bank Soal
-**Modul 3** · **Depends:** S3 · **Size:** L · **FR:** FR-ADM-SOA-01…06, §5.5, §5.6 (bobot per opsi)
-
-> **Outcome:** Operator membuat soal 4 tipe lengkap dengan LaTeX dan gambar, atau mengunggah ratusan soal sekaligus dari Excel/Word.
-
-- **DB** — `questions` dengan `options jsonb` (tiap opsi: id, label, points nullable), `correct_answer jsonb`, `option_weighted bool`
-- **BE**
-  - CRUD soal + filter program/tipe/kesulitan + paginasi
-  - Validasi per tipe: `pg` 1 benar; `pg_multi` >1 benar; `isian` pola pencocokan; `benar_salah` biner
-  - Mode **bobot per opsi**: seluruh opsi valid, opsi tanpa bobot eksplisit default **1**
-  - Import massal `.xlsx` / `.csv` / `.docx`: parse → validasi baris-per-baris → laporan galat → commit atomik
-  - Endpoint unduh template
-- **FE**
-  - `components/admin/question-editor.tsx` disambung ke API
-  - **Tambahkan upload gambar** (`imageUrl` sudah ada di tipe tapi tidak terjangkau dari UI)
-  - **Ganti preview import yang masih hardcoded** dengan hasil parse berkas yang benar-benar diunggah
-  - Tampilkan ID soal di daftar (FR-ADM-SOA-06)
-- **Integrasi** — object storage untuk gambar soal (validasi tipe + maks 5MB); render LaTeX via KaTeX (sudah terpasang)
-- **AC**
-  - Impor 200 soal: baris valid masuk, baris rusak dilaporkan per-nomor-baris, dan **tidak ada impor separuh jadi**
-  - Soal bermode bobot-per-opsi menyimpan bobot berbeda per opsi, dan opsi yang dikosongkan tersimpan bernilai 1
-  - Preview menampilkan LaTeX & gambar persis seperti yang nanti dilihat siswa
-  - Filter kombinasi (program + tipe + kesulitan) mengembalikan hasil yang benar
-
----
-
-### S8 — Tryout Builder
-**Modul 3** · **Depends:** S7 · **Size:** M · **FR:** FR-ADM-TRY-01…07
-
-> **Outcome:** Operator merakit tryout: subtes, durasi, soal, jendela tanggal, penahanan pembahasan, dan toggle pengacakan.
-
-- **DB**
-  - `tests` (base: program, tipe, judul, deskripsi, cover) + `tryout_details` (`scoring_mode`, `active_from`, `active_until`, `explanation_release_at`, **`randomize_questions`**, **`randomize_options`**)
-  - `subtests`, `subtest_questions`
-- **BE**
-  - CRUD tryout + subtes + assign soal berurutan
-  - **Edit-lock:** tolak ubah/hapus kalau sudah ada session — berlaku untuk **seluruh** field, bukan sebagian
-  - Validasi: `active_from` < `active_until`; tryout tanpa subtes tidak bisa diterbitkan
-- **FE**
-  - `components/admin/tryout-builder.tsx` disambung ke API
-  - **Tambahkan toggle "Acak Urutan Soal" & "Acak Urutan Jawaban"** — saat ini tidak ada di builder maupun di `lib/types.ts`
-  - Upload cover image (sekarang masih pilihan gradien)
-- **Integrasi** — `components/admin/question-picker-drawer.tsx` menarik dari bank soal asli
-- **AC**
-  - Toggle pengacakan tersimpan dan terbaca ulang setelah refresh
-  - Tryout yang sudah dikerjakan siswa: seluruh field terkunci, bukan hanya sebagian
-  - Urutan soal dalam subtes tersimpan sesuai susunan operator
-
----
-
-### S9 — Pengerjaan Tryout & Proctoring
-**Modul 3** · **Depends:** S6, S8 · **Size:** XL · **FR:** FR-TRY-01…15
-
-> **Outcome:** Siswa mengerjakan tryout dengan timer, tidak bisa mundur ke subtes yang sudah dikirim, bisa lanjut setelah browser tertutup, dan pelanggaran fullscreen/screenshot tercatat.
-
-**Slice paling berisiko di seluruh proyek.** Semua hal yang "diam-diam salah" ada di sini: timer, kehilangan koneksi, dan pengacakan. Anggarkan buffer di sini, bukan di slice lain.
-
-- **DB** — `test_sessions` (`attempt_number`, `status`, `progress jsonb`, UNIQUE(user, test, attempt)), `tryout_answers`, `violations`
-- **BE**
-  - `POST /tests/:id/sessions` — mulai attempt; **enforce jendela `active_from`/`active_until`** (gap FE saat ini) dan enrollment aktif
-  - **Timer otoritatif di server.** Waktu sisa dihitung dari `started_at` di DB, jam klien hanya untuk tampilan — kalau tidak, timer bisa dicurangi dengan mengubah jam perangkat
-  - Auto-submit saat timer habis, toleransi ±5 detik (NFR §6.1)
-  - Blocking time: subtes terkirim → ditolak permanen kalau dibuka lagi
-  - Simpan jawaban inkremental supaya resume tidak kehilangan progres
-  - **Pengacakan (FR-TRY-14/15):** urutan diacak **sekali** saat session dibuat, disimpan di `progress jsonb`, lalu dipakai konsisten sepanjang session — tidak berubah saat siswa bolak-balik antar soal. Bobot opsi melekat pada **konten** opsi, bukan posisi tampil
-  - `POST /sessions/:id/violations` — `exit_fullscreen`, `screenshot_attempt`
-- **FE**
-  - `app/student/tryout/[id]/subtest/[subtestId]` disambung ke API; timer sinkron ke server, bukan hitung mundur lokal murni
-  - Terapkan urutan acak dari server, jangan mengacak ulang di klien
-  - Fullscreen + deteksi screenshot sudah ada — arahkan pencatatannya ke API
-  - Perilaku offline: antre jawaban, kirim ulang saat koneksi kembali
-- **Integrasi** — Redis cache konten subtes pre-shuffle per `subtest_id`; API konten ujian **`Cache-Control: no-store`** (PRD §7.2 — kalau ikut ter-cache CDN, semua siswa dapat urutan acak yang sama dan tujuan pengacakan batal)
-- **AC**
-  - Tutup browser di tengah subtes → buka lagi → **waktu tersisa sudah berkurang sesuai waktu nyata**, jawaban utuh
-  - Ubah jam sistem perangkat → waktu sisa tidak terpengaruh
-  - Timer habis saat tab tidak aktif → subtes tetap auto-submit
-  - Subtes terkirim → tidak bisa dibuka lagi lewat URL langsung
-  - Dengan `randomize_questions` aktif: dua attempt berbeda → urutan berbeda; **dalam satu attempt, navigasi bolak-balik → urutan tetap**
-  - Dengan `randomize_options` aktif: skor soal bobot-per-opsi identik terlepas dari posisi tampil opsi
-  - Mulai tryout di luar jendela tanggal → ditolak
-  - Keluar dari fullscreen → tercatat dengan timestamp, overlay peringatan muncul, **timer terus berjalan**
-
----
-
-### S10 — Hasil, Scoring & Ranking
-**Modul 3** · **Depends:** S9 · **Size:** L · **FR:** FR-RES-01…05, §5.6, FR-ADM-RES-01…04
-
-> **Outcome:** Siswa melihat skor, peringkat, dan pembahasan; admin melihat & mengekspor hasil seluruh siswa.
-
-- **DB** — `tryout_results` (`total_score`, `subtest_scores jsonb`, `rank`, `irt_warning`)
-- **BE**
-  - Mesin skoring: weighted per kesulitan (konfigurasi global), bobot-per-opsi, mode IRT
-  - **IRT prevalidation:** soal dengan respons < 30 siswa → `irt_warning = true`, tampil di dashboard admin
-  - **Ranking = rata-rata skor seluruh attempt siswa** pada tryout tersebut (FR-RES-05), bukan skor satu attempt
-  - Gating pembahasan: sebelum `explanation_release_at`, kembalikan skor **tanpa** konten pembahasan — disaring di server, bukan disembunyikan di FE
-  - Export hasil
-- **FE**
-  - `app/student/tryout/[id]/result` + riwayat seluruh attempt
-  - `app/admin/results` disambung ke API
-  - **Tambahkan export Excel** — saat ini CSV saja, PRD minta Excel/CSV
-- **Integrasi** — Redis Sorted Set untuk leaderboard; generate export sebagai job River (S2) supaya tidak memblokir request
-- **AC**
-  - Siswa mengerjakan 3×, skor 60/80/100 → peringkat memakai rata-rata **80**, bukan 100
-  - Sebelum tanggal rilis pembahasan: **response API tidak memuat konten pembahasan sama sekali** (cek payload mentah, bukan tampilan)
-  - Tryout dengan soal <30 respons → penanda IRT warning muncul di dashboard admin
-  - Berkas Excel hasil export terbuka benar di Excel & Google Sheets, dengan angka sebagai angka
-  - Skor bobot-per-opsi cocok dengan hitungan manual pada satu kasus uji
-
----
-
-### S11 — Live Monitoring
-**Modul 3** · **Depends:** S9 · **Size:** S · **FR:** FR-MON-01…04
-
-> **Outcome:** Admin & operator melihat siapa yang sedang ujian sekarang dan pelanggaran apa yang terjadi.
-
-- **BE** — `GET /admin/monitoring/sessions` (siswa aktif, tryout, subtes berjalan, waktu mulai, jumlah pelanggaran); `GET /admin/sessions/:id/violations` timeline
-- **FE** — `app/admin/monitoring` disambung ke API, polling 30 detik (tanpa WebSocket per PRD §5.16); timeline pelanggaran juga tersedia dari halaman hasil untuk sesi selesai
-- **Integrasi** — event non-kritikal (in-memory, boleh hilang — PRD §7.1); query dibatasi supaya polling tidak membebani DB
-- **AC**
-  - Siswa memulai subtes → muncul di monitoring dalam ≤30 detik
-  - Siswa menyelesaikan tryout → hilang dari daftar aktif, tapi violation log-nya tetap bisa dibuka dari halaman hasil
-  - 50 sesi aktif bersamaan → satu putaran polling tetap p95 ≤500ms
-
----
-
-### S12 — Kecermatan End-to-End
-**Modul 4** · **Depends:** S6 · **Size:** L · **FR:** FR-KEC-01…14, FR-ADM-KEC-01…05
-
-> **Outcome:** Operator membuat tes kecermatan & produknya; siswa membeli sejumlah attempt, mengerjakan, dan melihat 3 skor komposit + Nilai Akhir.
-
-Satu slice utuh karena format ini punya produk, billing, engine, dan hasilnya sendiri yang terpisah dari tryout. UI-nya sudah dibangun di mockup (2026-07-20) — kerjaannya BE + integrasi.
-
-- **DB** — `kecermatan_details`, `kecermatan_answers`, `kecermatan_results`
-- **BE**
-  - Builder: tipe item, panjang item, opsi per soal, soal per kolom, jumlah kolom, durasi timer per kolom; edit/hapus terkunci kalau sudah dikerjakan
-  - Engine: **generate set referensi per kolom di server** (bukan di klien — kalau di klien, jawabannya ada di memori browser), subset acak dengan tepat 1 item hilang per soal, timer bersama per kolom, soal tak terjawab saat timer habis = `kosong` (bukan salah), jeda transisi antar kolom
-  - **Billing metered:** attempt memotong kuota; kuota habis → arahkan beli tambahan yang **menambah kuota pada enrollment yang sama**, bukan transaksi terpisah
-  - Skor komposit Kecepatan / Ketahanan / Ketelitian + Nilai Akhir tertimbang (30/45/25)
-  - Tanpa fullscreen, tanpa violation log, tanpa ranking (FR-KEC-06 — sengaja berbeda dari tryout)
-- **FE** — halaman kecermatan siswa & admin disambung ke API; hentikan generate soal di klien
-- **Integrasi** — pakai jalur checkout S6 apa adanya; hanya penerbitan enrollment yang bercabang (attempt, bukan tanggal)
-- **AC**
-  - Kuota habis → tombol mulai terkunci dan siswa diarahkan ke checkout
-  - Beli attempt tambahan → kuota **bertambah pada enrollment yang sama**, riwayat attempt lama tetap utuh
-  - Timer kolom habis → sisa soal tercatat `kosong`, dan `kosong` **tidak** dihitung sebagai salah di Ketelitian
-  - Set referensi tidak pernah muncul di response API sebelum soalnya ditampilkan
-  - Skor komposit cocok dengan contoh perhitungan klien (2026-07-05) pada dataset yang sama
-  - **Formula ditandai provisional di UI** sampai klien konfirmasi (§6 Keputusan Terbuka #3)
-
----
-
-### S13 — Hardening, Load Test & Rilis
-**Minggu 5** · **Depends:** semua · **Size:** M · **FR:** §6 NFR
-
-> **Outcome:** Platform tayang produksi dan bertahan di 1.000 CCU.
-
-- **BE** — rate limiting endpoint auth, **request OTP**, & submit jawaban; audit query N+1 di jalur ujian; index sesuai pola query nyata
-- **Email produksi** — pindah dari akun Gmail owner ke domain klien + provider transaksional, SPF/DKIM/DMARC terpasang, uji deliverability OTP & konfirmasi pembayaran ke Gmail/Outlook. **Syarat rilis, bukan opsional** (lihat S2)
-- **Infra** — HTTPS, Cloudflare CDN (aset statis saja), backup harian retensi 30 hari + **uji restore**, health check, alerting
-- **Test** — load test 1.000 CCU terkonsentrasi di jalur ujian (S9), bukan halaman katalog
-- **Rilis** — deploy staging, UAT klien mulai 30 Juli, bug fixing, go-live 3 Agustus
-- **AC**
-  - 1.000 CCU: p95 API ≤500ms non-ujian, load soal ≤1s
-  - Restore backup ke database bersih **berhasil dijalankan**, bukan sekadar backup ada
-  - Rate limit terbukti menahan brute-force login
-  - Uptime & alerting aktif sebelum go-live
-
----
-
-## 5. Ringkasan Integrasi
-
-Task integrasi tersebar di slice pemakainya, tapi dikumpulkan di sini untuk keperluan penjadwalan pihak ketiga:
-
-| Integrasi | Slice | Blocker |
+| Email/WhatsApp provider and templates | P02/P03 | Real staging delivery, failure/retry/expiry behavior and credential/log handling |
+| Domain and trusted origin/TLS | P04/P11 | Root and two tenant hosts, unknown/paused host behavior and forwarded-host spoof rejection |
+| Storage credentials/private buckets | P06/P09/P20/P21 | Authorized uploads/downloads and inaccessible foreign/private objects |
+| Platform-owned Midtrans merchant | P14 | Sandbox success/failure/duplicate/uncertain outcomes, then reviewed production configuration |
+| Emoji catalog/assets/font license | P09 | Visual consistency and license evidence |
+| Client grading fixtures/policy | P16/P17/P18 | Approved exact expected outputs and edge-case policy |
+| Infrastructure budget/staffing | P23 scheduling | Reviewed resource/load results, assigned ownership, new calendar and cost |
+
+Start provider/domain acquisition alongside foundation work. Exact providers, costs, package versions and machine sizes are not invented by this plan.
+
+## 7. Milestones and release sign-off
+
+| Milestone | Slices | Exit evidence |
 |---|---|---|
-| Kontrak OpenAPI + typed client | S0 | — |
-| Cabut `lib/mock-data.ts` per domain | S1, S3, S5, S6, S7, S8, S9, S10, S12 | — |
-| Email dev/UAT via akun owner | S2 | **Selesai — diputuskan 2026-07-23** |
-| Email produksi (domain klien + SPF/DKIM) | S13 | Butuh akses domain klien — **syarat rilis** |
-| **Provider WhatsApp** | S2 | **Belum diputuskan — lihat §6 #1** |
-| Midtrans (sandbox → prod) | S6 | Butuh akun merchant klien + verifikasi bisnis |
-| Object storage MinIO/GCS | S5, S6, S7 | — |
-| Redis (ranking + cache subtes) | S9, S10 | — |
-| River job queue | S2, S10 | — |
-| Cloudflare CDN + pemetaan domain | S4, S13 | **Lihat §6 #2** |
+| M1 Tenant-safe foundation | P00–P04 | Two tenants, real auth/support, durable real provider delivery |
+| M2 Both content formats | P05–P10 | Master/copy/version invariants and deterministic generator fixtures |
+| M3 All commerce paths | P11–P15 | Real catalog/landing, three payments, both top-up paths, ledger and grants |
+| M4 Both runtimes/results | P16–P18 | Authoritative expiry/recovery and approved grading/ranking |
+| M5 Complete operations | P19–P22 | Monitoring, PDF, spreadsheet reports, student grants and platform recap |
+| M6 Full-scope production readiness | P23 | All FRs/NFRs, client UAT, restore/security/load evidence and operating ownership |
 
-**Dua yang bergantung pihak lain — mulai proses akuisisinya di Minggu 1, jangan menunggu slice-nya tiba:** akun merchant Midtrans (verifikasi bisnis bisa makan berhari-hari) dan akses domain untuk DNS email.
+Milestones group sign-off; independent later-slice work can start when its actual predecessors pass. A catalog-only or wallet-only release does not count as full-scope completion. No new launch date or revised RAB is promised until scope decisions, staffing, provider onboarding and measured capacity are reviewed.
 
----
+## 8. Decision gates and handoff
 
-## 6. Keputusan Terbuka
+[ARCHITECTURE.md §9](ARCHITECTURE.md#9-risks--open-questions) owns D01–D16. The key early blockers are OTP/phone-only recovery, Operator capabilities, scoring ownership/normalization, domain ownership and resource bounds. Finance/session policies and confirmed kecermatan formulas gate their own slices; they do not prevent review of independent architecture sections.
 
-**Sudah diputuskan 2026-07-23:**
-
-- **OTP dipakai** (menyimpang dari PRD §7 yang menyatakan tanpa OTP) — pengiriman via email dulu. → S1, S2. *PRD §7 perlu diperbarui agar tidak bertentangan dengan implementasi.*
-- **Pengirim email dev/UAT** = akun owner, dengan migrasi ke domain klien sebagai syarat rilis di S13. → S2
-
-Tiga hal yang masih menghambat slice tertentu dan butuh jawaban klien:
-
-1. **Provider & channel WhatsApp (FR-NOT-04).** PRD merujuk "§10 Open Questions #6" yang **sudah tidak ada** di PRD v1.2 — rujukan menggantung. Perlu ditetapkan providernya (WA Business API resmi vs penyedia pihak ketiga), karena harga & waktu verifikasinya jauh berbeda. **Menghambat:** S2 selesai penuh. *Mitigasi: interface notifier dengan implementasi no-op supaya slice lain tetap jalan.*
-2. **Pemisahan domain.** PRD §5.19 merujuk "§10 Open Question #5" yang juga **sudah tidak ada**. Perlu konfirmasi: `tarunaeduka.id` (landing) vs `tryout.tarunaeduka.id` (aplikasi), dan siapa yang pegang DNS. **Menghambat:** S4, S13.
-3. **Formula skor Kecermatan (§10 #1).** Masih provisional. Sumber faktor `−0,05` pada Kecepatan & Ketahanan belum dijelaskan klien. **Tidak menghambat** — implementasikan sebagai baseline, tandai provisional di UI, tapi konfirmasi sebelum UAT supaya tidak jadi temuan di menit terakhir.
-
----
-
-## 7. Catatan Sizing
-
-Ukuran bersifat relatif (S < M < L < XL), bukan estimasi hari — pemetaan ke kalender mengikuti RAB v1.3 (±5 minggu, Rp 57jt).
-
-Distribusinya berat sebelah, dan itu memang mencerminkan kenyataan: **S9 (Pengerjaan Tryout) sendirian menanggung porsi risiko terbesar**, konsisten dengan RAB yang menaruh Rp 28,5jt di Modul 3 dan menandainya "modul paling kritikal". S6 (Checkout) urutan kedua karena menyentuh uang dan pihak ketiga.
-
-Dua hal yang perlu dijaga sepanjang eksekusi:
-
-- **Jalur kritis tidak bisa dipendekkan dengan menambah orang di slice lain.** S0 → S1 → S3 → S7 → S8 → S9 → S10 berurutan. Orang tambahan berguna di S2, S4, S11, S12 — bukan di jalur ini.
-- **Mockup FE yang sudah 85% jadi memang memangkas kerja FE, tapi tidak memangkas S9.** Layar ujian sudah ada; yang belum ada adalah timer otoritatif server, pengacakan, dan perilaku kehilangan koneksi — dan semuanya berada di sisi backend.
-
----
-
-## 8. Realitas Jadwal (per 2026-07-23)
-
-Bagian ini ditulis untuk dipakai saat presentasi ke klien.
-
-**Angka yang perlu disepakati di depan:**
-
-| | |
-|---|---|
-| Hari ini | Kamis, 23 Juli 2026 |
-| Target go-live di PRD & RAB | Senin, 3 Agustus 2026 — **11 hari lagi** |
-| Sisa pekerjaan | 14 slice; RAB sendiri menskalakannya ±5 minggu |
-| Backend | 0% — belum ada `go.mod`, migration, atau service |
-
-**Target 3 Agustus sudah tidak dapat dicapai.** Ini bukan soal kecepatan kerja: RAB v1.3 menganggarkan ±5 minggu untuk lingkup ini, dan yang tersedia 1,5 minggu. Menyampaikan ini di presentasi Senin jauh lebih murah daripada klien menemukannya sendiri pada 3 Agustus.
-
-**Kenapa menambah orang tidak memperbaikinya.** Jalur kritis S0 → S1 → S3 → S7 → S8 → S9 → S10 berurutan secara teknis: bank soal butuh struktur program, builder butuh bank soal, engine ujian butuh builder. S9 sendirian berukuran XL. Orang tambahan mempercepat S2/S4/S11/S12 — tidak satu pun ada di jalur kritis.
-
-**Yang realistis dikerjakan dalam satu minggu penuh:** S0 dan S1 — tulang punggung berjalan, login & OTP asli di atas Postgres. Itu ±2 dari 14 slice, dan tidak satu pun menghasilkan sesuatu yang terlihat berbeda di layar dibanding mockup yang sudah ada.
-
-### 8.1 Untuk presentasi Senin (4 hari — realistis 1 hari kerja + akhir pekan)
-
-**Jangan mulai backend untuk demo ini.** Login JWT asli dan login mock terlihat **persis sama** di depan klien. Tiga hari kerja backend menghasilkan nol perbedaan yang bisa dilihat penonton.
-
-Aset terkuat yang sudah dimiliki adalah mockup 34 halaman yang jalan di browser. Yang bernilai justru menutup titik buntu yang akan terlihat saat alur didemokan:
-
-| Prioritas | Pekerjaan | Kenapa |
-|---|---|---|
-| 1 | Checkout menyimpan ke mock store (order + enrollment + potong saldo) | Titik buntu paling terlihat — saat ini tombol bayar tidak menghasilkan apa-apa. Frontend saja, hitungan jam |
-| 2 | Toggle acak soal & jawaban muncul di tryout builder | Fitur yang ditagih di RAB Modul 3; kalau tidak ada di layar, klien menganggapnya belum dikerjakan |
-| 3 | Halaman riwayat saldo | Melengkapi cerita 3 metode pembayaran yang jadi nilai jual Modul 2 |
-| 4 | Latih alur demo ujung-ke-ujung | Daftar → beli → kerjakan → lihat hasil, tanpa menabrak layar yang belum tersambung |
-
-Semuanya berada di `lib/mock-data.ts` dan komponen yang sudah ada — tidak menyentuh backend, tidak membuang pekerjaan, karena semua tetap terpakai sebagai kondisi awal saat backend menyusul.
-
-### 8.2 Bahan diskusi jadwal dengan klien
-
-Tiga arah yang bisa ditawarkan; pilihannya milik klien, bukan milik tim:
-
-1. **Geser go-live ke ±akhir Agustus**, lingkup penuh utuh sesuai PRD. Paling jujur, tidak ada yang dikorbankan.
-2. **Rilis bertahap pakai batas modul RAB yang sudah ada.** Modul 1+2 (akun, katalog, transaksi) tayang lebih dulu — siswa sudah bisa mendaftar dan membeli — lalu Modul 3+4 menyusul. Cocok kalau 3 Agustus terikat komitmen pemasaran klien.
-3. **Kurangi lingkup MVP.** Kandidat paling masuk akal untuk ditunda: Tes Kecermatan (S12, Modul 4, Rp 7,5jt) — produk terpisah yang tidak menghalangi alur tryout, dan formula skornya pun masih menunggu validasi klien.
-
-Opsi 2 dan 3 bisa digabung. Yang tidak tersedia adalah mengerjakan lingkup penuh sebelum 3 Agustus.
-
----
-
-**Document End**
+This plan is ready for architecture/scope review, not automatic execution or production deployment. Preserve the documented decisions and evidence when turning each slice into its implementation checklist. The original plan is recoverable with `git show 4f2246a:requirement/PLAN.md`.
