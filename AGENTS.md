@@ -85,13 +85,13 @@ cd web && npm run gen:api   # after any openapi.yaml change
 
 `requirement/DESIGN.md` is the UI contract. Read it before any UI work, and follow it over your own taste or framework defaults.
 
-- **Tokens only.** Colors, radius, fonts and shadows come from the CSS variables in `web/app/globals.css` (HeroUI semantic tokens plus `--accent-2`, `--ring-start`, `--ring-end`). No hex or oklch literals, and no arbitrary Tailwind values like `bg-[#...]` or `rounded-[7px]` in components.
+- **Tokens only.** Colors, radius, fonts and shadows come from the CSS variables in `web/app/globals.css` (HeroUI semantic tokens plus `--accent-2`, `--ring-start`, `--ring-end`). No hex or oklch literals, and no arbitrary Tailwind values like `bg-[#...]` or `rounded-[7px]` in components. One documented exception: program category chips use Tailwind palette classes, and those live only in `components/status-badge.tsx` (DESIGN §2.3).
 - **Reuse before creating.** Check `web/components/` first: `app-shell`, `data-table`, `empty-state`, `stat-card`, `status-badge`, `countdown-ring`, `latex`, `ui/form`, `ui/form-modal`, `ui/link-button`. When a pattern appears a second time, extract it into `components/` and document it in `requirement/DESIGN.md`.
 - **HeroUI v3 is compound-component based.** Follow its documented nesting exactly. Two known traps:
   - `Switch.Control` must sit inside `Switch.Content`, or it renders but can't be clicked.
   - Drawer width goes on `Drawer.Dialog`, not `Drawer.Content`.
-- **Every data view needs four states:** loading, empty (`EmptyState`), error (show the API message plus `request_id`) and success. Every mutation shows pending feedback and a result.
-- **Every screen must work** in light and dark themes, in both locales (Indonesian strings run longer), at phone width, and by keyboard with visible focus.
+- **Data states:** specify every applicable state from DESIGN §7.5 before connecting an API.
+- **Acceptance:** every UI change passes the DESIGN §10 review checklist (viewport widths, themes, locales, keyboard, contrast).
 - **Math** renders through `components/latex.tsx` (KaTeX). Never use raw HTML injection for question content.
 - **Design changes stay in sync.** A change to a token or shared pattern updates `globals.css`, the component and `requirement/DESIGN.md` in the same commit.
 
@@ -105,7 +105,7 @@ cd web && npm run gen:api && git diff --exit-code lib/api/schema.ts
 cd web && npx tsc --noEmit && npm run lint && npm run build
 ```
 
-For UI changes, also check in a browser: the golden path plus edge states, in both themes and both locales, at phone width. Report check results honestly. If something was skipped or failed, say so with the output.
+For UI changes, also run the DESIGN §10 checklist in a browser. Report check results honestly. If something was skipped or failed, say so with the output.
 
 ## Conventions
 
