@@ -1,5 +1,8 @@
+# Workaround for a broken shell GOROOT on the original dev machine; CI uses setup-go's toolchain.
+ifneq ($(wildcard /opt/homebrew/Cellar/go/1.26.3/libexec),)
 GOROOT ?= /opt/homebrew/Cellar/go/1.26.3/libexec
 export GOROOT
+endif
 
 DATABASE_URL ?= postgres://tryout:tryout@localhost:5433/tryout?sslmode=disable
 MIGRATE = go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate
