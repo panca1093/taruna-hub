@@ -18,11 +18,11 @@ export function BarChart({ data, className, valueFormatter }: { data: BarDatum[]
           <div className="relative flex w-full flex-1 items-end">
             <motion.div
               initial={{ height: 0 }}
-              animate={{ height: `${Math.max(4, (d.value / max) * 100)}%` }}
+              animate={{ height: d.value === 0 ? "0%" : `${Math.max(4, (d.value / max) * 100)}%` }}
               transition={{ duration: 0.5, delay: i * 0.04, ease: [0.32, 0.72, 0, 1] }}
               className="w-full rounded-t-md bg-gradient-ring opacity-90 transition-opacity group-hover:opacity-100"
             />
-            <span className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 rounded-md bg-surface-tertiary px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-foreground opacity-0 shadow-surface transition-opacity group-hover:opacity-100">
+            <span className="pointer-events-none absolute -top-6 left-1/2 -translate-x-1/2 rounded-md bg-surface-tertiary px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-foreground shadow-surface">
               {valueFormatter ? valueFormatter(d.value) : d.value}
             </span>
           </div>
@@ -74,7 +74,7 @@ export function DonutStat({
   }, []);
 
   return (
-    <div className="inline-flex items-center gap-5">
+    <div className="flex flex-wrap items-center gap-5">
       <svg width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={strokeWidth} className="stroke-border" />
         {arcs.map((a) => (

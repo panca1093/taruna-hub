@@ -93,7 +93,7 @@ export default function AdminDashboardPage() {
       <Card className="mt-4 flex-row items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-3">
           <span className="relative inline-flex size-2.5">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-60" />
+            <span className="absolute inline-flex size-full animate-ping rounded-full motion-reduce:animate-none bg-accent opacity-60" />
             <span className="relative inline-flex size-2.5 rounded-full bg-accent" />
           </span>
           <p className="text-sm text-foreground">

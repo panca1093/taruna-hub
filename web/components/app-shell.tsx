@@ -195,8 +195,8 @@ export function AppShell({
       {/* Mobile drawer */}
       <Drawer isOpen={mobileOpen} onOpenChange={setMobileOpen}>
         <Drawer.Backdrop>
-          <Drawer.Content placement="left" className="w-72">
-            <Drawer.Dialog className="flex h-full flex-col">
+          <Drawer.Content placement="left">
+            <Drawer.Dialog className="flex h-full w-72 flex-col">
               <Drawer.Header className="flex h-14 items-center px-3.5">
                 <Logo />
               </Drawer.Header>
@@ -211,7 +211,7 @@ export function AppShell({
         </Drawer.Backdrop>
       </Drawer>
 
-      <div className="flex min-h-dvh flex-1 flex-col">
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-surface/85 px-4 backdrop-blur-sm lg:px-6">
           <Button variant="ghost" isIconOnly size="sm" className="lg:hidden" onPress={() => setMobileOpen(true)}>
             <Menu className="size-[18px]" />

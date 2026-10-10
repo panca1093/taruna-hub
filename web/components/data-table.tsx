@@ -23,7 +23,7 @@ export function DataTable<T>({
 }) {
   return (
     <div className={cn("overflow-hidden rounded-xl border border-border bg-surface", className)}>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border bg-surface-secondary">
@@ -45,9 +45,20 @@ export function DataTable<T>({
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (e) => {
+                        if (e.key !== "Enter" && e.key !== " ") return;
+                        e.preventDefault();
+                        onRowClick(row);
+                      }
+                    : undefined
+                }
+                tabIndex={onRowClick ? 0 : undefined}
                 className={cn(
                   "border-b border-border last:border-b-0",
-                  onRowClick && "cursor-pointer hover:bg-surface-secondary",
+                  onRowClick &&
+                    "cursor-pointer outline-none hover:bg-surface-secondary focus-visible:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset",
                 )}
               >
                 {columns.map((col) => (

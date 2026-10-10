@@ -131,10 +131,10 @@ export default function QuestionsPage() {
       actions={
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onPress={() => setImportOpen(true)}>
-            <Upload className="size-3.5" /> {t.bulkImport}
+            <Upload className="size-3.5" /> <span className="sr-only sm:not-sr-only">{t.bulkImport}</span>
           </Button>
           <Button variant="primary" size="sm" onPress={openCreate}>
-            <Plus className="size-3.5" /> {t.addQuestion}
+            <Plus className="size-3.5" /> <span className="sr-only sm:not-sr-only">{t.addQuestion}</span>
           </Button>
         </div>
       }

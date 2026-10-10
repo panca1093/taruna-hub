@@ -89,7 +89,7 @@ export default function MonitoringPage() {
     >
       <div className="mb-4 flex items-center gap-2 text-sm text-foreground">
         <span className="relative inline-flex size-2.5">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-60" />
+          <span className="absolute inline-flex size-full animate-ping rounded-full motion-reduce:animate-none bg-accent opacity-60" />
           <span className="relative inline-flex size-2.5 rounded-full bg-accent" />
         </span>
         <Radio className="size-4 text-muted" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
 
 export type Locale = "id" | "en";
 
@@ -26,6 +26,10 @@ function readLocale(): Locale {
 
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
   const locale = useSyncExternalStore(subscribe, readLocale, () => "id" as Locale);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
     window.localStorage.setItem(STORAGE_KEY, next);

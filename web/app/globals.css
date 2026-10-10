@@ -51,12 +51,13 @@
   --field-foreground: var(--foreground);
   --field-placeholder: var(--muted);
   --field-border: var(--border);
+  --field-border-width: 1px;
 
   --success: oklch(0.6534 0.1567 156.7);
-  --success-foreground: oklch(0.99 0 0);
+  --success-foreground: oklch(0.2242 0.019 267);
   --warning: oklch(0.7723 0.1585 73.7);
   --warning-foreground: oklch(0.2242 0.019 267);
-  --danger: oklch(0.6288 0.2116 20.6);
+  --danger: oklch(0.58 0.2116 20.6);
   --danger-foreground: oklch(0.99 0 0);
 
   --segment: oklch(1 0 0);

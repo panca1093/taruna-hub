@@ -39,10 +39,10 @@ Guidelines:
 | `accent-2` | `0.596 0.196 293.7` → `#885FE6` | `0.688 0.183 293.7` → `#A27FFF` | Gradient endpoint |
 | `accent-foreground` | `0.99 0 0` → `#FCFCFC` | `0.1 0 0` → `#030303` | Text on solid accent |
 | `success` | `0.6534 0.1567 156.7` → `#00AC67` | Inherits light value → `#00AC67` | Completed / confirmed |
-| `success-foreground` | `0.99 0 0` → `#FCFCFC` | Inherits light value → `#FCFCFC` | Text on solid success |
+| `success-foreground` | `0.2242 0.019 267` → `#181B25` | Inherits light value → `#181B25` | Text on solid success |
 | `warning` | `0.7723 0.1585 73.7` → `#F0A31B` | `0.8022 0.1451 76.6` → `#F3B040` | Pending / attention |
 | `warning-foreground` | `0.2242 0.019 267` → `#181B25` | `0.16 0.01 267` → `#0B0D12` | Text on solid warning |
-| `danger` | `0.6288 0.2116 20.6` → `#ED3D4F` | `0.671 0.1988 22.5` → `#F8555A` | Error / destructive / urgent |
+| `danger` | `0.58 0.2116 20.6` → `#DB2740` | `0.671 0.1988 22.5` → `#F8555A` | Error / destructive / urgent |
 | `danger-foreground` | `0.99 0 0` → `#FCFCFC` | `0.1 0 0` → `#030303` | Text on solid danger |
 | `border` | `0.9091 0.0055 258` → `#DFE1E5` | `0.2965 0.0075 264` → `#2B2D31` | Component boundaries |
 | `separator` | `0.928 0.0045 258` → `#E5E7EA` | `0.2684 0.0075 264` → `#24262A` | Quieter separators |
@@ -163,7 +163,7 @@ Project CSS explicitly tightens `.button` to 6px and `.chip` to 4.5px. Order fil
 - Cards use `shadow-surface`; overlays use `shadow-overlay`. Use these tokens instead of new shadows per page.
 - The inherited light surface shadow is `0 2px 4px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.06), 0 0 1px rgba(0,0,0,.06)`.
 - Dark cards are distinguished mainly through surface color. Do not add bright outlines to every card to simulate light-mode elevation.
-- Gap: HeroUI's field border width resolves to `0px` in this theme. Defining `--field-border` alone does not create a visible input border. Verify input boundaries and focus in both themes before shipping a form.
+- HeroUI's default theme sets `--field-border-width: 0px`; the project overrides it to `1px` so fields stay visible on same-color cards. Verify input boundaries and focus in both themes before shipping a form.
 
 ## 5. Responsive layout and application shell
 
@@ -190,7 +190,7 @@ Reuse [AppShell](../web/components/app-shell.tsx) for authenticated operational 
 | Sidebar logo row | 56px high; 14px horizontal inset |
 | Sidebar navigation | 8px container inset; items 10px horizontal / 8px vertical; 18px icons |
 | Selected navigation | Accent soft background/text plus a 2px gradient left indicator |
-| Mobile drawer | Left placement; source requests 288px on `Drawer.Content`; closes after navigation |
+| Mobile drawer | Left placement; 288px set on `Drawer.Dialog` (measured); closes after navigation |
 | Header | Sticky; 56px; `z-30`; `surface/85`, blur, bottom border |
 | Header padding | 16px base; 24px at `lg` |
 | Main padding | 16px horizontal / 24px vertical; 24px / 32px at `lg` |
@@ -209,7 +209,7 @@ Guidelines:
 - Let legends and action groups wrap or stack. Ensure drawers and dialogs fit the viewport with safe edge spacing.
 - A collapsed sidebar still needs accessible names and discoverable labels for icon-only items.
 
-**Observed gap:** at a 390px viewport, `/admin` produced a 635px document width. The current table/shell combination does not contain overflow at page level. `/student` remained 390px wide. Treat page-level horizontal scrolling as a failed responsive acceptance check, not a design rule to reproduce.
+The shell's main column carries `min-w-0` and `DataTable`'s scroll region is `relative`, so wide tables (including absolutely positioned descendants) scroll inside the table. All shell routes were measured without page-level overflow at 320/390/768/1024/1440px. Treat page-level horizontal scrolling as a failed responsive acceptance check.
 
 ## 6. Component specifications
 
@@ -277,7 +277,7 @@ The question editor is an observed specialized pattern: compact formatting toolb
 - Clickable rows get a pointer and secondary hover background.
 - Current component has no built-in search, sorting, pagination, loading, empty state, or error state.
 
-Guidelines: place count, search/filter controls, and any primary action above the table. Make active filters visible and provide a clear reset. Right-align comparable numeric columns when useful. Keep IDs in mono and secondary styling. Put explicit links/buttons in rows so details can be opened with a keyboard; `onRowClick` alone currently does not provide keyboard interaction.
+Guidelines: place count, search/filter controls, and any primary action above the table. Make active filters visible and provide a clear reset. Right-align comparable numeric columns when useful. Keep IDs in mono and secondary styling. With `onRowClick`, rows are focusable, show a focus ring, and open on Enter/Space; explicit links/buttons in rows are still preferred for multiple row actions.
 
 Order status filters are rounded-full custom buttons with 14px medium labels, 14px horizontal / 6px vertical padding, accent fill when selected, and neutral border when inactive. For new filter controls, expose the selection state semantically and support keyboard activation.
 
@@ -295,7 +295,7 @@ Icons use Lucide with a common 16–18px control size and stroke width around 2.
 
 Guidelines: use a modal for a bounded edit, review, or confirmation; use a full page for long builders. Keep dismissal and submission clear. For irreversible actions, state the affected object and consequence. Verify focus entry, Escape/dismiss behavior, focus containment, and return focus in the actual flow. Keep footer actions reachable when content scrolls. Existing question-picker and navigation drawers are suited to side-by-side selection and navigation.
 
-Gap: the shell currently sets navigation-drawer width on `Drawer.Content`. The project instructions require width on `Drawer.Dialog` for HeroUI v3. Verify the opened drawer during implementation rather than treating the requested 288px as a measured dialog width.
+Drawer width belongs on `Drawer.Dialog` for HeroUI v3; the navigation drawer follows this and measures 288px when open.
 
 ### 6.7 Empty states, errors, and feedback
 
@@ -316,7 +316,7 @@ Toasts are provided globally at `bottom end`. Use them for concise action outcom
 
 The ring uses `ring-start` → `ring-end`; `urgent` changes the stroke to danger. The caller determines urgency. Product timer policy must come from the exam specification, not a new visual threshold invented per screen.
 
-Gap: bar height is currently clamped to a minimum 4%, including zero. Avoid representing zero as a positive quantity in production charts. Hover-only values also need an alternative for touch and keyboard users. Donut legends need responsive wrapping/stacking for long translations.
+Zero renders as an empty bar; small positive values keep a 4% minimum so they stay visible. Bar values are always visible rather than hover-only, and donut legends wrap below the chart when space is narrow.
 
 ### 6.9 Branding and avatars
 
@@ -413,11 +413,11 @@ These are required design considerations for new integration; most are not suppl
 - Use headings to express page/section hierarchy. Charts need a readable summary or equivalent values; color and animation alone cannot communicate status.
 - Check zoom, long names, long translations, and narrow viewports. Keep focus and validation messages visible around sticky regions.
 
-Token spot checks using browser-sampled sRGB values: primary light text/fill is approximately 5.01:1; light solid danger with its foreground is 3.80:1; solid success with its foreground is 2.88:1 in both themes. **Gap:** those last two solid pairs are below the normal-text threshold. They are not measurements of the soft status badges. Review the actual rendered use and adjust centrally before using those solid pairs for small text. This is a limited spot check, not a full accessibility audit.
+Token spot checks (computed from OKLCH): primary light text/fill ≈ 4.98:1; light solid danger with its foreground ≈ 4.64:1; solid success with its dark foreground ≈ 5.77:1 in both themes. These are not measurements of the soft status badges and are a limited spot check, not a full accessibility audit.
 
 ### 8.2 Motion
 
-Observed: sidebar width transition 200ms; button transitions 100–250ms; bar entrance 500ms with 40ms stagger; ring transition 700ms. The live-session indicator uses a ping animation. HeroUI buttons include reduced-motion handling, but the custom chart/ring motion does not explicitly follow that preference.
+Observed: sidebar width transition 200ms; button transitions 100–250ms; bar entrance 500ms with 40ms stagger; ring transition 700ms. The live-session indicator uses a ping animation. HeroUI buttons include reduced-motion handling; framer-motion (charts, ring) follows it through `MotionConfig reducedMotion="user"` in providers, and the live ping uses `motion-reduce:animate-none`.
 
 Guidelines: respect `prefers-reduced-motion` for custom motion, avoid repeated animation on routine data refresh, and keep urgent information readable without pulsing. Animate only to clarify change or orientation. Timer readability and accuracy matter more than entrance effects.
 
@@ -425,7 +425,7 @@ Guidelines: respect `prefers-reduced-motion` for custom motion, avoid repeated a
 
 Observed: light is the default, automatic system-theme selection is disabled, and the class-based theme can be toggled manually. Indonesian is the default locale; Indonesian/English dictionaries are under `lib/i18n/dict/`.
 
-Guidelines: add user-facing strings to the appropriate dictionary; test both languages with the same layout. Localize accessible names, validation, status, and empty-state copy as well as headings. Keep currency/date formatting deliberate. Theme changes should alter tokens, not per-page hex overrides. The current root document language stays `id`; synchronize it with the selected locale during localization integration.
+Guidelines: add user-facing strings to the appropriate dictionary; test both languages with the same layout. Localize accessible names, validation, status, and empty-state copy as well as headings. Keep currency/date formatting deliberate. Theme changes should alter tokens, not per-page hex overrides. The root document language is server-rendered as `id` and synchronized to the selected locale on the client.
 
 ## 9. Future tenant branding boundary
 
