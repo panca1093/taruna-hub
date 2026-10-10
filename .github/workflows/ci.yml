@@ -80,4 +80,5 @@ jobs:
           git diff --exit-code lib/api/schema.ts
 
       - run: npx tsc --noEmit
+      - run: npm run lint
       - run: npm run build
