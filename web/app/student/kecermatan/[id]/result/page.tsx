@@ -1,17 +1,17 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect } from "react";
 import { notFound, useRouter } from "next/navigation";
 import { Accordion, Card, Chip } from "@heroui/react";
 import { CheckCircle2, ChevronDown, Gauge, MinusCircle, Timer, Trophy, XCircle } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { CountdownRing } from "@/components/countdown-ring";
 import { useSession } from "@/lib/session-context";
-import { computeResult, loadSession, type KecermatanSessionState } from "@/lib/kecermatan-session";
+import { computeResult, loadSession } from "@/lib/kecermatan-session";
 import { getKecermatanTest } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
-import type { KecermatanResult } from "@/lib/types";
 import { useKecermatanResultT } from "@/lib/i18n/dict/kecermatan-result";
+import { useHydrated } from "@/lib/use-hydrated";
 
 export default function KecermatanResultPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -19,20 +19,15 @@ export default function KecermatanResultPage({ params }: { params: Promise<{ id:
   const { user } = useSession();
   const t = useKecermatanResultT();
   const test = getKecermatanTest(id);
-  const [session, setSession] = useState<KecermatanSessionState | null>(null);
-  const [result, setResult] = useState<Omit<KecermatanResult, "id"> | null>(null);
+  const hydrated = useHydrated();
+  const loaded = hydrated && test ? loadSession(test.id, user.id) : null;
+  const session = loaded?.status === "completed" ? loaded : null;
+  const result = test && session ? computeResult(test, session) : null;
+  const mustRedirect = hydrated && !!test && !session;
 
   useEffect(() => {
-    if (!test) return;
-    const s = loadSession(test.id, user.id);
-    if (!s || s.status !== "completed") {
-      router.replace(`/student/kecermatan/${test.id}`);
-      return;
-    }
-    setSession(s);
-    setResult(computeResult(test, s));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [test?.id, user.id]);
+    if (mustRedirect) router.replace(`/student/kecermatan/${id}`);
+  }, [mustRedirect, router, id]);
 
   if (!test) notFound();
   if (!result || !session) {

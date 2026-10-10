@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@heroui/react";
 import { Award, ClipboardList, PackageOpen, Trophy, Wallet } from "lucide-react";
@@ -14,26 +13,25 @@ import { useSession } from "@/lib/session-context";
 import { loadSession } from "@/lib/tryout-session";
 import { formatDateTime, formatIDR, getEnrollmentsForUser, getProgram, getResultsForUser, getTryout } from "@/lib/mock-data";
 import { useStudentDashboardT } from "@/lib/i18n/dict/student-dashboard";
+import { useHydrated } from "@/lib/use-hydrated";
 
 type TryoutState = "not_started" | "in_progress" | "completed";
 
 export default function StudentDashboardPage() {
   const { user } = useSession();
   const t = useStudentDashboardT();
-  const [statuses, setStatuses] = useState<Record<string, TryoutState>>({});
+  const hydrated = useHydrated();
 
   const enrollments = getEnrollmentsForUser(user.id);
   const results = [...getResultsForUser(user.id)].sort((a, b) => (a.completedAt < b.completedAt ? 1 : -1));
 
-  useEffect(() => {
-    const next: Record<string, TryoutState> = {};
+  const statuses: Record<string, TryoutState> = {};
+  if (hydrated) {
     for (const e of enrollments) {
       const session = loadSession(e.tryoutId, user.id);
-      next[e.tryoutId] = !session ? "not_started" : session.status === "completed" ? "completed" : "in_progress";
+      statuses[e.tryoutId] = !session ? "not_started" : session.status === "completed" ? "completed" : "in_progress";
     }
-    setStatuses(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.id]);
+  }
 
   const notStarted = enrollments.filter((e) => (statuses[e.tryoutId] ?? "not_started") === "not_started").length;
   const inProgress = enrollments.filter((e) => statuses[e.tryoutId] === "in_progress").length;

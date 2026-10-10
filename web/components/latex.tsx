@@ -16,7 +16,6 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
         throwOnError: false,
         displayMode: false,
       });
-      // eslint-disable-next-line react/no-danger
       return [<span key={dollarKey} dangerouslySetInnerHTML={{ __html: html }} />];
     }
 

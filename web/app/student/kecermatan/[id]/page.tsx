@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use } from "react";
 import { notFound, useRouter } from "next/navigation";
 import { Button, Card } from "@heroui/react";
 import { Gauge, PlayCircle, ShoppingBag, Sparkles } from "lucide-react";
@@ -26,6 +26,7 @@ import {
   hasKecermatanAccess,
 } from "@/lib/mock-data";
 import { useKecermatanOverviewT } from "@/lib/i18n/dict/kecermatan-overview";
+import { useHydrated } from "@/lib/use-hydrated";
 
 export default function KecermatanOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -33,17 +34,11 @@ export default function KecermatanOverviewPage({ params }: { params: Promise<{ i
   const { user } = useSession();
   const t = useKecermatanOverviewT();
   const test = getKecermatanTest(id);
-  const [session, setSession] = useState<KecermatanSessionState | null>(null);
-  const [left, setLeft] = useState(0);
-  const [attempts, setAttempts] = useState<KecermatanSessionState[]>([]);
-
-  useEffect(() => {
-    if (!test) return;
-    setSession(loadSession(test.id, user.id));
-    const purchased = getKecermatanAttemptsPurchased(user.id, test.id);
-    setLeft(remainingAttempts(test.id, user.id, purchased));
-    setAttempts(getAttempts(test.id, user.id));
-  }, [test, user.id]);
+  const hydrated = useHydrated();
+  const ready = hydrated && !!test;
+  const session: KecermatanSessionState | null = ready ? loadSession(test.id, user.id) : null;
+  const left = ready ? remainingAttempts(test.id, user.id, getKecermatanAttemptsPurchased(user.id, test.id)) : 0;
+  const attempts: KecermatanSessionState[] = ready ? getAttempts(test.id, user.id) : [];
 
   if (!test) notFound();
   if (!hasKecermatanAccess(user.id, test.id)) {

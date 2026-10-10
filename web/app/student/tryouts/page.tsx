@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Card, Chip } from "@heroui/react";
 import { Clock, ListChecks, PackageOpen, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -21,34 +20,30 @@ import {
   getSubtestsForTryout,
   getTryout,
 } from "@/lib/mock-data";
+import { useHydrated } from "@/lib/use-hydrated";
 
 type TryoutState = "not_started" | "in_progress" | "completed";
 
 export default function StudentTryoutsPage() {
   const t = useTryoutsListT();
   const { user } = useSession();
-  const [statuses, setStatuses] = useState<Record<string, TryoutState>>({});
-  const [kecRemaining, setKecRemaining] = useState<Record<string, number>>({});
+  const hydrated = useHydrated();
 
   const enrollments = getEnrollmentsForUser(user.id);
   const kecTestIds = [...new Set(getKecermatanEnrollmentsForUser(user.id).map((e) => e.kecermatanTestId))];
 
-  useEffect(() => {
-    const next: Record<string, TryoutState> = {};
+  const statuses: Record<string, TryoutState> = {};
+  const kecRemaining: Record<string, number> = {};
+  if (hydrated) {
     for (const e of enrollments) {
       const session = loadSession(e.tryoutId, user.id);
-      next[e.tryoutId] = !session ? "not_started" : session.status === "completed" ? "completed" : "in_progress";
+      statuses[e.tryoutId] = !session ? "not_started" : session.status === "completed" ? "completed" : "in_progress";
     }
-    setStatuses(next);
-
-    const nextKec: Record<string, number> = {};
     for (const testId of kecTestIds) {
       const purchased = getKecermatanAttemptsPurchased(user.id, testId);
-      nextKec[testId] = remainingAttempts(testId, user.id, purchased);
+      kecRemaining[testId] = remainingAttempts(testId, user.id, purchased);
     }
-    setKecRemaining(nextKec);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.id]);
+  }
 
   if (enrollments.length === 0 && kecTestIds.length === 0) {
     return (

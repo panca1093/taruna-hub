@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@heroui/react";
 import { useCommonT } from "@/lib/i18n/dict/common";
+import { useHydrated } from "@/lib/use-hydrated";
 
 export function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useHydrated();
   const t = useCommonT();
-
-  useEffect(() => setMounted(true), []);
 
   if (!mounted) {
     return <div className="size-9" aria-hidden />;

@@ -16,6 +16,7 @@ import {
 import { getKecermatanTest } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
 import { useKecermatanAttemptT } from "@/lib/i18n/dict/kecermatan-attempt";
+import { useHydrated } from "@/lib/use-hydrated";
 
 type Phase = "instructions" | "kolom" | "jeda";
 
@@ -34,50 +35,59 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
   const [nextKolomNumber, setNextKolomNumber] = useState<number | null>(null);
 
   // Init: resume mid-attempt if a kolom already started, otherwise show instructions first.
-  useEffect(() => {
-    if (!test) return;
+  const hydrated = useHydrated();
+  const seedKey = `${id}:${user.id}`;
+  const [seededKey, setSeededKey] = useState<string | null>(null);
+  const [alreadyCompleted, setAlreadyCompleted] = useState(false);
+
+  if (hydrated && test && seededKey !== seedKey) {
+    setSeededKey(seedKey);
     const s = initSession(test.id, user.id);
     if (s.status === "completed") {
-      router.replace(`/student/kecermatan/${test.id}/result`);
-      return;
-    }
-    setSession(s);
-    if (Object.keys(s.kolomStartedAt).length > 0) {
+      setAlreadyCompleted(true);
+    } else if (Object.keys(s.kolomStartedAt).length > 0) {
       const started = startKolom(test.id, user.id, s.currentKolom);
       setSession(started);
       const soal = started.soalByKolom[s.currentKolom] ?? [];
       const firstPending = soal.findIndex((q) => q.selectedLabel === null);
       setSoalIndex(firstPending === -1 ? soal.length : firstPending);
       setPhase("kolom");
+    } else {
+      setSession(s);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [test?.id, user.id]);
+  }
+
+  useEffect(() => {
+    if (alreadyCompleted) router.replace(`/student/kecermatan/${id}/result`);
+  }, [alreadyCompleted, router, id]);
+
+  const hasTest = !!test;
 
   const beginKolom = useCallback(
     (kolomNumber: number) => {
-      if (!test) return;
-      const s = startKolom(test.id, user.id, kolomNumber);
+      if (!hasTest) return;
+      const s = startKolom(id, user.id, kolomNumber);
       setSession(s);
       setSoalIndex(0);
       setPhase("kolom");
     },
-    [test, user.id],
+    [hasTest, id, user.id, setSession, setSoalIndex, setPhase],
   );
 
   const finishKolom = useCallback(
     (kolomNumber: number) => {
-      if (!test) return;
-      const s = completeKolom(test.id, user.id, kolomNumber);
+      if (!hasTest) return;
+      const s = completeKolom(id, user.id, kolomNumber);
       setSession(s);
       if (s.status === "completed") {
-        router.replace(`/student/kecermatan/${test.id}/result`);
+        router.replace(`/student/kecermatan/${id}/result`);
         return;
       }
       setNextKolomNumber(kolomNumber + 1);
       setJedaLeft(5);
       setPhase("jeda");
     },
-    [test, user.id, router],
+    [hasTest, id, user.id, router, setSession, setNextKolomNumber, setJedaLeft, setPhase],
   );
 
   // Countdown timer for the active kolom, resilient to reload via persisted kolomStartedAt.
@@ -100,11 +110,7 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
   // Jeda auto-advance countdown.
   useEffect(() => {
     if (phase !== "jeda" || nextKolomNumber === null) return;
-    if (jedaLeft <= 0) {
-      beginKolom(nextKolomNumber);
-      return;
-    }
-    const t = setTimeout(() => setJedaLeft((v) => v - 1), 1000);
+    const t = setTimeout(() => (jedaLeft <= 1 ? beginKolom(nextKolomNumber) : setJedaLeft((v) => v - 1)), 1000);
     return () => clearTimeout(t);
   }, [phase, jedaLeft, nextKolomNumber, beginKolom]);
 

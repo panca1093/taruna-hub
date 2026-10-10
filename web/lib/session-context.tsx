@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
 import type { AppUser, Role } from "./types";
 import { currentAdmin, currentOperator, currentStudent } from "./mock-data";
 
@@ -42,17 +42,24 @@ export function saveSessionSettings(settings: SessionSettings) {
   window.localStorage.setItem(SESSION_SETTINGS_KEY, JSON.stringify(settings));
 }
 
-export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRoleState] = useState<Role>("student");
+const roleListeners = new Set<() => void>();
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY) as Role | null;
-    if (stored && usersByRole[stored]) setRoleState(stored);
-  }, []);
+function subscribe(notify: () => void) {
+  roleListeners.add(notify);
+  return () => roleListeners.delete(notify);
+}
+
+function readRole(): Role {
+  const stored = window.localStorage.getItem(STORAGE_KEY) as Role | null;
+  return stored && usersByRole[stored] ? stored : "student";
+}
+
+export function SessionProvider({ children }: { children: React.ReactNode }) {
+  const role = useSyncExternalStore(subscribe, readRole, () => "student" as Role);
 
   const setRole = useCallback((next: Role) => {
-    setRoleState(next);
     window.localStorage.setItem(STORAGE_KEY, next);
+    roleListeners.forEach((notify) => notify());
   }, []);
 
   const value = useMemo<SessionContextValue>(

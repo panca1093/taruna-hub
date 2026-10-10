@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button, Card, toast } from "@heroui/react";
 import { CreditCard, Scale, Settings as SettingsIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { SwitchInput, TextInput } from "@/components/ui/form";
 import { getSessionSettings, saveSessionSettings } from "@/lib/session-context";
+import { useHydrated } from "@/lib/use-hydrated";
 import { useSettingsT } from "@/lib/i18n/dict/settings";
 
 export default function SettingsPage() {
@@ -15,11 +16,15 @@ export default function SettingsPage() {
   const [autoLogout, setAutoLogout] = useState(true);
   const [idleMinutes, setIdleMinutes] = useState("30");
 
-  useEffect(() => {
+  const hydrated = useHydrated();
+  const [seeded, setSeeded] = useState(false);
+
+  if (hydrated && !seeded) {
     const stored = getSessionSettings();
+    setSeeded(true);
     setAutoLogout(stored.autoLogout);
     setIdleMinutes(String(stored.idleMinutes));
-  }, []);
+  }
 
   const handleSave = () => {
     saveSessionSettings({ autoLogout, idleMinutes: Number(idleMinutes) || 30 });

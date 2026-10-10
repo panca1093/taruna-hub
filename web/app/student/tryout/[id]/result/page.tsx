@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect } from "react";
 import { notFound, useRouter } from "next/navigation";
 import { Accordion, Card, Chip } from "@heroui/react";
 import { CheckCircle2, ChevronDown, Clock, Info, Trophy, XCircle } from "lucide-react";
@@ -12,8 +12,8 @@ import { useSession } from "@/lib/session-context";
 import { computeResult, estimateRank, getAttempts, loadSession } from "@/lib/tryout-session";
 import { formatDate, getQuestionsForSubtest, getSubtest, getTryout } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
-import type { TryoutResult } from "@/lib/types";
 import { useTryoutResultT } from "@/lib/i18n/dict/tryout-result";
+import { useHydrated } from "@/lib/use-hydrated";
 
 export default function ResultPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -21,25 +21,24 @@ export default function ResultPage({ params }: { params: Promise<{ id: string }>
   const { user } = useSession();
   const tryout = getTryout(id);
   const t = useTryoutResultT();
-  const [result, setResult] = useState<Omit<TryoutResult, "id" | "sessionId"> | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string[]>>({});
-
-  useEffect(() => {
-    if (!tryout) return;
-    const session = loadSession(tryout.id, user.id);
-    if (!session || session.status !== "completed") {
-      router.replace(`/student/tryout/${tryout.id}`);
-      return;
-    }
-    setAnswers(session.answers);
+  const hydrated = useHydrated();
+  const loaded = hydrated && tryout ? loadSession(tryout.id, user.id) : null;
+  const session = loaded?.status === "completed" ? loaded : null;
+  const answers: Record<string, string[]> = session?.answers ?? {};
+  let result = null;
+  if (tryout && session) {
     // Ranking is based on the average score across all of the student's own
     // attempts on this tryout (FR-RES-05), not just this attempt's score.
     const attempts = getAttempts(tryout.id, user.id);
     const attemptScores = attempts.map((a) => computeResult(tryout, a, { rank: 1, participantCount: 1 }).totalScore);
     const avgScore = Math.round(attemptScores.reduce((sum, s) => sum + s, 0) / attemptScores.length);
-    setResult(computeResult(tryout, session, estimateRank(tryout.id, avgScore)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tryout?.id, user.id]);
+    result = computeResult(tryout, session, estimateRank(tryout.id, avgScore));
+  }
+  const mustRedirect = hydrated && !!tryout && !session;
+
+  useEffect(() => {
+    if (mustRedirect) router.replace(`/student/tryout/${id}`);
+  }, [mustRedirect, router, id]);
 
   if (!tryout) notFound();
   if (!result) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card, Chip } from "@heroui/react";
@@ -24,21 +24,21 @@ import {
   hasEnrollment,
   hasKecermatanAccess,
 } from "@/lib/mock-data";
+import { useHydrated } from "@/lib/use-hydrated";
 
 export default function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const product = getProduct(id);
   const { role, user } = useSession();
-  const [kecRemaining, setKecRemaining] = useState<number | null>(null);
+  const hydrated = useHydrated();
   const t = useCatalogDetailT();
 
   const kecermatanTest = product?.kecermatanTestId ? getKecermatanTest(product.kecermatanTestId) : undefined;
 
-  useEffect(() => {
-    if (role !== "student" || !kecermatanTest) return;
-    const purchased = getKecermatanAttemptsPurchased(user.id, kecermatanTest.id);
-    setKecRemaining(remainingAttempts(kecermatanTest.id, user.id, purchased));
-  }, [role, kecermatanTest, user.id]);
+  const kecRemaining =
+    hydrated && role === "student" && kecermatanTest
+      ? remainingAttempts(kecermatanTest.id, user.id, getKecermatanAttemptsPurchased(user.id, kecermatanTest.id))
+      : null;
 
   if (!product) notFound();
 

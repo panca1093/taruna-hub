@@ -19,7 +19,6 @@ import { useCommonT } from "@/lib/i18n/dict/common";
 import { useTryoutSubtestT } from "@/lib/i18n/dict/tryout-subtest";
 import {
   completeSubtest,
-  initSession,
   logViolation,
   saveAnswer,
   startSubtest,
@@ -27,6 +26,7 @@ import {
 } from "@/lib/tryout-session";
 import { getQuestionsForSubtest, getSubtest, getTryout } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
+import { useHydrated } from "@/lib/use-hydrated";
 
 export default function SubtestPage({
   params,
@@ -53,29 +53,37 @@ export default function SubtestPage({
   const containerRef = useRef<HTMLDivElement>(null);
   const submittedRef = useRef(false);
 
+  const found = !!tryout && !!subtest;
+
   const doSubmit = useCallback(() => {
-    if (!tryout || !subtest || submittedRef.current) return;
+    if (!found || submittedRef.current) return;
     submittedRef.current = true;
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-    const updated = completeSubtest(tryout.id, user.id, subtest.id);
+    const updated = completeSubtest(id, user.id, subtestId);
     if (updated.status === "completed") {
-      router.replace(`/student/tryout/${tryout.id}/result`);
+      router.replace(`/student/tryout/${id}/result`);
     } else {
-      router.replace(`/student/tryout/${tryout.id}`);
+      router.replace(`/student/tryout/${id}`);
     }
-  }, [tryout, subtest, user.id, router]);
+  }, [found, id, subtestId, user.id, router]);
 
   // Init session + guard against re-entering a completed subtest.
+  const hydrated = useHydrated();
+  const seedKey = `${id}:${subtestId}:${user.id}`;
+  const [seededKey, setSeededKey] = useState<string | null>(null);
+  const [alreadyCompleted, setAlreadyCompleted] = useState(false);
+
+  if (hydrated && found && seededKey !== seedKey) {
+    const s = startSubtest(id, user.id, subtestId);
+    const completed = s.subtestStatus[subtestId] === "completed";
+    setSeededKey(seedKey);
+    setAlreadyCompleted(completed);
+    setSession(completed ? null : s);
+  }
+
   useEffect(() => {
-    if (!tryout || !subtest) return;
-    const s = startSubtest(tryout.id, user.id, subtest.id);
-    if (s.subtestStatus[subtest.id] === "completed") {
-      router.replace(`/student/tryout/${tryout.id}`);
-      return;
-    }
-    setSession(s);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tryout?.id, subtest?.id, user.id]);
+    if (alreadyCompleted) router.replace(`/student/tryout/${id}`);
+  }, [alreadyCompleted, router, id]);
 
   // Countdown timer, resilient to reloads via persisted subtestStartedAt.
   useEffect(() => {

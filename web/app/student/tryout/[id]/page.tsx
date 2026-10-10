@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import { notFound, useRouter } from "next/navigation";
 import { Button, Card } from "@heroui/react";
 import { CheckCircle2, ChevronRight, Circle, Clock, Lock, PlayCircle, RotateCcw, Trophy } from "lucide-react";
@@ -10,6 +10,7 @@ import { useSession } from "@/lib/session-context";
 import { computeResult, getAttempts, initSession, nextPendingSubtest, startNewAttempt, type TryoutSessionState } from "@/lib/tryout-session";
 import { formatDateTime, getProgram, getSubtestsForTryout, getTryout, hasEnrollment } from "@/lib/mock-data";
 import { ProgramBadge } from "@/components/status-badge";
+import { useHydrated } from "@/lib/use-hydrated";
 import { useTryoutOverviewT } from "@/lib/i18n/dict/tryout-overview";
 
 export default function TryoutOverviewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,10 +21,11 @@ export default function TryoutOverviewPage({ params }: { params: Promise<{ id: s
   const [session, setSession] = useState<TryoutSessionState | null>(null);
   const t = useTryoutOverviewT();
 
-  useEffect(() => {
-    if (!tryout) return;
+  const hydrated = useHydrated();
+
+  if (hydrated && tryout && (session?.tryoutId !== tryout.id || session.userId !== user.id)) {
     setSession(initSession(tryout.id, user.id));
-  }, [tryout, user.id]);
+  }
 
   if (!tryout) notFound();
   if (!hasEnrollment(user.id, tryout.id)) {
