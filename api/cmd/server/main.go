@@ -46,7 +46,7 @@ func run() error {
 
 	userRepo := repository.NewUserRepository(pool)
 	userSvc := service.NewUserService(userRepo)
-	h := handler.New(cfg, logger, userSvc, handler.NewHealthHandler(pool))
+	h := handler.New(logger, userSvc, handler.NewHealthHandler(pool))
 
 	e := echo.New()
 	e.HideBanner = true
@@ -56,7 +56,7 @@ func run() error {
 	e.Use(httpx.Recover(logger))
 	e.Use(httpx.RequestLogger(logger))
 	e.Use(httpx.CORS(cfg.CORSOrigins, !cfg.IsProduction()))
-	h.Register(e)
+	h.Register(e, apiIdentity(cfg, userSvc))
 
 	go func() {
 		logger.Info("server listening", slog.String("port", cfg.Port), slog.String("env", cfg.Env))
@@ -72,6 +72,13 @@ func run() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownGrace)
 	defer cancel()
 	return e.Shutdown(shutdownCtx)
+}
+
+func apiIdentity(cfg config.Config, users *service.UserService) echo.MiddlewareFunc {
+	if cfg.IsDevelopment() {
+		return handler.DevIdentity(users)
+	}
+	return handler.NoIdentity
 }
 
 func newLogger(cfg config.Config) *slog.Logger {

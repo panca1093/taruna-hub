@@ -13,12 +13,12 @@ import (
 
 const currentUserKey = "current_user"
 
-// devIdentity is a placeholder for the JWT middleware that S1 introduces. It resolves
+// DevIdentity is a placeholder for the JWT middleware that S1 introduces. It resolves
 // the caller from X-Demo-User (email or phone) so the walking skeleton can prove a real
 // database round-trip before auth exists.
 //
 // TODO: remove in S1 — this trusts a client-supplied header and must never reach production.
-func devIdentity(users *service.UserService) echo.MiddlewareFunc {
+func DevIdentity(users *service.UserService) echo.MiddlewareFunc {
 	const devUserHeader = "X-Demo-User"
 	const fallbackUser = "naila@example.com"
 
@@ -40,6 +40,13 @@ func devIdentity(users *service.UserService) echo.MiddlewareFunc {
 			c.Set(currentUserKey, user)
 			return next(c)
 		}
+	}
+}
+
+// NoIdentity keeps /api/v1 closed outside development until P03 provides real sessions.
+func NoIdentity(echo.HandlerFunc) echo.HandlerFunc {
+	return func(echo.Context) error {
+		return httpx.Unauthorized("Autentikasi diperlukan.")
 	}
 }
 
