@@ -113,16 +113,16 @@ export interface paths {
          * Current user
          * @description Returns the signed-in user.
          *
-         *     **S0 only:** the caller is resolved from the `X-Demo-User` header (email or phone),
-         *     falling back to the seeded student. Slice S1 replaces this with a JWT bearer token
-         *     and removes the header entirely.
+         *     **Development only (until P03):** the caller is resolved from the `X-Demo-User` header
+         *     (email or phone), falling back to the seeded student. Any other `APP_ENV` always
+         *     answers `401`. P03 replaces this with a JWT bearer token and removes the header.
          */
         get: {
             parameters: {
                 query?: never;
                 header?: {
                     /**
-                     * @description Dev-only identity override. Removed in S1.
+                     * @description Dev-only identity override. Removed in P03.
                      * @example naila@example.com
                      */
                     "X-Demo-User"?: string;

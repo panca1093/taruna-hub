@@ -29,7 +29,8 @@ func Load() (Config, error) {
 	return c, nil
 }
 
-func (c Config) IsProduction() bool { return c.Env == "production" }
+func (c Config) IsProduction() bool  { return c.Env == "production" }
+func (c Config) IsDevelopment() bool { return c.Env == "development" }
 
 func env(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
