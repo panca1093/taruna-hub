@@ -55,7 +55,7 @@ func run() error {
 	e.Use(httpx.RequestID())
 	e.Use(httpx.Recover(logger))
 	e.Use(httpx.RequestLogger(logger))
-	e.Use(httpx.CORS(cfg.CORSOrigins, !cfg.IsProduction()))
+	e.Use(httpx.CORS(cfg.CORSOrigins, cfg.IsDevelopment()))
 	h.Register(e, apiIdentity(cfg, userSvc))
 
 	go func() {

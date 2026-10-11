@@ -19,12 +19,15 @@ func RequestIDFrom(c echo.Context) string {
 }
 
 // RequestLogger emits one structured line per request, carrying the request id so a
-// client-reported failure can be traced back to a single log entry.
+// client-reported failure can be traced back to a single log entry. It renders a returned
+// error itself so the logged status is the one the client actually receives.
 func RequestLogger(logger *slog.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			start := time.Now()
-			err := next(c)
+			if err := next(c); err != nil {
+				c.Error(err)
+			}
 			logger.Info("request",
 				slog.String("request_id", RequestIDFrom(c)),
 				slog.String("method", c.Request().Method),
@@ -32,7 +35,7 @@ func RequestLogger(logger *slog.Logger) echo.MiddlewareFunc {
 				slog.Int("status", c.Response().Status),
 				slog.Duration("took", time.Since(start)),
 			)
-			return err
+			return nil
 		}
 	}
 }
@@ -58,7 +61,8 @@ func Recover(logger *slog.Logger) echo.MiddlewareFunc {
 // CORS locks responses to the configured origins. In development it accepts any
 // localhost port instead, because the Next.js dev server falls back to a random port
 // whenever 3000 is taken — pinning one port there just produces confusing CORS failures.
-func CORS(origins []string, allowAnyLocalhost bool) echo.MiddlewareFunc {
+// Development also allows the X-Demo-User header, or its preflight would be rejected.
+func CORS(origins []string, development bool) echo.MiddlewareFunc {
 	cfg := middleware.CORSConfig{
 		AllowOrigins:     origins,
 		AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
@@ -66,7 +70,8 @@ func CORS(origins []string, allowAnyLocalhost bool) echo.MiddlewareFunc {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}
-	if allowAnyLocalhost {
+	if development {
+		cfg.AllowHeaders = append(cfg.AllowHeaders, "X-Demo-User")
 		cfg.AllowOriginFunc = func(origin string) (bool, error) {
 			return strings.HasPrefix(origin, "http://localhost:") ||
 				strings.HasPrefix(origin, "http://127.0.0.1:"), nil
