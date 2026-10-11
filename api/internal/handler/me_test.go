@@ -46,7 +46,7 @@ func TestMeResolvesDemoIdentityInDevelopment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer pool.Close()
+	t.Cleanup(pool.Close)
 
 	email := "p00-" + uuid.NewString() + "@example.com"
 	if _, err := pool.Exec(ctx,
