@@ -61,8 +61,7 @@ func run() error {
 	return e.Shutdown(shutdownCtx)
 }
 
-// newEcho assembles the whole server, so tests can exercise the real middleware chain
-// instead of rebuilding it and drifting from what production runs.
+// newEcho is the single assembly point, so tests run the real middleware chain.
 func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool) *echo.Echo {
 	h := handler.New(logger, handler.NewHealthHandler(pool))
 
