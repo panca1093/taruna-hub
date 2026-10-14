@@ -6,11 +6,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import { api, ApiError, ServiceUnavailableError, type Ready } from "@/lib/api/client";
 import { useDevApiCheckT } from "@/lib/i18n/dict/dev-api-check";
 
-/**
- * P00 walking-skeleton proof: this page holds no mock data, so anything it renders came
- * from Postgres through the generated typed client. P03 replaces it with real login and
- * a real page consuming the API.
- */
+// Dev proof of browser -> API -> PostgreSQL: renders only what /readyz returned, no mock data.
 export default function ApiCheckPage() {
   const t = useDevApiCheckT();
   const [ready, setReady] = useState<Ready | null>(null);

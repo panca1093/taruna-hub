@@ -16,8 +16,7 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/infra"
 )
 
-// Routes are asserted through newEcho, so this covers the middleware chain the server
-// actually runs in every environment, not a hand-built approximation of it.
+// Goes through newEcho so it covers the chain the server really runs in every environment.
 func TestRoutesAcrossEnvironments(t *testing.T) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
