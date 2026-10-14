@@ -8,7 +8,7 @@ export type Ready = paths["/readyz"]["get"]["responses"][200]["content"]["applic
 /** 503 body of `GET /readyz`. This endpoint does not use the error envelope. */
 export type NotReady = paths["/readyz"]["get"]["responses"][503]["content"]["application/json"];
 
-// Production sets NEXT_PUBLIC_API_URL to "" (same-origin); the API derives the tenant from the host, so dev calls it on the page's own host.
+// Production sets NEXT_PUBLIC_API_URL to "" (same-origin); unset in dev, call the API on the page's own host.
 function baseUrl(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL;
   if (configured !== undefined) return configured;
