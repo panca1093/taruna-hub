@@ -7,8 +7,8 @@ info:
     is generated from this file, so a breaking change here surfaces as a compile error in
     the frontend rather than a runtime surprise.
 
-    Scope today is slice S0 (walking skeleton). Later slices extend this file; they do not
-    fork it.
+    Scope today is slice P00 (walking skeleton). Later slices extend this file; they do not
+    fork it. No route authenticates yet: the first identity arrives with P03 login.
 
 servers:
   - url: http://localhost:8081
@@ -17,8 +17,6 @@ servers:
 tags:
   - name: system
     description: Liveness and readiness probes
-  - name: identity
-    description: The signed-in user
 
 paths:
   /healthz:
@@ -43,7 +41,11 @@ paths:
     get:
       tags: [system]
       summary: Readiness probe
-      description: Reports whether this instance can serve traffic, including database reachability.
+      description: |+
+        Reports whether this instance can serve traffic, including database reachability.
+
+        The 503 body is this endpoint's own shape — `{status, reason}` — and deliberately
+        not the error envelope.
       responses:
         "200":
           description: Ready to serve
@@ -62,6 +64,7 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [status, reason]
                 properties:
                   status:
                     type: string
@@ -70,65 +73,8 @@ paths:
                     type: string
                     example: database unreachable
 
-  /api/v1/me:
-    get:
-      tags: [identity]
-      summary: Current user
-      description: |
-        Returns the signed-in user.
-
-        **Development only (until P03):** the caller is resolved from the `X-Demo-User` header
-        (email or phone), falling back to the seeded student. Any other `APP_ENV` always
-        answers `401`. P03 replaces this with a JWT bearer token and removes the header.
-      parameters:
-        - in: header
-          name: X-Demo-User
-          required: false
-          schema:
-            type: string
-          description: Dev-only identity override. Removed in P03.
-          example: naila@example.com
-      responses:
-        "200":
-          description: The current user
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/User"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalError"
-
 components:
   schemas:
-    User:
-      type: object
-      required: [id, name, email, phone, role, balance]
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-          example: Naila Ramadhani
-        email:
-          type: string
-          format: email
-          nullable: true
-        phone:
-          type: string
-          nullable: true
-          description: Either email or phone is always present (FR-AUTH-01).
-        role:
-          type: string
-          enum: [student, operator, admin]
-        balance:
-          type: number
-          format: double
-          description: Wallet balance in IDR.
-          example: 150000
-
     ErrorEnvelope:
       type: object
       required: [error]
