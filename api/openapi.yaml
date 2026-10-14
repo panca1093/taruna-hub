@@ -41,7 +41,7 @@ paths:
     get:
       tags: [system]
       summary: Readiness probe
-      description: |+
+      description: |
         Reports whether this instance can serve traffic, including database reachability.
 
         The 503 body is this endpoint's own shape — `{status, reason}` — and deliberately
