@@ -61,7 +61,6 @@ func Recover(logger *slog.Logger) echo.MiddlewareFunc {
 // CORS locks responses to the configured origins. In development it accepts any
 // localhost port instead, because the Next.js dev server falls back to a random port
 // whenever 3000 is taken — pinning one port there just produces confusing CORS failures.
-// Development also allows the X-Demo-User header, or its preflight would be rejected.
 func CORS(origins []string, development bool) echo.MiddlewareFunc {
 	cfg := middleware.CORSConfig{
 		AllowOrigins:     origins,
@@ -71,7 +70,6 @@ func CORS(origins []string, development bool) echo.MiddlewareFunc {
 		MaxAge:           300,
 	}
 	if development {
-		cfg.AllowHeaders = append(cfg.AllowHeaders, "X-Demo-User")
 		cfg.AllowOriginFunc = func(origin string) (bool, error) {
 			return strings.HasPrefix(origin, "http://localhost:") ||
 				strings.HasPrefix(origin, "http://127.0.0.1:"), nil

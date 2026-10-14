@@ -9,14 +9,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/config"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/handler"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/infra"
-	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
-	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
 func main() {
@@ -44,19 +43,7 @@ func run() error {
 	}
 	defer pool.Close()
 
-	userRepo := repository.NewUserRepository(pool)
-	userSvc := service.NewUserService(userRepo)
-	h := handler.New(logger, userSvc, handler.NewHealthHandler(pool))
-
-	e := echo.New()
-	e.HideBanner = true
-	e.HidePort = true
-	e.HTTPErrorHandler = httpx.ErrorHandler(logger)
-	e.Use(httpx.RequestID())
-	e.Use(httpx.Recover(logger))
-	e.Use(httpx.RequestLogger(logger))
-	e.Use(httpx.CORS(cfg.CORSOrigins, cfg.IsDevelopment()))
-	h.Register(e, apiIdentity(cfg, userSvc))
+	e := newEcho(cfg, logger, pool)
 
 	go func() {
 		logger.Info("server listening", slog.String("port", cfg.Port), slog.String("env", cfg.Env))
@@ -74,11 +61,22 @@ func run() error {
 	return e.Shutdown(shutdownCtx)
 }
 
-func apiIdentity(cfg config.Config, users *service.UserService) echo.MiddlewareFunc {
-	if cfg.IsDevelopment() {
-		return handler.DevIdentity(users)
-	}
-	return handler.NoIdentity
+// newEcho assembles the whole server, so tests can exercise the real middleware chain
+// instead of rebuilding it and drifting from what production runs.
+func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool) *echo.Echo {
+	h := handler.New(logger, handler.NewHealthHandler(pool))
+
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
+	e.HTTPErrorHandler = httpx.ErrorHandler(logger)
+	e.Use(httpx.RequestID())
+	e.Use(httpx.Recover(logger))
+	e.Use(httpx.RequestLogger(logger))
+	e.Use(httpx.CORS(cfg.CORSOrigins, cfg.IsDevelopment()))
+	h.Register(e)
+
+	return e
 }
 
 func newLogger(cfg config.Config) *slog.Logger {

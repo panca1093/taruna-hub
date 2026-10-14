@@ -8,10 +8,10 @@ import (
 )
 
 type Config struct {
-	Env         string
-	Port        string
-	DatabaseURL string
-	CORSOrigins []string
+	Env           string
+	Port          string
+	DatabaseURL   string
+	CORSOrigins   []string
 	ShutdownGrace time.Duration
 }
 
