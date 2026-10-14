@@ -5,21 +5,21 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 )
 
-// smokeArgs exists only to prove the pinned River modules still compile and run against the
-// migrated `river` schema that golang-migrate owns.
+// smokeArgs proves the pinned River modules compile and run against the migrated river schema.
 type smokeArgs struct {
 	NotificationID string `json:"notification_id"`
 }
 
 func (smokeArgs) Kind() string { return "notification" }
 
-func smokePool(t *testing.T) *pgxpool.Pool {
+func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -34,7 +34,7 @@ func smokePool(t *testing.T) *pgxpool.Pool {
 }
 
 func TestRiverTransactionalInsertSmoke(t *testing.T) {
-	pool := smokePool(t)
+	pool := testPool(t)
 	ctx := context.Background()
 
 	client, err := river.NewClient[pgx.Tx](riverpgxv5.New(pool), &river.Config{Schema: "river"})
@@ -42,30 +42,36 @@ func TestRiverTransactionalInsertSmoke(t *testing.T) {
 		t.Fatalf("new river client: %v", err)
 	}
 
-	countJobs := func() int {
+	// Per-run identities keep both the counting and the cleanup off every other package's jobs.
+	keep := "smoke-" + uuid.NewString()
+	drop := "smoke-" + uuid.NewString()
+
+	countJobs := func(id string) int {
 		t.Helper()
 		var n int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM river.river_job WHERE kind = 'notification'`).Scan(&n); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM river.river_job WHERE args->>'notification_id' = $1`, id).Scan(&n); err != nil {
 			t.Fatalf("count jobs: %v", err)
 		}
 		return n
 	}
-	before := countJobs()
-	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM river.river_job WHERE kind = 'notification'`) })
+	var keptJobID int64
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM river.river_job WHERE id = $1`, keptJobID) })
 
 	// A committed transaction keeps the job.
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
-	if _, err := client.InsertTx(ctx, tx, smokeArgs{NotificationID: "keep"}, &river.InsertOpts{Queue: "notifications", MaxAttempts: 6}); err != nil {
+	res, err := client.InsertTx(ctx, tx, smokeArgs{NotificationID: keep}, &river.InsertOpts{Queue: "notifications", MaxAttempts: 6})
+	if err != nil {
 		t.Fatalf("insert in tx: %v", err)
 	}
+	keptJobID = res.Job.ID
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	if got := countJobs(); got != before+1 {
-		t.Fatalf("jobs after commit = %d, want %d", got, before+1)
+	if got := countJobs(keep); got != 1 {
+		t.Fatalf("my jobs after commit = %d, want 1", got)
 	}
 
 	// A rolled-back transaction leaves nothing behind.
@@ -73,13 +79,16 @@ func TestRiverTransactionalInsertSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
-	if _, err := client.InsertTx(ctx, tx, smokeArgs{NotificationID: "drop"}, &river.InsertOpts{Queue: "notifications", MaxAttempts: 6}); err != nil {
+	if _, err := client.InsertTx(ctx, tx, smokeArgs{NotificationID: drop}, &river.InsertOpts{Queue: "notifications", MaxAttempts: 6}); err != nil {
 		t.Fatalf("insert in tx: %v", err)
 	}
 	if err := tx.Rollback(ctx); err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
-	if got := countJobs(); got != before+1 {
-		t.Fatalf("jobs after rollback = %d, want %d", got, before+1)
+	if got := countJobs(keep); got != 1 {
+		t.Fatalf("my jobs after rollback = %d, want 1", got)
+	}
+	if got := countJobs(drop); got != 0 {
+		t.Errorf("rolled-back insert left %d jobs, want 0", got)
 	}
 }

@@ -14,15 +14,6 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
-// ErrBusy means another claim holds the row, or this caller's lease has already expired.
-var ErrBusy = errors.New("notification is claimed by another attempt")
-
-// ReconcileErrorText is the fixed, sanitized reason recorded for an orphaned queued row.
-const ReconcileErrorText = "reconciled: delivery job ended without a result"
-
-// ReconcileLimit bounds one maintenance scan.
-const ReconcileLimit = 100
-
 type NotificationRepository struct {
 	db *pgxpool.Pool
 }
@@ -67,9 +58,7 @@ func (r *NotificationRepository) Create(ctx context.Context, tx pgx.Tx, n model.
 	return id, nil
 }
 
-// FindForDelivery is one of the two named unscoped reads. It takes a UUID only, so it cannot be
-// asked about a tenant, a recipient or an event; it exists solely to discover the row's scope,
-// which every later read and write in the delivery path must then pass.
+// FindForDelivery is an unscoped read that exists only to discover the row's scope.
 func (r *NotificationRepository) FindForDelivery(ctx context.Context, id uuid.UUID) (model.Notification, error) {
 	row := r.db.QueryRow(ctx, `SELECT `+notificationColumns+` FROM notification_logs WHERE id = $1`, id)
 	return scanNotification(row)
@@ -92,15 +81,11 @@ func (r *NotificationRepository) Claim(ctx context.Context, tenantID *uuid.UUID,
 		    AND (claimed_until IS NULL OR claimed_until < now())
 		  RETURNING `+notificationColumns,
 		id, tenantID, token, lease.Seconds())
-	n, err := scanNotification(row)
-	if errors.Is(err, ErrNotFound) {
-		return model.Notification{}, ErrBusy
-	}
-	return n, err
+	return scanNotification(row)
 }
 
-// Finish writes a terminal state for the claim owner only; an expired lease no longer owns the row.
-func (r *NotificationRepository) Finish(ctx context.Context, tenantID *uuid.UUID, id, token uuid.UUID, status model.NotificationStatus, attempts int, outcome model.Outcome, lastError *string) (bool, error) {
+// Finish writes a terminal state for the claim owner only; a nil outcome records no verdict.
+func (r *NotificationRepository) Finish(ctx context.Context, tenantID *uuid.UUID, id, token uuid.UUID, status model.NotificationStatus, attempts int, outcome *model.Outcome, lastError *string) (bool, error) {
 	tag, err := r.db.Exec(ctx,
 		`UPDATE notification_logs
 		    SET status = $4, attempts = $5, last_outcome = $6, last_error = $7,
@@ -130,9 +115,7 @@ func (r *NotificationRepository) Release(ctx context.Context, tenantID *uuid.UUI
 	return tag.RowsAffected() > 0, nil
 }
 
-// ReconcileCandidates is the second named unscoped read: a bounded maintenance scan across scopes
-// that selects queued rows whose River job is missing or already finished. It is reachable from no
-// tenant-scoped repository method and from no service entry point a caller can supply a scope to.
+// ReconcileCandidates is the bounded maintenance scan, reachable from no caller-supplied scope.
 func (r *NotificationRepository) ReconcileCandidates(ctx context.Context, cutoff time.Time, limit int) ([]model.Notification, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT `+prefixColumns("n")+`
@@ -161,9 +144,7 @@ func (r *NotificationRepository) ReconcileCandidates(ctx context.Context, cutoff
 	return out, rows.Err()
 }
 
-// FailOrphan is the scoped conditional write that retires one orphaned row. It rechecks state,
-// liveness of the claim and job eligibility in the same statement, so a job revived between the
-// scan and the write keeps the row queued and sealed.
+// FailOrphan retires one orphaned row, rechecking the claim and the job in the same statement.
 func (r *NotificationRepository) FailOrphan(ctx context.Context, tenantID *uuid.UUID, id uuid.UUID, lastError string) (bool, error) {
 	tag, err := r.db.Exec(ctx,
 		`UPDATE notification_logs

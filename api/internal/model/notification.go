@@ -34,7 +34,6 @@ const (
 )
 
 // Notification is one durable delivery attempt of one business event to one recipient.
-// A nil TenantID is the platform scope, never a wildcard.
 type Notification struct {
 	ID           uuid.UUID
 	TenantID     *uuid.UUID

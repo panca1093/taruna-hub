@@ -37,6 +37,11 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 	tenants := seedTenants(t, ctx, pool)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
+	// The P02 service has no route yet; the wiring still runs here so the assembly is exercised.
+	if _, err := newNotifications(config.Config{Env: "development", DatabaseURL: dsn}, logger, pool); err != nil {
+		t.Fatalf("wire notifications: %v", err)
+	}
+
 	for _, env := range []string{"development", "staging", "production"} {
 		t.Run(env, func(t *testing.T) {
 			baseDomain := "tarunaeduka.id"

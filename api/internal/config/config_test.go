@@ -1,6 +1,87 @@
 package config
 
-import "testing"
+import (
+	"encoding/base64"
+	"testing"
+)
+
+func TestSMTPConfigValidation(t *testing.T) {
+	base := func() {
+		t.Setenv("APP_ENV", "production")
+		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+		t.Setenv("SMTP_HOST", "")
+		t.Setenv("SMTP_PORT", "587")
+		t.Setenv("SMTP_TLS", "starttls")
+		t.Setenv("SMTP_FROM", "")
+		t.Setenv("NOTIFICATION_SEAL_KEY", "")
+	}
+
+	t.Run("host without from", func(t *testing.T) {
+		base()
+		t.Setenv("SMTP_HOST", "smtp.example.com")
+		if _, err := Load(); err == nil {
+			t.Error("SMTP_HOST without SMTP_FROM was accepted, want an error")
+		}
+	})
+
+	t.Run("bad port", func(t *testing.T) {
+		base()
+		t.Setenv("SMTP_PORT", "not-a-port")
+		if _, err := Load(); err == nil {
+			t.Error("an unparsable SMTP_PORT was accepted, want an error")
+		}
+	})
+
+	t.Run("tls none outside development", func(t *testing.T) {
+		base()
+		t.Setenv("SMTP_TLS", "none")
+		if _, err := Load(); err == nil {
+			t.Error("SMTP_TLS=none outside development was accepted, want an error")
+		}
+		t.Setenv("APP_ENV", "development")
+		cfg, err := Load()
+		if err != nil || cfg.SMTP.TLS != SMTPTLSNone {
+			t.Errorf("development: tls = %q, err = %v; want none, nil", cfg.SMTP.TLS, err)
+		}
+	})
+
+	t.Run("unknown tls mode", func(t *testing.T) {
+		base()
+		t.Setenv("SMTP_TLS", "maybe")
+		if _, err := Load(); err == nil {
+			t.Error("an unknown SMTP_TLS was accepted, want an error")
+		}
+	})
+
+	t.Run("unset host is legal everywhere", func(t *testing.T) {
+		base()
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("unset SMTP_HOST: %v, want nil", err)
+		}
+		if cfg.SMTP.Host != "" || cfg.SMTP.Port != "587" || cfg.SMTP.TLS != SMTPTLSStartTLS {
+			t.Errorf("defaults = %+v, want empty host, port 587, starttls", cfg.SMTP)
+		}
+	})
+
+	t.Run("seal key must decode to 32 bytes", func(t *testing.T) {
+		base()
+		t.Setenv("NOTIFICATION_SEAL_KEY", "not base64!!")
+		if _, err := Load(); err == nil {
+			t.Error("a non-base64 seal key was accepted, want an error")
+		}
+		t.Setenv("NOTIFICATION_SEAL_KEY", base64.StdEncoding.EncodeToString(make([]byte, 16)))
+		if _, err := Load(); err == nil {
+			t.Error("a 16-byte seal key was accepted, want an error")
+		}
+		t.Setenv("NOTIFICATION_SEAL_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+		cfg, err := Load()
+		if err != nil || len(cfg.NotificationSealKey) != 32 {
+			t.Errorf("seal key = %d bytes, err = %v; want 32, nil", len(cfg.NotificationSealKey), err)
+		}
+	})
+}
 
 func TestLoadRequiresBaseDomainOutsideDevelopment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
