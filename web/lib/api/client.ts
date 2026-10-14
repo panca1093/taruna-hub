@@ -8,11 +8,7 @@ export type Ready = paths["/readyz"]["get"]["responses"][200]["content"]["applic
 /** 503 body of `GET /readyz`. This endpoint does not use the error envelope. */
 export type NotReady = paths["/readyz"]["get"]["responses"][503]["content"]["application/json"];
 
-/**
- * Browser calls are same-origin in production, so `NEXT_PUBLIC_API_URL` is set to an
- * empty string there. With no configuration at all, a page opened on a tenant host must
- * call the API on that same host, because the API derives the tenant from the host.
- */
+// Production sets NEXT_PUBLIC_API_URL to "" (same-origin); the API derives the tenant from the host, so dev calls it on the page's own host.
 function baseUrl(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL;
   if (configured !== undefined) return configured;
@@ -37,11 +33,7 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Thrown when `/readyz` answers 503. That status carries the endpoint's own
- * `{status, reason}` body instead of the error envelope, so it gets its own error type
- * rather than a fabricated error code.
- */
+// /readyz answers 503 with its own {status, reason} body, not the error envelope.
 export class ServiceUnavailableError extends Error {
   readonly status = 503;
   readonly reason: string;
@@ -90,7 +82,7 @@ export const api = {
   ready: (): Promise<Ready> =>
     request<Ready>("/readyz", undefined, (status, body) => {
       if (status !== 503) return undefined;
-      const notReady = body as Partial<NotReady> | null;
-      return new ServiceUnavailableError(notReady?.reason ?? `Request failed (${status})`);
+      const reason = (body as Partial<NotReady> | null)?.reason;
+      return reason ? new ServiceUnavailableError(reason) : undefined;
     }),
 };

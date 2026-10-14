@@ -15,8 +15,6 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/infra"
 )
 
-// testPool is the shared connect-or-skip gate: the readiness proof is only meaningful
-// against a real database, so these tests must run rather than silently pass.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("DATABASE_URL")
