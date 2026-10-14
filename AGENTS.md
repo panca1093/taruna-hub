@@ -71,7 +71,7 @@ cd web && npm run gen:api   # after any openapi.yaml change
 - **Never** put grading keys, correct answers or internal snapshots in student DTOs.
 - **Errors** use the envelope `{error:{code,message,fields?,request_id?}}` via `internal/httpx`, and codes are declared in OpenAPI.
 - PostgreSQL is authoritative. Redis is derived and must be rebuildable.
-- `X-Demo-User` / `devIdentity` is dev-only and gets deleted when real auth lands (P03). Never extend it.
+- No demo identity exists, and no route authenticates until P03 ships login. Identity comes from login, never from a client-supplied header.
 
 ## Frontend rules
 
