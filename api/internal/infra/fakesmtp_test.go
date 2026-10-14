@@ -50,9 +50,15 @@ type fakeSMTP struct {
 
 func newFakeSMTP(t *testing.T) *fakeSMTP {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	return newFakeSMTPOn(t, "127.0.0.1:0")
+}
+
+// newFakeSMTPOn lets a test choose the address, so a server can answer on a name PlainAuth distrusts.
+func newFakeSMTPOn(t *testing.T, addr string) *fakeSMTP {
+	t.Helper()
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		t.Fatalf("listen: %v", err)
+		t.Fatalf("listen on %s: %v", addr, err)
 	}
 	s := &fakeSMTP{t: t, ln: ln, addr: ln.Addr().String()}
 	go func() {

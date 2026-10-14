@@ -112,7 +112,7 @@ func (s *SMTPSender) Send(ctx context.Context, msg service.Message) error {
 		}
 	}
 	if s.cfg.Username != "" {
-		if err := c.Auth(smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)); err != nil {
+		if err := c.Auth(refusingPlainAuth{inner: smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)}); err != nil {
 			return authClass(err)
 		}
 	}
@@ -205,11 +205,39 @@ func replyClass(err error) error {
 
 // authClass keeps the class of an AUTH reply but never its text.
 func authClass(err error) error {
-	if code, ok := replyCode(err); ok && code >= 500 {
+	if code, ok := replyCode(err); ok {
+		if code >= 500 {
+			return permanent("smtp: authentication failed")
+		}
+		return transient("smtp: transient failure")
+	}
+	var refusal *authRefusal
+	if errors.As(err, &refusal) {
+		// The mechanism itself declined to send credentials, which no retry can change.
 		return permanent("smtp: authentication failed")
 	}
 	return transient("smtp: transient failure")
 }
+
+// refusingPlainAuth tags PlainAuth's reply-less refusal so authClass can make it permanent.
+type refusingPlainAuth struct{ inner smtp.Auth }
+
+func (a refusingPlainAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	mech, resp, err := a.inner.Start(server)
+	if err != nil {
+		return "", nil, &authRefusal{err: err}
+	}
+	return mech, resp, nil
+}
+
+func (a refusingPlainAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	return a.inner.Next(fromServer, more)
+}
+
+type authRefusal struct{ err error }
+
+func (e *authRefusal) Error() string { return e.err.Error() }
+func (e *authRefusal) Unwrap() error { return e.err }
 
 // handshakeClass fails closed on a certificate or a 5xx reply, and retries a 4xx or transport error.
 func handshakeClass(err error) error {
