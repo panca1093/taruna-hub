@@ -16,6 +16,8 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/handler"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/infra"
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
 func main() {
@@ -63,6 +65,7 @@ func run() error {
 
 // newEcho is the single assembly point, so tests run the real middleware chain.
 func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool) *echo.Echo {
+	tenants := service.NewTenantService(repository.NewTenantRepository(pool), cfg.BaseDomain)
 	h := handler.New(logger, handler.NewHealthHandler(pool))
 
 	e := echo.New()
@@ -73,7 +76,7 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool) *echo.E
 	e.Use(httpx.Recover(logger))
 	e.Use(httpx.RequestLogger(logger))
 	e.Use(httpx.CORS(cfg.CORSOrigins, cfg.IsDevelopment()))
-	h.Register(e)
+	h.Register(e, handler.ResolveHostScope(tenants, cfg.TrustForwardedHost))
 
 	return e
 }

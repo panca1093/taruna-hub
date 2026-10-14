@@ -105,10 +105,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tenant for the request host
+         * @description Resolves the tenant from the request host: `<slug>.<BASE_DOMAIN>` selects a tenant.
+         *
+         *     An active tenant's slug and display name are public — the landing page needs them.
+         *     An inactive, unknown, reserved, malformed or platform host answers the same `404`
+         *     with the same code and message, so those cases cannot be told apart from outside.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The tenant the request host resolves to */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Tenant"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+                500: components["responses"]["InternalError"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Tenant: {
+            /**
+             * @description Subdomain label under `BASE_DOMAIN`. Immutable once created.
+             * @example taruna
+             */
+            slug: string;
+            /**
+             * @description Display name the landing page shows.
+             * @example Taruna Eduka
+             */
+            name: string;
+        };
         ErrorEnvelope: {
             error: {
                 /**
@@ -130,6 +187,15 @@ export interface components {
     responses: {
         /** @description No valid identity on the request */
         Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description The request host selects no active tenant, or the resource does not exist */
+        NotFound: {
             headers: {
                 [name: string]: unknown;
             };
