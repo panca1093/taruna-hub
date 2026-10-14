@@ -347,7 +347,7 @@ paths:
 
 ## 6. Rollout & Migration Plan
 
-1. Complete foundation checks, tenant bootstrap, and two-tenant integration fixtures. Disable demo identity outside explicit local demo mode; fail closed in staging/production.
+1. Complete foundation checks, tenant bootstrap, and two-tenant integration fixtures. No demo identity exists; identity comes only from login (P03).
 2. Deploy reviewed schema changes and River migrations to staging before enabling dependent UI. For any existing records, inventory first and obtain an explicit tenant assignment mapping; preserve IDs, links, and balances. This review did not establish that real data exists. Never infer ownership from email/name or delete records to simplify migration.
 3. Deliver slices with real browser/API/database demos. Read-only shadows may compare new queries to known fixtures; mock responses cannot count as a production acceptance result.
 4. Exercise Midtrans sandbox, real selected notification providers, protected files, exact scoring fixtures, and tenant isolation before full-scope UAT. A placeholder provider is not complete.

@@ -46,10 +46,10 @@ make migrate-create NAME=add_orders  # new pair of .sql files
 Fixtures live in `seed/dev.sql` and are deliberately **not** a migration — production
 must never run them.
 
-## Current state (slice S0)
+## Current state (slice P00)
 
-Walking skeleton only: `/healthz`, `/readyz`, `/api/v1/me`.
+Walking skeleton only: `/healthz`, `/readyz`.
 
-`/api/v1/me` resolves the caller from the `X-Demo-User` header (email or phone),
-defaulting to the seeded student. **This trusts a client-supplied header and must not
-reach production** — slice S1 replaces it with JWT and deletes `devIdentity`.
+`/readyz` is the API → PostgreSQL round trip: it pings the database and answers
+`503 {status, reason}` when the database is unreachable. No route authenticates yet —
+the first identity arrives with P03 login.
