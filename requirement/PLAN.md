@@ -93,17 +93,17 @@ For every slice, use this verification loop:
 
 **Outcome:** A developer can start a fresh local stack and demonstrate a real scoped browser/API/PostgreSQL round trip.
 
-**DB / backend / integration:** Existing API config/probes/error handling, initial schema, Compose, web API client, CI. Preserve applied migration history; add migrations rather than rewriting shared history.
+**DB / backend / integration:** Existing API config/probes/error handling, initial schema, Compose, web API client, CI. No environment is deployed yet, so the initial migration may be rewritten until the first deployment.
 
 **Files / frontend:** api/internal/config, handler, httpx; api/Makefile; docker-compose.yml; .github/workflows/ci.yml; web/lib/api; web/app/dev/api-check.
 
-**Interfaces:** Produces consistent errors/request IDs, liveness/readiness, migration workflow, generated contract check. No demo identity in staging/production; a local demo identity is explicitly isolated until P03.
+**Interfaces:** Produces consistent errors/request IDs, liveness/readiness, migration workflow, generated contract check. No demo identity exists; the first identity is P03 login.
 
 **Acceptance scenarios:**
 
-- [ ] Fresh database migrations and local fixtures succeed; browser renders a database user, not a mock.
-- [ ] Production-mode request cannot use X-Demo-User or fallback identity.
-- [ ] Returned 401/500 is logged as its actual status; required development headers pass preflight if demo mode remains.
+- [ ] Fresh database migrations and local fixtures succeed; browser renders live API and database readiness from /readyz, not a mock.
+- [ ] No request can authenticate through a client-supplied header or fallback identity in any APP_ENV.
+- [ ] Returned 401/500 is logged as its actual status.
 - [ ] Go build/vet/race tests, TypeScript/build and lint are enforced in CI; generated schema drift fails.
 
 **Decision / verification gate:** Direct browser/database verification; existing lint failures and no-running-container baseline are addressed here.
@@ -118,7 +118,7 @@ For every slice, use this verification loop:
 
 **DB / backend / integration:** Add tenants and role/null-tenant constraints; replace global identifier uniqueness with tenant indexes and platform partial indexes. Scoped repository entry points and host validation.
 
-**Files / frontend:** api/migrations; api/internal/model/user.go; repository/user.go; service/user.go; handler/me.go; httpx; explicit development seed/bootstrap command.
+**Files / frontend:** api/migrations; api/internal/model/user.go; repository/user.go; service/user.go; handler/tenant.go; httpx; explicit development seed/bootstrap command.
 
 **Interfaces:** Produces validated tenant scope, master/platform scope and initial account provisioning. P03 supplies interactive authentication; no open public admin-bootstrap endpoint.
 
