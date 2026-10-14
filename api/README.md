@@ -73,15 +73,15 @@ BOOTSTRAP_PASSWORD=... go run ./cmd/bootstrap admin -tenant taruna -name "Siti" 
 BOOTSTRAP_PASSWORD=... go run ./cmd/bootstrap admin -platform -name "Root" -email root@example.com
 ```
 
-## Current state (slices P00–P02)
+## Current state (slices P00–P03a)
 
-`/healthz`, `/readyz` and `GET /api/v1/tenant`.
+`/healthz`, `/readyz`, `GET /api/v1/tenant`, the auth routes and `GET /api/v1/me`.
 
 `/readyz` is the API → PostgreSQL round trip: it pings the database and answers
 `503 {status, reason}` when the database is unreachable. `GET /api/v1/tenant` publishes the
 active tenant the request host resolves to, or a `404` that is identical for an inactive,
-unknown, reserved, malformed or platform host. No route authenticates yet — the first identity
-arrives with P03 login.
+unknown, reserved, malformed or platform host. `GET /api/v1/me` is the first route that
+authenticates; see [Authentication and sessions](#authentication-and-sessions-p03a).
 
 ## Notifications and durable jobs (P02)
 
@@ -140,3 +140,52 @@ offers an untrusted certificate, fails the send instead. Secrets (OTP, reset tok
 in `params`, in River args or in logs — they are sealed with AES-256-GCM under
 `NOTIFICATION_SEAL_KEY` and erased the moment the row reaches a terminal state. Logs carry fixed
 class text and a masked recipient, never provider output.
+
+## Authentication and sessions (P03a)
+
+`POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout` and
+`GET /api/v1/me`. This is the API half of P03: registration, email OTP, password reset and login
+throttling arrive with P03b, and the web login screens with P03c.
+
+### What a request proves
+
+Every `/api/v1/*` request resolves a tenant from its host first, and the token has to agree with it.
+`login` reads the identifier only inside that tenant, so the same email in two tenants is two
+different people. `Authenticate` then rebuilds the caller from the access token **plus** the session
+row and the user row, so a revoked session, a changed role or a deactivated account invalidates an
+old token on the very next request. The token's own claims are never trusted for the role or the
+tenant on their own.
+
+| Concern | Value |
+|---|---|
+| Access token | HS256 JWT, 15 minutes, issuer `taruna-api`, audience `taruna-web` |
+| Refresh token | 32 random bytes, base64url, stored only as its SHA-256 |
+| Refresh cookie | `refresh_token`; `Path=/api/v1/auth`; `HttpOnly`; `SameSite=Lax`; `Secure` outside development; `Max-Age` 30 days |
+| Idle lifetime | 3 hours (D13), enforced server-side on every authenticated request |
+
+Two rules are easy to get wrong, and both are deliberate:
+
+- **Refreshing is not activity.** It issues a new access token but does not move `last_activity_at`,
+  so reloading a page cannot keep a session alive past the idle deadline. Only an authenticated
+  request extends it, and at most once a minute per session.
+- **`refresh` and `logout` require an `Origin`** that is both accepted by the CORS policy and on the
+  host this request resolved to. The CORS middleware still runs the handler for a rejected origin, so
+  those two routes — the ones that act on a cookie alone — check it themselves. The dev case of web
+  on `:3000` calling the API on `:8081` under the same hostname stays allowed.
+
+Logout always answers `204` and always clears the cookie, and revocation takes effect immediately.
+Login failures are indistinguishable: an unknown identifier, an inactive account and a wrong password
+share one message, and an unknown account still pays for a bcrypt comparison so timing does not
+single it out either.
+
+### Not here yet
+
+No refresh-token rotation or reuse detection, no login throttle or lockout (P03b), no capability
+matrix — the guard is by role only — no absolute session cap, no phone/email canonicalization and
+nothing per-IP. `GET /api/v1/me` carries identity only: balance and the ledger are not part of it.
+
+### Config
+
+| Variable | Meaning |
+|---|---|
+| `JWT_SECRET` | Base64 of at least 32 bytes; **required in every environment**. `openssl rand -base64 32` |
