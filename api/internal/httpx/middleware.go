@@ -61,17 +61,33 @@ func Recover(logger *slog.Logger) echo.MiddlewareFunc {
 
 // CORS locks responses to the configured origins; development widens it to localhost origins.
 func CORS(origins []string, development bool) echo.MiddlewareFunc {
-	cfg := middleware.CORSConfig{
-		AllowOrigins:     origins,
+	return middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOriginFunc:  func(origin string) (bool, error) { return originAllowed(origins, development, origin), nil },
 		AllowMethods:     []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", RequestIDHeader},
 		AllowCredentials: true,
 		MaxAge:           300,
+	})
+}
+
+// The middleware still runs the handler for a rejected origin, so cookie-only routes re-check it via this predicate.
+func OriginPolicy(origins []string, development bool) func(string) bool {
+	return func(origin string) bool { return originAllowed(origins, development, origin) }
+}
+
+func originAllowed(origins []string, development bool, origin string) bool {
+	if origin == "" {
+		return false
 	}
 	if development {
-		cfg.AllowOriginFunc = func(origin string) (bool, error) { return localOrigin(origin), nil }
+		return localOrigin(origin)
 	}
-	return middleware.CORSWithConfig(cfg)
+	for _, o := range origins {
+		if o == origin {
+			return true
+		}
+	}
+	return false
 }
 
 // Dev-only: lets <slug>.localhost:3000 call the API on the same host.

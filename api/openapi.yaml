@@ -7,8 +7,10 @@ info:
     is generated from this file, so a breaking change here surfaces as a compile error in
     the frontend rather than a runtime surprise.
 
-    Scope today is slices P00–P01. Later slices extend this file; they do not fork it.
-    No route authenticates yet: the first identity arrives with P03 login.
+    Scope today is slices P00–P03a. Later slices extend this file; they do not fork it.
+    Every `/api/v1/*` route resolves its tenant from the request host first, and the access token
+    has to agree with that host, so a token minted for one tenant is refused everywhere else.
+    P03a ships the API and the generated types only — the login UI is P03c.
 
 servers:
   - url: http://localhost:8081
@@ -19,6 +21,8 @@ tags:
     description: Liveness and readiness probes
   - name: tenant
     description: Public tenant lookup by request host
+  - name: auth
+    description: Sessions, tokens and the authenticated principal
 
 paths:
   /healthz:
@@ -97,7 +101,148 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Exchange credentials for an access token
+      description: |
+        `identifier` matches either the email or the phone column, but only inside the tenant the
+        request host resolves to, so the same email in two tenants is two different people.
+
+        Unknown identifier, inactive account and wrong password all answer the same `401` with the
+        same message, and an account that does not exist costs the same password comparison as one
+        that does. A password longer than 72 bytes is refused the same way, because bcrypt ignores
+        everything past that.
+
+        On success the refresh token is set as an `HttpOnly` cookie scoped to `/api/v1/auth` and is
+        never part of the body. This route needs no `Origin`: it is authenticated by credentials.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: A session was opened
+          headers:
+            Set-Cookie:
+              description: |
+                `refresh_token=<opaque>; Path=/api/v1/auth; HttpOnly; SameSite=Lax; Max-Age=2592000`,
+                plus `Secure` outside development.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: Issue a new access token from the refresh cookie
+      description: |
+        Reads the refresh cookie, which must name a live session of this host's tenant. Idle time is
+        enforced here: the server expires a session that has had no authenticated request for three
+        hours. Refreshing is not activity, so it does not move that deadline — only an authenticated
+        request on `/me` (or any later protected route) does.
+
+        The refresh token never appears in the body, and this slice does not rotate it. A request is
+        refused with `403` unless its `Origin` is both accepted by the CORS policy and on the host
+        this request resolved to. A token that can never work again also clears the cookie.
+      responses:
+        "200":
+          description: A fresh access token for the same session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the session behind the refresh cookie
+      description: |
+        Revocation takes effect on the very next request: the access token is refused immediately,
+        because every request re-reads the session row. Always answers `204` and always clears the
+        cookie, so a retry, a stale token or no token at all is not an error to the client.
+
+        Like refresh, this route requires an `Origin` that is both CORS-accepted and on this
+        request's host.
+      responses:
+        "204":
+          description: The session is gone; the cookie is cleared with `Max-Age=0`
+          headers:
+            Set-Cookie:
+              description: "`refresh_token=; Path=/api/v1/auth; HttpOnly; SameSite=Lax; Max-Age=0`"
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/me:
+    get:
+      tags: [auth]
+      summary: The authenticated principal
+      description: |
+        Returns the caller the server rebuilt from the access token, the session row and the user
+        row — not from the token alone. A revoked session, a role change or a deactivated account
+        invalidates an old token on the next request. Balance and the ledger are not part of
+        identity and are not published here.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        `Authorization: Bearer <access_token>` from `/api/v1/auth/login`, valid for 15 minutes.
+        HS256 only; issuer `taruna-api`, audience `taruna-web`.
+
   schemas:
     Tenant:
       type: object
@@ -112,6 +257,62 @@ components:
           type: string
           description: Display name the landing page shows.
           example: Taruna Eduka
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [identifier, password]
+      properties:
+        identifier:
+          type: string
+          description: Email or phone. Matched only within the tenant scope of the request host.
+          example: naila@example.com
+        password:
+          type: string
+          format: password
+          description: At most 72 bytes; anything longer is refused like any other wrong password.
+
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, name, email, phone, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+          description: Null when the account was created with a phone number only.
+        phone:
+          type: string
+          nullable: true
+          description: Null when the account was created with an email only.
+        role:
+          type: string
+          enum: [student, operator, admin, platform_admin]
+          description: |
+            `platform_admin` only ever exists on the platform host; a tenant host sees its own roles.
+
+    TokenResponse:
+      type: object
+      additionalProperties: false
+      required: [access_token, token_type, expires_in, user]
+      properties:
+        access_token:
+          type: string
+          description: HS256 JWT for the `Authorization` header. Keep it in memory, not in storage.
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Access-token lifetime in seconds.
+          example: 900
+        user:
+          $ref: "#/components/schemas/User"
 
     ErrorEnvelope:
       type: object
@@ -146,7 +347,19 @@ components:
 
   responses:
     Unauthorized:
-      description: No valid identity on the request
+      description: No usable identity on the request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: The request is understood but not allowed, for example a rejected Origin
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    ValidationFailed:
+      description: The request body is missing a field or is not the expected shape
       content:
         application/json:
           schema:

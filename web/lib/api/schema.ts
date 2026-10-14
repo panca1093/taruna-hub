@@ -150,6 +150,237 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange credentials for an access token
+         * @description `identifier` matches either the email or the phone column, but only inside the tenant the
+         *     request host resolves to, so the same email in two tenants is two different people.
+         *
+         *     Unknown identifier, inactive account and wrong password all answer the same `401` with the
+         *     same message, and an account that does not exist costs the same password comparison as one
+         *     that does. A password longer than 72 bytes is refused the same way, because bcrypt ignores
+         *     everything past that.
+         *
+         *     On success the refresh token is set as an `HttpOnly` cookie scoped to `/api/v1/auth` and is
+         *     never part of the body. This route needs no `Origin`: it is authenticated by credentials.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["LoginRequest"];
+                };
+            };
+            responses: {
+                /** @description A session was opened */
+                200: {
+                    headers: {
+                        /**
+                         * @description `refresh_token=<opaque>; Path=/api/v1/auth; HttpOnly; SameSite=Lax; Max-Age=2592000`,
+                         *     plus `Secure` outside development.
+                         */
+                        "Set-Cookie"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TokenResponse"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a new access token from the refresh cookie
+         * @description Reads the refresh cookie, which must name a live session of this host's tenant. Idle time is
+         *     enforced here: the server expires a session that has had no authenticated request for three
+         *     hours. Refreshing is not activity, so it does not move that deadline — only an authenticated
+         *     request on `/me` (or any later protected route) does.
+         *
+         *     The refresh token never appears in the body, and this slice does not rotate it. A request is
+         *     refused with `403` unless its `Origin` is both accepted by the CORS policy and on the host
+         *     this request resolved to. A token that can never work again also clears the cookie.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A fresh access token for the same session */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TokenResponse"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke the session behind the refresh cookie
+         * @description Revocation takes effect on the very next request: the access token is refused immediately,
+         *     because every request re-reads the session row. Always answers `204` and always clears the
+         *     cookie, so a retry, a stale token or no token at all is not an error to the client.
+         *
+         *     Like refresh, this route requires an `Origin` that is both CORS-accepted and on this
+         *     request's host.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The session is gone; the cookie is cleared with `Max-Age=0` */
+                204: {
+                    headers: {
+                        /** @description `refresh_token=; Path=/api/v1/auth; HttpOnly; SameSite=Lax; Max-Age=0` */
+                        "Set-Cookie"?: string;
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                403: components["responses"]["Forbidden"];
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The authenticated principal
+         * @description Returns the caller the server rebuilt from the access token, the session row and the user
+         *     row — not from the token alone. A revoked session, a role change or a deactivated account
+         *     invalidates an old token on the next request. Balance and the ledger are not part of
+         *     identity and are not published here.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The caller */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["User"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -165,6 +396,44 @@ export interface components {
              * @example Taruna Eduka
              */
             name: string;
+        };
+        LoginRequest: {
+            /**
+             * @description Email or phone. Matched only within the tenant scope of the request host.
+             * @example naila@example.com
+             */
+            identifier: string;
+            /**
+             * Format: password
+             * @description At most 72 bytes; anything longer is refused like any other wrong password.
+             */
+            password: string;
+        };
+        User: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description Null when the account was created with a phone number only. */
+            email: string | null;
+            /** @description Null when the account was created with an email only. */
+            phone: string | null;
+            /**
+             * @description `platform_admin` only ever exists on the platform host; a tenant host sees its own roles.
+             * @enum {string}
+             */
+            role: "student" | "operator" | "admin" | "platform_admin";
+        };
+        TokenResponse: {
+            /** @description HS256 JWT for the `Authorization` header. Keep it in memory, not in storage. */
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            /**
+             * @description Access-token lifetime in seconds.
+             * @example 900
+             */
+            expires_in: number;
+            user: components["schemas"]["User"];
         };
         ErrorEnvelope: {
             error: {
@@ -185,8 +454,26 @@ export interface components {
         };
     };
     responses: {
-        /** @description No valid identity on the request */
+        /** @description No usable identity on the request */
         Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description The request is understood but not allowed, for example a rejected Origin */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description The request body is missing a field or is not the expected shape */
+        ValidationFailed: {
             headers: {
                 [name: string]: unknown;
             };

@@ -13,6 +13,9 @@ import (
 
 const hostScopeKey = "host_scope"
 
+// hostKey keeps the validated host string so the Origin check compares against the host the scope came from.
+const hostKey = "request_host"
+
 // tenantNotFound is one message for every host without a tenant, so a caller cannot tell them apart.
 const tenantNotFound = "Tenant tidak ditemukan."
 
@@ -34,6 +37,7 @@ func ResolveHostScope(tenants *service.TenantService, trustForwardedHost bool) e
 			}
 
 			c.Set(hostScopeKey, scope)
+			c.Set(hostKey, host)
 			return next(c)
 		}
 	}
@@ -42,6 +46,11 @@ func ResolveHostScope(tenants *service.TenantService, trustForwardedHost bool) e
 func hostScope(c echo.Context) (service.HostScope, bool) {
 	s, ok := c.Get(hostScopeKey).(service.HostScope)
 	return s, ok
+}
+
+func requestHost(c echo.Context) (string, bool) {
+	h, ok := c.Get(hostKey).(string)
+	return h, ok
 }
 
 // tenantResponse is an explicit DTO: the scope also carries the tenant ID and activity, which are not public.

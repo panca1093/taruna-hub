@@ -1,17 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/config"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
@@ -20,6 +23,11 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
+
+// testJWTSecret is what newEcho signs with here; a real deployment gets it from JWT_SECRET.
+var testJWTSecret = []byte("p03a-server-test-secret-0123456789")
+
+const wiringPassword = "wiring-test-password"
 
 // Goes through newEcho so it covers the chain the server really runs in every environment.
 func TestRoutesAcrossEnvironments(t *testing.T) {
@@ -35,6 +43,7 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 	t.Cleanup(pool.Close)
 
 	tenants := seedTenants(t, ctx, pool)
+	student := seedUser(t, ctx, pool, tenants[0].ID, model.RoleStudent)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	// The P02 service has no route yet; the wiring still runs here so the assembly is exercised.
@@ -48,11 +57,20 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 			if env == "development" {
 				baseDomain = "localhost"
 			}
+			// Outside development CORS is an explicit list, so the browser origins are named here.
+			origins := []string{"http://localhost:3000"}
+			if env != "development" {
+				origins = []string{
+					originOf(tenants[0].Slug + "." + baseDomain),
+					originOf(tenants[1].Slug + "." + baseDomain),
+				}
+			}
 			e := newEcho(config.Config{
 				Env:         env,
 				DatabaseURL: dsn,
-				CORSOrigins: []string{"http://localhost:3000"},
+				CORSOrigins: origins,
 				BaseDomain:  baseDomain,
+				JWTSecret:   testJWTSecret,
 			}, logger, pool)
 
 			for _, tc := range []struct {
@@ -103,12 +121,83 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				}
 			}
 
-			rec := serveOn(e, "/api/v1/me", tenants[0].Slug+"."+baseDomain)
-			if rec.Code != http.StatusNotFound {
-				t.Fatalf("GET /api/v1/me: status = %d, want %d", rec.Code, http.StatusNotFound)
+			host := tenants[0].Slug + "." + baseDomain
+
+			// /me is registered but never public, and no auth response may be cached.
+			rec := serveOn(e, "/api/v1/me", host)
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("GET /api/v1/me without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
 			}
-			if code := envelopeOf(t, rec).Error.Code; code != httpx.CodeNotFound {
-				t.Errorf("GET /api/v1/me: error code = %q, want %q", code, httpx.CodeNotFound)
+			if code := envelopeOf(t, rec).Error.Code; code != httpx.CodeUnauthorized {
+				t.Errorf("GET /api/v1/me without a token: error code = %q, want %q", code, httpx.CodeUnauthorized)
+			}
+			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("GET /api/v1/me: Cache-Control = %q, want no-store", got)
+			}
+
+			login := postJSON(e, host, "/api/v1/auth/login", map[string]string{
+				"identifier": *student.Email,
+				"password":   wiringPassword,
+			})
+			if login.Code != http.StatusOK {
+				t.Fatalf("POST /api/v1/auth/login: status = %d body = %s, want %d", login.Code, login.Body.String(), http.StatusOK)
+			}
+			if got := login.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("POST /api/v1/auth/login: Cache-Control = %q, want no-store", got)
+			}
+			var tokens struct {
+				AccessToken string `json:"access_token"`
+				TokenType   string `json:"token_type"`
+				ExpiresIn   int    `json:"expires_in"`
+				User        struct {
+					ID    string  `json:"id"`
+					Email *string `json:"email"`
+					Role  string  `json:"role"`
+				} `json:"user"`
+			}
+			if err := json.Unmarshal(login.Body.Bytes(), &tokens); err != nil {
+				t.Fatalf("login body %s is not JSON: %v", login.Body.String(), err)
+			}
+			if tokens.TokenType != "Bearer" || tokens.ExpiresIn <= 0 || tokens.User.ID != student.ID.String() {
+				t.Errorf("login body = %s, want a bearer token for user %s with a positive expires_in", login.Body.String(), student.ID)
+			}
+			if c := cookieNamed(login.Result().Cookies(), "refresh_token"); c == nil || c.Value == "" {
+				t.Errorf("login set no refresh cookie: %v", login.Result().Header.Values("Set-Cookie"))
+			}
+			if strings.Contains(login.Body.String(), "refresh_token") {
+				t.Errorf("login body mentions the refresh cookie: %s", login.Body.String())
+			}
+
+			authed := getWithToken(e, host, "/api/v1/me", tokens.AccessToken)
+			if authed.Code != http.StatusOK {
+				t.Fatalf("GET /api/v1/me with a token: status = %d body = %s, want %d", authed.Code, authed.Body.String(), http.StatusOK)
+			}
+			var me struct {
+				ID    string  `json:"id"`
+				Name  string  `json:"name"`
+				Email *string `json:"email"`
+				Phone *string `json:"phone"`
+				Role  string  `json:"role"`
+			}
+			if err := json.Unmarshal(authed.Body.Bytes(), &me); err != nil {
+				t.Fatalf("me body %s is not JSON: %v", authed.Body.String(), err)
+			}
+			if me.ID != student.ID.String() || me.Role != string(model.RoleStudent) || me.Email == nil || *me.Email != *student.Email {
+				t.Errorf("me body = %s, want the student who logged in", authed.Body.String())
+			}
+			if strings.Contains(authed.Body.String(), "balance") {
+				t.Errorf("me body carries a balance, which this slice must not publish: %s", authed.Body.String())
+			}
+
+			logout := postWithCookie(e, host, "/api/v1/auth/logout", cookieNamed(login.Result().Cookies(), "refresh_token"), originOf(host))
+			if logout.Code != http.StatusNoContent {
+				t.Errorf("POST /api/v1/auth/logout: status = %d body = %s, want %d", logout.Code, logout.Body.String(), http.StatusNoContent)
+			}
+			if got := logout.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("POST /api/v1/auth/logout: Cache-Control = %q, want no-store", got)
+			}
+			if after := getWithToken(e, host, "/api/v1/me", tokens.AccessToken); after.Code != http.StatusUnauthorized {
+				t.Errorf("GET /api/v1/me after logout: status = %d body = %s, want %d", after.Code, after.Body.String(), http.StatusUnauthorized)
 			}
 		})
 	}
@@ -121,8 +210,16 @@ func seedTenants(t *testing.T, ctx context.Context, pool *pgxpool.Pool) []model.
 
 	var ids []uuid.UUID
 	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE tenant_id = ANY($1)`, ids)
-		_, _ = pool.Exec(ctx, `DELETE FROM tenants WHERE id = ANY($1)`, ids)
+		// Sessions first: they reference the users this fixture owns.
+		if _, err := pool.Exec(ctx, `DELETE FROM auth_sessions WHERE tenant_id = ANY($1)`, ids); err != nil {
+			t.Errorf("cleanup fixture sessions: %v", err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM users WHERE tenant_id = ANY($1)`, ids); err != nil {
+			t.Errorf("cleanup fixture users: %v", err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM tenants WHERE id = ANY($1)`, ids); err != nil {
+			t.Errorf("cleanup fixture tenants: %v", err)
+		}
 	})
 
 	var out []model.Tenant
@@ -140,6 +237,24 @@ func seedTenants(t *testing.T, ctx context.Context, pool *pgxpool.Pool) []model.
 	return out
 }
 
+// seedUser gives the wiring test one account whose password it knows; seedTenants cleans it up.
+func seedUser(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tenantID uuid.UUID, role model.Role) model.User {
+	t.Helper()
+	hash, err := bcrypt.GenerateFromPassword([]byte(wiringPassword), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	email := "wiring-" + uuid.NewString()[:8] + "@example.com"
+	user, err := repository.NewUserRepository(pool).Create(ctx, model.User{
+		TenantID: &tenantID, Name: "Wiring Student", Email: &email,
+		PasswordHash: string(hash), Role: role,
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	return user
+}
+
 func serve(e *echo.Echo, path string) *httptest.ResponseRecorder {
 	return serveOn(e, path, "")
 }
@@ -152,6 +267,61 @@ func serveOn(e *echo.Echo, path, host string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	return rec
+}
+
+func postJSON(e *echo.Echo, host, path string, body any) *httptest.ResponseRecorder {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(body); err != nil {
+		panic(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, path, &buf)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Host = host
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
+func postWithCookie(e *echo.Echo, host, path string, cookie *http.Cookie, origin string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, path, nil)
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	if origin != "" {
+		req.Header.Set(echo.HeaderOrigin, origin)
+	}
+	req.Host = host
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
+func getWithToken(e *echo.Echo, host, path, token string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Host = host
+	if token != "" {
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	}
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
+func cookieNamed(cookies []*http.Cookie, name string) *http.Cookie {
+	for _, c := range cookies {
+		if c.Name == name {
+			return c
+		}
+	}
+	return nil
+}
+
+// originOf turns a request host into the page origin a browser would send: same hostname, web port.
+func originOf(host string) string {
+	if i := strings.Index(host, ":"); i >= 0 {
+		host = host[:i]
+	}
+	return "http://" + host + ":3000"
 }
 
 func envelopeOf(t *testing.T, rec *httptest.ResponseRecorder) httpx.Envelope {
