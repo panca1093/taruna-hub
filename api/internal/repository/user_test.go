@@ -9,17 +9,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/tarunaeduka/bimbel-tryout/api/internal/infra"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
+// Built with pgxpool directly: infra now imports service, so importing infra from this package would cycle.
 func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		t.Skip("DATABASE_URL not set")
 	}
-	pool, err := infra.NewPostgresPool(context.Background(), dsn)
+	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
