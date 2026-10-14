@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -57,34 +58,102 @@ func TestRequestLoggerRecordsReturnedErrorStatus(t *testing.T) {
 	}
 }
 
-func TestCORSPreflightDemoHeader(t *testing.T) {
+// The demo identity is gone; no environment may advertise the header it used.
+func TestCORSAllowHeadersNeverIncludeDemoHeader(t *testing.T) {
 	cases := []struct {
 		name string
 		dev  bool
-		want bool
 	}{
-		{"development allows X-Demo-User", true, true},
-		{"non-development rejects X-Demo-User", false, false},
+		{"development", true},
+		{"non-development", false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			e := echo.New()
-			e.Use(CORS([]string{"http://localhost:3000"}, tc.dev))
-			e.GET("/x", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
-
-			req := httptest.NewRequest(http.MethodOptions, "/x", nil)
-			req.Header.Set("Origin", "http://localhost:3000")
-			req.Header.Set("Access-Control-Request-Method", http.MethodGet)
-			req.Header.Set("Access-Control-Request-Headers", "X-Demo-User")
-			rec := httptest.NewRecorder()
-			e.ServeHTTP(rec, req)
-
-			allowed := rec.Header().Get("Access-Control-Allow-Headers")
-			got := bytes.Contains([]byte(allowed), []byte("X-Demo-User"))
-			if got != tc.want {
-				t.Errorf("Access-Control-Allow-Headers = %q, X-Demo-User allowed = %v, want %v", allowed, got, tc.want)
+			allowed := preflightAllowHeaders(t, tc.dev, "http://localhost:3000")
+			if strings.Contains(allowed, "X-Demo-User") {
+				t.Errorf("Access-Control-Allow-Headers = %q, must not allow X-Demo-User", allowed)
 			}
 		})
 	}
+}
+
+func TestCORSOriginPolicyPerEnvironment(t *testing.T) {
+	cases := []struct {
+		name  string
+		dev   bool
+		allow []string
+		deny  []string
+	}{
+		{
+			name:  "development accepts any localhost port",
+			dev:   true,
+			allow: []string{"http://localhost:3000", "http://localhost:4123", "http://127.0.0.1:3000"},
+			deny:  []string{"http://example.com", "http://localhost.evil.com"},
+		},
+		{
+			name:  "non-development accepts only the configured origins",
+			dev:   false,
+			allow: []string{"http://localhost:3000"},
+			deny:  []string{"http://localhost:4123", "http://127.0.0.1:3000", "http://example.com"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, origin := range tc.allow {
+				if got := preflightAllowOrigin(t, tc.dev, origin); got != origin {
+					t.Errorf("preflight Origin %s: Access-Control-Allow-Origin = %q, want %q", origin, got, origin)
+				}
+				if got := simpleAllowOrigin(t, tc.dev, origin); got != origin {
+					t.Errorf("GET Origin %s: Access-Control-Allow-Origin = %q, want %q", origin, got, origin)
+				}
+			}
+			for _, origin := range tc.deny {
+				if got := preflightAllowOrigin(t, tc.dev, origin); got != "" {
+					t.Errorf("preflight Origin %s: Access-Control-Allow-Origin = %q, want empty", origin, got)
+				}
+				if got := simpleAllowOrigin(t, tc.dev, origin); got != "" {
+					t.Errorf("GET Origin %s: Access-Control-Allow-Origin = %q, want empty", origin, got)
+				}
+			}
+		})
+	}
+}
+
+func corsEcho(dev bool) *echo.Echo {
+	e := echo.New()
+	e.Use(CORS([]string{"http://localhost:3000"}, dev))
+	e.GET("/x", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	return e
+}
+
+func preflightAllowHeaders(t *testing.T, dev bool, origin string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodOptions, "/x", nil)
+	req.Header.Set("Origin", origin)
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set("Access-Control-Request-Headers", "X-Demo-User")
+	rec := httptest.NewRecorder()
+	corsEcho(dev).ServeHTTP(rec, req)
+	return rec.Header().Get("Access-Control-Allow-Headers")
+}
+
+func preflightAllowOrigin(t *testing.T, dev bool, origin string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodOptions, "/x", nil)
+	req.Header.Set("Origin", origin)
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	rec := httptest.NewRecorder()
+	corsEcho(dev).ServeHTTP(rec, req)
+	return rec.Header().Get("Access-Control-Allow-Origin")
+}
+
+func simpleAllowOrigin(t *testing.T, dev bool, origin string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Origin", origin)
+	rec := httptest.NewRecorder()
+	corsEcho(dev).ServeHTTP(rec, req)
+	return rec.Header().Get("Access-Control-Allow-Origin")
 }

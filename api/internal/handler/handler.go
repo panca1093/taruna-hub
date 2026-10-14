@@ -4,25 +4,21 @@ import (
 	"log/slog"
 
 	"github.com/labstack/echo/v4"
-
-	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
 type Handler struct {
 	logger *slog.Logger
-	users  *service.UserService
 	health *HealthHandler
 }
 
-func New(logger *slog.Logger, users *service.UserService, health *HealthHandler) *Handler {
-	return &Handler{logger: logger, users: users, health: health}
+func New(logger *slog.Logger, health *HealthHandler) *Handler {
+	return &Handler{logger: logger, health: health}
 }
 
+// Register mounts the transport. apiMiddleware carries the middleware for the /api/v1
+// group — P01 attaches host-to-tenant resolution there; P00 has no /api/v1 routes yet,
+// so the group itself is not created.
 func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	e.GET("/healthz", h.health.Live)
 	e.GET("/readyz", h.health.Ready)
-
-	v1 := e.Group("/api/v1")
-	v1.Use(apiMiddleware...)
-	v1.GET("/me", h.Me)
 }
