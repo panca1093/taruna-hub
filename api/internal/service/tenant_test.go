@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/tarunaeduka/bimbel-tryout/api/internal/infra"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
 )
 
@@ -71,7 +70,8 @@ func testTenantService(t *testing.T) (*TenantService, *pgxpool.Pool) {
 	if dsn == "" {
 		t.Skip("DATABASE_URL not set")
 	}
-	pool, err := infra.NewPostgresPool(context.Background(), dsn)
+	// Built with pgxpool directly: infra imports service, so importing infra here would cycle.
+	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
