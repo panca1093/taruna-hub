@@ -132,7 +132,7 @@ their slices arrive.
 | `SMTP_PORT` | relay port, default `587` |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | optional AUTH credentials |
 | `SMTP_FROM` | envelope and header sender; required once `SMTP_HOST` is set |
-| `SMTP_TLS` | `starttls` (default), `tls`, or `none`; `none` only when `APP_ENV=development` |
+| `SMTP_TLS` | `starttls` (default), `tls`, or `none`; `none` only when `APP_ENV=development`, and never with `SMTP_USERNAME` unless `SMTP_HOST` is loopback |
 | `NOTIFICATION_SEAL_KEY` | base64 of exactly 32 bytes; required only to send secret-bearing messages |
 
 `SMTP_TLS=starttls` refuses to fall back to cleartext: a server that does not offer STARTTLS, or

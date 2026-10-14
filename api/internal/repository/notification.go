@@ -64,7 +64,6 @@ func (r *NotificationRepository) FindForDelivery(ctx context.Context, id uuid.UU
 	return scanNotification(row)
 }
 
-// Find reads one row inside a scope.
 func (r *NotificationRepository) Find(ctx context.Context, tenantID *uuid.UUID, id uuid.UUID) (model.Notification, error) {
 	row := r.db.QueryRow(ctx,
 		`SELECT `+notificationColumns+` FROM notification_logs WHERE id = $1 AND `+scopeClause, id, tenantID)

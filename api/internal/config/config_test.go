@@ -46,6 +46,34 @@ func TestSMTPConfigValidation(t *testing.T) {
 		}
 	})
 
+	// PlainAuth cannot send a password to a remote cleartext server, so this pairing only ever fails.
+	t.Run("cleartext credentials need a loopback host", func(t *testing.T) {
+		base()
+		t.Setenv("APP_ENV", "development")
+		t.Setenv("SMTP_TLS", "none")
+		t.Setenv("SMTP_HOST", "smtp.example.com")
+		t.Setenv("SMTP_FROM", "no-reply@tarunaeduka.id")
+		t.Setenv("SMTP_USERNAME", "relay")
+		t.Setenv("SMTP_PASSWORD", "hunter2")
+		if _, err := Load(); err == nil {
+			t.Error("cleartext credentials against a remote host were accepted, want an error")
+		}
+
+		for _, host := range []string{"localhost", "127.0.0.1", "::1"} {
+			t.Setenv("SMTP_HOST", host)
+			if _, err := Load(); err != nil {
+				t.Errorf("cleartext credentials against %s: %v, want nil", host, err)
+			}
+		}
+
+		// An unauthenticated cleartext relay stays legal: there is no credential to protect.
+		t.Setenv("SMTP_HOST", "smtp.example.com")
+		t.Setenv("SMTP_USERNAME", "")
+		if _, err := Load(); err != nil {
+			t.Errorf("cleartext without credentials: %v, want nil", err)
+		}
+	})
+
 	t.Run("unknown tls mode", func(t *testing.T) {
 		base()
 		t.Setenv("SMTP_TLS", "maybe")

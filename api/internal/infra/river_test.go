@@ -14,8 +14,7 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
-// gateSender holds the first Send inside the gate and records whether its context was cancelled;
-// every later send goes straight to inner, so a test can gate one attempt and observe the retry.
+// gateSender holds only the first Send, so a test can interrupt one attempt and observe the retry.
 type gateSender struct {
 	// inner is the real transport; nil makes the gate the whole transport.
 	inner service.Sender

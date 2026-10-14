@@ -11,7 +11,6 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
-// SMTP transport modes.
 const (
 	SMTPTLSStartTLS = "starttls"
 	SMTPTLSImplicit = "tls"
@@ -96,6 +95,10 @@ func (s SMTPConfig) validate(development bool) error {
 		if !development {
 			return fmt.Errorf("SMTP_TLS=none is only allowed when APP_ENV=development")
 		}
+		// PlainAuth never sends a password to a remote cleartext host, so this pairing can only fail.
+		if s.Username != "" && !isLoopbackHost(s.Host) {
+			return fmt.Errorf("SMTP_USERNAME over SMTP_TLS=none is only allowed against a loopback SMTP_HOST")
+		}
 	default:
 		return fmt.Errorf("SMTP_TLS must be one of %s, %s, %s", SMTPTLSStartTLS, SMTPTLSImplicit, SMTPTLSNone)
 	}
@@ -103,6 +106,14 @@ func (s SMTPConfig) validate(development bool) error {
 		return fmt.Errorf("SMTP_FROM is required when SMTP_HOST is set")
 	}
 	return nil
+}
+
+func isLoopbackHost(host string) bool {
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
 }
 
 func (c Config) IsProduction() bool  { return c.Env == "production" }

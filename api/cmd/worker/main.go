@@ -15,7 +15,6 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
-// reconcileInterval is how often orphaned queued notifications are retired.
 const reconcileInterval = 10 * time.Minute
 
 func main() {

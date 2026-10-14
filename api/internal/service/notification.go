@@ -93,7 +93,6 @@ type NewNotification struct {
 	ExpiresAt    *time.Time
 }
 
-// Message is the rendered outbound payload handed to a channel transport.
 type Message struct {
 	Recipient string
 	Subject   string
@@ -113,7 +112,6 @@ type NotificationJobArgs struct {
 
 func (NotificationJobArgs) Kind() string { return JobKindNotification }
 
-// JobInserter inserts the delivery job in the caller's transaction.
 type JobInserter interface {
 	InsertNotificationTx(ctx context.Context, tx pgx.Tx, args NotificationJobArgs) error
 }
@@ -143,7 +141,6 @@ type notificationTemplate struct {
 	body    *template.Template
 }
 
-// Attempt is the River attempt metadata, supplied by the worker.
 type Attempt struct {
 	N   int
 	Max int
@@ -477,7 +474,6 @@ func (s *NotificationService) finish(ctx context.Context, scope *uuid.UUID, id, 
 	return s.settleLostOwnership(ctx, scope, id)
 }
 
-// outcomeOf is a convenience for the terminal writes that do record a verdict.
 func outcomeOf(o model.Outcome) *model.Outcome { return &o }
 
 func (s *NotificationService) release(ctx context.Context, scope *uuid.UUID, id, token uuid.UUID, retry *DeliveryError, attempts int) error {

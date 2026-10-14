@@ -200,3 +200,33 @@ func TestSMTPSenderClassifiesReplies(t *testing.T) {
 		}
 	})
 }
+
+// PlainAuth's reply-less refusal to send a password must be permanent, not retried for hours.
+func TestSMTPCleartextAuthRefusalIsPermanent(t *testing.T) {
+	// 127.0.0.2 is loopback but not one of the names PlainAuth trusts, so the refusal is real.
+	s := newFakeSMTPOn(t, "127.0.0.2:0")
+	s.authEnabled = true
+	host, port := s.hostPort(t)
+
+	cfg := config.SMTPConfig{Host: host, Port: port, From: "no-reply@tarunaeduka.id", TLS: config.SMTPTLSNone,
+		Username: "relay", Password: "hunter2"}
+	err := NewSMTPSender(cfg, testLogger()).Send(context.Background(), testMessage())
+	if err == nil {
+		t.Fatal("send succeeded over cleartext credentials, want the PlainAuth refusal")
+	}
+	if got := s.connectionCount(); got != 1 {
+		t.Fatalf("connections = %d, want 1: the refusal must happen at AUTH, not at dial", got)
+	}
+	if !service.IsPermanent(err) {
+		t.Errorf("class = %v, want permanent: a refusal is a configuration error, not a retry", err)
+	}
+	if err.Error() != "smtp: authentication failed" {
+		t.Errorf("err = %q, want the fixed %q", err.Error(), "smtp: authentication failed")
+	}
+	if strings.Contains(err.Error(), "hunter2") {
+		t.Errorf("error leaks the SMTP password: %q", err.Error())
+	}
+	if got := s.messageCount(); got != 0 {
+		t.Errorf("messages = %d, want 0: no body is sent without authentication", got)
+	}
+}
