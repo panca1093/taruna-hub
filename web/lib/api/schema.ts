@@ -56,6 +56,9 @@ export interface paths {
         /**
          * Readiness probe
          * @description Reports whether this instance can serve traffic, including database reachability.
+         *
+         *     The 503 body is this endpoint's own shape — `{status, reason}` — and deliberately
+         *     not the error envelope.
          */
         get: {
             parameters: {
@@ -86,63 +89,12 @@ export interface paths {
                     content: {
                         "application/json": {
                             /** @example unavailable */
-                            status?: string;
+                            status: string;
                             /** @example database unreachable */
-                            reason?: string;
+                            reason: string;
                         };
                     };
                 };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Current user
-         * @description Returns the signed-in user.
-         *
-         *     **Development only (until P03):** the caller is resolved from the `X-Demo-User` header
-         *     (email or phone), falling back to the seeded student. Any other `APP_ENV` always
-         *     answers `401`. P03 replaces this with a JWT bearer token and removes the header.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: {
-                    /**
-                     * @description Dev-only identity override. Removed in P03.
-                     * @example naila@example.com
-                     */
-                    "X-Demo-User"?: string;
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The current user */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["User"];
-                    };
-                };
-                401: components["responses"]["Unauthorized"];
-                500: components["responses"]["InternalError"];
             };
         };
         put?: never;
@@ -157,24 +109,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        User: {
-            /** Format: uuid */
-            id: string;
-            /** @example Naila Ramadhani */
-            name: string;
-            /** Format: email */
-            email: string | null;
-            /** @description Either email or phone is always present (FR-AUTH-01). */
-            phone: string | null;
-            /** @enum {string} */
-            role: "student" | "operator" | "admin";
-            /**
-             * Format: double
-             * @description Wallet balance in IDR.
-             * @example 150000
-             */
-            balance: number;
-        };
         ErrorEnvelope: {
             error: {
                 /**

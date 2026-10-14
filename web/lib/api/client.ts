@@ -1,10 +1,24 @@
 import type { components, paths } from "./schema";
 
-export type User = components["schemas"]["User"];
 export type ErrorEnvelope = components["schemas"]["ErrorEnvelope"];
 export type ErrorCode = ErrorEnvelope["error"]["code"];
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8081";
+/** Success body of `GET /readyz` — the walking skeleton's API + database proof. */
+export type Ready = paths["/readyz"]["get"]["responses"][200]["content"]["application/json"];
+/** 503 body of `GET /readyz`. This endpoint does not use the error envelope. */
+export type NotReady = paths["/readyz"]["get"]["responses"][503]["content"]["application/json"];
+
+/**
+ * Browser calls are same-origin in production, so `NEXT_PUBLIC_API_URL` is set to an
+ * empty string there. With no configuration at all, a page opened on a tenant host must
+ * call the API on that same host, because the API derives the tenant from the host.
+ */
+function baseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+  if (configured !== undefined) return configured;
+  if (typeof window === "undefined") return "http://localhost:8081";
+  return `${window.location.protocol}//${window.location.hostname}:8081`;
+}
 
 /** Thrown for any non-2xx response, carrying the server's stable error code. */
 export class ApiError extends Error {
@@ -23,8 +37,28 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: keyof paths, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+/**
+ * Thrown when `/readyz` answers 503. That status carries the endpoint's own
+ * `{status, reason}` body instead of the error envelope, so it gets its own error type
+ * rather than a fabricated error code.
+ */
+export class ServiceUnavailableError extends Error {
+  readonly status = 503;
+  readonly reason: string;
+
+  constructor(reason: string) {
+    super(reason);
+    this.name = "ServiceUnavailableError";
+    this.reason = reason;
+  }
+}
+
+async function request<T>(
+  path: keyof paths,
+  init?: RequestInit,
+  mapError?: (status: number, body: unknown) => Error | undefined,
+): Promise<T> {
+  const res = await fetch(`${baseUrl()}${path}`, {
     ...init,
     headers: { Accept: "application/json", ...init?.headers },
   });
@@ -32,19 +66,31 @@ async function request<T>(path: keyof paths, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     // A non-JSON body here means the failure happened before the API could shape a
     // response (proxy, gateway, network); surface it as internal_error rather than crashing.
-    const body = await res.json().catch(() => null);
-    throw new ApiError(
-      res.status,
-      body?.error ?? { code: "internal_error", message: `Request failed (${res.status})` },
+    const body: unknown = await res.json().catch(() => null);
+    throw (
+      mapError?.(res.status, body) ??
+      new ApiError(res.status, envelopeError(body) ?? fallbackError(res.status))
     );
   }
 
   return res.json() as Promise<T>;
 }
 
+function envelopeError(body: unknown): ErrorEnvelope["error"] | undefined {
+  if (typeof body !== "object" || body === null || !("error" in body)) return undefined;
+  const { error } = body as ErrorEnvelope;
+  return error && typeof error.message === "string" ? error : undefined;
+}
+
+function fallbackError(status: number): ErrorEnvelope["error"] {
+  return { code: "internal_error", message: `Request failed (${status})` };
+}
+
 export const api = {
-  me: (demoUser?: string) =>
-    request<User>("/api/v1/me", {
-      headers: demoUser ? { "X-Demo-User": demoUser } : undefined,
+  ready: (): Promise<Ready> =>
+    request<Ready>("/readyz", undefined, (status, body) => {
+      if (status !== 503) return undefined;
+      const notReady = body as Partial<NotReady> | null;
+      return new ServiceUnavailableError(notReady?.reason ?? `Request failed (${status})`);
     }),
 };
