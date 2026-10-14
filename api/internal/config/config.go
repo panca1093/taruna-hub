@@ -8,11 +8,13 @@ import (
 )
 
 type Config struct {
-	Env           string
-	Port          string
-	DatabaseURL   string
-	CORSOrigins   []string
-	ShutdownGrace time.Duration
+	Env                string
+	Port               string
+	DatabaseURL        string
+	CORSOrigins        []string
+	ShutdownGrace      time.Duration
+	BaseDomain         string
+	TrustForwardedHost bool
 }
 
 func Load() (Config, error) {
@@ -22,9 +24,18 @@ func Load() (Config, error) {
 		DatabaseURL:   env("DATABASE_URL", ""),
 		CORSOrigins:   split(env("CORS_ORIGINS", "http://localhost:3000")),
 		ShutdownGrace: 10 * time.Second,
+		BaseDomain:    strings.ToLower(env("BASE_DOMAIN", "")),
+		// Only true behind a proxy that strips client-sent X-Forwarded-Host and sets its own.
+		TrustForwardedHost: env("TRUST_FORWARDED_HOST", "") == "true",
 	}
 	if c.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
+	}
+	if c.BaseDomain == "" {
+		if !c.IsDevelopment() {
+			return Config{}, fmt.Errorf("BASE_DOMAIN is required outside development")
+		}
+		c.BaseDomain = "localhost"
 	}
 	return c, nil
 }
