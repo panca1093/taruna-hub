@@ -24,6 +24,7 @@ type User struct {
 	PasswordHash string
 	Role         Role
 	Balance      float64
+	IsActive     bool
 	CreatedAt    time.Time
 }
 
