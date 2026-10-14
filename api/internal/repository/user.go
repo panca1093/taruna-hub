@@ -25,7 +25,7 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-const userColumns = `id, tenant_id, name, email, phone, password_hash, role, balance, created_at`
+const userColumns = `id, tenant_id, name, email, phone, password_hash, role, balance, created_at, is_active`
 
 func (r *UserRepository) FindByID(ctx context.Context, tenantID, id uuid.UUID) (model.User, error) {
 	if tenantID == uuid.Nil {
@@ -33,6 +33,13 @@ func (r *UserRepository) FindByID(ctx context.Context, tenantID, id uuid.UUID) (
 	}
 	row := r.db.QueryRow(ctx,
 		`SELECT `+userColumns+` FROM users WHERE tenant_id = $1 AND id = $2`, tenantID, id)
+	return scanUser(row)
+}
+
+// FindPlatformByID is the platform-scope counterpart of FindByID: the only null-tenant read by id.
+func (r *UserRepository) FindPlatformByID(ctx context.Context, id uuid.UUID) (model.User, error) {
+	row := r.db.QueryRow(ctx,
+		`SELECT `+userColumns+` FROM users WHERE tenant_id IS NULL AND id = $1`, id)
 	return scanUser(row)
 }
 
@@ -69,7 +76,7 @@ type scannable interface {
 
 func scanUser(row scannable) (model.User, error) {
 	var u model.User
-	err := row.Scan(&u.ID, &u.TenantID, &u.Name, &u.Email, &u.Phone, &u.PasswordHash, &u.Role, &u.Balance, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.TenantID, &u.Name, &u.Email, &u.Phone, &u.PasswordHash, &u.Role, &u.Balance, &u.CreatedAt, &u.IsActive)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.User{}, ErrNotFound
 	}

@@ -35,8 +35,15 @@ func newTenant(t *testing.T, repo *TenantRepository) model.Tenant {
 		t.Fatalf("create tenant: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = repo.db.Exec(ctx, `DELETE FROM users WHERE tenant_id = $1`, tenant.ID)
-		_, _ = repo.db.Exec(ctx, `DELETE FROM tenants WHERE id = $1`, tenant.ID)
+		if _, err := repo.db.Exec(ctx, `DELETE FROM auth_sessions WHERE user_id IN (SELECT id FROM users WHERE tenant_id = $1)`, tenant.ID); err != nil {
+			t.Errorf("cleanup sessions of tenant %s: %v", tenant.ID, err)
+		}
+		if _, err := repo.db.Exec(ctx, `DELETE FROM users WHERE tenant_id = $1`, tenant.ID); err != nil {
+			t.Errorf("cleanup users of tenant %s: %v", tenant.ID, err)
+		}
+		if _, err := repo.db.Exec(ctx, `DELETE FROM tenants WHERE id = $1`, tenant.ID); err != nil {
+			t.Errorf("cleanup tenant %s: %v", tenant.ID, err)
+		}
 	})
 	return tenant
 }
@@ -49,7 +56,14 @@ func newUser(t *testing.T, repo *UserRepository, tenantID *uuid.UUID, role model
 	if err != nil {
 		t.Fatalf("create user %s: %v", email, err)
 	}
-	t.Cleanup(func() { _, _ = repo.db.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, u.ID) })
+	t.Cleanup(func() {
+		if _, err := repo.db.Exec(context.Background(), `DELETE FROM auth_sessions WHERE user_id = $1`, u.ID); err != nil {
+			t.Errorf("cleanup sessions of user %s: %v", u.ID, err)
+		}
+		if _, err := repo.db.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, u.ID); err != nil {
+			t.Errorf("cleanup user %s: %v", u.ID, err)
+		}
+	})
 	return u
 }
 
@@ -130,5 +144,46 @@ func TestUserLookupsRequireScope(t *testing.T) {
 	}
 	if _, err := users.FindByIdentifier(ctx, uuid.Nil, email); !errors.Is(err, ErrScopeRequired) {
 		t.Errorf("FindByIdentifier(Nil): err = %v, want ErrScopeRequired", err)
+	}
+}
+
+func TestFindPlatformByIDNeverLeavesThePlatformScope(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	tenants, users := NewTenantRepository(pool), NewUserRepository(pool)
+	a := newTenant(t, tenants)
+
+	platform := newUser(t, users, nil, model.RolePlatformAdmin, "plat-"+uuid.NewString()[:8]+"@example.com")
+	tenantUser := newUser(t, users, &a.ID, model.RoleStudent, "tenant-"+uuid.NewString()[:8]+"@example.com")
+
+	if got, err := users.FindPlatformByID(ctx, platform.ID); err != nil || got.ID != platform.ID {
+		t.Errorf("FindPlatformByID(platform) = %v, %v; want the platform account", got.ID, err)
+	}
+	if _, err := users.FindPlatformByID(ctx, tenantUser.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("FindPlatformByID(tenant user): err = %v, want ErrNotFound", err)
+	}
+	if _, err := users.FindPlatformByID(ctx, uuid.New()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("FindPlatformByID(unknown): err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestUserIsActiveRoundTrips(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	tenants, users := NewTenantRepository(pool), NewUserRepository(pool)
+	a := newTenant(t, tenants)
+	u := newUser(t, users, &a.ID, model.RoleStudent, "active-"+uuid.NewString()[:8]+"@example.com")
+
+	if !u.IsActive {
+		t.Error("a new user is inactive, want active by default")
+	}
+	if got, err := users.FindByID(ctx, a.ID, u.ID); err != nil || !got.IsActive {
+		t.Errorf("FindByID = active %v, err %v; want true, nil", got.IsActive, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE users SET is_active = false WHERE id = $1`, u.ID); err != nil {
+		t.Fatalf("deactivate: %v", err)
+	}
+	if got, err := users.FindByID(ctx, a.ID, u.ID); err != nil || got.IsActive {
+		t.Errorf("after deactivation FindByID = active %v, err %v; want false, nil", got.IsActive, err)
 	}
 }
