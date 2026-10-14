@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
@@ -58,9 +59,7 @@ func Recover(logger *slog.Logger) echo.MiddlewareFunc {
 	})
 }
 
-// CORS locks responses to the configured origins. In development it accepts any
-// localhost port instead, because the Next.js dev server falls back to a random port
-// whenever 3000 is taken — pinning one port there just produces confusing CORS failures.
+// CORS locks responses to the configured origins; development widens it to localhost origins.
 func CORS(origins []string, development bool) echo.MiddlewareFunc {
 	cfg := middleware.CORSConfig{
 		AllowOrigins:     origins,
@@ -70,12 +69,19 @@ func CORS(origins []string, development bool) echo.MiddlewareFunc {
 		MaxAge:           300,
 	}
 	if development {
-		cfg.AllowOriginFunc = func(origin string) (bool, error) {
-			return strings.HasPrefix(origin, "http://localhost:") ||
-				strings.HasPrefix(origin, "http://127.0.0.1:"), nil
-		}
+		cfg.AllowOriginFunc = func(origin string) (bool, error) { return localOrigin(origin), nil }
 	}
 	return middleware.CORSWithConfig(cfg)
+}
+
+// Dev-only: lets <slug>.localhost:3000 call the API on the same host.
+func localOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	host := u.Hostname()
+	return host == "localhost" || host == "127.0.0.1" || strings.HasSuffix(host, ".localhost")
 }
 
 // NoStore marks exam-content responses uncacheable. PRD §7.2: per-session shuffled

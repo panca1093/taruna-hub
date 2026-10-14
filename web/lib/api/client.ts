@@ -7,6 +7,8 @@ export type ErrorCode = ErrorEnvelope["error"]["code"];
 export type Ready = paths["/readyz"]["get"]["responses"][200]["content"]["application/json"];
 /** 503 body of `GET /readyz`. This endpoint does not use the error envelope. */
 export type NotReady = paths["/readyz"]["get"]["responses"][503]["content"]["application/json"];
+/** Success body of `GET /api/v1/tenant` — the tenant the request host resolves to. */
+export type Tenant = components["schemas"]["Tenant"];
 
 // Production sets NEXT_PUBLIC_API_URL to "" (same-origin); unset in dev, call the API on the page's own host.
 function baseUrl(): string {
@@ -85,4 +87,5 @@ export const api = {
       const reason = (body as Partial<NotReady> | null)?.reason;
       return reason ? new ServiceUnavailableError(reason) : undefined;
     }),
+  tenant: (): Promise<Tenant> => request<Tenant>("/api/v1/tenant"),
 };

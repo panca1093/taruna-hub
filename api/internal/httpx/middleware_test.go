@@ -86,16 +86,19 @@ func TestCORSOriginPolicyPerEnvironment(t *testing.T) {
 		deny  []string
 	}{
 		{
-			name:  "development accepts any localhost port",
+			name:  "development accepts any localhost origin",
 			dev:   true,
-			allow: []string{"http://localhost:3000", "http://localhost:4123", "http://127.0.0.1:3000"},
-			deny:  []string{"http://example.com", "http://localhost.evil.com"},
+			allow: []string{"http://localhost:3000", "http://localhost:4123", "http://127.0.0.1:3000", "http://taruna.localhost:3000", "http://sekolah-b.localhost"},
+			deny:  []string{"http://example.com", "http://localhost.evil.com", "http://evil-localhost:3000"},
 		},
 		{
 			name:  "non-development accepts only the configured origins",
 			dev:   false,
 			allow: []string{"http://localhost:3000"},
-			deny:  []string{"http://localhost:4123", "http://127.0.0.1:3000", "http://example.com"},
+			deny: []string{
+				"http://localhost:4123", "http://127.0.0.1:3000", "http://taruna.localhost:3000",
+				"http://example.com", "http://localhost.evil.com", "http://evil-localhost:3000",
+			},
 		},
 	}
 

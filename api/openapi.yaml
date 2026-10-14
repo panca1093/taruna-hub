@@ -7,8 +7,8 @@ info:
     is generated from this file, so a breaking change here surfaces as a compile error in
     the frontend rather than a runtime surprise.
 
-    Scope today is slice P00 (walking skeleton). Later slices extend this file; they do not
-    fork it. No route authenticates yet: the first identity arrives with P03 login.
+    Scope today is slices P00–P01. Later slices extend this file; they do not fork it.
+    No route authenticates yet: the first identity arrives with P03 login.
 
 servers:
   - url: http://localhost:8081
@@ -17,6 +17,8 @@ servers:
 tags:
   - name: system
     description: Liveness and readiness probes
+  - name: tenant
+    description: Public tenant lookup by request host
 
 paths:
   /healthz:
@@ -73,8 +75,44 @@ paths:
                     type: string
                     example: database unreachable
 
+  /api/v1/tenant:
+    get:
+      tags: [tenant]
+      summary: Tenant for the request host
+      description: |
+        Resolves the tenant from the request host: `<slug>.<BASE_DOMAIN>` selects a tenant.
+
+        An active tenant's slug and display name are public — the landing page needs them.
+        An inactive, unknown, reserved, malformed or platform host answers the same `404`
+        with the same code and message, so those cases cannot be told apart from outside.
+      responses:
+        "200":
+          description: The tenant the request host resolves to
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   schemas:
+    Tenant:
+      type: object
+      additionalProperties: false
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+          description: Subdomain label under `BASE_DOMAIN`. Immutable once created.
+          example: taruna
+        name:
+          type: string
+          description: Display name the landing page shows.
+          example: Taruna Eduka
+
     ErrorEnvelope:
       type: object
       required: [error]
@@ -109,6 +147,12 @@ components:
   responses:
     Unauthorized:
       description: No valid identity on the request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: The request host selects no active tenant, or the resource does not exist
       content:
         application/json:
           schema:
