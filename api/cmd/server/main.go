@@ -45,6 +45,11 @@ func run() error {
 	}
 	defer pool.Close()
 
+	// The P02 service has no route yet, so it is built here but not threaded through the router.
+	if _, err := newNotifications(cfg, logger, pool); err != nil {
+		return err
+	}
+
 	e := newEcho(cfg, logger, pool)
 
 	go func() {
@@ -79,6 +84,21 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool) *echo.E
 	h.Register(e, handler.ResolveHostScope(tenants, cfg.TrustForwardedHost))
 
 	return e
+}
+
+// newNotifications is the P02 wiring: one service over the insert-only River client.
+func newNotifications(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool) (*service.NotificationService, error) {
+	inserter, err := infra.NewRiverInserter(pool, logger)
+	if err != nil {
+		return nil, err
+	}
+	return service.NewNotificationService(
+		repository.NewNotificationRepository(pool),
+		inserter,
+		infra.NewSenders(cfg.SMTP, logger),
+		cfg.NotificationSealKey,
+		logger,
+	)
 }
 
 func newLogger(cfg config.Config) *slog.Logger {

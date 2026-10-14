@@ -12,6 +12,12 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
+// outOf returns the pointer form Finish takes for a recorded verdict.
+func outOf(o model.Outcome) *model.Outcome { return &o }
+
+// reconcileText is the caller-chosen reason the repository only stores; the text itself is service policy.
+const reconcileText = "reconciled: delivery job ended without a result"
+
 // insertNotification commits one row through the real positional-conflict insert.
 func insertNotification(t *testing.T, pool *pgxpool.Pool, repo *NotificationRepository, n model.Notification) uuid.UUID {
 	t.Helper()
@@ -103,11 +109,10 @@ func TestRepoScopeIsolation(t *testing.T) {
 		}
 	}
 
-	// Every write path refuses a foreign scope. A platform row is foreign to every tenant, and a
-	// tenant row is foreign to the platform scope.
+	// Every write path refuses a foreign scope, including a platform row against a tenant.
 	token := uuid.New()
-	if _, err := repo.Claim(ctx, &b.ID, rowA, token, time.Minute); !errors.Is(err, ErrBusy) {
-		t.Errorf("Claim(B, rowA): err = %v, want ErrBusy", err)
+	if _, err := repo.Claim(ctx, &b.ID, rowA, token, time.Minute); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Claim(B, rowA): err = %v, want ErrNotFound: the claim found no row it could take", err)
 	}
 	errText := "x"
 	for _, tc := range []struct {
@@ -120,7 +125,7 @@ func TestRepoScopeIsolation(t *testing.T) {
 		{"platform", nil, rowA},
 		{"platform", nil, rowB},
 	} {
-		if ok, err := repo.Finish(ctx, tc.tenantID, tc.id, token, model.StatusSent, 1, model.OutcomeOK, &errText); err != nil || ok {
+		if ok, err := repo.Finish(ctx, tc.tenantID, tc.id, token, model.StatusSent, 1, outOf(model.OutcomeOK), &errText); err != nil || ok {
 			t.Errorf("Finish(%s scope, %s row): ok = %v, err = %v; want false, nil", tc.name, tc.name, ok, err)
 		}
 		if ok, err := repo.Release(ctx, tc.tenantID, tc.id, token, 1, model.OutcomeTransient, &errText); err != nil || ok {
@@ -129,8 +134,8 @@ func TestRepoScopeIsolation(t *testing.T) {
 		if ok, err := repo.FailOrphan(ctx, tc.tenantID, tc.id, errText); err != nil || ok {
 			t.Errorf("FailOrphan(%s scope, %s row): ok = %v, err = %v; want false, nil", tc.name, tc.name, ok, err)
 		}
-		if _, err := repo.Claim(ctx, tc.tenantID, tc.id, uuid.New(), time.Minute); !errors.Is(err, ErrBusy) {
-			t.Errorf("Claim(%s scope, %s row): err = %v, want ErrBusy", tc.name, tc.name, err)
+		if _, err := repo.Claim(ctx, tc.tenantID, tc.id, uuid.New(), time.Minute); !errors.Is(err, ErrNotFound) {
+			t.Errorf("Claim(%s scope, %s row): err = %v, want ErrNotFound", tc.name, tc.name, err)
 		}
 	}
 	if tenantID := rowTenant(t, pool, rowP); tenantID != nil {
@@ -150,11 +155,8 @@ func TestRepoScopeIsolation(t *testing.T) {
 		t.Errorf("FindForDelivery(unknown): err = %v, want ErrNotFound", err)
 	}
 
-	if _, err := pool.Exec(ctx, `UPDATE notification_logs SET created_at = now() - interval '2 hours' WHERE id = ANY($1)`,
-		[]uuid.UUID{rowA, rowB, rowP}); err != nil {
-		t.Fatalf("age rows: %v", err)
-	}
-	candidates, err := repo.ReconcileCandidates(ctx, time.Now().Add(-time.Hour), ReconcileLimit)
+	// A future cutoff keeps this test out of the one-hour window the worker's Reconcile owns.
+	candidates, err := repo.ReconcileCandidates(ctx, time.Now().Add(time.Hour), 10000)
 	if err != nil {
 		t.Fatalf("ReconcileCandidates: %v", err)
 	}
@@ -263,7 +265,7 @@ func TestFindForDeliveryIsTheOnlyByIDRead(t *testing.T) {
 	if _, err := repo.Claim(ctx, got.TenantID, got.ID, token, time.Minute); err != nil {
 		t.Fatalf("Claim with the discovered scope: %v", err)
 	}
-	if ok, err := repo.Finish(ctx, got.TenantID, got.ID, token, model.StatusSent, 1, model.OutcomeOK, nil); err != nil || !ok {
+	if ok, err := repo.Finish(ctx, got.TenantID, got.ID, token, model.StatusSent, 1, outOf(model.OutcomeOK), nil); err != nil || !ok {
 		t.Fatalf("Finish with the discovered scope: ok = %v, err = %v", ok, err)
 	}
 }
@@ -283,15 +285,15 @@ func TestClaimIsExclusiveAndLeaseBound(t *testing.T) {
 	if first.ClaimToken == nil || first.ClaimedUntil == nil || !first.ClaimedUntil.After(time.Now()) {
 		t.Fatalf("claim did not record a live lease: token %v until %v", first.ClaimToken, first.ClaimedUntil)
 	}
-	if _, err := repo.Claim(ctx, &a.ID, id, uuid.New(), time.Minute); !errors.Is(err, ErrBusy) {
-		t.Errorf("second claim: err = %v, want ErrBusy", err)
+	if _, err := repo.Claim(ctx, &a.ID, id, uuid.New(), time.Minute); !errors.Is(err, ErrNotFound) {
+		t.Errorf("second claim: err = %v, want ErrNotFound: the claim found no row it could take", err)
 	}
 
 	// An expired lease stops owning the row.
 	if _, err := pool.Exec(ctx, `UPDATE notification_logs SET claimed_until = now() - interval '1 second' WHERE id = $1`, id); err != nil {
 		t.Fatalf("expire lease: %v", err)
 	}
-	if ok, err := repo.Finish(ctx, &a.ID, id, *first.ClaimToken, model.StatusSent, 1, model.OutcomeOK, nil); err != nil || ok {
+	if ok, err := repo.Finish(ctx, &a.ID, id, *first.ClaimToken, model.StatusSent, 1, outOf(model.OutcomeOK), nil); err != nil || ok {
 		t.Errorf("Finish with an expired lease: ok = %v, err = %v; want false, nil", ok, err)
 	}
 	if ok, err := repo.Release(ctx, &a.ID, id, *first.ClaimToken, 1, model.OutcomeTransient, nil); err != nil || ok {
@@ -316,7 +318,7 @@ func TestFailOrphanSkipsLiveJobs(t *testing.T) {
 	id := insertNotification(t, pool, repo, model.Notification{TenantID: &a.ID, EventKey: "evt-" + uuid.NewString()[:8], Recipient: "a@example.com"})
 
 	jobID := insertRiverJob(t, pool, id, "available", 0)
-	if ok, err := repo.FailOrphan(ctx, &a.ID, id, ReconcileErrorText); err != nil || ok {
+	if ok, err := repo.FailOrphan(ctx, &a.ID, id, reconcileText); err != nil || ok {
 		t.Errorf("FailOrphan with a live job: ok = %v, err = %v; want false, nil", ok, err)
 	}
 	row, err := find(t, repo, &a.ID, id)
@@ -327,26 +329,26 @@ func TestFailOrphanSkipsLiveJobs(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE river.river_job SET state = 'discarded', finalized_at = now() WHERE id = $1`, jobID); err != nil {
 		t.Fatalf("discard job: %v", err)
 	}
-	if ok, err := repo.FailOrphan(ctx, &a.ID, id, ReconcileErrorText); err != nil || !ok {
+	if ok, err := repo.FailOrphan(ctx, &a.ID, id, reconcileText); err != nil || !ok {
 		t.Fatalf("FailOrphan with a discarded job: ok = %v, err = %v; want true, nil", ok, err)
 	}
 	row, err = find(t, repo, &a.ID, id)
 	if err != nil {
 		t.Fatalf("re-read: %v", err)
 	}
-	if row.Status != model.StatusFailed || row.FinishedAt == nil || row.LastError == nil || *row.LastError != ReconcileErrorText {
+	if row.Status != model.StatusFailed || row.FinishedAt == nil || row.LastError == nil || *row.LastError != reconcileText {
 		t.Errorf("reconciled row = status %s finished %v error %v; want failed with the fixed reason", row.Status, row.FinishedAt, row.LastError)
 	}
 }
 
-// insertRiverJob writes the minimal river_job row Reconcile reasons about.
+// insertRiverJob writes the minimal river_job row Reconcile reasons about, on a queue no worker listens on.
 func insertRiverJob(t *testing.T, pool *pgxpool.Pool, notificationID uuid.UUID, state string, attempt int) int64 {
 	t.Helper()
 	ctx := context.Background()
 	var id int64
 	err := pool.QueryRow(ctx,
 		`INSERT INTO river.river_job (state, attempt, max_attempts, kind, args, queue, finalized_at)
-		 VALUES ($1::river.river_job_state, $2, 6, 'notification', jsonb_build_object('notification_id', $3::text), 'notifications',
+		 VALUES ($1::river.river_job_state, $2, 6, 'notification', jsonb_build_object('notification_id', $3::text), 'p02-repo-test',
 		         CASE WHEN $1 IN ('completed','discarded','cancelled') THEN now() ELSE NULL END)
 		 RETURNING id`, state, attempt, notificationID.String()).Scan(&id)
 	if err != nil {
