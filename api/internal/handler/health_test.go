@@ -31,7 +31,8 @@ func testPool(t *testing.T) *pgxpool.Pool {
 
 func readyzEcho(pool *pgxpool.Pool) *echo.Echo {
 	e := echo.New()
-	h := New(slog.New(slog.NewTextHandler(os.Stderr, nil)), NewHealthHandler(pool))
+	// The probes are registered without the API middleware, so no auth service is needed here.
+	h := New(slog.New(slog.NewTextHandler(os.Stderr, nil)), NewHealthHandler(pool), nil, AuthOptions{})
 	h.Register(e)
 	return e
 }

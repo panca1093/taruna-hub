@@ -38,7 +38,12 @@ type Config struct {
 	SMTP               SMTPConfig
 	// NotificationSealKey decrypts secret-bearing notification payloads; nil forbids them.
 	NotificationSealKey []byte
+	// JWTSecret signs access tokens. Required everywhere: an unauthenticated API is not a mode.
+	JWTSecret []byte
 }
+
+// MinJWTSecretBytes is the shortest acceptable HMAC key; 32 bytes is the SHA-256 block a signer needs.
+const MinJWTSecretBytes = 32
 
 func Load() (Config, error) {
 	c := Config{
@@ -71,6 +76,19 @@ func Load() (Config, error) {
 	if err := c.SMTP.validate(c.IsDevelopment()); err != nil {
 		return Config{}, err
 	}
+	// No environment may start without a signing key: an unauthenticated API is not a mode.
+	rawSecret := env("JWT_SECRET", "")
+	if rawSecret == "" {
+		return Config{}, fmt.Errorf("JWT_SECRET is required (generate one with: openssl rand -base64 32)")
+	}
+	raw, err := base64.StdEncoding.DecodeString(rawSecret)
+	if err != nil {
+		return Config{}, fmt.Errorf("JWT_SECRET is not valid base64: %w", err)
+	}
+	if len(raw) < MinJWTSecretBytes {
+		return Config{}, fmt.Errorf("JWT_SECRET must decode to at least %d bytes, got %d", MinJWTSecretBytes, len(raw))
+	}
+	c.JWTSecret = raw
 	if raw := env("NOTIFICATION_SEAL_KEY", ""); raw != "" {
 		key, err := base64.StdEncoding.DecodeString(raw)
 		if err != nil {

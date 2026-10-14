@@ -40,13 +40,18 @@ func forEachBaseDomain(t *testing.T, run func(t *testing.T, f tenantFixture)) {
 }
 
 // Router-level only; TestRoutesAcrossEnvironments covers the real assembly.
-func newTenantEcho(tenants *service.TenantService, trustForwardedHost bool) *echo.Echo {
+func newTenantEcho(f tenantFixture, trustForwardedHost bool) *echo.Echo {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	e := echo.New()
 	e.HTTPErrorHandler = httpx.ErrorHandler(logger)
-	New(logger, NewHealthHandler(nil)).Register(e, ResolveHostScope(tenants, trustForwardedHost))
+	New(logger, NewHealthHandler(nil), newAuthService(f), AuthOptions{
+		AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
+	}).Register(e, ResolveHostScope(f.tenants, trustForwardedHost))
 	return e
 }
+
+// devOrigins is what the development CORS policy accepts; these tests never change it.
+var devOrigins = []string{"http://localhost:3000"}
 
 func newTenantFixture(t *testing.T, baseDomain string) tenantFixture {
 	t.Helper()
@@ -69,8 +74,15 @@ func newTenantFixture(t *testing.T, baseDomain string) tenantFixture {
 
 	var ids []uuid.UUID
 	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE tenant_id = ANY($1)`, ids)
-		_, _ = pool.Exec(ctx, `DELETE FROM tenants WHERE id = ANY($1)`, ids)
+		if _, err := pool.Exec(ctx, `DELETE FROM auth_sessions WHERE tenant_id = ANY($1)`, ids); err != nil {
+			t.Errorf("cleanup sessions of the fixture tenants: %v", err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM users WHERE tenant_id = ANY($1)`, ids); err != nil {
+			t.Errorf("cleanup users of the fixture tenants: %v", err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM tenants WHERE id = ANY($1)`, ids); err != nil {
+			t.Errorf("cleanup fixture tenants: %v", err)
+		}
 	})
 
 	slugs := []string{"a-" + uuid.NewString()[:8], "b-" + uuid.NewString()[:8], "c-" + uuid.NewString()[:8]}
@@ -127,7 +139,7 @@ func errorEnvelope(t *testing.T, rec *httptest.ResponseRecorder) httpx.Envelope 
 
 func TestTenantAnswersItsOwnTenantPerHost(t *testing.T) {
 	forEachBaseDomain(t, func(t *testing.T, f tenantFixture) {
-		e := newTenantEcho(f.tenants, false)
+		e := newTenantEcho(f, false)
 
 		var bodies []map[string]any
 		for _, tenant := range f.active {
@@ -149,7 +161,7 @@ func TestTenantAnswersItsOwnTenantPerHost(t *testing.T) {
 
 func TestTenantHostsWithoutAnActiveTenantAnswerIdentical404(t *testing.T) {
 	forEachBaseDomain(t, func(t *testing.T, f tenantFixture) {
-		e := newTenantEcho(f.tenants, false)
+		e := newTenantEcho(f, false)
 		a := f.active[0]
 
 		// The platform host is the reference: every hostless host must be indistinguishable from it.
@@ -188,7 +200,7 @@ func TestTenantHostsWithoutAnActiveTenantAnswerIdentical404(t *testing.T) {
 
 func TestTenantStopsServingADeactivatedTenant(t *testing.T) {
 	forEachBaseDomain(t, func(t *testing.T, f tenantFixture) {
-		e := newTenantEcho(f.tenants, false)
+		e := newTenantEcho(f, false)
 		tenant := f.active[1]
 		if rec := getTenant(e, f.host(tenant.Slug), nil); rec.Code != http.StatusOK {
 			t.Fatalf("host %s: status = %d body = %s, want %d", tenant.Slug, rec.Code, rec.Body.String(), http.StatusOK)
@@ -210,35 +222,38 @@ func TestTenantForwardedHostOnlyHonoredFromTrustedProxy(t *testing.T) {
 		host := f.host(a.Slug)
 		spoof := map[string]string{"X-Forwarded-Host": f.host(b.Slug)}
 
-		rec := getTenant(newTenantEcho(f.tenants, false), host, spoof)
+		rec := getTenant(newTenantEcho(f, false), host, spoof)
 		if rec.Code != http.StatusOK || tenantBody(t, rec)["slug"] != a.Slug {
 			t.Errorf("untrusted proxy: status %d body %s; want tenant %s (header ignored)", rec.Code, rec.Body.String(), a.Slug)
 		}
 
-		rec = getTenant(newTenantEcho(f.tenants, true), host, spoof)
+		rec = getTenant(newTenantEcho(f, true), host, spoof)
 		if body := tenantBody(t, rec); rec.Code != http.StatusOK || body["slug"] != b.Slug {
 			t.Errorf("trusted proxy: status %d body %s; want tenant %s", rec.Code, rec.Body.String(), b.Slug)
 		}
 
 		chain := map[string]string{"X-Forwarded-Host": f.host(a.Slug) + ", " + f.host(b.Slug)}
-		if rec := getTenant(newTenantEcho(f.tenants, true), host, chain); rec.Code != http.StatusNotFound {
+		if rec := getTenant(newTenantEcho(f, true), host, chain); rec.Code != http.StatusNotFound {
 			t.Errorf("forwarded chain: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusNotFound)
 		}
 	})
 }
 
-func TestTenantMeRouteIsGone(t *testing.T) {
+// /me exists now, but it is never public: no token is a rejection, not a tenant lookup.
+func TestMeRequiresAuthenticationOnEveryHost(t *testing.T) {
 	forEachBaseDomain(t, func(t *testing.T, f tenantFixture) {
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
-		req.Host = f.host(f.active[0].Slug)
-		newTenantEcho(f.tenants, false).ServeHTTP(rec, req)
+		for _, host := range []string{f.host(f.active[0].Slug), "admin." + f.baseDomain} {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+			req.Host = host
+			newTenantEcho(f, false).ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("GET /api/v1/me: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusNotFound)
-		}
-		if code := errorEnvelope(t, rec).Error.Code; code != httpx.CodeNotFound {
-			t.Errorf("GET /api/v1/me: error code = %q, want %q", code, httpx.CodeNotFound)
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("GET /api/v1/me on %s: status = %d body = %s, want %d", host, rec.Code, rec.Body.String(), http.StatusUnauthorized)
+			}
+			if code := errorEnvelope(t, rec).Error.Code; code != httpx.CodeUnauthorized {
+				t.Errorf("GET /api/v1/me on %s: error code = %q, want %q", host, code, httpx.CodeUnauthorized)
+			}
 		}
 	})
 }

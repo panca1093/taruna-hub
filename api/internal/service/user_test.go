@@ -16,18 +16,26 @@ func TestProvisionAdmin(t *testing.T) {
 	tenants, pool := testTenantService(t)
 	ctx := context.Background()
 	users := NewUserService(repository.NewUserRepository(pool))
-	tenant, err := tenants.Provision(ctx, "t-"+uuid.NewString()[:8], "svc-test")
-	if err != nil {
-		t.Fatalf("provision tenant: %v", err)
-	}
+	tenant := provisionTenant(t, tenants, pool)
+
+	// Every id this test creates is deleted by that exact id, never by a shared prefix.
+	var owned []uuid.UUID
 	t.Cleanup(func() {
-		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE tenant_id = $1 OR email LIKE 'svc-plat-%'`, tenant.ID)
+		for _, id := range owned {
+			if _, err := pool.Exec(ctx, `DELETE FROM auth_sessions WHERE user_id = $1`, id); err != nil {
+				t.Errorf("cleanup sessions of user %s: %v", id, err)
+			}
+			if _, err := pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id); err != nil {
+				t.Errorf("cleanup user %s: %v", id, err)
+			}
+		}
 	})
 
 	tenantAdmin, err := users.ProvisionAdmin(ctx, &tenant.ID, "Owner", "owner@example.com", "correct-horse")
 	if err != nil {
 		t.Fatalf("tenant admin: %v", err)
 	}
+	owned = append(owned, tenantAdmin.ID)
 	if tenantAdmin.Role != model.RoleAdmin || tenantAdmin.TenantID == nil || *tenantAdmin.TenantID != tenant.ID {
 		t.Errorf("tenant admin = role %s tenant %v; want admin in %s", tenantAdmin.Role, tenantAdmin.TenantID, tenant.ID)
 	}
@@ -40,6 +48,7 @@ func TestProvisionAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platform admin: %v", err)
 	}
+	owned = append(owned, platform.ID)
 	if platform.Role != model.RolePlatformAdmin || platform.TenantID != nil {
 		t.Errorf("platform admin = role %s tenant %v; want platform_admin, no tenant", platform.Role, platform.TenantID)
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
 )
 
@@ -76,18 +77,37 @@ func testTenantService(t *testing.T) (*TenantService, *pgxpool.Pool) {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(pool.Close)
-	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM tenants WHERE name = 'svc-test'`) })
 	return NewTenantService(repository.NewTenantRepository(pool), "tarunaeduka.id"), pool
 }
 
-func TestResolveHost(t *testing.T) {
-	svc, _ := testTenantService(t)
-	ctx := context.Background()
-	slug := "t-" + uuid.NewString()[:8]
-	tenant, err := svc.Provision(ctx, slug, "svc-test")
+// Tests share one database and run in parallel, so nothing may be deleted by name or prefix.
+func provisionTenant(t *testing.T, svc *TenantService, pool *pgxpool.Pool) model.Tenant {
+	t.Helper()
+	tenant, err := svc.Provision(context.Background(), "t-"+uuid.NewString()[:8], "svc-test")
 	if err != nil {
-		t.Fatalf("provision: %v", err)
+		t.Fatalf("provision tenant: %v", err)
 	}
+	t.Cleanup(func() {
+		ctx := context.Background()
+		// Sessions reference users, so they go first or the user delete would fail.
+		if _, err := pool.Exec(ctx, `DELETE FROM auth_sessions WHERE tenant_id = $1`, tenant.ID); err != nil {
+			t.Errorf("cleanup sessions of tenant %s: %v", tenant.ID, err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM users WHERE tenant_id = $1`, tenant.ID); err != nil {
+			t.Errorf("cleanup users of tenant %s: %v", tenant.ID, err)
+		}
+		if _, err := pool.Exec(ctx, `DELETE FROM tenants WHERE id = $1`, tenant.ID); err != nil {
+			t.Errorf("cleanup tenant %s: %v", tenant.ID, err)
+		}
+	})
+	return tenant
+}
+
+func TestResolveHost(t *testing.T) {
+	svc, pool := testTenantService(t)
+	ctx := context.Background()
+	tenant := provisionTenant(t, svc, pool)
+	slug := tenant.Slug
 
 	got, err := svc.ResolveHost(ctx, slug+".tarunaeduka.id:3000")
 	if err != nil || got.Platform || got.Tenant.ID != tenant.ID {
@@ -109,20 +129,17 @@ func TestResolveHost(t *testing.T) {
 func TestResolveHostSkipsInactiveTenant(t *testing.T) {
 	svc, pool := testTenantService(t)
 	ctx := context.Background()
-	slug := "t-" + uuid.NewString()[:8]
-	if _, err := svc.Provision(ctx, slug, "svc-test"); err != nil {
-		t.Fatalf("provision: %v", err)
-	}
-	if _, err := pool.Exec(ctx, `UPDATE tenants SET is_active = false WHERE slug = $1`, slug); err != nil {
+	tenant := provisionTenant(t, svc, pool)
+	if _, err := pool.Exec(ctx, `UPDATE tenants SET is_active = false WHERE id = $1`, tenant.ID); err != nil {
 		t.Fatalf("deactivate: %v", err)
 	}
-	if _, err := svc.ResolveHost(ctx, slug+".tarunaeduka.id"); !errors.Is(err, ErrTenantNotFound) {
+	if _, err := svc.ResolveHost(ctx, tenant.Slug+".tarunaeduka.id"); !errors.Is(err, ErrTenantNotFound) {
 		t.Errorf("inactive tenant: err = %v, want ErrTenantNotFound", err)
 	}
 }
 
 func TestProvisionRejectsBadAndDuplicateSlugs(t *testing.T) {
-	svc, _ := testTenantService(t)
+	svc, pool := testTenantService(t)
 	ctx := context.Background()
 
 	for _, slug := range []string{"www", "Bad_Slug", ""} {
@@ -131,11 +148,8 @@ func TestProvisionRejectsBadAndDuplicateSlugs(t *testing.T) {
 		}
 	}
 
-	slug := "t-" + uuid.NewString()[:8]
-	if _, err := svc.Provision(ctx, slug, "svc-test"); err != nil {
-		t.Fatalf("first provision: %v", err)
-	}
-	if _, err := svc.Provision(ctx, slug, "svc-test"); !errors.Is(err, ErrSlugTaken) {
+	tenant := provisionTenant(t, svc, pool)
+	if _, err := svc.Provision(ctx, tenant.Slug, "svc-test"); !errors.Is(err, ErrSlugTaken) {
 		t.Errorf("duplicate slug: err = %v, want ErrSlugTaken", err)
 	}
 }

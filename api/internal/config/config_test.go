@@ -15,6 +15,8 @@ func TestSMTPConfigValidation(t *testing.T) {
 		t.Setenv("SMTP_TLS", "starttls")
 		t.Setenv("SMTP_FROM", "")
 		t.Setenv("NOTIFICATION_SEAL_KEY", "")
+		// Every environment needs a signing key, so the negative cases below stay about SMTP.
+		t.Setenv("JWT_SECRET", validJWTSecret())
 	}
 
 	t.Run("host without from", func(t *testing.T) {
@@ -111,9 +113,64 @@ func TestSMTPConfigValidation(t *testing.T) {
 	})
 }
 
+// validJWTSecret is the base64 of 32 bytes: the shape every environment's JWT_SECRET must have.
+func validJWTSecret() string {
+	return base64.StdEncoding.EncodeToString(make([]byte, MinJWTSecretBytes))
+}
+
+func TestConfigRequiresJWTSecret(t *testing.T) {
+	base := func() {
+		t.Setenv("APP_ENV", "development")
+		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+		t.Setenv("SMTP_HOST", "")
+		t.Setenv("SMTP_PORT", "587")
+		t.Setenv("SMTP_TLS", "starttls")
+		t.Setenv("SMTP_FROM", "")
+		t.Setenv("NOTIFICATION_SEAL_KEY", "")
+	}
+
+	for _, env := range []string{"development", "staging", "production"} {
+		t.Run(env+" without a secret", func(t *testing.T) {
+			base()
+			t.Setenv("APP_ENV", env)
+			t.Setenv("JWT_SECRET", "")
+			if _, err := Load(); err == nil {
+				t.Errorf("%s without JWT_SECRET: err = nil, want an error", env)
+			}
+		})
+	}
+
+	t.Run("not base64", func(t *testing.T) {
+		base()
+		t.Setenv("JWT_SECRET", "not base64!!")
+		if _, err := Load(); err == nil {
+			t.Error("a non-base64 JWT_SECRET was accepted, want an error")
+		}
+	})
+
+	t.Run("too short", func(t *testing.T) {
+		base()
+		t.Setenv("JWT_SECRET", base64.StdEncoding.EncodeToString(make([]byte, MinJWTSecretBytes-1)))
+		if _, err := Load(); err == nil {
+			t.Error("a 31-byte JWT_SECRET was accepted, want an error")
+		}
+	})
+
+	t.Run("valid", func(t *testing.T) {
+		base()
+		t.Setenv("JWT_SECRET", validJWTSecret())
+		cfg, err := Load()
+		if err != nil || len(cfg.JWTSecret) != MinJWTSecretBytes {
+			t.Errorf("JWTSecret = %d bytes, err = %v; want %d, nil", len(cfg.JWTSecret), err, MinJWTSecretBytes)
+		}
+	})
+}
+
 func TestLoadRequiresBaseDomainOutsideDevelopment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
 	t.Setenv("BASE_DOMAIN", "")
+	t.Setenv("JWT_SECRET", validJWTSecret())
 
 	t.Setenv("APP_ENV", "development")
 	cfg, err := Load()

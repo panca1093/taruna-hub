@@ -71,7 +71,16 @@ func run() error {
 // newEcho is the single assembly point, so tests run the real middleware chain.
 func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool) *echo.Echo {
 	tenants := service.NewTenantService(repository.NewTenantRepository(pool), cfg.BaseDomain)
-	h := handler.New(logger, handler.NewHealthHandler(pool))
+	auth := service.NewAuthService(
+		repository.NewUserRepository(pool),
+		repository.NewSessionRepository(pool),
+		cfg.JWTSecret,
+		logger,
+	)
+	h := handler.New(logger, handler.NewHealthHandler(pool), auth, handler.AuthOptions{
+		SecureCookies: !cfg.IsDevelopment(),
+		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
+	})
 
 	e := echo.New()
 	e.HideBanner = true
