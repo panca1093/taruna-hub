@@ -3,7 +3,7 @@
 Go backend. Layering follows PRD §7: `model → repository → service → handler`, with
 `infra` for datastore wiring and `httpx` for HTTP concerns.
 
-This file is how to run it. How it behaves is in [`docs/`](../docs/README.md) at the repo root.
+This file is how to run it. How it behaves is in [`docs/`](../docs/index.md) at the repo root.
 
 ## Run it
 
