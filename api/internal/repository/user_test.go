@@ -35,6 +35,11 @@ func newTenant(t *testing.T, repo *TenantRepository) model.Tenant {
 		t.Fatalf("create tenant: %v", err)
 	}
 	t.Cleanup(func() {
+		for _, table := range []string{"notification_logs", "auth_registrations", "auth_password_resets"} {
+			if _, err := repo.db.Exec(ctx, `DELETE FROM `+table+` WHERE tenant_id = $1`, tenant.ID); err != nil {
+				t.Errorf("cleanup %s of tenant %s: %v", table, tenant.ID, err)
+			}
+		}
 		if _, err := repo.db.Exec(ctx, `DELETE FROM auth_sessions WHERE user_id IN (SELECT id FROM users WHERE tenant_id = $1)`, tenant.ID); err != nil {
 			t.Errorf("cleanup sessions of tenant %s: %v", tenant.ID, err)
 		}

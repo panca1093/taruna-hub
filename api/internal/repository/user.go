@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
@@ -15,6 +16,9 @@ import (
 var (
 	ErrNotFound      = errors.New("not found")
 	ErrScopeRequired = errors.New("tenant scope required")
+	// Both wrap ErrDuplicate; registration needs to say which identifier is already taken.
+	ErrDuplicateEmail = fmt.Errorf("%w: email", ErrDuplicate)
+	ErrDuplicatePhone = fmt.Errorf("%w: phone", ErrDuplicate)
 )
 
 type UserRepository struct {
@@ -63,7 +67,41 @@ func (r *UserRepository) FindPlatformByIdentifier(ctx context.Context, identifie
 }
 
 func (r *UserRepository) Create(ctx context.Context, u model.User) (model.User, error) {
-	row := r.db.QueryRow(ctx,
+	return insertUser(ctx, r.db, u)
+}
+
+// CreateTx is Create inside the caller's transaction, so an account and what made it commit together.
+func (r *UserRepository) CreateTx(ctx context.Context, tx pgx.Tx, u model.User) (model.User, error) {
+	return insertUser(ctx, tx, u)
+}
+
+// FindByIDTx reads inside the caller's transaction: a transaction that also waits on the pool can starve it.
+func (r *UserRepository) FindByIDTx(ctx context.Context, tx pgx.Tx, tenantID *uuid.UUID, id uuid.UUID) (model.User, error) {
+	row := tx.QueryRow(ctx,
+		`SELECT `+userColumns+` FROM users WHERE id = $1 AND tenant_id IS NOT DISTINCT FROM $2`, id, tenantID)
+	return scanUser(row)
+}
+
+// UpdatePasswordTx is scoped like every user write; a nil tenant is the platform.
+func (r *UserRepository) UpdatePasswordTx(ctx context.Context, tx pgx.Tx, tenantID *uuid.UUID, id uuid.UUID, hash string) error {
+	tag, err := tx.Exec(ctx,
+		`UPDATE users SET password_hash = $3 WHERE id = $1 AND tenant_id IS NOT DISTINCT FROM $2`,
+		id, tenantID, hash)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+type rowQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func insertUser(ctx context.Context, q rowQuerier, u model.User) (model.User, error) {
+	row := q.QueryRow(ctx,
 		`INSERT INTO users (tenant_id, name, email, phone, password_hash, role)
 		 VALUES ($1, $2, $3, $4, $5, $6) RETURNING `+userColumns,
 		u.TenantID, u.Name, u.Email, u.Phone, u.PasswordHash, u.Role)
@@ -81,10 +119,23 @@ func scanUser(row scannable) (model.User, error) {
 		return model.User{}, ErrNotFound
 	}
 	if isUniqueViolation(err) {
-		return model.User{}, ErrDuplicate
+		return model.User{}, duplicateUser(err)
 	}
 	if err != nil {
 		return model.User{}, fmt.Errorf("scan user: %w", err)
 	}
 	return u, nil
+}
+
+func duplicateUser(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.ConstraintName {
+		case "users_tenant_email_key", "users_platform_email_key":
+			return ErrDuplicateEmail
+		case "users_tenant_phone_key", "users_platform_phone_key":
+			return ErrDuplicatePhone
+		}
+	}
+	return ErrDuplicate
 }

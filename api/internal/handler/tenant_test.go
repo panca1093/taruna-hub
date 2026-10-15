@@ -74,6 +74,11 @@ func newTenantFixture(t *testing.T, baseDomain string) tenantFixture {
 
 	var ids []uuid.UUID
 	t.Cleanup(func() {
+		for _, table := range []string{"notification_logs", "auth_registrations", "auth_password_resets"} {
+			if _, err := pool.Exec(ctx, `DELETE FROM `+table+` WHERE tenant_id = ANY($1)`, ids); err != nil {
+				t.Errorf("cleanup %s of the fixture tenants: %v", table, err)
+			}
+		}
 		if _, err := pool.Exec(ctx, `DELETE FROM auth_sessions WHERE tenant_id = ANY($1)`, ids); err != nil {
 			t.Errorf("cleanup sessions of the fixture tenants: %v", err)
 		}

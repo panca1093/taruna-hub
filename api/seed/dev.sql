@@ -22,16 +22,16 @@ INSERT INTO users (tenant_id, name, email, phone, password_hash, role, balance)
 SELECT t.id, v.name, v.email, v.phone,
        '$2a$10$gZ0w6wuB5MiODdtWAetlPetM3X84pFE04KlyoP3h0Wsoa43WzhEp.', v.role::user_role, v.balance
 FROM (VALUES
-    ('taruna',    'Naila Ramadhani',  'naila@example.com',       '081234567890', 'student',  150000),
-    ('taruna',    'Siti Aminah',      'admin@tarunaeduka.id',    '081200000001', 'admin',    0),
-    ('taruna',    'Rizky Operator',   'operator@tarunaeduka.id', '081200000002', 'operator', 0),
-    ('sekolah-b', 'Naila Sekolah B',  'naila@example.com',       '081234567890', 'student',  25000),
-    ('sekolah-b', 'Admin Sekolah B',  'admin@sekolah-b.test',    '081200000003', 'admin',    0)
+    ('taruna',    'Naila Ramadhani',  'naila@example.com',       '+6281234567890', 'student',  150000),
+    ('taruna',    'Siti Aminah',      'admin@tarunaeduka.id',    '+6281200000001', 'admin',    0),
+    ('taruna',    'Rizky Operator',   'operator@tarunaeduka.id', '+6281200000002', 'operator', 0),
+    ('sekolah-b', 'Naila Sekolah B',  'naila@example.com',       '+6281234567890', 'student',  25000),
+    ('sekolah-b', 'Admin Sekolah B',  'admin@sekolah-b.test',    '+6281200000003', 'admin',    0)
 ) AS v (slug, name, email, phone, role, balance)
 JOIN tenants t ON t.slug = v.slug
 ON CONFLICT DO NOTHING;
 
 INSERT INTO users (tenant_id, name, email, phone, password_hash, role)
-VALUES (NULL, 'Platform Admin', 'root@tarunaeduka.id', '081200000009',
+VALUES (NULL, 'Platform Admin', 'root@tarunaeduka.id', '+6281200000009',
         '$2a$10$gZ0w6wuB5MiODdtWAetlPetM3X84pFE04KlyoP3h0Wsoa43WzhEp.', 'platform_admin')
 ON CONFLICT DO NOTHING;
