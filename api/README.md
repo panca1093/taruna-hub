@@ -133,7 +133,7 @@ their slices arrive.
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | optional AUTH credentials |
 | `SMTP_FROM` | envelope and header sender; required once `SMTP_HOST` is set |
 | `SMTP_TLS` | `starttls` (default), `tls`, or `none`; `none` only when `APP_ENV=development`, and never with `SMTP_USERNAME` unless `SMTP_HOST` is loopback |
-| `NOTIFICATION_SEAL_KEY` | base64 of exactly 32 bytes; required only to send secret-bearing messages |
+| `NOTIFICATION_SEAL_KEY` | base64 of exactly 32 bytes; **required in every environment** since P03b, because signup codes and reset links are sealed |
 
 `SMTP_TLS=starttls` refuses to fall back to cleartext: a server that does not offer STARTTLS, or
 offers an untrusted certificate, fails the send instead. Secrets (OTP, reset tokens) never appear
@@ -141,11 +141,11 @@ in `params`, in River args or in logs — they are sealed with AES-256-GCM under
 `NOTIFICATION_SEAL_KEY` and erased the moment the row reaches a terminal state. Logs carry fixed
 class text and a masked recipient, never provider output.
 
-## Authentication and sessions (P03a)
+## Authentication and sessions (P03a, P03b)
 
 `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout` and
-`GET /api/v1/me`. This is the API half of P03: registration, email OTP, password reset and login
-throttling arrive with P03b, and the web login screens with P03c.
+`GET /api/v1/me` (P03a), plus registration, the email code and password reset (P03b). This is the
+API half of P03; the web screens arrive with P03c.
 
 ### What a request proves
 
@@ -159,7 +159,7 @@ tenant on their own.
 | Concern | Value |
 |---|---|
 | Access token | HS256 JWT, 15 minutes, issuer `taruna-api`, audience `taruna-web` |
-| Refresh token | 32 random bytes, base64url, stored only as its SHA-256 |
+| Refresh token | 32 random bytes, base64url, stored only as its SHA-256; rotated on every refresh |
 | Refresh cookie | `refresh_token`; `Path=/api/v1/auth`; `HttpOnly`; `SameSite=Lax`; `Secure` outside development; `Max-Age` 30 days |
 | Idle lifetime | 3 hours (D13), enforced server-side on every authenticated request |
 
@@ -173,19 +173,76 @@ Two rules are easy to get wrong, and both are deliberate:
   those two routes — the ones that act on a cookie alone — check it themselves. The dev case of web
   on `:3000` calling the API on `:8081` under the same hostname stays allowed.
 
+**Every refresh rotates the token.** The replaced token keeps working for 30 seconds, so two tabs
+that refresh at once both get an access token; the one that lost the race sets no cookie, because the
+winner already did. After those 30 seconds a replaced token can only be a copy, so presenting it
+revokes the whole session and the current token dies with it.
+
 Logout always answers `204` and always clears the cookie, and revocation takes effect immediately.
 Login failures are indistinguishable: an unknown identifier, an inactive account and a wrong password
 share one message, and an unknown account still pays for a bcrypt comparison so timing does not
 single it out either.
 
+### Identifiers
+
+Emails are stored trimmed and lowercased, phones as E.164 (`0812…`, `62812…` and `+62 812-…` all
+become `+62812…`), and check constraints on `users` refuse anything else. Login, registration and
+recovery normalize the input the same way, so every spelling reaches the same account.
+
+### Registration and recovery (P03b, D01)
+
+| Route | Answer |
+|---|---|
+| `POST /auth/register` | `202` and a 6-digit code by email; nothing is an account yet |
+| `POST /auth/register/resend` | `202` and a fresh code; the same `202` and no email for an unknown address |
+| `POST /auth/register/verify` | `200`, a token body and the cookie — the account exists from here |
+| `POST /auth/password/forgot` | `202` and no body for every well-formed email |
+| `POST /auth/password/reset` | `204`; the password changes and every session of the account is revoked |
+
+D01 is settled: the code goes by email over the P02 SMTP transport, email is required at signup and a
+phone is optional, so recovery is always an email link. Registration exists only on tenant hosts.
+
+A pending signup lives in `auth_registrations`, not in `users`, so an unverified address never
+blocks anyone: signing up again replaces it. The code is stored as an HMAC keyed from `JWT_SECRET`,
+works for 10 minutes and 5 guesses, and the guesses are counted under a row lock, so a burst of
+concurrent requests buys no extra tries. Two racing verifications of the right code create one
+account.
+
+A reset link is `<scheme>://<slug>.<BASE_DOMAIN>[:port]/reset-password#token=…`, built from
+configuration only — never from a request header, or a forged `Origin` could put an attacker's host
+into a genuine email. The token sits in the fragment so it never reaches a server log or a `Referer`.
+It is single use (one conditional `UPDATE`), lasts 30 minutes, and a newer request retires older links.
+
+Codes and links travel only as sealed notification params with an expiry equal to their own, so a
+message that would arrive dead is expired instead of sent.
+
+### Throttles
+
+Fixed-window counters in `auth_throttles`, keyed by a SHA-256 of rule, host scope and normalized
+identifier. Attempts are counted before any password check in one atomic statement, so concurrent
+requests cannot exceed the budget. A refusal is `429 too_many_requests` with `Retry-After`.
+
+| Rule | Budget |
+|---|---|
+| Login, per identifier and host | 10 attempts / 15 minutes; a success or a password reset clears it |
+| Signup codes, per email and tenant | 5 / hour across register and resend, and 60 seconds between resends |
+| Forgot password, per email and host | 3 / 15 minutes, counted for unknown emails too |
+
+A login lockout keyed on the identifier lets someone who knows an address lock its owner out for 15
+minutes; the reset link still works and clears it.
+
 ### Not here yet
 
-No refresh-token rotation or reuse detection, no login throttle or lockout (P03b), no capability
-matrix — the guard is by role only — no absolute session cap, no phone/email canonicalization and
-nothing per-IP. `GET /api/v1/me` carries identity only: balance and the ledger are not part of it.
+No capability matrix — the guard is by role only (D02) — no absolute session cap, nothing per-IP
+(that needs a trusted-proxy client-IP decision), and no sweep of expired pending signups, used reset
+tokens or stale throttle rows: they are small and harmless, and a maintenance job can arrive with the
+next worker change. `GET /api/v1/me` carries identity only: balance and the ledger are not part of it.
 
 ### Config
 
 | Variable | Meaning |
 |---|---|
 | `JWT_SECRET` | Base64 of at least 32 bytes; **required in every environment**. `openssl rand -base64 32` |
+| `NOTIFICATION_SEAL_KEY` | Base64 of exactly 32 bytes; **required in every environment** (see Notifications) |
+| `PUBLIC_WEB_SCHEME` | Scheme of links in emails; default `https`, and `http` is allowed only in development (its default there) |
+| `PUBLIC_WEB_PORT` | Port of links in emails; default `3000` in development, none elsewhere |

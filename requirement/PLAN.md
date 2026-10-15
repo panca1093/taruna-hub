@@ -158,7 +158,7 @@ For every slice, use this verification loop:
 
 ### P03 — Real tenant accounts and sessions
 
-**Status:** planned · **Size:** L · **Depends:** P01, P02
+**Status:** in progress — P03a sessions/login/role guard and P03b registration, email code, reset, rotation and throttling are API-complete; P03c web screens remain · **Size:** L · **Depends:** P01, P02
 
 **Outcome:** Students and staff authenticate in their own tenant and recover accounts through the approved channel.
 
