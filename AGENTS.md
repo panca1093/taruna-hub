@@ -37,6 +37,7 @@ web/                  Next.js 16 · React 19 · HeroUI v3 · Tailwind v4
   lib/api/            generated schema.ts + typed client: the data boundary
   lib/i18n/dict/      one dictionary file per feature (id + en)
   lib/mock-data.ts, demo-store.ts   mock layer, replaced slice by slice
+docs/                 implementation notes per area (how it behaves); app READMEs only say how to run
 requirement/          PRD, architecture, plan, reconciliation
 docker-compose.yml    Postgres, Redis, MinIO
 ```
