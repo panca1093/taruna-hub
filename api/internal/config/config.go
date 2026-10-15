@@ -36,8 +36,11 @@ type Config struct {
 	BaseDomain         string
 	TrustForwardedHost bool
 	SMTP               SMTPConfig
-	// NotificationSealKey decrypts secret-bearing notification payloads; nil forbids them.
+	// NotificationSealKey seals the codes and reset links queued for delivery. Required everywhere.
 	NotificationSealKey []byte
+	// WebScheme and WebPort place links in emails on <slug>.<BaseDomain>; never taken from a request.
+	WebScheme string
+	WebPort   string
 	// JWTSecret signs access tokens. Required everywhere: an unauthenticated API is not a mode.
 	JWTSecret []byte
 }
@@ -89,15 +92,33 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("JWT_SECRET must decode to at least %d bytes, got %d", MinJWTSecretBytes, len(raw))
 	}
 	c.JWTSecret = raw
-	if raw := env("NOTIFICATION_SEAL_KEY", ""); raw != "" {
-		key, err := base64.StdEncoding.DecodeString(raw)
-		if err != nil {
-			return Config{}, fmt.Errorf("NOTIFICATION_SEAL_KEY is not valid base64: %w", err)
+	// Registration codes and reset links are sealed secrets, so signup cannot work without the key.
+	rawSeal := env("NOTIFICATION_SEAL_KEY", "")
+	if rawSeal == "" {
+		return Config{}, fmt.Errorf("NOTIFICATION_SEAL_KEY is required (generate one with: openssl rand -base64 32)")
+	}
+	key, err := base64.StdEncoding.DecodeString(rawSeal)
+	if err != nil {
+		return Config{}, fmt.Errorf("NOTIFICATION_SEAL_KEY is not valid base64: %w", err)
+	}
+	if len(key) != service.SealKeyBytes {
+		return Config{}, fmt.Errorf("NOTIFICATION_SEAL_KEY must decode to exactly %d bytes, got %d", service.SealKeyBytes, len(key))
+	}
+	c.NotificationSealKey = key
+
+	c.WebScheme, c.WebPort = "https", ""
+	if c.IsDevelopment() {
+		c.WebScheme, c.WebPort = "http", "3000"
+	}
+	c.WebScheme = env("PUBLIC_WEB_SCHEME", c.WebScheme)
+	c.WebPort = env("PUBLIC_WEB_PORT", c.WebPort)
+	if c.WebScheme != "https" && !(c.WebScheme == "http" && c.IsDevelopment()) {
+		return Config{}, fmt.Errorf("PUBLIC_WEB_SCHEME must be https outside development, got %q", c.WebScheme)
+	}
+	if c.WebPort != "" {
+		if port, err := strconv.Atoi(c.WebPort); err != nil || port < 1 || port > 65535 {
+			return Config{}, fmt.Errorf("PUBLIC_WEB_PORT must be a port number, got %q", c.WebPort)
 		}
-		if len(key) != service.SealKeyBytes {
-			return Config{}, fmt.Errorf("NOTIFICATION_SEAL_KEY must decode to exactly %d bytes, got %d", service.SealKeyBytes, len(key))
-		}
-		c.NotificationSealKey = key
 	}
 	return c, nil
 }

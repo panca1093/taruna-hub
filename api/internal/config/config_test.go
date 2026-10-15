@@ -14,7 +14,7 @@ func TestSMTPConfigValidation(t *testing.T) {
 		t.Setenv("SMTP_PORT", "587")
 		t.Setenv("SMTP_TLS", "starttls")
 		t.Setenv("SMTP_FROM", "")
-		t.Setenv("NOTIFICATION_SEAL_KEY", "")
+		t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
 		// Every environment needs a signing key, so the negative cases below stay about SMTP.
 		t.Setenv("JWT_SECRET", validJWTSecret())
 	}
@@ -127,7 +127,7 @@ func TestConfigRequiresJWTSecret(t *testing.T) {
 		t.Setenv("SMTP_PORT", "587")
 		t.Setenv("SMTP_TLS", "starttls")
 		t.Setenv("SMTP_FROM", "")
-		t.Setenv("NOTIFICATION_SEAL_KEY", "")
+		t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
 	}
 
 	for _, env := range []string{"development", "staging", "production"} {
@@ -171,6 +171,7 @@ func TestLoadRequiresBaseDomainOutsideDevelopment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
 	t.Setenv("BASE_DOMAIN", "")
 	t.Setenv("JWT_SECRET", validJWTSecret())
+	t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
 
 	t.Setenv("APP_ENV", "development")
 	cfg, err := Load()
@@ -190,5 +191,54 @@ func TestLoadRequiresBaseDomainOutsideDevelopment(t *testing.T) {
 	cfg, err = Load()
 	if err != nil || cfg.BaseDomain != "tarunaeduka.id" {
 		t.Errorf("production: BaseDomain = %q, err = %v; want tarunaeduka.id, nil", cfg.BaseDomain, err)
+	}
+}
+
+// validSealKey is the base64 of 32 bytes, the shape NOTIFICATION_SEAL_KEY must have everywhere.
+func validSealKey() string {
+	return base64.StdEncoding.EncodeToString(make([]byte, 32))
+}
+
+// Signup codes and reset links are sealed, so no environment may start without the key.
+func TestConfigRequiresSealKey(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+	t.Setenv("JWT_SECRET", validJWTSecret())
+	t.Setenv("NOTIFICATION_SEAL_KEY", "")
+	for _, env := range []string{"development", "staging", "production"} {
+		t.Setenv("APP_ENV", env)
+		if _, err := Load(); err == nil {
+			t.Errorf("%s without NOTIFICATION_SEAL_KEY: err = nil, want an error", env)
+		}
+	}
+}
+
+// Email links are built from configuration, and only development may send a cleartext one.
+func TestPublicWebLinkConfig(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+	t.Setenv("JWT_SECRET", validJWTSecret())
+	t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
+	t.Setenv("PUBLIC_WEB_SCHEME", "")
+	t.Setenv("PUBLIC_WEB_PORT", "")
+
+	t.Setenv("APP_ENV", "development")
+	cfg, err := Load()
+	if err != nil || cfg.WebScheme != "http" || cfg.WebPort != "3000" {
+		t.Errorf("development defaults = %q, %q, %v; want http, 3000, nil", cfg.WebScheme, cfg.WebPort, err)
+	}
+	t.Setenv("APP_ENV", "production")
+	cfg, err = Load()
+	if err != nil || cfg.WebScheme != "https" || cfg.WebPort != "" {
+		t.Errorf("production defaults = %q, %q, %v; want https, no port, nil", cfg.WebScheme, cfg.WebPort, err)
+	}
+	t.Setenv("PUBLIC_WEB_SCHEME", "http")
+	if _, err := Load(); err == nil {
+		t.Error("PUBLIC_WEB_SCHEME=http outside development was accepted, want an error")
+	}
+	t.Setenv("PUBLIC_WEB_SCHEME", "https")
+	t.Setenv("PUBLIC_WEB_PORT", "not-a-port")
+	if _, err := Load(); err == nil {
+		t.Error("an unparsable PUBLIC_WEB_PORT was accepted, want an error")
 	}
 }

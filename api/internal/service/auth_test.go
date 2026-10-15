@@ -95,6 +95,7 @@ func newAuthHarness(t *testing.T, opts ...AuthOption) *authHarness {
 	h.auth = NewAuthService(
 		repository.NewUserRepository(pool),
 		repository.NewSessionRepository(pool),
+		repository.NewThrottleRepository(pool),
 		[]byte(authSecretText),
 		slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		all...,
@@ -521,7 +522,7 @@ func TestChangedRoleOrInactiveUserTokenRejected(t *testing.T) {
 	}
 }
 
-func TestRefreshIssuesNewAccessTokenSameRefresh(t *testing.T) {
+func TestRefreshRotatesTheRefreshToken(t *testing.T) {
 	h := newAuthHarness(t)
 	tenant := h.tenant()
 	user := h.user(&tenant.ID, model.RoleStudent, authPassword)
@@ -537,8 +538,13 @@ func TestRefreshIssuesNewAccessTokenSameRefresh(t *testing.T) {
 	if second.AccessToken == first.AccessToken {
 		t.Error("refresh returned the same access token bytes")
 	}
-	if second.RefreshToken != first.RefreshToken {
-		t.Error("refresh rotated the refresh token, which this slice must not do")
+	if second.RefreshToken == "" || second.RefreshToken == first.RefreshToken {
+		t.Error("refresh did not rotate the refresh token")
+	}
+	row := h.sessionRow(second.RefreshToken)
+	if !bytes.Equal(row.RefreshHash, hashRefreshToken(second.RefreshToken)) ||
+		!bytes.Equal(row.PreviousRefreshHash, hashRefreshToken(first.RefreshToken)) {
+		t.Error("the session does not hold the new token as current and the old one as previous")
 	}
 	if second.Principal.SessionID != first.Principal.SessionID {
 		t.Errorf("refresh session = %s, want %s", second.Principal.SessionID, first.Principal.SessionID)
@@ -593,7 +599,8 @@ func TestRefreshDoesNotExtendIdle(t *testing.T) {
 	start := h.clock.Now()
 
 	h.clock.Advance(20 * time.Minute)
-	if _, err := h.auth.Refresh(context.Background(), h.scope(tenant), tokens.RefreshToken); err != nil {
+	rotated, err := h.auth.Refresh(context.Background(), h.scope(tenant), tokens.RefreshToken)
+	if err != nil {
 		t.Fatalf("refresh inside the idle window: %v", err)
 	}
 	if got := h.sessionRow(tokens.RefreshToken).LastActivityAt; !got.Equal(start) {
@@ -601,9 +608,13 @@ func TestRefreshDoesNotExtendIdle(t *testing.T) {
 	}
 
 	// 20m + 11m is past the ORIGINAL 30m deadline, which a refresh must not have pushed out.
+	// The rotated token is used, so the refusal is the idle rule and not reuse detection.
 	h.clock.Advance(11 * time.Minute)
-	if _, err := h.auth.Refresh(context.Background(), h.scope(tenant), tokens.RefreshToken); !errors.Is(err, ErrUnauthenticated) {
+	if _, err := h.auth.Refresh(context.Background(), h.scope(tenant), rotated.RefreshToken); !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("refresh past the original idle deadline: err = %v, want ErrUnauthenticated", err)
+	}
+	if h.sessionRow(rotated.RefreshToken).RevokedAt != nil {
+		t.Error("an idle refusal revoked the session; only reuse should")
 	}
 	if _, err := h.authenticate(h.scope(tenant), tokens.AccessToken); !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("access past the original idle deadline: err = %v, want ErrUnauthenticated", err)

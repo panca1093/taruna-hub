@@ -169,6 +169,10 @@ export interface paths {
          *     that does. A password longer than 72 bytes is refused the same way, because bcrypt ignores
          *     everything past that.
          *
+         *     Attempts are counted per identifier and host before the password is checked: the 11th
+         *     attempt within 15 minutes answers `429` with `Retry-After`, even with the right password.
+         *     A successful login, or a password reset, clears the count.
+         *
          *     On success the refresh token is set as an `HttpOnly` cookie scoped to `/api/v1/auth` and is
          *     never part of the body. This route needs no `Origin`: it is authenticated by credentials.
          */
@@ -210,6 +214,7 @@ export interface paths {
                     };
                 };
                 422: components["responses"]["ValidationFailed"];
+                429: components["responses"]["TooManyRequests"];
             };
         };
         delete?: never;
@@ -234,9 +239,15 @@ export interface paths {
          *     hours. Refreshing is not activity, so it does not move that deadline — only an authenticated
          *     request on `/me` (or any later protected route) does.
          *
-         *     The refresh token never appears in the body, and this slice does not rotate it. A request is
-         *     refused with `403` unless its `Origin` is both accepted by the CORS policy and on the host
-         *     this request resolved to. A token that can never work again also clears the cookie.
+         *     Every refresh rotates the token and sets the new one in the cookie. The replaced token keeps
+         *     working for 30 seconds, so two tabs that refresh at once both succeed; such a response sets
+         *     no cookie, because the winning refresh already set it. Presented after those 30 seconds, a
+         *     replaced token can only be a copy, so the whole session is revoked and the current token
+         *     stops working too.
+         *
+         *     The refresh token never appears in the body. A request is refused with `403` unless its
+         *     `Origin` is both accepted by the CORS policy and on the host this request resolved to. A
+         *     token that can never work again also clears the cookie.
          */
         post: {
             parameters: {
@@ -250,6 +261,8 @@ export interface paths {
                 /** @description A fresh access token for the same session */
                 200: {
                     headers: {
+                        /** @description The rotated `refresh_token`; absent on a refresh inside the 30-second grace. */
+                        "Set-Cookie"?: string;
                         [name: string]: unknown;
                     };
                     content: {
@@ -321,6 +334,280 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a student signup and email a verification code
+         * @description D01: email is required and the phone is optional; both must be free in this tenant. Nothing
+         *     becomes an account yet: the signup is kept pending and a 6-digit code is emailed. It works
+         *     for 10 minutes and for at most 5 guesses. Signing up again with the same email replaces the
+         *     pending details and the code. At most 5 codes go to one email per hour across this route and
+         *     `/register/resend`.
+         *
+         *     Registration exists only on tenant hosts; the platform host answers `404`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RegisterRequest"];
+                };
+            };
+            responses: {
+                /** @description The code is on its way */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CodeSent"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+                /** @description An account already holds the email (`fields.email`) or the phone (`fields.phone`) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+                429: components["responses"]["TooManyRequests"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a fresh verification code
+         * @description Replaces the pending code and restores its 5 guesses. An email with no pending signup gets the
+         *     same `202` and no email. Within 60 seconds of the last code this answers `429`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EmailRequest"];
+                };
+            };
+            responses: {
+                /** @description A code is on its way if a signup is pending */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CodeSent"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+                429: components["responses"]["TooManyRequests"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify the code, create the student account and open its session
+         * @description A wrong, expired, used-up or unknown code all answer the same `422` with `fields.code`. A
+         *     wrong guess is counted even under concurrent requests. On success the answer is exactly a
+         *     login's: a token body and the refresh cookie.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["VerifyRequest"];
+                };
+            };
+            responses: {
+                /** @description The account exists and a session is open */
+                200: {
+                    headers: {
+                        /** @description The `refresh_token` cookie, as on login. */
+                        "Set-Cookie"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TokenResponse"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+                /** @description Another account took the email or phone while this signup was pending */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a password reset link
+         * @description FR-AUTH-03. Answers `202` with no body for every well-formed email, whether or not an account
+         *     on this host has it, so the answer reveals nothing. A matching active account gets a link to
+         *     `/reset-password#token=…` on this host's web app; it works once, for 30 minutes, and asking
+         *     again retires the previous link. The limit is 3 requests per email per 15 minutes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EmailRequest"];
+                };
+            };
+            responses: {
+                /** @description A link is on its way if the email belongs to an account here */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+                429: components["responses"]["TooManyRequests"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a new password with a reset token
+         * @description Spends the token, sets the password and revokes every session of the account. An unknown,
+         *     used, expired or other-host token answers `422` with `fields.token`. The user logs in again
+         *     afterwards; no session is opened here.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResetPasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description The password is changed and every session is ended */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
             };
         };
         delete?: never;
@@ -409,6 +696,58 @@ export interface components {
              */
             password: string;
         };
+        RegisterRequest: {
+            /** @example Budi Santoso */
+            name: string;
+            /**
+             * @description Required (D01). Stored trimmed and lowercased.
+             * @example budi@example.com
+             */
+            email: string;
+            /**
+             * @description Optional. Indonesian local or international form; stored as E.164.
+             * @example 0812-3456-7890
+             */
+            phone?: string;
+            /**
+             * Format: password
+             * @description 8 characters to 72 bytes.
+             */
+            password: string;
+        };
+        EmailRequest: {
+            /** @example budi@example.com */
+            email: string;
+        };
+        VerifyRequest: {
+            /** @example budi@example.com */
+            email: string;
+            /** @example 042917 */
+            code: string;
+        };
+        ResetPasswordRequest: {
+            /** @description The value after `#token=` in the emailed link. */
+            token: string;
+            /**
+             * Format: password
+             * @description 8 characters to 72 bytes.
+             */
+            password: string;
+        };
+        CodeSent: {
+            /** @description The normalized email the code went to. */
+            email: string;
+            /**
+             * @description Seconds the code stays valid.
+             * @example 600
+             */
+            expires_in: number;
+            /**
+             * @description Seconds before another code may be requested.
+             * @example 60
+             */
+            resend_after: number;
+        };
         User: {
             /** Format: uuid */
             id: string;
@@ -441,7 +780,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "internal_error";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "too_many_requests" | "internal_error";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -484,6 +823,17 @@ export interface components {
         /** @description The request host selects no active tenant, or the resource does not exist */
         NotFound: {
             headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description Too many attempts; retry after the given number of seconds */
+        TooManyRequests: {
+            headers: {
+                /** @description Whole seconds until the current window ends. */
+                "Retry-After"?: number;
                 [name: string]: unknown;
             };
             content: {

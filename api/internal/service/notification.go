@@ -193,11 +193,25 @@ func NewNotificationService(repo *repository.NotificationRepository, jobs JobIns
 		}
 		s.sealer = sealer
 	}
-	// The one template P02 ships. P03 adds reset and OTP templates through RegisterTemplate.
-	if err := s.RegisterTemplate(templateNameSMTPTest,
-		`Taruna Eduka test message{{with .Get "subject"}} - {{.}}{{end}}`,
-		"Pesan uji dari Taruna Eduka.{{range .Values}}\n{{.Key}}: {{.Value}}{{end}}"); err != nil {
-		return nil, err
+	// Registered here rather than by each caller, so the API and the worker can never disagree on a name.
+	for _, t := range []struct{ name, subject, body string }{
+		{templateNameSMTPTest,
+			`Taruna Eduka test message{{with .Get "subject"}} - {{.}}{{end}}`,
+			"Pesan uji dari Taruna Eduka.{{range .Values}}\n{{.Key}}: {{.Value}}{{end}}"},
+		{TemplateRegistrationCode,
+			`Kode verifikasi {{.Get "tenant_name"}}`,
+			"Halo {{.Get \"name\"}},\n\nKode verifikasi pendaftaran Anda di {{.Get \"tenant_name\"}}: {{.Get \"code\"}}\n\n" +
+				"Kode berlaku {{.Get \"minutes\"}} menit. Jangan bagikan kode ini kepada siapa pun.\n" +
+				"Abaikan email ini jika Anda tidak mendaftar."},
+		{TemplatePasswordReset,
+			`Atur ulang kata sandi {{.Get "tenant_name"}}`,
+			"Halo {{.Get \"name\"}},\n\nBuka tautan berikut untuk mengatur ulang kata sandi akun {{.Get \"tenant_name\"}} Anda:\n" +
+				"{{.Get \"reset_url\"}}\n\nTautan berlaku {{.Get \"minutes\"}} menit dan hanya dapat dipakai sekali.\n" +
+				"Abaikan email ini jika Anda tidak memintanya; kata sandi Anda tidak berubah."},
+	} {
+		if err := s.RegisterTemplate(t.name, t.subject, t.body); err != nil {
+			return nil, err
+		}
 	}
 	return s, nil
 }
