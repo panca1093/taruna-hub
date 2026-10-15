@@ -49,6 +49,16 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 	student := seedUser(t, ctx, pool, tenants[0].ID, model.RoleStudent)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		t.Skip("REDIS_URL not set")
+	}
+	rdb, err := infra.NewRedisClient(ctx, redisURL)
+	if err != nil {
+		t.Fatalf("connect redis: %v", err)
+	}
+	t.Cleanup(func() { _ = rdb.Close() })
+
 	notifications, err := newNotifications(config.Config{Env: "development", DatabaseURL: dsn, NotificationSealKey: testSealKey}, logger, pool)
 	if err != nil {
 		t.Fatalf("wire notifications: %v", err)
@@ -74,7 +84,7 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				CORSOrigins: origins,
 				BaseDomain:  baseDomain,
 				JWTSecret:   testJWTSecret,
-			}, logger, pool, notifications)
+			}, logger, pool, rdb, notifications)
 
 			for _, tc := range []struct {
 				path string

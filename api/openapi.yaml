@@ -230,14 +230,18 @@ paths:
   /api/v1/auth/register:
     post:
       tags: [auth]
-      summary: Start a student signup and email a verification code
+      summary: Create a student account and open its session
       description: |
-        D01: email is required and the phone is optional; both must be free in this tenant. Nothing
-        becomes an account yet: the signup is kept pending and a 6-digit code is emailed. It works
-        for 10 minutes and for at most 5 guesses. Signing up again with the same email replaces the
-        pending details and the code. At most 5 codes go to one email per hour across this route and
-        `/register/resend`.
+        D01: email is required and the phone is optional; both must be free in this tenant, and an
+        account counts as holding them from the moment it is created, verified or not. The account
+        exists at once and the answer is exactly a login's: a token body and the refresh cookie.
 
+        A 6-digit code is emailed to verify the address. Verification never blocks a login; the web
+        app reads `user.email_verified` and shows an alert until it is true. Someone who signed up
+        with an address that is not theirs is undone by the real owner's password reset, which also
+        verifies the email.
+
+        At most 5 codes go to one email per hour across this route and `/me/email/resend`.
         Registration exists only on tenant hosts; the platform host answers `404`.
       requestBody:
         required: true
@@ -246,68 +250,7 @@ paths:
             schema:
               $ref: "#/components/schemas/RegisterRequest"
       responses:
-        "202":
-          description: The code is on its way
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CodeSent"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          description: An account already holds the email (`fields.email`) or the phone (`fields.phone`)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          $ref: "#/components/responses/ValidationFailed"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-
-  /api/v1/auth/register/resend:
-    post:
-      tags: [auth]
-      summary: Email a fresh verification code
-      description: |
-        Replaces the pending code and restores its 5 guesses. An email with no pending signup gets the
-        same `202` and no email. Within 60 seconds of the last code this answers `429`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/EmailRequest"
-      responses:
-        "202":
-          description: A code is on its way if a signup is pending
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CodeSent"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "422":
-          $ref: "#/components/responses/ValidationFailed"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
-
-  /api/v1/auth/register/verify:
-    post:
-      tags: [auth]
-      summary: Verify the code, create the student account and open its session
-      description: |
-        A wrong, expired, used-up or unknown code all answer the same `422` with `fields.code`. A
-        wrong guess is counted even under concurrent requests. On success the answer is exactly a
-        login's: a token body and the refresh cookie.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/VerifyRequest"
-      responses:
-        "200":
+        "201":
           description: The account exists and a session is open
           headers:
             Set-Cookie:
@@ -321,13 +264,15 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: Another account took the email or phone while this signup was pending
+          description: An account already holds the email (`fields.email`) or the phone (`fields.phone`)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/auth/password/forgot:
     post:
@@ -336,8 +281,9 @@ paths:
       description: |
         FR-AUTH-03. Answers `202` with no body for every well-formed email, whether or not an account
         on this host has it, so the answer reveals nothing. A matching active account gets a link to
-        `/reset-password#token=…` on this host's web app; it works once, for 30 minutes, and asking
-        again retires the previous link. The limit is 3 requests per email per 15 minutes.
+        `/reset-password#token=…` on this host's web app. The token is signed and bound to the
+        current password: it works for 30 minutes, and the first password change — through any link —
+        ends every outstanding link. The limit is 3 requests per email per 15 minutes.
       requestBody:
         required: true
         content:
@@ -363,9 +309,9 @@ paths:
       tags: [auth]
       summary: Set a new password with a reset token
       description: |
-        Spends the token, sets the password and revokes every session of the account. An unknown,
-        used, expired or other-host token answers `422` with `fields.token`. The user logs in again
-        afterwards; no session is opened here.
+        Sets the password, revokes every session of the account and marks its email verified, since
+        following the emailed link proves the inbox. A forged, used, expired or other-host token
+        answers `422` with `fields.token`. The user logs in again afterwards; no session is opened here.
       requestBody:
         required: true
         content:
@@ -383,6 +329,53 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/me/email/verify:
+    post:
+      tags: [auth]
+      summary: Verify the signed-in user's email with the emailed code
+      description: |
+        A code works for 10 minutes and 5 guesses; wrong guesses are counted even under concurrent
+        requests. A wrong, expired, used-up or missing code answers `422` with `fields.code`.
+        Verifying an already verified email is a `204` too.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CodeRequest"
+      responses:
+        "204":
+          description: The email is verified
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/me/email/resend:
+    post:
+      tags: [auth]
+      summary: Email the signed-in user a fresh verification code
+      description: |
+        Replaces the outstanding code and restores its 5 guesses. Within 60 seconds of the last
+        code, or past 5 codes in an hour, this answers `429`. An already verified email answers `409`.
+      security:
+        - bearerAuth: []
+      responses:
+        "202":
+          description: A code is on its way
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: The email is already verified, or the account has no email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/me:
     get:
@@ -482,14 +475,11 @@ components:
           type: string
           example: budi@example.com
 
-    VerifyRequest:
+    CodeRequest:
       type: object
       additionalProperties: false
-      required: [email, code]
+      required: [code]
       properties:
-        email:
-          type: string
-          example: budi@example.com
         code:
           type: string
           pattern: "^[0-9]{6}$"
@@ -509,27 +499,10 @@ components:
           minLength: 8
           description: 8 characters to 72 bytes.
 
-    CodeSent:
-      type: object
-      additionalProperties: false
-      required: [email, expires_in, resend_after]
-      properties:
-        email:
-          type: string
-          description: The normalized email the code went to.
-        expires_in:
-          type: integer
-          description: Seconds the code stays valid.
-          example: 600
-        resend_after:
-          type: integer
-          description: Seconds before another code may be requested.
-          example: 60
-
     User:
       type: object
       additionalProperties: false
-      required: [id, name, email, phone, role]
+      required: [id, name, email, phone, role, email_verified]
       properties:
         id:
           type: string
@@ -549,6 +522,11 @@ components:
           enum: [student, operator, admin, platform_admin]
           description: |
             `platform_admin` only ever exists on the platform host; a tenant host sees its own roles.
+        email_verified:
+          type: boolean
+          description: |
+            False until the owner enters the emailed code or completes a password reset. D01: it
+            never blocks anything; the web app shows an alert while it is false.
 
     TokenResponse:
       type: object

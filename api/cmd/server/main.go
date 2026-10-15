@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/config"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/handler"
@@ -45,12 +46,18 @@ func run() error {
 	}
 	defer pool.Close()
 
+	rdb, err := infra.NewRedisClient(ctx, cfg.RedisURL)
+	if err != nil {
+		return err
+	}
+	defer rdb.Close()
+
 	notifications, err := newNotifications(cfg, logger, pool)
 	if err != nil {
 		return err
 	}
 
-	e := newEcho(cfg, logger, pool, notifications)
+	e := newEcho(cfg, logger, pool, rdb, notifications)
 
 	go func() {
 		logger.Info("server listening", slog.String("port", cfg.Port), slog.String("env", cfg.Env))
@@ -69,16 +76,15 @@ func run() error {
 }
 
 // newEcho is the single assembly point, so tests run the real middleware chain.
-func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, notifications *service.NotificationService) *echo.Echo {
+func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client, notifications *service.NotificationService) *echo.Echo {
 	tenants := service.NewTenantService(repository.NewTenantRepository(pool), cfg.BaseDomain)
 	users := repository.NewUserRepository(pool)
 	sessions := repository.NewSessionRepository(pool)
-	throttles := repository.NewThrottleRepository(pool)
+	throttles := repository.NewThrottleRepository(rdb)
 	auth := service.NewAuthService(users, sessions, throttles, cfg.JWTSecret, logger)
 	account := service.NewAccountService(service.AccountDeps{
 		DB:            pool,
 		Users:         users,
-		Accounts:      repository.NewAccountRepository(pool),
 		Sessions:      sessions,
 		Throttles:     throttles,
 		Notifications: notifications,

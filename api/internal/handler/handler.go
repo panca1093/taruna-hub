@@ -51,9 +51,9 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/auth/logout", h.Logout, httpx.NoStore(), h.requireAcceptedOrigin)
 	// None of these act on a cookie alone, so like login they need no Origin check.
 	v1.POST("/auth/register", h.SignUp, httpx.NoStore())
-	v1.POST("/auth/register/resend", h.ResendCode, httpx.NoStore())
-	v1.POST("/auth/register/verify", h.VerifyCode, httpx.NoStore())
 	v1.POST("/auth/password/forgot", h.ForgotPassword, httpx.NoStore())
 	v1.POST("/auth/password/reset", h.ResetPassword, httpx.NoStore())
+	v1.POST("/me/email/verify", h.VerifyEmail, httpx.NoStore(), Authenticate(h.auth))
+	v1.POST("/me/email/resend", h.ResendEmailCode, httpx.NoStore(), Authenticate(h.auth))
 	v1.GET("/me", h.Me, httpx.NoStore(), Authenticate(h.auth))
 }

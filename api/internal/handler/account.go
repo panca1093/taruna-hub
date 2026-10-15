@@ -22,6 +22,8 @@ const (
 	emailTaken        = "Email sudah terdaftar."
 	phoneTaken        = "Nomor HP sudah terdaftar."
 	alreadyRegistered = "Akun sudah terdaftar."
+	alreadyVerified   = "Email sudah terverifikasi."
+	noEmail           = "Akun ini tidak memiliki email."
 	codeInvalid       = "Kode salah atau sudah kedaluwarsa."
 	resetInvalid      = "Tautan tidak valid atau sudah kedaluwarsa."
 	tooManyRequests   = "Terlalu banyak percobaan. Coba lagi nanti."
@@ -38,9 +40,8 @@ type emailRequest struct {
 	Email string `json:"email"`
 }
 
-type verifyRequest struct {
-	Email string `json:"email"`
-	Code  string `json:"code"`
+type codeRequest struct {
+	Code string `json:"code"`
 }
 
 type resetRequest struct {
@@ -48,13 +49,7 @@ type resetRequest struct {
 	Password string `json:"password"`
 }
 
-type codeSentResponse struct {
-	Email       string `json:"email"`
-	ExpiresIn   int    `json:"expires_in"`
-	ResendAfter int    `json:"resend_after"`
-}
-
-// SignUp starts a registration; the account exists only once the emailed code is verified.
+// SignUp creates the student and answers like a login; the emailed code only verifies the address.
 func (h *Handler) SignUp(c echo.Context) error {
 	scope, ok := hostScope(c)
 	if !ok {
@@ -67,53 +62,45 @@ func (h *Handler) SignUp(c echo.Context) error {
 	if err := requireFields(map[string]string{"name": req.Name, "email": req.Email, "password": req.Password}); err != nil {
 		return err
 	}
-	sent, err := h.account.Register(c.Request().Context(), scope, service.RegisterInput{
+	tokens, err := h.account.Register(c.Request().Context(), scope, service.RegisterInput{
 		Name: req.Name, Email: req.Email, Phone: req.Phone, Password: req.Password,
 	})
 	if err != nil {
 		return accountError(c, err)
 	}
-	return c.JSON(http.StatusAccepted, newCodeSent(sent))
-}
-
-func (h *Handler) ResendCode(c echo.Context) error {
-	scope, ok := hostScope(c)
-	if !ok {
-		return httpx.NotFound(tenantNotFound)
-	}
-	var req emailRequest
-	if err := bindStrict(c, &req); err != nil {
-		return err
-	}
-	if err := requireFields(map[string]string{"email": req.Email}); err != nil {
-		return err
-	}
-	sent, err := h.account.ResendCode(c.Request().Context(), scope, req.Email)
-	if err != nil {
-		return accountError(c, err)
-	}
-	return c.JSON(http.StatusAccepted, newCodeSent(sent))
-}
-
-// VerifyCode creates the account and answers exactly like a login, cookie included.
-func (h *Handler) VerifyCode(c echo.Context) error {
-	scope, ok := hostScope(c)
-	if !ok {
-		return httpx.NotFound(tenantNotFound)
-	}
-	var req verifyRequest
-	if err := bindStrict(c, &req); err != nil {
-		return err
-	}
-	if err := requireFields(map[string]string{"email": req.Email, "code": req.Code}); err != nil {
-		return err
-	}
-	tokens, err := h.account.VerifyCode(c.Request().Context(), scope, req.Email, strings.TrimSpace(req.Code))
-	if err != nil {
-		return accountError(c, err)
-	}
 	h.setRefreshCookie(c, tokens.RefreshToken)
-	return c.JSON(http.StatusOK, newTokenResponse(tokens))
+	return c.JSON(http.StatusCreated, newTokenResponse(tokens))
+}
+
+// ResendEmailCode mails the signed-in caller a fresh code.
+func (h *Handler) ResendEmailCode(c echo.Context) error {
+	scope, ok := hostScope(c)
+	principal, signedIn := PrincipalFrom(c)
+	if !ok || !signedIn {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	if err := h.account.ResendEmailCode(c.Request().Context(), scope, principal); err != nil {
+		return accountError(c, err)
+	}
+	return c.NoContent(http.StatusAccepted)
+}
+
+func (h *Handler) VerifyEmail(c echo.Context) error {
+	principal, ok := PrincipalFrom(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	var req codeRequest
+	if err := bindStrict(c, &req); err != nil {
+		return err
+	}
+	if err := requireFields(map[string]string{"code": req.Code}); err != nil {
+		return err
+	}
+	if err := h.account.VerifyEmail(c.Request().Context(), principal, strings.TrimSpace(req.Code)); err != nil {
+		return accountError(c, err)
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 // ForgotPassword is 202 for every well-formed email, so the answer says nothing about who exists.
@@ -185,6 +172,10 @@ func accountError(c echo.Context, err error) error {
 		return httpx.Conflict(alreadyRegistered).WithFields(map[string]string{"email": emailTaken})
 	case errors.Is(err, service.ErrPhoneTaken):
 		return httpx.Conflict(alreadyRegistered).WithFields(map[string]string{"phone": phoneTaken})
+	case errors.Is(err, service.ErrAlreadyVerified):
+		return httpx.Conflict(alreadyVerified)
+	case errors.Is(err, service.ErrNoEmail):
+		return httpx.Conflict(noEmail)
 	case errors.Is(err, service.ErrInvalidCode):
 		return httpx.Validation(codeInvalid, map[string]string{"code": codeInvalid})
 	case errors.Is(err, service.ErrInvalidResetToken):
@@ -205,12 +196,4 @@ func rateLimited(c echo.Context, err error) error {
 	}
 	c.Response().Header().Set("Retry-After", strconv.Itoa(seconds))
 	return httpx.TooManyRequests(tooManyRequests)
-}
-
-func newCodeSent(s service.CodeSent) codeSentResponse {
-	return codeSentResponse{
-		Email:       s.Email,
-		ExpiresIn:   int(s.ExpiresIn.Seconds()),
-		ResendAfter: int(s.ResendAfter.Seconds()),
-	}
 }

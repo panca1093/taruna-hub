@@ -35,7 +35,7 @@ func newAuthService(f tenantFixture, opts ...service.AuthOption) *service.AuthSe
 	return service.NewAuthService(
 		repository.NewUserRepository(f.pool),
 		repository.NewSessionRepository(f.pool),
-		repository.NewThrottleRepository(f.pool),
+		repository.NewThrottleRepository(f.redis),
 		authTestSecret,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		opts...,

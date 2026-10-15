@@ -198,11 +198,11 @@ func NewNotificationService(repo *repository.NotificationRepository, jobs JobIns
 		{templateNameSMTPTest,
 			`Taruna Eduka test message{{with .Get "subject"}} - {{.}}{{end}}`,
 			"Pesan uji dari Taruna Eduka.{{range .Values}}\n{{.Key}}: {{.Value}}{{end}}"},
-		{TemplateRegistrationCode,
+		{TemplateEmailCode,
 			`Kode verifikasi {{.Get "tenant_name"}}`,
-			"Halo {{.Get \"name\"}},\n\nKode verifikasi pendaftaran Anda di {{.Get \"tenant_name\"}}: {{.Get \"code\"}}\n\n" +
+			"Halo {{.Get \"name\"}},\n\nKode verifikasi email Anda di {{.Get \"tenant_name\"}}: {{.Get \"code\"}}\n\n" +
 				"Kode berlaku {{.Get \"minutes\"}} menit. Jangan bagikan kode ini kepada siapa pun.\n" +
-				"Abaikan email ini jika Anda tidak mendaftar."},
+				"Abaikan email ini jika Anda tidak merasa mendaftar."},
 		{TemplatePasswordReset,
 			`Atur ulang kata sandi {{.Get "tenant_name"}}`,
 			"Halo {{.Get \"name\"}},\n\nBuka tautan berikut untuk mengatur ulang kata sandi akun {{.Get \"tenant_name\"}} Anda:\n" +

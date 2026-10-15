@@ -62,7 +62,7 @@ flowchart LR
 | Repositories | Raw SQL, mandatory scope, persistence and locking | Tenant repositories require scope; cross-tenant platform reporting is a separate explicit entry point |
 | Worker | Notifications, imports, PDFs, spreadsheet exports, deadline enforcement/recovery | Jobs carry immutable entity IDs and tenant/actor context; re-check scope before loading objects |
 | PostgreSQL | Authoritative identities, catalog, finance, access, answers, snapshots, results, audit, durable jobs | One database, shared schema with `tenant_id`; `river` is a separate schema, not a separate datastore |
-| Redis | Versioned pre-shuffle content and tenant-local ranking projections | Loss never loses money, answers, jobs, or sessions |
+| Redis | Versioned pre-shuffle content, tenant-local ranking projections, and auth throttle counters (P03b) | Loss never loses money, answers, jobs, or sessions; a lost throttle counter only resets a budget early |
 | Object storage | Validated public branding assets and protected exam/payment/export assets | Object identifiers are authorized through the API; URLs are not proof of permission |
 
 ### Routing and deployment
@@ -397,7 +397,7 @@ These are business/release decisions, not missing architecture sections. Affecte
 
 | ID | Specific uncertainty | Proposed treatment / alternatives | Owner and gate |
 |---|---|---|---|
-| D01 | OTP contradicts PRD; triggers and phone-only delivery/recovery unknown | **Resolved 2026-10-15 (owner):** OTP is retained as a 6-digit email code at signup, sent over SMTP for now. Email is required at registration and a phone is optional, so password recovery is always an email link. Phone signup is kept as an extra identifier, not removed; this narrows PRD FR-AUTH-01 ("email atau nomor HP") by owner decision | Product owner — resolved for P03b |
+| D01 | OTP contradicts PRD; triggers and phone-only delivery/recovery unknown | **Resolved 2026-10-15 (owner):** OTP is retained as a 6-digit email code sent over SMTP for now. Email is required at registration and a phone is optional, so password recovery is always an email link. Signup creates the account and signs it in at once; verification is a flag the web app shows as an alert and **never blocks login**. Phone signup is kept as an extra identifier, not removed; this narrows PRD FR-AUTH-01 ("email atau nomor HP") by owner decision | Product owner — resolved for P03b |
 | D02 | Operator student CRUD and package mutation conflict with role table | Choose granular capabilities; until decided, privilege-restricted default rather than granting ambiguous writes | Product owner, before P03/P09/P22 permissions |
 | D03 | Kecermatan formula, N>10 comparison, zero denominators, 0–100 caps/rounding | Whole-half comparison proposed; confirm correction factor and expected outputs including zero/overflow cases | Client, before P18 scoring/UAT |
 | D04 | Global weights in tenant system, score display, rank ties, IRT distinct-student/revision counting | Propose tenant-wide weights frozen per test/session, raw scores plus agreed display, tenant-local version counts; no fitted IRT | Product owner, before P08/P16/P17 contracts |

@@ -28,9 +28,11 @@ type SMTPConfig struct {
 }
 
 type Config struct {
-	Env                string
-	Port               string
-	DatabaseURL        string
+	Env         string
+	Port        string
+	DatabaseURL string
+	// RedisURL holds the auth throttles: disposable counters, so losing Redis only resets them.
+	RedisURL           string
 	CORSOrigins        []string
 	ShutdownGrace      time.Duration
 	BaseDomain         string
@@ -69,6 +71,13 @@ func Load() (Config, error) {
 	}
 	if c.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
+	}
+	c.RedisURL = env("REDIS_URL", "")
+	if c.RedisURL == "" {
+		if !c.IsDevelopment() {
+			return Config{}, fmt.Errorf("REDIS_URL is required outside development")
+		}
+		c.RedisURL = "redis://localhost:6380/0"
 	}
 	if c.BaseDomain == "" {
 		if !c.IsDevelopment() {

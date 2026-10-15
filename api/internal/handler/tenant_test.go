@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/infra"
@@ -26,6 +27,7 @@ var baseDomains = []string{"localhost", "tarunaeduka.id"}
 
 type tenantFixture struct {
 	pool       *pgxpool.Pool
+	redis      *redis.Client
 	baseDomain string
 	tenants    *service.TenantService
 	active     [2]model.Tenant
@@ -65,16 +67,27 @@ func newTenantFixture(t *testing.T, baseDomain string) tenantFixture {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(pool.Close)
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		t.Skip("REDIS_URL not set")
+	}
+	redisOpts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		t.Fatalf("parse REDIS_URL: %v", err)
+	}
+	rdb := redis.NewClient(redisOpts)
+	t.Cleanup(func() { _ = rdb.Close() })
 
 	f := tenantFixture{
 		pool:       pool,
+		redis:      rdb,
 		baseDomain: baseDomain,
 		tenants:    service.NewTenantService(repository.NewTenantRepository(pool), baseDomain),
 	}
 
 	var ids []uuid.UUID
 	t.Cleanup(func() {
-		for _, table := range []string{"notification_logs", "auth_registrations", "auth_password_resets"} {
+		for _, table := range []string{"notification_logs"} {
 			if _, err := pool.Exec(ctx, `DELETE FROM `+table+` WHERE tenant_id = ANY($1)`, ids); err != nil {
 				t.Errorf("cleanup %s of the fixture tenants: %v", table, err)
 			}

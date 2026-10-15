@@ -5,6 +5,8 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -29,9 +31,11 @@ var (
 	ErrRegistrationClosed = errors.New("registration is not offered on this host")
 	ErrEmailTaken         = errors.New("email already registered")
 	ErrPhoneTaken         = errors.New("phone already registered")
-	// ErrInvalidCode covers a wrong, expired, exhausted or unknown code alike.
+	ErrAlreadyVerified    = errors.New("email already verified")
+	ErrNoEmail            = errors.New("account has no email")
+	// ErrInvalidCode covers a wrong, expired, used-up or missing code alike.
 	ErrInvalidCode = errors.New("invalid or expired code")
-	// ErrInvalidResetToken covers an unknown, used, expired or foreign token alike.
+	// ErrInvalidResetToken covers a forged, expired, used, foreign or malformed token alike.
 	ErrInvalidResetToken = errors.New("invalid or expired reset token")
 )
 
@@ -49,7 +53,7 @@ type InputError struct {
 func (e *InputError) Error() string { return "invalid input" }
 
 const (
-	// D01: the registration code goes out by email over SMTP.
+	// D01: the verification code goes out by email over SMTP and never blocks a login.
 	codeDigits      = 6
 	codeTTL         = 10 * time.Minute
 	codeResendAfter = time.Minute
@@ -57,8 +61,8 @@ const (
 	resetTTL        = 30 * time.Minute
 	maxNameRunes    = 100
 
-	TemplateRegistrationCode = "registration-code"
-	TemplatePasswordReset    = "password-reset"
+	TemplateEmailCode     = "email-code"
+	TemplatePasswordReset = "password-reset"
 )
 
 // WebLinks builds links into the web app from configuration only: never from a request header,
@@ -85,22 +89,22 @@ func (w WebLinks) resetURL(scope HostScope, token string) string {
 type AccountDeps struct {
 	DB            *pgxpool.Pool
 	Users         *repository.UserRepository
-	Accounts      *repository.AccountRepository
 	Sessions      *repository.SessionRepository
 	Throttles     *repository.ThrottleRepository
 	Notifications *NotificationService
 	Auth          *AuthService
 	Links         WebLinks
-	// Secret keys the code HMAC; a database dump alone cannot test a million codes against it.
+	// Secret keys the code and reset-token HMACs, one derived key each.
 	Secret []byte
 	Logger *slog.Logger
 }
 
 type AccountService struct {
 	AccountDeps
-	codeKey []byte
-	now     func() time.Time
-	cost    int
+	codeKey  []byte
+	resetKey []byte
+	now      func() time.Time
+	cost     int
 }
 
 type AccountOption func(*AccountService)
@@ -115,9 +119,13 @@ func WithAccountPasswordCost(cost int) AccountOption {
 }
 
 func NewAccountService(deps AccountDeps, opts ...AccountOption) *AccountService {
-	mac := hmac.New(sha256.New, deps.Secret)
-	mac.Write([]byte("registration-code-v1"))
-	s := &AccountService{AccountDeps: deps, codeKey: mac.Sum(nil), now: time.Now, cost: bcrypt.DefaultCost}
+	s := &AccountService{
+		AccountDeps: deps,
+		codeKey:     deriveKey(deps.Secret, "email-code-v1"),
+		resetKey:    deriveKey(deps.Secret, "password-reset-v1"),
+		now:         time.Now,
+		cost:        bcrypt.DefaultCost,
+	}
 	if s.Logger == nil {
 		s.Logger = slog.Default()
 	}
@@ -127,6 +135,12 @@ func NewAccountService(deps AccountDeps, opts ...AccountOption) *AccountService 
 	return s
 }
 
+func deriveKey(secret []byte, purpose string) []byte {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(purpose))
+	return mac.Sum(nil)
+}
+
 type RegisterInput struct {
 	Name     string
 	Email    string
@@ -134,17 +148,11 @@ type RegisterInput struct {
 	Password string
 }
 
-// CodeSent is the same for a first signup and a resend, known or not, so it reveals nothing.
-type CodeSent struct {
-	Email       string
-	ExpiresIn   time.Duration
-	ResendAfter time.Duration
-}
-
-// Register keeps the signup pending and emails a code. D01: email is required, a phone is optional.
-func (s *AccountService) Register(ctx context.Context, scope HostScope, in RegisterInput) (CodeSent, error) {
+// Register creates the student and logs them in at once. D01: email is required, a phone is
+// optional, and the emailed code only verifies the address; it never gates the account.
+func (s *AccountService) Register(ctx context.Context, scope HostScope, in RegisterInput) (Tokens, error) {
 	if scope.Platform {
-		return CodeSent{}, ErrRegistrationClosed
+		return Tokens{}, ErrRegistrationClosed
 	}
 	fields := map[string]string{}
 	name := strings.TrimSpace(in.Name)
@@ -167,122 +175,37 @@ func (s *AccountService) Register(ctx context.Context, scope HostScope, in Regis
 		fields["password"] = ReasonPassword
 	}
 	if len(fields) > 0 {
-		return CodeSent{}, &InputError{Fields: fields}
+		return Tokens{}, &InputError{Fields: fields}
 	}
 
 	tenantID := scope.Tenant.ID
 	if err := hitThrottle(ctx, s.Throttles, codeThrottle, throttleKey(codeThrottle, tenantID.String(), email), s.now()); err != nil {
-		return CodeSent{}, err
+		return Tokens{}, err
 	}
+	// Checked first so the common case answers before bcrypt; the unique constraints still decide races.
 	if err := s.taken(ctx, tenantID, email, ErrEmailTaken); err != nil {
-		return CodeSent{}, err
+		return Tokens{}, err
 	}
 	if phone != nil {
 		if err := s.taken(ctx, tenantID, *phone, ErrPhoneTaken); err != nil {
-			return CodeSent{}, err
+			return Tokens{}, err
 		}
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), s.cost)
 	if err != nil {
-		return CodeSent{}, fmt.Errorf("hash password: %w", err)
+		return Tokens{}, fmt.Errorf("hash password: %w", err)
 	}
-	code, codeID, err := newCode()
+	code, err := newCode()
 	if err != nil {
-		return CodeSent{}, err
+		return Tokens{}, err
 	}
 	now := s.now()
-	err = s.inTx(ctx, func(tx pgx.Tx) error {
-		reg, err := s.Accounts.UpsertRegistrationTx(ctx, tx, model.Registration{
-			TenantID: tenantID, Email: email, Phone: phone, Name: name, PasswordHash: string(hash),
-			CodeID: codeID, CodeHash: s.codeHash(codeID, code), ExpiresAt: now.Add(codeTTL), SentAt: now,
-		})
-		if err != nil {
-			return err
-		}
-		return s.sendCode(ctx, tx, scope, reg, code)
-	})
-	if err != nil {
-		return CodeSent{}, err
-	}
-	s.Logger.Info("registration code sent", slog.String("tenant_id", tenantID.String()))
-	return codeSent(email), nil
-}
-
-// ResendCode answers the same for an unknown email as for a pending one.
-func (s *AccountService) ResendCode(ctx context.Context, scope HostScope, rawEmail string) (CodeSent, error) {
-	if scope.Platform {
-		return CodeSent{}, ErrRegistrationClosed
-	}
-	email, ok := NormalizeEmail(rawEmail)
-	if !ok {
-		return CodeSent{}, &InputError{Fields: map[string]string{"email": ReasonInvalid}}
-	}
-	tenantID := scope.Tenant.ID
-	if err := hitThrottle(ctx, s.Throttles, codeThrottle, throttleKey(codeThrottle, tenantID.String(), email), s.now()); err != nil {
-		return CodeSent{}, err
-	}
-	code, codeID, err := newCode()
-	if err != nil {
-		return CodeSent{}, err
-	}
-	now := s.now()
-	err = s.inTx(ctx, func(tx pgx.Tx) error {
-		reg, err := s.Accounts.FindRegistrationForUpdateTx(ctx, tx, tenantID, email)
-		if errors.Is(err, repository.ErrNotFound) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if wait := reg.SentAt.Add(codeResendAfter).Sub(now); wait > 0 {
-			return &ThrottleError{RetryAfter: wait}
-		}
-		reg.CodeID, reg.CodeHash, reg.ExpiresAt, reg.SentAt = codeID, s.codeHash(codeID, code), now.Add(codeTTL), now
-		if err := s.Accounts.ReplaceCodeTx(ctx, tx, tenantID, reg.ID, reg.CodeID, reg.CodeHash, reg.ExpiresAt, reg.SentAt); err != nil {
-			return err
-		}
-		return s.sendCode(ctx, tx, scope, reg, code)
-	})
-	if err != nil {
-		return CodeSent{}, err
-	}
-	return codeSent(email), nil
-}
-
-// VerifyCode turns the pending signup into a student account and opens its first session.
-func (s *AccountService) VerifyCode(ctx context.Context, scope HostScope, rawEmail, code string) (Tokens, error) {
-	if scope.Platform {
-		return Tokens{}, ErrRegistrationClosed
-	}
-	email, ok := NormalizeEmail(rawEmail)
-	if !ok || !validCodeShape(code) {
-		return Tokens{}, ErrInvalidCode
-	}
-	tenantID := scope.Tenant.ID
-	now := s.now()
-
 	var user model.User
-	var wrong bool
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
-		reg, err := s.Accounts.FindRegistrationForUpdateTx(ctx, tx, tenantID, email)
-		if errors.Is(err, repository.ErrNotFound) {
-			return ErrInvalidCode
-		}
-		if err != nil {
-			return err
-		}
-		if !now.Before(reg.ExpiresAt) || reg.Attempts >= maxCodeAttempts {
-			return ErrInvalidCode
-		}
-		if !hmac.Equal(s.codeHash(reg.CodeID, code), reg.CodeHash) {
-			// The wrong guess is committed, so it counts even though the request fails.
-			wrong = true
-			return s.Accounts.CountAttemptTx(ctx, tx, tenantID, reg.ID)
-		}
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		user, err = s.Users.CreateTx(ctx, tx, model.User{
-			TenantID: &tenantID, Name: reg.Name, Email: &reg.Email, Phone: reg.Phone,
-			PasswordHash: reg.PasswordHash, Role: model.RoleStudent,
+			TenantID: &tenantID, Name: name, Email: &email, Phone: phone,
+			PasswordHash: string(hash), Role: model.RoleStudent,
 		})
 		switch {
 		case errors.Is(err, repository.ErrDuplicateEmail):
@@ -292,24 +215,88 @@ func (s *AccountService) VerifyCode(ctx context.Context, scope HostScope, rawEma
 		case err != nil:
 			return err
 		}
-		return s.Accounts.DeleteRegistrationTx(ctx, tx, tenantID, reg.ID)
+		return s.sendCode(ctx, tx, scope, user, code, now)
 	})
 	if err != nil {
 		return Tokens{}, err
-	}
-	if wrong {
-		return Tokens{}, ErrInvalidCode
 	}
 
 	tokens, err := s.Auth.startSession(ctx, user)
 	if err != nil {
 		return Tokens{}, err
 	}
-	s.Logger.Info("registration verified",
+	s.Logger.Info("registered",
 		slog.String("user_id", user.ID.String()),
 		slog.String("tenant_id", tenantID.String()),
 	)
 	return tokens, nil
+}
+
+// ResendEmailCode replaces the caller's code; it shares the per-email budget with Register.
+func (s *AccountService) ResendEmailCode(ctx context.Context, scope HostScope, p model.Principal) error {
+	if p.Email == nil {
+		return ErrNoEmail
+	}
+	if err := hitThrottle(ctx, s.Throttles, codeThrottle, throttleKey(codeThrottle, scopeTenantLabel(scope), *p.Email), s.now()); err != nil {
+		return err
+	}
+	code, err := newCode()
+	if err != nil {
+		return err
+	}
+	now := s.now()
+	return s.inTx(ctx, func(tx pgx.Tx) error {
+		current, err := s.Users.FindEmailCodeForUpdateTx(ctx, tx, p.TenantID, p.UserID)
+		if err != nil {
+			return err
+		}
+		if current.VerifiedAt != nil {
+			return ErrAlreadyVerified
+		}
+		if current.ExpiresAt != nil {
+			sentAt := current.ExpiresAt.Add(-codeTTL)
+			if wait := sentAt.Add(codeResendAfter).Sub(now); wait > 0 {
+				return &ThrottleError{RetryAfter: wait}
+			}
+		}
+		user := model.User{ID: p.UserID, TenantID: p.TenantID, Name: p.Name, Email: p.Email}
+		return s.sendCode(ctx, tx, scope, user, code, now)
+	})
+}
+
+// VerifyEmail checks the caller's code. Verifying twice is not an error.
+func (s *AccountService) VerifyEmail(ctx context.Context, p model.Principal, code string) error {
+	if !validCodeShape(code) {
+		return ErrInvalidCode
+	}
+	now := s.now()
+	var wrong bool
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		current, err := s.Users.FindEmailCodeForUpdateTx(ctx, tx, p.TenantID, p.UserID)
+		if err != nil {
+			return err
+		}
+		if current.VerifiedAt != nil {
+			return nil
+		}
+		if current.Hash == nil || current.ExpiresAt == nil || !now.Before(*current.ExpiresAt) || current.Attempts >= maxCodeAttempts {
+			return ErrInvalidCode
+		}
+		if !hmac.Equal(s.codeHash(p.UserID, code), current.Hash) {
+			// The wrong guess is committed, so it counts even though the request fails.
+			wrong = true
+			return s.Users.CountEmailCodeAttemptTx(ctx, tx, p.TenantID, p.UserID)
+		}
+		return s.Users.MarkEmailVerifiedTx(ctx, tx, p.TenantID, p.UserID, now)
+	})
+	if err != nil {
+		return err
+	}
+	if wrong {
+		return ErrInvalidCode
+	}
+	s.Logger.Info("email verified", slog.String("user_id", p.UserID.String()))
+	return nil
 }
 
 // ForgotPassword answers nil whether or not the email belongs to anyone on this host.
@@ -332,18 +319,9 @@ func (s *AccountService) ForgotPassword(ctx context.Context, scope HostScope, ra
 		return nil
 	}
 
-	token, err := newRefreshToken()
-	if err != nil {
-		return fmt.Errorf("generate reset token: %w", err)
-	}
-	now := s.now()
-	expires := now.Add(resetTTL)
+	expires := s.now().Add(resetTTL)
+	token := s.resetToken(user, expires)
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
-		if err := s.Accounts.CreateResetTx(ctx, tx, model.PasswordReset{
-			UserID: user.ID, TenantID: user.TenantID, TokenHash: hashRefreshToken(token), ExpiresAt: expires, CreatedAt: now,
-		}); err != nil {
-			return err
-		}
 		return s.Notifications.Enqueue(ctx, tx, NewNotification{
 			Scope:     Scope{TenantID: user.TenantID},
 			EventKey:  "password-reset:" + uuid.NewString(),
@@ -367,41 +345,40 @@ func (s *AccountService) ForgotPassword(ctx context.Context, scope HostScope, ra
 	return nil
 }
 
-// ResetPassword spends the token, sets the password and ends every session the old password opened.
+// ResetPassword sets the password and ends every session the old password opened. The token is
+// bound to the password hash it was issued against, so once that changes the link is dead.
 func (s *AccountService) ResetPassword(ctx context.Context, scope HostScope, token, password string) error {
 	if !validPassword(password) {
 		return &InputError{Fields: map[string]string{"password": ReasonPassword}}
 	}
-	if token == "" {
+	userID, expires, mac, ok := parseResetToken(token)
+	if !ok || !s.now().Before(expires) {
 		return ErrInvalidResetToken
 	}
-	// Hashing before the transaction keeps the row lock short.
+	user, err := s.Auth.userInScope(ctx, scope, userID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return ErrInvalidResetToken
+	}
+	if err != nil {
+		return fmt.Errorf("find user for reset: %w", err)
+	}
+	if !user.IsActive || !hmac.Equal(mac, s.resetMAC(user, expires)) {
+		return ErrInvalidResetToken
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), s.cost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
 	now := s.now()
-	var user model.User
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
-		reset, err := s.Accounts.ConsumeResetTx(ctx, tx, scopeTenant(scope), hashRefreshToken(token), now)
-		if errors.Is(err, repository.ErrNotFound) {
-			return ErrInvalidResetToken
-		}
+		replaced, err := s.Users.ReplacePasswordTx(ctx, tx, user.TenantID, user.ID, user.PasswordHash, string(hash), now)
 		if err != nil {
 			return err
 		}
-		user, err = s.Users.FindByIDTx(ctx, tx, scopeTenant(scope), reset.UserID)
-		if errors.Is(err, repository.ErrNotFound) {
+		if !replaced {
+			// A racing reset spent the link first.
 			return ErrInvalidResetToken
-		}
-		if err != nil {
-			return err
-		}
-		if !user.IsActive {
-			return ErrInvalidResetToken
-		}
-		if err := s.Users.UpdatePasswordTx(ctx, tx, user.TenantID, user.ID, string(hash)); err != nil {
-			return err
 		}
 		return s.Sessions.RevokeAllForUserTx(ctx, tx, user.ID, now)
 	})
@@ -413,7 +390,7 @@ func (s *AccountService) ResetPassword(ctx context.Context, scope HostScope, tok
 		if id == nil {
 			continue
 		}
-		if err := s.Throttles.Clear(ctx, throttleKey(loginThrottle, scopeTenantLabel(scope), *id)); err != nil {
+		if err := s.Throttles.Clear(ctx, throttleKey(loginThrottle, scopeTenantLabel(scope), *id), loginThrottle.window, now); err != nil {
 			s.Logger.Error("clear login throttle after reset", slog.String("error", err.Error()))
 		}
 	}
@@ -422,6 +399,47 @@ func (s *AccountService) ResetPassword(ctx context.Context, scope HostScope, tok
 		slog.String("tenant_id", tenantLabel(user.TenantID)),
 	)
 	return nil
+}
+
+// resetToken is base64url(user id ‖ expiry) "." base64url(HMAC of that and the current password hash).
+func (s *AccountService) resetToken(user model.User, expires time.Time) string {
+	payload := resetPayload(user.ID, expires)
+	return base64.RawURLEncoding.EncodeToString(payload) + "." +
+		base64.RawURLEncoding.EncodeToString(s.resetMAC(user, expires))
+}
+
+func (s *AccountService) resetMAC(user model.User, expires time.Time) []byte {
+	mac := hmac.New(sha256.New, s.resetKey)
+	mac.Write(resetPayload(user.ID, expires))
+	mac.Write([]byte(user.PasswordHash))
+	return mac.Sum(nil)
+}
+
+func resetPayload(userID uuid.UUID, expires time.Time) []byte {
+	payload := make([]byte, 0, 24)
+	payload = append(payload, userID[:]...)
+	return binary.BigEndian.AppendUint64(payload, uint64(expires.Unix()))
+}
+
+func parseResetToken(token string) (uuid.UUID, time.Time, []byte, bool) {
+	rawPayload, rawMAC, found := strings.Cut(token, ".")
+	if !found {
+		return uuid.Nil, time.Time{}, nil, false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(rawPayload)
+	if err != nil || len(payload) != 24 {
+		return uuid.Nil, time.Time{}, nil, false
+	}
+	mac, err := base64.RawURLEncoding.DecodeString(rawMAC)
+	if err != nil || len(mac) != sha256.Size {
+		return uuid.Nil, time.Time{}, nil, false
+	}
+	userID, err := uuid.FromBytes(payload[:16])
+	if err != nil {
+		return uuid.Nil, time.Time{}, nil, false
+	}
+	expires := time.Unix(int64(binary.BigEndian.Uint64(payload[16:])), 0)
+	return userID, expires, mac, true
 }
 
 // taken reports an identifier an existing account already holds in this tenant.
@@ -436,31 +454,35 @@ func (s *AccountService) taken(ctx context.Context, tenantID uuid.UUID, identifi
 	return fmt.Errorf("check identifier: %w", err)
 }
 
-func (s *AccountService) sendCode(ctx context.Context, tx pgx.Tx, scope HostScope, reg model.Registration, code string) error {
-	tenantID := reg.TenantID
+// sendCode stores the new code's HMAC and queues the email in the same transaction.
+func (s *AccountService) sendCode(ctx context.Context, tx pgx.Tx, scope HostScope, user model.User, code string, now time.Time) error {
+	expires := now.Add(codeTTL)
+	if err := s.Users.SetEmailCodeTx(ctx, tx, user.TenantID, user.ID, s.codeHash(user.ID, code), expires); err != nil {
+		return err
+	}
 	return s.Notifications.Enqueue(ctx, tx, NewNotification{
-		Scope:     Scope{TenantID: &tenantID},
-		EventKey:  "registration-code:" + reg.CodeID.String(),
+		Scope:     Scope{TenantID: user.TenantID},
+		EventKey:  "email-code:" + uuid.NewString(),
 		Channel:   string(model.ChannelEmail),
-		Recipient: reg.Email,
-		Template:  TemplateRegistrationCode,
+		Recipient: *user.Email,
+		Template:  TemplateEmailCode,
 		Params: map[string]string{
-			"tenant_name": tenantName(scope), "name": reg.Name, "minutes": minutes(codeTTL),
+			"tenant_name": tenantName(scope), "name": user.Name, "minutes": minutes(codeTTL),
 		},
 		SecretParams: map[string]string{"code": code},
 		// A code that reaches the inbox after it stopped working is worse than none.
-		ExpiresAt: &reg.ExpiresAt,
+		ExpiresAt: &expires,
 	})
 }
 
-func (s *AccountService) codeHash(codeID uuid.UUID, code string) []byte {
+func (s *AccountService) codeHash(userID uuid.UUID, code string) []byte {
 	mac := hmac.New(sha256.New, s.codeKey)
-	mac.Write(codeID[:])
+	mac.Write(userID[:])
 	mac.Write([]byte(code))
 	return mac.Sum(nil)
 }
 
-// inTx commits only when fn succeeds, except that fn may commit a failed guess by returning nil.
+// inTx commits only when fn succeeds; a failed guess is committed by fn returning nil.
 func (s *AccountService) inTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
@@ -476,17 +498,13 @@ func (s *AccountService) inTx(ctx context.Context, fn func(pgx.Tx) error) error 
 	return nil
 }
 
-func codeSent(email string) CodeSent {
-	return CodeSent{Email: email, ExpiresIn: codeTTL, ResendAfter: codeResendAfter}
-}
-
-// newCode is uniform over 000000–999999; codeID makes every send a distinct notification.
-func newCode() (string, uuid.UUID, error) {
+// newCode is uniform over 000000–999999.
+func newCode() (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
 	if err != nil {
-		return "", uuid.Nil, fmt.Errorf("generate code: %w", err)
+		return "", fmt.Errorf("generate code: %w", err)
 	}
-	return fmt.Sprintf("%0*d", codeDigits, n.Int64()), uuid.New(), nil
+	return fmt.Sprintf("%0*d", codeDigits, n.Int64()), nil
 }
 
 func validCodeShape(code string) bool {

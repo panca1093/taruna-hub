@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
@@ -41,9 +42,8 @@ func newAccountService(t *testing.T, f tenantFixture, auth *service.AuthService)
 	return service.NewAccountService(service.AccountDeps{
 		DB:            f.pool,
 		Users:         repository.NewUserRepository(f.pool),
-		Accounts:      repository.NewAccountRepository(f.pool),
 		Sessions:      repository.NewSessionRepository(f.pool),
-		Throttles:     repository.NewThrottleRepository(f.pool),
+		Throttles:     repository.NewThrottleRepository(f.redis),
 		Notifications: notifications,
 		Auth:          auth,
 		Links:         service.WebLinks{Scheme: "http", BaseDomain: f.baseDomain, Port: "3000"},
@@ -94,6 +94,7 @@ func wantError(t *testing.T, name string, rec *httptest.ResponseRecorder, status
 	}
 }
 
+// D01 over HTTP: signup answers like a login, and the email is verified later by the signed-in user.
 func TestSignUpOverHTTP(t *testing.T) {
 	f := newAuthFixture(t, "localhost", false)
 	e := f.echo(t)
@@ -102,42 +103,46 @@ func TestSignUpOverHTTP(t *testing.T) {
 	signup := map[string]string{"name": "Budi", "email": strings.ToUpper(email), "phone": "0812-" + strconv.Itoa(10000000+int(uuid.New().ID()%89999999)), "password": authTestPassword}
 
 	rec := postJSON(e, host, "/api/v1/auth/register", signup, nil)
-	if rec.Code != http.StatusAccepted {
-		t.Fatalf("register: status = %d body = %s, want 202", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("register: status = %d body = %s, want 201", rec.Code, rec.Body.String())
 	}
 	if got := rec.Header().Get("Cache-Control"); !strings.Contains(got, "no-store") {
 		t.Errorf("register Cache-Control = %q, want no-store", got)
 	}
-	var sent codeSentResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &sent); err != nil {
-		t.Fatalf("decode: %v", err)
+	if c := cookieNamed(rec.Result().Cookies(), refreshCookieName); c == nil || c.Value == "" || !c.HttpOnly {
+		t.Error("register set no HttpOnly refresh cookie")
 	}
-	if sent.Email != email || sent.ExpiresIn != 600 || sent.ResendAfter != 60 {
-		t.Errorf("register body = %+v, want the normalized email, 600 and 60", sent)
+	tokens := decodeTokenResponse(t, rec)
+	if tokens.User.Role != model.RoleStudent || tokens.User.Email == nil || *tokens.User.Email != email || tokens.User.EmailVerified {
+		t.Errorf("registered user = %+v, want an unverified student with %s", tokens.User, email)
 	}
-	code := f.secretParam(t, email, service.TemplateRegistrationCode, "code")
+	bearer := map[string]string{echo.HeaderAuthorization: "Bearer " + tokens.AccessToken}
+	code := f.secretParam(t, email, service.TemplateEmailCode, "code")
+
+	// Unverified is signed in: /me works and says so, which is what the web app's alert reads.
+	me := getWithToken(e, host, "/api/v1/me", tokens.AccessToken)
+	if me.Code != http.StatusOK || !strings.Contains(me.Body.String(), `"email_verified":false`) {
+		t.Errorf("me before verifying: status = %d body = %s, want 200 and email_verified false", me.Code, me.Body.String())
+	}
 
 	wrong := "000000"
 	if code == wrong {
 		wrong = "000001"
 	}
-	wantError(t, "wrong code", postJSON(e, host, "/api/v1/auth/register/verify", map[string]string{"email": email, "code": wrong}, nil),
+	wantError(t, "wrong code", postJSON(e, host, "/api/v1/me/email/verify", map[string]string{"code": wrong}, bearer),
 		http.StatusUnprocessableEntity, httpx.CodeValidation, "code")
+	wantError(t, "no token", postJSON(e, host, "/api/v1/me/email/verify", map[string]string{"code": code}, nil),
+		http.StatusUnauthorized, httpx.CodeUnauthorized)
+	wantError(t, "resend inside the cooldown", postJSON(e, host, "/api/v1/me/email/resend", nil, bearer),
+		http.StatusTooManyRequests, httpx.CodeRateLimited)
 
-	verified := postJSON(e, host, "/api/v1/auth/register/verify", map[string]string{"email": email, "code": code}, nil)
-	if verified.Code != http.StatusOK {
-		t.Fatalf("verify: status = %d body = %s, want 200", verified.Code, verified.Body.String())
+	if rec := postJSON(e, host, "/api/v1/me/email/verify", map[string]string{"code": code}, bearer); rec.Code != http.StatusNoContent {
+		t.Fatalf("verify: status = %d body = %s, want 204", rec.Code, rec.Body.String())
 	}
-	if c := cookieNamed(verified.Result().Cookies(), refreshCookieName); c == nil || c.Value == "" || !c.HttpOnly {
-		t.Error("verify set no HttpOnly refresh cookie")
+	if me := getWithToken(e, host, "/api/v1/me", tokens.AccessToken); !strings.Contains(me.Body.String(), `"email_verified":true`) {
+		t.Errorf("me after verifying = %s, want email_verified true", me.Body.String())
 	}
-	tokens := decodeTokenResponse(t, verified)
-	if tokens.User.Role != model.RoleStudent || tokens.User.Email == nil || *tokens.User.Email != email {
-		t.Errorf("verified user = %+v, want a student with %s", tokens.User, email)
-	}
-	if me := getWithToken(e, host, "/api/v1/me", tokens.AccessToken); me.Code != http.StatusOK {
-		t.Errorf("me after verify: status = %d", me.Code)
-	}
+	wantError(t, "resend after verifying", postJSON(e, host, "/api/v1/me/email/resend", nil, bearer), http.StatusConflict, httpx.CodeConflict)
 
 	wantError(t, "email taken", postJSON(e, host, "/api/v1/auth/register", signup, nil), http.StatusConflict, httpx.CodeConflict, "email")
 	wantError(t, "platform host", postJSON(e, "admin."+f.baseDomain+":8081", "/api/v1/auth/register", signup, nil),
@@ -152,10 +157,10 @@ func TestSignUpOverHTTP(t *testing.T) {
 		http.StatusUnprocessableEntity, httpx.CodeValidation, "body")
 
 	if strings.Contains(f.logs.String(), code) {
-		t.Error("the registration code reached a log")
+		t.Error("the verification code reached a log")
 	}
 	if strings.Contains(rec.Body.String(), code) {
-		t.Error("the registration code reached a response")
+		t.Error("the verification code reached a response")
 	}
 }
 

@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,9 +92,8 @@ func newAccountHarness(t *testing.T, opts ...AuthOption) *accountHarness {
 	h.account = NewAccountService(AccountDeps{
 		DB:            h.pool,
 		Users:         repository.NewUserRepository(h.pool),
-		Accounts:      repository.NewAccountRepository(h.pool),
 		Sessions:      repository.NewSessionRepository(h.pool),
-		Throttles:     repository.NewThrottleRepository(h.pool),
+		Throttles:     repository.NewThrottleRepository(testRedis(t)),
 		Notifications: notifications,
 		Auth:          h.auth,
 		Links:         WebLinks{Scheme: "https", BaseDomain: "tarunaeduka.test", Port: "3000"},
@@ -145,7 +145,7 @@ func (h *accountHarness) sealed(recipient, template string) (map[string]string, 
 
 func (h *accountHarness) code(email string) string {
 	h.t.Helper()
-	secret, _ := h.sealed(email, TemplateRegistrationCode)
+	secret, _ := h.sealed(email, TemplateEmailCode)
 	return secret["code"]
 }
 
@@ -159,13 +159,15 @@ func (h *accountHarness) notificationCount(recipient string) int {
 	return n
 }
 
-func (h *accountHarness) register(scope HostScope, email, phone string) {
+func (h *accountHarness) register(scope HostScope, email, phone string) Tokens {
 	h.t.Helper()
-	if _, err := h.account.Register(context.Background(), scope, RegisterInput{
+	tokens, err := h.account.Register(context.Background(), scope, RegisterInput{
 		Name: "Budi Santoso", Email: email, Phone: phone, Password: authPassword,
-	}); err != nil {
+	})
+	if err != nil {
 		h.t.Fatalf("register %s: %v", email, err)
 	}
+	return tokens
 }
 
 func uniqueEmail(prefix string) string { return prefix + "-" + uuid.NewString()[:8] + "@example.com" }
@@ -182,7 +184,18 @@ func otherCode(code string) string {
 	return "000000"
 }
 
-func TestRegisterThenVerifyCreatesAStudentWithASession(t *testing.T) {
+// principal is what the Authenticate middleware would hand the handlers for these tokens.
+func (h *accountHarness) principal(scope HostScope, tokens Tokens) model.Principal {
+	h.t.Helper()
+	p, err := h.authenticate(scope, tokens.AccessToken)
+	if err != nil {
+		h.t.Fatalf("authenticate: %v", err)
+	}
+	return p
+}
+
+// D01: signup creates the account and logs in at once; the code only flips a flag the web app shows.
+func TestRegisterCreatesAStudentWhoCanLogInBeforeVerifying(t *testing.T) {
 	h := newAccountHarness(t)
 	tenant := h.tenant()
 	ctx := context.Background()
@@ -190,25 +203,34 @@ func TestRegisterThenVerifyCreatesAStudentWithASession(t *testing.T) {
 	phone := uniqueLocalPhone()
 	canonicalPhone := "+62" + phone[1:]
 
-	sent, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{
+	tokens, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{
 		Name: "  Budi Santoso ", Email: "  " + strings.ToUpper(email), Phone: phone[:4] + "-" + phone[4:], Password: authPassword,
 	})
 	if err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	if sent.Email != email || sent.ExpiresIn != codeTTL || sent.ResendAfter != codeResendAfter {
-		t.Errorf("code sent = %+v, want the normalized email and the code timings", sent)
+	p := tokens.Principal
+	if p.Role != model.RoleStudent || p.Name != "Budi Santoso" || p.Email == nil || *p.Email != email ||
+		p.Phone == nil || *p.Phone != canonicalPhone || p.EmailVerified {
+		t.Errorf("principal = %+v, want an unverified student with the canonical email and phone", p)
+	}
+	if p.TenantID == nil || *p.TenantID != tenant.ID || tokens.RefreshToken == "" {
+		t.Errorf("principal tenant = %v, refresh = %q; want %s and a session", p.TenantID, tokens.RefreshToken, tenant.ID)
 	}
 
-	// Pending is not an account: nothing exists to log in to yet.
-	if _, err := repository.NewUserRepository(h.pool).FindByIdentifier(ctx, tenant.ID, email); !errors.Is(err, repository.ErrNotFound) {
-		t.Errorf("a user exists before verification: err = %v", err)
-	}
-	if _, err := h.auth.Login(ctx, h.scope(tenant), email, authPassword); !errors.Is(err, ErrInvalidCredentials) {
-		t.Errorf("login before verification: err = %v, want ErrInvalidCredentials", err)
+	// Unverified is not locked out: every spelling of the identifiers logs in.
+	for _, identifier := range []string{canonicalPhone, phone, "62" + phone[1:], strings.ToUpper(email)} {
+		got, err := h.auth.Login(ctx, h.scope(tenant), identifier, authPassword)
+		if err != nil {
+			t.Errorf("login as %q before verifying: %v", identifier, err)
+			continue
+		}
+		if got.Principal.UserID != p.UserID || got.Principal.EmailVerified {
+			t.Errorf("login as %q = %+v, want the same unverified account", identifier, got.Principal)
+		}
 	}
 
-	secret, n := h.sealed(email, TemplateRegistrationCode)
+	secret, n := h.sealed(email, TemplateEmailCode)
 	code := secret["code"]
 	if !validCodeShape(code) {
 		t.Fatalf("code %q is not %d digits", code, codeDigits)
@@ -219,49 +241,25 @@ func TestRegisterThenVerifyCreatesAStudentWithASession(t *testing.T) {
 	if n.ExpiresAt == nil || !n.ExpiresAt.Equal(h.clock.Now().Add(codeTTL)) {
 		t.Errorf("notification expires_at = %v, want the code expiry", n.ExpiresAt)
 	}
-	if n.Params["tenant_name"] != tenant.Name || n.Params["name"] != "Budi Santoso" {
-		t.Errorf("notification params = %v, want the tenant and the trimmed name", n.Params)
-	}
 
-	tokens, err := h.account.VerifyCode(ctx, h.scope(tenant), strings.ToUpper(email), code)
-	if err != nil {
+	if err := h.account.VerifyEmail(ctx, p, code); err != nil {
 		t.Fatalf("verify: %v", err)
 	}
-	p := tokens.Principal
-	if p.Role != model.RoleStudent || p.Email == nil || *p.Email != email || p.Phone == nil || *p.Phone != canonicalPhone {
-		t.Errorf("principal = %+v, want a student with the canonical email and phone", p)
+	if !h.principal(h.scope(tenant), tokens).EmailVerified {
+		t.Error("the live session does not see the verification")
 	}
-	if p.TenantID == nil || *p.TenantID != tenant.ID {
-		t.Errorf("principal tenant = %v, want %s", p.TenantID, tenant.ID)
+	if err := h.account.VerifyEmail(ctx, p, otherCode(code)); err != nil {
+		t.Errorf("verifying an already verified email: err = %v, want nil", err)
 	}
-	if tokens.RefreshToken == "" {
-		t.Error("verify opened no refresh session")
+	if err := h.account.ResendEmailCode(ctx, h.scope(tenant), p); !errors.Is(err, ErrAlreadyVerified) {
+		t.Errorf("resend after verifying: err = %v, want ErrAlreadyVerified", err)
 	}
-	if _, err := h.authenticate(h.scope(tenant), tokens.AccessToken); err != nil {
-		t.Errorf("the verified session's access token was rejected: %v", err)
-	}
-
-	var pending int
-	if err := h.pool.QueryRow(ctx, `SELECT count(*) FROM auth_registrations WHERE tenant_id = $1`, tenant.ID).Scan(&pending); err != nil {
-		t.Fatalf("count pending: %v", err)
-	}
-	if pending != 0 {
-		t.Errorf("pending registrations = %d after verify, want 0", pending)
-	}
-
-	// FR-AUTH-02: every spelling of the same phone or email reaches the same account.
-	for _, identifier := range []string{canonicalPhone, phone, "62" + phone[1:], " " + phone[:4] + " " + phone[4:], strings.ToUpper(email)} {
-		got, err := h.auth.Login(ctx, h.scope(tenant), identifier, authPassword)
-		if err != nil {
-			t.Errorf("login as %q: %v", identifier, err)
-			continue
-		}
-		if got.Principal.UserID != p.UserID {
-			t.Errorf("login as %q reached %s, want %s", identifier, got.Principal.UserID, p.UserID)
-		}
+	var hash []byte
+	if err := h.pool.QueryRow(ctx, `SELECT email_code_hash FROM users WHERE id = $1`, p.UserID).Scan(&hash); err != nil || hash != nil {
+		t.Errorf("code hash after verifying = %x, %v; want it cleared", hash, err)
 	}
 	if strings.Contains(h.logs.String(), code) {
-		t.Error("the registration code was written to a log")
+		t.Error("the code was written to a log")
 	}
 }
 
@@ -270,80 +268,45 @@ func TestRegisterSameIdentifiersInTwoTenants(t *testing.T) {
 	h := newAccountHarness(t)
 	a, b := h.tenant(), h.tenant()
 	email, phone := uniqueEmail("twin"), uniqueLocalPhone()
-
-	h.register(h.scope(a), email, phone)
-	h.register(h.scope(b), email, phone)
-
-	// Two pending rows, two codes: each tenant's code works only on its own host.
-	codes := map[uuid.UUID]string{}
-	for _, tenant := range []model.Tenant{a, b} {
-		var codeHash []byte
-		var codeID uuid.UUID
-		if err := h.pool.QueryRow(context.Background(),
-			`SELECT code_id, code_hash FROM auth_registrations WHERE tenant_id = $1 AND email = $2`, tenant.ID, email,
-		).Scan(&codeID, &codeHash); err != nil {
-			t.Fatalf("read pending row for %s: %v", tenant.Slug, err)
-		}
-		secret, _ := h.sealedFor(tenant.ID, email)
-		if !bytes.Equal(h.account.codeHash(codeID, secret), codeHash) {
-			t.Fatalf("the %s notification does not carry the %s code", tenant.Slug, tenant.Slug)
-		}
-		codes[tenant.ID] = secret
-	}
-	if codes[a.ID] != codes[b.ID] {
-		if _, err := h.account.VerifyCode(context.Background(), h.scope(b), email, codes[a.ID]); !errors.Is(err, ErrInvalidCode) {
-			t.Errorf("A's code on B: err = %v, want ErrInvalidCode", err)
-		}
-	}
-
-	ta, err := h.account.VerifyCode(context.Background(), h.scope(a), email, codes[a.ID])
-	if err != nil {
-		t.Fatalf("verify on A: %v", err)
-	}
-	tb, err := h.account.VerifyCode(context.Background(), h.scope(b), email, codes[b.ID])
-	if err != nil {
-		t.Fatalf("verify on B: %v", err)
-	}
+	ta := h.register(h.scope(a), email, phone)
+	tb := h.register(h.scope(b), email, phone)
 	if ta.Principal.UserID == tb.Principal.UserID {
 		t.Error("two tenants share one account")
 	}
+	// A's code is bound to A's account, so it verifies nothing on B.
+	codeA := h.codeFor(a.ID, email)
+	if err := h.account.VerifyEmail(context.Background(), tb.Principal, codeA); err == nil && h.codeFor(b.ID, email) != codeA {
+		t.Error("A's code verified B's account")
+	}
 }
 
-// sealedFor reads the code a tenant-scoped notification carries.
-func (h *accountHarness) sealedFor(tenantID uuid.UUID, recipient string) (string, model.Notification) {
+func (h *accountHarness) codeFor(tenantID uuid.UUID, recipient string) string {
 	h.t.Helper()
 	var n model.Notification
 	if err := h.pool.QueryRow(context.Background(),
-		`SELECT id, sealed_params FROM notification_logs
-		  WHERE tenant_id = $1 AND recipient = $2 AND template = $3 ORDER BY created_at DESC, id LIMIT 1`,
-		tenantID, recipient, TemplateRegistrationCode).Scan(&n.ID, &n.SealedParams); err != nil {
-		h.t.Fatalf("read notification: %v", err)
+		`SELECT id, sealed_params FROM notification_logs WHERE tenant_id = $1 AND recipient = $2 AND template = $3
+		  ORDER BY created_at DESC, id LIMIT 1`, tenantID, recipient, TemplateEmailCode).Scan(&n.ID, &n.SealedParams); err != nil {
+		h.t.Fatalf("read code notification: %v", err)
 	}
 	plain, err := h.sealer.Open(n.SealedParams, n.ID[:])
 	if err != nil {
-		h.t.Fatalf("open sealed params: %v", err)
+		h.t.Fatalf("open: %v", err)
 	}
 	var secret map[string]string
 	if err := json.Unmarshal(plain, &secret); err != nil {
-		h.t.Fatalf("decode sealed params: %v", err)
+		h.t.Fatalf("decode: %v", err)
 	}
-	return secret["code"], n
+	return secret["code"]
 }
 
+// An account exists from the moment of signup, verified or not, so its identifiers are taken.
 func TestRegisterRefusesTakenIdentifiersAndBadInput(t *testing.T) {
 	h := newAccountHarness(t)
 	tenant := h.tenant()
 	ctx := context.Background()
 	existing := h.user(&tenant.ID, model.RoleStudent, authPassword)
-
-	phone := uniqueLocalPhone()
-	canonical := "+62" + phone[1:]
-	holder := uniqueEmail("phone-holder")
-	if _, err := repository.NewUserRepository(h.pool).Create(ctx, model.User{
-		TenantID: &tenant.ID, Name: "Holder", Email: &holder, Phone: &canonical, PasswordHash: h.hashed(authPassword), Role: model.RoleStudent,
-	}); err != nil {
-		t.Fatalf("create phone holder: %v", err)
-	}
+	unverifiedEmail, phone := uniqueEmail("unverified"), uniqueLocalPhone()
+	h.register(h.scope(tenant), unverifiedEmail, phone)
 
 	cases := []struct {
 		name string
@@ -351,17 +314,18 @@ func TestRegisterRefusesTakenIdentifiersAndBadInput(t *testing.T) {
 		want error
 	}{
 		{"email in another case", RegisterInput{Name: "X", Email: strings.ToUpper(*existing.Email), Password: authPassword}, ErrEmailTaken},
-		{"phone in local form", RegisterInput{Name: "X", Email: uniqueEmail("fresh"), Phone: phone, Password: authPassword}, ErrPhoneTaken},
+		{"an unverified account's email", RegisterInput{Name: "X", Email: unverifiedEmail, Password: "other-password"}, ErrEmailTaken},
+		{"phone in another form", RegisterInput{Name: "X", Email: uniqueEmail("fresh"), Phone: "62" + phone[1:], Password: authPassword}, ErrPhoneTaken},
 	}
 	for _, tc := range cases {
 		if _, err := h.account.Register(ctx, h.scope(tenant), tc.in); !errors.Is(err, tc.want) {
 			t.Errorf("%s: err = %v, want %v", tc.name, err, tc.want)
 		}
 	}
+	// The squatter's signup did not change who owns the unverified account's password.
+	h.login(h.scope(tenant), unverifiedEmail, authPassword)
 
-	_, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{
-		Name: " ", Email: "not-an-email", Phone: "12", Password: "short",
-	})
+	_, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{Name: " ", Email: "not-an-email", Phone: "12", Password: "short"})
 	var input *InputError
 	if !errors.As(err, &input) {
 		t.Fatalf("bad input: err = %v, want an InputError", err)
@@ -379,19 +343,38 @@ func TestRegisterRefusesTakenIdentifiersAndBadInput(t *testing.T) {
 	}
 }
 
+// Two signups for one email race; the unique constraint lets exactly one through.
+func TestConcurrentRegisterCreatesOneAccount(t *testing.T) {
+	h := newAccountHarness(t)
+	tenant := h.tenant()
+	email := uniqueEmail("race")
+	var wins atomic.Int32
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := h.account.Register(context.Background(), h.scope(tenant), RegisterInput{Name: "R", Email: email, Password: authPassword})
+			switch {
+			case err == nil:
+				wins.Add(1)
+			case !errors.Is(err, ErrEmailTaken):
+				t.Errorf("a losing signup: err = %v, want ErrEmailTaken", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if wins.Load() != 1 {
+		t.Errorf("successful signups = %d, want 1", wins.Load())
+	}
+}
+
 // Platform Admins are provisioned; the platform host offers no signup at all.
 func TestRegistrationIsClosedOnThePlatformHost(t *testing.T) {
 	h := newAccountHarness(t)
-	ctx := context.Background()
 	email := uniqueEmail("platform-signup")
-	if _, err := h.account.Register(ctx, h.platformScope(), RegisterInput{Name: "X", Email: email, Password: authPassword}); !errors.Is(err, ErrRegistrationClosed) {
+	if _, err := h.account.Register(context.Background(), h.platformScope(), RegisterInput{Name: "X", Email: email, Password: authPassword}); !errors.Is(err, ErrRegistrationClosed) {
 		t.Errorf("register: err = %v, want ErrRegistrationClosed", err)
-	}
-	if _, err := h.account.ResendCode(ctx, h.platformScope(), email); !errors.Is(err, ErrRegistrationClosed) {
-		t.Errorf("resend: err = %v, want ErrRegistrationClosed", err)
-	}
-	if _, err := h.account.VerifyCode(ctx, h.platformScope(), email, "123456"); !errors.Is(err, ErrRegistrationClosed) {
-		t.Errorf("verify: err = %v, want ErrRegistrationClosed", err)
 	}
 	if n := h.notificationCount(email); n != 0 {
 		t.Errorf("notifications = %d, want 0", n)
@@ -404,7 +387,7 @@ func TestWrongCodesAreCountedUnderConcurrency(t *testing.T) {
 	tenant := h.tenant()
 	ctx := context.Background()
 	email := uniqueEmail("guess")
-	h.register(h.scope(tenant), email, "")
+	p := h.register(h.scope(tenant), email, "").Principal
 	code := h.code(email)
 
 	var wg sync.WaitGroup
@@ -412,7 +395,7 @@ func TestWrongCodesAreCountedUnderConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := h.account.VerifyCode(ctx, h.scope(tenant), email, otherCode(code)); !errors.Is(err, ErrInvalidCode) {
+			if err := h.account.VerifyEmail(ctx, p, otherCode(code)); !errors.Is(err, ErrInvalidCode) {
 				t.Errorf("wrong code: err = %v, want ErrInvalidCode", err)
 			}
 		}()
@@ -420,126 +403,59 @@ func TestWrongCodesAreCountedUnderConcurrency(t *testing.T) {
 	wg.Wait()
 
 	var attempts int
-	if err := h.pool.QueryRow(ctx, `SELECT attempts FROM auth_registrations WHERE tenant_id = $1 AND email = $2`, tenant.ID, email).Scan(&attempts); err != nil {
+	if err := h.pool.QueryRow(ctx, `SELECT email_code_attempts FROM users WHERE id = $1`, p.UserID).Scan(&attempts); err != nil {
 		t.Fatalf("read attempts: %v", err)
 	}
 	if attempts != maxCodeAttempts {
 		t.Errorf("attempts = %d, want exactly %d", attempts, maxCodeAttempts)
 	}
-	if _, err := h.account.VerifyCode(ctx, h.scope(tenant), email, code); !errors.Is(err, ErrInvalidCode) {
+	if err := h.account.VerifyEmail(ctx, p, code); !errors.Is(err, ErrInvalidCode) {
 		t.Errorf("the right code after the budget is spent: err = %v, want ErrInvalidCode", err)
 	}
 
 	// A fresh code restores the budget, and only the fresh code works.
 	h.clock.Advance(codeResendAfter + time.Second)
-	if _, err := h.account.ResendCode(ctx, h.scope(tenant), email); err != nil {
+	if err := h.account.ResendEmailCode(ctx, h.scope(tenant), p); err != nil {
 		t.Fatalf("resend: %v", err)
 	}
 	fresh := h.code(email)
 	if fresh != code {
-		if _, err := h.account.VerifyCode(ctx, h.scope(tenant), email, code); !errors.Is(err, ErrInvalidCode) {
+		if err := h.account.VerifyEmail(ctx, p, code); !errors.Is(err, ErrInvalidCode) {
 			t.Errorf("the replaced code: err = %v, want ErrInvalidCode", err)
 		}
 	}
-	if _, err := h.account.VerifyCode(ctx, h.scope(tenant), email, fresh); err != nil {
+	if err := h.account.VerifyEmail(ctx, p, fresh); err != nil {
 		t.Errorf("the fresh code: %v", err)
 	}
 }
 
-// Many verifications of the right code race; exactly one account comes out of it.
-func TestConcurrentVerifyCreatesOneAccount(t *testing.T) {
-	h := newAccountHarness(t)
-	tenant := h.tenant()
-	ctx := context.Background()
-	email := uniqueEmail("race")
-	h.register(h.scope(tenant), email, "")
-	code := h.code(email)
-
-	var wins atomic.Int32
-	var wg sync.WaitGroup
-	for range 8 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, err := h.account.VerifyCode(ctx, h.scope(tenant), email, code)
-			switch {
-			case err == nil:
-				wins.Add(1)
-			case !errors.Is(err, ErrInvalidCode):
-				t.Errorf("a losing verify: err = %v, want ErrInvalidCode", err)
-			}
-		}()
-	}
-	wg.Wait()
-	if wins.Load() != 1 {
-		t.Errorf("successful verifications = %d, want 1", wins.Load())
-	}
-	var users int
-	if err := h.pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE tenant_id = $1 AND email = $2`, tenant.ID, email).Scan(&users); err != nil {
-		t.Fatalf("count users: %v", err)
-	}
-	if users != 1 {
-		t.Errorf("accounts = %d, want 1", users)
-	}
-}
-
-func TestCodeExpiresAndResendIsPaced(t *testing.T) {
+func TestCodeExpiresAndSendsArePacedAndCapped(t *testing.T) {
 	h := newAccountHarness(t)
 	tenant := h.tenant()
 	ctx := context.Background()
 	email := uniqueEmail("pace")
-	h.register(h.scope(tenant), email, "")
+	p := h.register(h.scope(tenant), email, "").Principal
 	code := h.code(email)
 
 	var limited *ThrottleError
-	if _, err := h.account.ResendCode(ctx, h.scope(tenant), email); !errors.As(err, &limited) || limited.RetryAfter <= 0 || limited.RetryAfter > codeResendAfter {
+	if err := h.account.ResendEmailCode(ctx, h.scope(tenant), p); !errors.As(err, &limited) || limited.RetryAfter <= 0 || limited.RetryAfter > codeResendAfter {
 		t.Errorf("resend inside the cooldown: err = %v, want a ThrottleError within %s", err, codeResendAfter)
 	}
-
 	h.clock.Advance(codeTTL)
-	if _, err := h.account.VerifyCode(ctx, h.scope(tenant), email, code); !errors.Is(err, ErrInvalidCode) {
+	if err := h.account.VerifyEmail(ctx, p, code); !errors.Is(err, ErrInvalidCode) {
 		t.Errorf("a code at its expiry: err = %v, want ErrInvalidCode", err)
 	}
 
-	// An unknown email gets the same answer as a pending one and sends nothing.
-	unknown := uniqueEmail("nobody")
-	sent, err := h.account.ResendCode(ctx, h.scope(tenant), unknown)
-	if err != nil || sent.Email != unknown || sent.ExpiresIn != codeTTL {
-		t.Errorf("resend for an unknown email = %+v, %v; want the usual answer", sent, err)
-	}
-	if n := h.notificationCount(unknown); n != 0 {
-		t.Errorf("notifications for an unknown email = %d, want 0", n)
-	}
-}
-
-// Signing up again replaces the pending details, and sends are capped per email per hour.
-func TestReRegisterReplacesPendingAndSendsAreCapped(t *testing.T) {
-	h := newAccountHarness(t)
-	tenant := h.tenant()
-	ctx := context.Background()
-	email := uniqueEmail("again")
-
-	for i := range codeThrottle.limit {
-		if _, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{
-			Name: fmt.Sprintf("Name %d", i), Email: email, Password: authPassword,
-		}); err != nil {
-			t.Fatalf("register %d: %v", i, err)
+	// The signup sent one and the refused resend still counted, so three more fit in the hour.
+	for i := range codeThrottle.limit - 2 {
+		h.clock.Advance(codeResendAfter)
+		if err := h.account.ResendEmailCode(ctx, h.scope(tenant), p); err != nil {
+			t.Fatalf("resend %d: %v", i+1, err)
 		}
 	}
-	var limited *ThrottleError
-	if _, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{Name: "Over", Email: email, Password: authPassword}); !errors.As(err, &limited) {
-		t.Fatalf("send %d in one hour: err = %v, want a ThrottleError", codeThrottle.limit+1, err)
-	}
-	if limited.RetryAfter <= 0 || limited.RetryAfter > codeThrottle.window {
-		t.Errorf("retry after %s, want within the %s window", limited.RetryAfter, codeThrottle.window)
-	}
-
-	tokens, err := h.account.VerifyCode(ctx, h.scope(tenant), email, h.code(email))
-	if err != nil {
-		t.Fatalf("verify the last code: %v", err)
-	}
-	if want := fmt.Sprintf("Name %d", codeThrottle.limit-1); tokens.Principal.Name != want {
-		t.Errorf("account name = %q, want the last signup's %q", tokens.Principal.Name, want)
+	h.clock.Advance(codeResendAfter)
+	if err := h.account.ResendEmailCode(ctx, h.scope(tenant), p); !errors.As(err, &limited) || limited.RetryAfter > codeThrottle.window {
+		t.Errorf("a send past the hourly cap: err = %v, want a ThrottleError", err)
 	}
 }
 
@@ -561,18 +477,19 @@ func (h *accountHarness) resetToken(scope HostScope, email string) string {
 	return strings.TrimPrefix(link, prefix)
 }
 
-func TestPasswordResetSetsPasswordAndEndsEverySession(t *testing.T) {
+// A reset proves the inbox, so it also verifies the email: the real owner's way back from a squatter.
+func TestPasswordResetSetsPasswordEndsSessionsAndVerifiesEmail(t *testing.T) {
 	h := newAccountHarness(t)
 	tenant, other := h.tenant(), h.tenant()
 	ctx := context.Background()
-	user := h.user(&tenant.ID, model.RoleStudent, authPassword)
-	first := h.login(h.scope(tenant), *user.Email, authPassword)
-	second := h.login(h.scope(tenant), *user.Email, authPassword)
+	email := uniqueEmail("reset")
+	first := h.register(h.scope(tenant), email, "")
+	second := h.login(h.scope(tenant), email, authPassword)
 
-	if err := h.account.ForgotPassword(ctx, h.scope(tenant), strings.ToUpper(*user.Email)); err != nil {
+	if err := h.account.ForgotPassword(ctx, h.scope(tenant), strings.ToUpper(email)); err != nil {
 		t.Fatalf("forgot: %v", err)
 	}
-	token := h.resetToken(h.scope(tenant), *user.Email)
+	token := h.resetToken(h.scope(tenant), email)
 
 	const newPassword = "brand-new-horse"
 	if err := h.account.ResetPassword(ctx, h.scope(other), token, newPassword); !errors.Is(err, ErrInvalidResetToken) {
@@ -591,11 +508,12 @@ func TestPasswordResetSetsPasswordAndEndsEverySession(t *testing.T) {
 			t.Errorf("%s session after the reset: err = %v, want ErrUnauthenticated", name, err)
 		}
 	}
-	if _, err := h.auth.Login(ctx, h.scope(tenant), *user.Email, authPassword); !errors.Is(err, ErrInvalidCredentials) {
+	if _, err := h.auth.Login(ctx, h.scope(tenant), email, authPassword); !errors.Is(err, ErrInvalidCredentials) {
 		t.Errorf("the old password: err = %v, want ErrInvalidCredentials", err)
 	}
-	h.login(h.scope(tenant), *user.Email, newPassword)
-
+	if !h.login(h.scope(tenant), email, newPassword).Principal.EmailVerified {
+		t.Error("a completed reset did not verify the email")
+	}
 	if err := h.account.ResetPassword(ctx, h.scope(tenant), token, "yet-another-horse"); !errors.Is(err, ErrInvalidResetToken) {
 		t.Errorf("the token a second time: err = %v, want ErrInvalidResetToken", err)
 	}
@@ -604,6 +522,7 @@ func TestPasswordResetSetsPasswordAndEndsEverySession(t *testing.T) {
 	}
 }
 
+// The token is bound to the password hash: whichever link is used first kills every other one.
 func TestResetTokensAreSingleUseUnderConcurrencyAndExpire(t *testing.T) {
 	h := newAccountHarness(t)
 	tenant := h.tenant()
@@ -613,13 +532,14 @@ func TestResetTokensAreSingleUseUnderConcurrencyAndExpire(t *testing.T) {
 	if err := h.account.ForgotPassword(ctx, h.scope(tenant), *user.Email); err != nil {
 		t.Fatalf("forgot: %v", err)
 	}
-	stale := h.resetToken(h.scope(tenant), *user.Email)
+	older := h.resetToken(h.scope(tenant), *user.Email)
+	h.clock.Advance(time.Second) // a different expiry, so the two links differ
 	if err := h.account.ForgotPassword(ctx, h.scope(tenant), *user.Email); err != nil {
 		t.Fatalf("forgot again: %v", err)
 	}
 	token := h.resetToken(h.scope(tenant), *user.Email)
-	if err := h.account.ResetPassword(ctx, h.scope(tenant), stale, "brand-new-horse"); !errors.Is(err, ErrInvalidResetToken) {
-		t.Errorf("a link the newer one replaced: err = %v, want ErrInvalidResetToken", err)
+	if token == older {
+		t.Fatal("two requests produced the same link")
 	}
 
 	var wins atomic.Int32
@@ -641,8 +561,11 @@ func TestResetTokensAreSingleUseUnderConcurrencyAndExpire(t *testing.T) {
 	if wins.Load() != 1 {
 		t.Errorf("successful resets = %d, want 1", wins.Load())
 	}
+	if err := h.account.ResetPassword(ctx, h.scope(tenant), older, "brand-new-horse"); !errors.Is(err, ErrInvalidResetToken) {
+		t.Errorf("the other link after one was used: err = %v, want ErrInvalidResetToken", err)
+	}
 
-	h.clock.Advance(16 * time.Minute) // past the forgot window, so a third request is allowed
+	h.clock.Advance(16 * time.Minute) // past the forgot window, so another request is allowed
 	if err := h.account.ForgotPassword(ctx, h.scope(tenant), *user.Email); err != nil {
 		t.Fatalf("forgot a third time: %v", err)
 	}
@@ -651,6 +574,35 @@ func TestResetTokensAreSingleUseUnderConcurrencyAndExpire(t *testing.T) {
 	if err := h.account.ResetPassword(ctx, h.scope(tenant), expiring, "late-horse-123"); !errors.Is(err, ErrInvalidResetToken) {
 		t.Errorf("a token at its expiry: err = %v, want ErrInvalidResetToken", err)
 	}
+}
+
+// A token is a claim the server re-derives; any edit to it, or a made-up one, is refused.
+func TestResetTokensCannotBeForged(t *testing.T) {
+	h := newAccountHarness(t)
+	tenant := h.tenant()
+	ctx := context.Background()
+	victim := h.user(&tenant.ID, model.RoleStudent, authPassword)
+	attacker := h.user(&tenant.ID, model.RoleStudent, authPassword)
+
+	if err := h.account.ForgotPassword(ctx, h.scope(tenant), *attacker.Email); err != nil {
+		t.Fatalf("forgot: %v", err)
+	}
+	token := h.resetToken(h.scope(tenant), *attacker.Email)
+	_, rawMAC, _ := strings.Cut(token, ".")
+	// The attacker's valid MAC on a payload naming the victim.
+	forged := base64.RawURLEncoding.EncodeToString(resetPayload(victim.ID, h.clock.Now().Add(resetTTL))) + "." + rawMAC
+	flipped := []byte(token)
+	flipped[len(flipped)-2] ^= 1
+
+	for name, bad := range map[string]string{
+		"another user's id": forged, "a flipped byte": string(flipped), "no separator": strings.ReplaceAll(token, ".", ""),
+		"garbage": "not-a-token", "empty mac": strings.SplitN(token, ".", 2)[0] + ".",
+	} {
+		if err := h.account.ResetPassword(ctx, h.scope(tenant), bad, "hijacked-horse"); !errors.Is(err, ErrInvalidResetToken) {
+			t.Errorf("%s: err = %v, want ErrInvalidResetToken", name, err)
+		}
+	}
+	h.login(h.scope(tenant), *victim.Email, authPassword)
 }
 
 // Forgot answers the same for everyone, and its throttle is keyed on the input, not on an account.

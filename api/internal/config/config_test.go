@@ -9,6 +9,7 @@ func TestSMTPConfigValidation(t *testing.T) {
 	base := func() {
 		t.Setenv("APP_ENV", "production")
 		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("REDIS_URL", "redis://x:6379/0")
 		t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
 		t.Setenv("SMTP_HOST", "")
 		t.Setenv("SMTP_PORT", "587")
@@ -122,6 +123,7 @@ func TestConfigRequiresJWTSecret(t *testing.T) {
 	base := func() {
 		t.Setenv("APP_ENV", "development")
 		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("REDIS_URL", "redis://x:6379/0")
 		t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
 		t.Setenv("SMTP_HOST", "")
 		t.Setenv("SMTP_PORT", "587")
@@ -169,6 +171,7 @@ func TestConfigRequiresJWTSecret(t *testing.T) {
 
 func TestLoadRequiresBaseDomainOutsideDevelopment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("REDIS_URL", "redis://x:6379/0")
 	t.Setenv("BASE_DOMAIN", "")
 	t.Setenv("JWT_SECRET", validJWTSecret())
 	t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
@@ -202,6 +205,7 @@ func validSealKey() string {
 // Signup codes and reset links are sealed, so no environment may start without the key.
 func TestConfigRequiresSealKey(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("REDIS_URL", "redis://x:6379/0")
 	t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
 	t.Setenv("JWT_SECRET", validJWTSecret())
 	t.Setenv("NOTIFICATION_SEAL_KEY", "")
@@ -216,6 +220,7 @@ func TestConfigRequiresSealKey(t *testing.T) {
 // Email links are built from configuration, and only development may send a cleartext one.
 func TestPublicWebLinkConfig(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("REDIS_URL", "redis://x:6379/0")
 	t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
 	t.Setenv("JWT_SECRET", validJWTSecret())
 	t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
@@ -240,5 +245,24 @@ func TestPublicWebLinkConfig(t *testing.T) {
 	t.Setenv("PUBLIC_WEB_PORT", "not-a-port")
 	if _, err := Load(); err == nil {
 		t.Error("an unparsable PUBLIC_WEB_PORT was accepted, want an error")
+	}
+}
+
+// Throttles live in Redis, so only development may fall back to the local container.
+func TestConfigRequiresRedisOutsideDevelopment(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+	t.Setenv("JWT_SECRET", validJWTSecret())
+	t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
+	t.Setenv("REDIS_URL", "")
+	t.Setenv("APP_ENV", "development")
+	if cfg, err := Load(); err != nil || cfg.RedisURL != "redis://localhost:6380/0" {
+		t.Errorf("development default = %q, %v; want the compose port", cfg.RedisURL, err)
+	}
+	for _, env := range []string{"staging", "production"} {
+		t.Setenv("APP_ENV", env)
+		if _, err := Load(); err == nil {
+			t.Errorf("%s without REDIS_URL: err = nil, want an error", env)
+		}
 	}
 }

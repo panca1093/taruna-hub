@@ -352,13 +352,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Start a student signup and email a verification code
-         * @description D01: email is required and the phone is optional; both must be free in this tenant. Nothing
-         *     becomes an account yet: the signup is kept pending and a 6-digit code is emailed. It works
-         *     for 10 minutes and for at most 5 guesses. Signing up again with the same email replaces the
-         *     pending details and the code. At most 5 codes go to one email per hour across this route and
-         *     `/register/resend`.
+         * Create a student account and open its session
+         * @description D01: email is required and the phone is optional; both must be free in this tenant, and an
+         *     account counts as holding them from the moment it is created, verified or not. The account
+         *     exists at once and the answer is exactly a login's: a token body and the refresh cookie.
          *
+         *     A 6-digit code is emailed to verify the address. Verification never blocks a login; the web
+         *     app reads `user.email_verified` and shows an alert until it is true. Someone who signed up
+         *     with an address that is not theirs is undone by the real owner's password reset, which also
+         *     verifies the email.
+         *
+         *     At most 5 codes go to one email per hour across this route and `/me/email/resend`.
          *     Registration exists only on tenant hosts; the platform host answers `404`.
          */
         post: {
@@ -374,13 +378,15 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description The code is on its way */
-                202: {
+                /** @description The account exists and a session is open */
+                201: {
                     headers: {
+                        /** @description The `refresh_token` cookie, as on login. */
+                        "Set-Cookie"?: string;
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["CodeSent"];
+                        "application/json": components["schemas"]["TokenResponse"];
                     };
                 };
                 404: components["responses"]["NotFound"];
@@ -403,111 +409,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/register/resend": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Email a fresh verification code
-         * @description Replaces the pending code and restores its 5 guesses. An email with no pending signup gets the
-         *     same `202` and no email. Within 60 seconds of the last code this answers `429`.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["EmailRequest"];
-                };
-            };
-            responses: {
-                /** @description A code is on its way if a signup is pending */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CodeSent"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-                422: components["responses"]["ValidationFailed"];
-                429: components["responses"]["TooManyRequests"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/register/verify": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Verify the code, create the student account and open its session
-         * @description A wrong, expired, used-up or unknown code all answer the same `422` with `fields.code`. A
-         *     wrong guess is counted even under concurrent requests. On success the answer is exactly a
-         *     login's: a token body and the refresh cookie.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["VerifyRequest"];
-                };
-            };
-            responses: {
-                /** @description The account exists and a session is open */
-                200: {
-                    headers: {
-                        /** @description The `refresh_token` cookie, as on login. */
-                        "Set-Cookie"?: string;
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["TokenResponse"];
-                    };
-                };
-                404: components["responses"]["NotFound"];
-                /** @description Another account took the email or phone while this signup was pending */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                422: components["responses"]["ValidationFailed"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/password/forgot": {
         parameters: {
             query?: never;
@@ -521,8 +422,9 @@ export interface paths {
          * Email a password reset link
          * @description FR-AUTH-03. Answers `202` with no body for every well-formed email, whether or not an account
          *     on this host has it, so the answer reveals nothing. A matching active account gets a link to
-         *     `/reset-password#token=…` on this host's web app; it works once, for 30 minutes, and asking
-         *     again retires the previous link. The limit is 3 requests per email per 15 minutes.
+         *     `/reset-password#token=…` on this host's web app. The token is signed and bound to the
+         *     current password: it works for 30 minutes, and the first password change — through any link —
+         *     ends every outstanding link. The limit is 3 requests per email per 15 minutes.
          */
         post: {
             parameters: {
@@ -574,9 +476,9 @@ export interface paths {
         put?: never;
         /**
          * Set a new password with a reset token
-         * @description Spends the token, sets the password and revokes every session of the account. An unknown,
-         *     used, expired or other-host token answers `422` with `fields.token`. The user logs in again
-         *     afterwards; no session is opened here.
+         * @description Sets the password, revokes every session of the account and marks its email verified, since
+         *     following the emailed link proves the inbox. A forged, used, expired or other-host token
+         *     answers `422` with `fields.token`. The user logs in again afterwards; no session is opened here.
          */
         post: {
             parameters: {
@@ -608,6 +510,100 @@ export interface paths {
                     };
                 };
                 422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify the signed-in user's email with the emailed code
+         * @description A code works for 10 minutes and 5 guesses; wrong guesses are counted even under concurrent
+         *     requests. A wrong, expired, used-up or missing code answers `422` with `fields.code`.
+         *     Verifying an already verified email is a `204` too.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CodeRequest"];
+                };
+            };
+            responses: {
+                /** @description The email is verified */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email the signed-in user a fresh verification code
+         * @description Replaces the outstanding code and restores its 5 guesses. Within 60 seconds of the last
+         *     code, or past 5 codes in an hour, this answers `429`. An already verified email answers `409`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A code is on its way */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                /** @description The email is already verified, or the account has no email */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                429: components["responses"]["TooManyRequests"];
             };
         };
         delete?: never;
@@ -719,9 +715,7 @@ export interface components {
             /** @example budi@example.com */
             email: string;
         };
-        VerifyRequest: {
-            /** @example budi@example.com */
-            email: string;
+        CodeRequest: {
             /** @example 042917 */
             code: string;
         };
@@ -733,20 +727,6 @@ export interface components {
              * @description 8 characters to 72 bytes.
              */
             password: string;
-        };
-        CodeSent: {
-            /** @description The normalized email the code went to. */
-            email: string;
-            /**
-             * @description Seconds the code stays valid.
-             * @example 600
-             */
-            expires_in: number;
-            /**
-             * @description Seconds before another code may be requested.
-             * @example 60
-             */
-            resend_after: number;
         };
         User: {
             /** Format: uuid */
@@ -761,6 +741,11 @@ export interface components {
              * @enum {string}
              */
             role: "student" | "operator" | "admin" | "platform_admin";
+            /**
+             * @description False until the owner enters the emailed code or completes a password reset. D01: it
+             *     never blocks anything; the web app shows an alert while it is false.
+             */
+            email_verified: boolean;
         };
         TokenResponse: {
             /** @description HS256 JWT for the `Authorization` header. Keep it in memory, not in storage. */

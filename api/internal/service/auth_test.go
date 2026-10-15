@@ -95,7 +95,7 @@ func newAuthHarness(t *testing.T, opts ...AuthOption) *authHarness {
 	h.auth = NewAuthService(
 		repository.NewUserRepository(pool),
 		repository.NewSessionRepository(pool),
-		repository.NewThrottleRepository(pool),
+		repository.NewThrottleRepository(testRedis(t)),
 		[]byte(authSecretText),
 		slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		all...,

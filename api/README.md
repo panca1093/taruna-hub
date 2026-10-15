@@ -193,39 +193,49 @@ recovery normalize the input the same way, so every spelling reaches the same ac
 
 | Route | Answer |
 |---|---|
-| `POST /auth/register` | `202` and a 6-digit code by email; nothing is an account yet |
-| `POST /auth/register/resend` | `202` and a fresh code; the same `202` and no email for an unknown address |
-| `POST /auth/register/verify` | `200`, a token body and the cookie — the account exists from here |
+| `POST /auth/register` | `201`, a token body and the cookie — the account exists and is signed in; a code is emailed |
+| `POST /me/email/verify` | `204` once the signed-in user enters the emailed code |
+| `POST /me/email/resend` | `202` and a fresh code; `409` if already verified |
 | `POST /auth/password/forgot` | `202` and no body for every well-formed email |
-| `POST /auth/password/reset` | `204`; the password changes and every session of the account is revoked |
+| `POST /auth/password/reset` | `204`; the password changes, every session is revoked and the email counts as verified |
 
 D01 is settled: the code goes by email over the P02 SMTP transport, email is required at signup and a
 phone is optional, so recovery is always an email link. Registration exists only on tenant hosts.
 
-A pending signup lives in `auth_registrations`, not in `users`, so an unverified address never
-blocks anyone: signing up again replaces it. The code is stored as an HMAC keyed from `JWT_SECRET`,
-works for 10 minutes and 5 guesses, and the guesses are counted under a row lock, so a burst of
-concurrent requests buys no extra tries. Two racing verifications of the right code create one
-account.
+**Verification never blocks login.** Signup creates the `users` row straight away and signs it in;
+`email_verified_at` stays empty until the code is entered, and `user.email_verified` on every token
+body and `/me` lets the web app show an alert. Because the account is real from the start, its email
+and phone are taken from the start too. If someone signs up with an address that is not theirs, the
+real owner uses "forgot password": the link reaches the real inbox, and completing it sets their
+password, ends the squatter's sessions and verifies the email.
+
+The code lives on the account row as an HMAC keyed from `JWT_SECRET` (`email_code_hash`,
+`email_code_expires_at`, `email_code_attempts`), works for 10 minutes and 5 guesses, and the guesses
+are counted under a row lock, so a burst of concurrent requests buys no extra tries.
 
 A reset link is `<scheme>://<slug>.<BASE_DOMAIN>[:port]/reset-password#token=…`, built from
 configuration only — never from a request header, or a forged `Origin` could put an attacker's host
 into a genuine email. The token sits in the fragment so it never reaches a server log or a `Referer`.
-It is single use (one conditional `UPDATE`), lasts 30 minutes, and a newer request retires older links.
+It is stateless: the user id and expiry, signed with an HMAC over the **current password hash**. No
+table stores it. Once the password changes, through this link or any other, every outstanding link
+stops verifying; the change itself is one conditional `UPDATE`, so two racing submits cannot both win.
+Links last 30 minutes, and asking twice leaves both valid until one of them is used.
 
 Codes and links travel only as sealed notification params with an expiry equal to their own, so a
 message that would arrive dead is expired instead of sent.
 
 ### Throttles
 
-Fixed-window counters in `auth_throttles`, keyed by a SHA-256 of rule, host scope and normalized
-identifier. Attempts are counted before any password check in one atomic statement, so concurrent
-requests cannot exceed the budget. A refusal is `429 too_many_requests` with `Retry-After`.
+Fixed-window counters in Redis (`REDIS_URL`), keyed by a SHA-256 of rule, host scope and normalized
+identifier plus the window number. The window comes from the app clock, so tests move it. Attempts are
+counted before any password check with one atomic `INCR`, so concurrent requests cannot exceed the
+budget. A refusal is `429 too_many_requests` with `Retry-After`. Losing Redis only resets the counters;
+while it is unreachable, login, signup and forgot-password answer `500` rather than run unthrottled.
 
 | Rule | Budget |
 |---|---|
 | Login, per identifier and host | 10 attempts / 15 minutes; a success or a password reset clears it |
-| Signup codes, per email and tenant | 5 / hour across register and resend, and 60 seconds between resends |
+| Email codes, per email and tenant | 5 / hour across register and resend, and 60 seconds between resends |
 | Forgot password, per email and host | 3 / 15 minutes, counted for unknown emails too |
 
 A login lockout keyed on the identifier lets someone who knows an address lock its owner out for 15
@@ -234,15 +244,15 @@ minutes; the reset link still works and clears it.
 ### Not here yet
 
 No capability matrix — the guard is by role only (D02) — no absolute session cap, nothing per-IP
-(that needs a trusted-proxy client-IP decision), and no sweep of expired pending signups, used reset
-tokens or stale throttle rows: they are small and harmless, and a maintenance job can arrive with the
-next worker change. `GET /api/v1/me` carries identity only: balance and the ledger are not part of it.
+(that needs a trusted-proxy client-IP decision), and no policy yet on what an unverified email may
+not do (for example checkout); verification is only a flag today. `GET /api/v1/me` carries identity only: balance and the ledger are not part of it.
 
 ### Config
 
 | Variable | Meaning |
 |---|---|
 | `JWT_SECRET` | Base64 of at least 32 bytes; **required in every environment**. `openssl rand -base64 32` |
+| `REDIS_URL` | Auth throttles; required outside development, which defaults to `redis://localhost:6380/0` |
 | `NOTIFICATION_SEAL_KEY` | Base64 of exactly 32 bytes; **required in every environment** (see Notifications) |
 | `PUBLIC_WEB_SCHEME` | Scheme of links in emails; default `https`, and `http` is allowed only in development (its default there) |
 | `PUBLIC_WEB_PORT` | Port of links in emails; default `3000` in development, none elsewhere |

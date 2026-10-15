@@ -105,6 +105,8 @@ type userResponse struct {
 	Email *string    `json:"email"`
 	Phone *string    `json:"phone"`
 	Role  model.Role `json:"role"`
+	// EmailVerified drives the web app's "verify your email" alert; it never blocks anything.
+	EmailVerified bool `json:"email_verified"`
 }
 
 type tokenResponse struct {
@@ -209,7 +211,10 @@ func bindStrict(c echo.Context, dst any) error {
 }
 
 func newUserResponse(p model.Principal) userResponse {
-	return userResponse{ID: p.UserID, Name: p.Name, Email: p.Email, Phone: p.Phone, Role: p.Role}
+	return userResponse{
+		ID: p.UserID, Name: p.Name, Email: p.Email, Phone: p.Phone, Role: p.Role,
+		EmailVerified: p.EmailVerified,
+	}
 }
 
 func newTokenResponse(t service.Tokens) tokenResponse {

@@ -110,7 +110,7 @@ func TestTemplateRegistryIsTheSeamForLaterSlices(t *testing.T) {
 		t.Errorf("re-registering an existing template: err = %v, want ErrTemplateExists", err)
 	}
 	// The P03b templates come built in, so a later slice's template stands in here.
-	for _, name := range []string{TemplateRegistrationCode, TemplatePasswordReset} {
+	for _, name := range []string{TemplateEmailCode, TemplatePasswordReset} {
 		if _, ok := svc.templates[name]; !ok {
 			t.Errorf("built-in template %s is missing", name)
 		}

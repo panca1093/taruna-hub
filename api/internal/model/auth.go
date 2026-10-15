@@ -29,31 +29,14 @@ type Principal struct {
 	Email     *string
 	Phone     *string
 	Role      Role
+	// EmailVerified is a flag for the web app to surface; D01 never lets it block a login.
+	EmailVerified bool
 }
 
-// Registration is a signup waiting for its email code (D01); it becomes a User only once verified.
-type Registration struct {
-	ID           uuid.UUID
-	TenantID     uuid.UUID
-	Email        string
-	Phone        *string
-	Name         string
-	PasswordHash string
-	CodeID       uuid.UUID
-	CodeHash     []byte
-	Attempts     int
-	ExpiresAt    time.Time
-	SentAt       time.Time
-	CreatedAt    time.Time
-}
-
-// PasswordReset is a single-use recovery credential; only the SHA-256 of its token is stored.
-type PasswordReset struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	TenantID   *uuid.UUID
-	TokenHash  []byte
-	ExpiresAt  time.Time
-	ConsumedAt *time.Time
-	CreatedAt  time.Time
+// EmailCode is the outstanding verification code of one account; it never leaves the service.
+type EmailCode struct {
+	Hash       []byte
+	ExpiresAt  *time.Time
+	Attempts   int
+	VerifiedAt *time.Time
 }

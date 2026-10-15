@@ -2,13 +2,16 @@ package repository
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
@@ -112,4 +115,45 @@ func scanSession(row scannable) (model.Session, error) {
 		return model.Session{}, fmt.Errorf("scan session: %w", err)
 	}
 	return s, nil
+}
+
+// ThrottleRepository keeps fixed-window counters in Redis. Losing them only resets a budget early,
+// so they are the kind of derived, disposable state ARCHITECTURE allows Redis to hold.
+type ThrottleRepository struct {
+	rdb *redis.Client
+}
+
+func NewThrottleRepository(rdb *redis.Client) *ThrottleRepository {
+	return &ThrottleRepository{rdb: rdb}
+}
+
+// throttlePrefix namespaces the keys; the rest is a hash, so no identifier is stored in clear.
+const throttlePrefix = "throttle:"
+
+// Hit counts one attempt in the window that contains at, and returns the count and that window's end.
+// The window is derived from at rather than from Redis's clock, so a test clock moves it too.
+func (r *ThrottleRepository) Hit(ctx context.Context, keyHash []byte, window time.Duration, at time.Time) (int, time.Time, error) {
+	slot := at.UnixNano() / int64(window)
+	end := time.Unix(0, (slot+1)*int64(window))
+	key := throttleKey(keyHash, slot)
+	pipe := r.rdb.TxPipeline()
+	incr := pipe.Incr(ctx, key)
+	// Two windows of TTL outlives any skew between the app clock and Redis's.
+	pipe.Expire(ctx, key, 2*window)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return 0, time.Time{}, fmt.Errorf("hit throttle: %w", err)
+	}
+	return int(incr.Val()), end, nil
+}
+
+// Clear forgives the window that contains at.
+func (r *ThrottleRepository) Clear(ctx context.Context, keyHash []byte, window time.Duration, at time.Time) error {
+	if err := r.rdb.Del(ctx, throttleKey(keyHash, at.UnixNano()/int64(window))).Err(); err != nil {
+		return fmt.Errorf("clear throttle: %w", err)
+	}
+	return nil
+}
+
+func throttleKey(keyHash []byte, slot int64) string {
+	return throttlePrefix + hex.EncodeToString(keyHash) + ":" + strconv.FormatInt(slot, 10)
 }

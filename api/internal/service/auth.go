@@ -160,7 +160,7 @@ func (s *AuthService) Login(ctx context.Context, scope HostScope, identifier, pa
 		return Tokens{}, err
 	}
 	// A success forgives earlier typos; a failure to clear only leaves the window to run out.
-	if err := s.throttles.Clear(ctx, throttleKey); err != nil {
+	if err := s.throttles.Clear(ctx, throttleKey, loginThrottle.window, s.now()); err != nil {
 		s.logger.Error("clear login throttle", slog.String("error", err.Error()))
 	}
 	s.logger.Info("login",
@@ -441,6 +441,8 @@ func principalFor(u model.User, sessionID uuid.UUID) model.Principal {
 		Email:     u.Email,
 		Phone:     u.Phone,
 		Role:      u.Role,
+		// The flag is read from the live row on every request, so the web app sees a verification at once.
+		EmailVerified: u.EmailVerifiedAt != nil,
 	}
 }
 
@@ -497,7 +499,7 @@ type throttleRule struct {
 // Budgets sit well above what a person mistypes and well below what a guesser needs.
 var (
 	loginThrottle  = throttleRule{name: "login", limit: 10, window: 15 * time.Minute}
-	codeThrottle   = throttleRule{name: "registration-code", limit: 5, window: time.Hour}
+	codeThrottle   = throttleRule{name: "email-code", limit: 5, window: time.Hour}
 	forgotThrottle = throttleRule{name: "password-forgot", limit: 3, window: 15 * time.Minute}
 )
 
@@ -508,12 +510,12 @@ func throttleKey(rule throttleRule, scope, subject string) []byte {
 }
 
 func hitThrottle(ctx context.Context, repo *repository.ThrottleRepository, rule throttleRule, key []byte, now time.Time) error {
-	hits, start, err := repo.Hit(ctx, key, rule.window, now)
+	hits, end, err := repo.Hit(ctx, key, rule.window, now)
 	if err != nil {
 		return err
 	}
 	if hits > rule.limit {
-		return &ThrottleError{RetryAfter: start.Add(rule.window).Sub(now)}
+		return &ThrottleError{RetryAfter: end.Sub(now)}
 	}
 	return nil
 }
