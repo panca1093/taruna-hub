@@ -35,6 +35,7 @@ func newAuthService(f tenantFixture, opts ...service.AuthOption) *service.AuthSe
 	return service.NewAuthService(
 		repository.NewUserRepository(f.pool),
 		repository.NewSessionRepository(f.pool),
+		repository.NewThrottleRepository(f.redis),
 		authTestSecret,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		opts...,
@@ -110,7 +111,8 @@ func (f authFixture) echo(t *testing.T, opts ...service.AuthOption) *echo.Echo {
 	e.Use(httpx.Recover(logger))
 	e.Use(httpx.RequestLogger(logger))
 	e.Use(httpx.CORS(devOrigins, true))
-	New(logger, NewHealthHandler(f.pool), newAuthService(f.tenantFixture, opts...), AuthOptions{
+	auth := newAuthService(f.tenantFixture, opts...)
+	New(logger, NewHealthHandler(f.pool), auth, newAccountService(t, f.tenantFixture, auth), AuthOptions{
 		SecureCookies: f.secure,
 		AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
 	}).Register(e, ResolveHostScope(f.tenants, false))

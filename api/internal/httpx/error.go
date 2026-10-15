@@ -19,6 +19,7 @@ const (
 	CodeNotFound     Code = "not_found"
 	CodeConflict     Code = "conflict"
 	CodeValidation   Code = "validation_failed"
+	CodeRateLimited  Code = "too_many_requests"
 	CodeInternal     Code = "internal_error"
 )
 
@@ -64,6 +65,10 @@ func Unauthorized(msg string) *Error { return New(http.StatusUnauthorized, CodeU
 func Forbidden(msg string) *Error    { return New(http.StatusForbidden, CodeForbidden, msg) }
 func NotFound(msg string) *Error     { return New(http.StatusNotFound, CodeNotFound, msg) }
 func Conflict(msg string) *Error     { return New(http.StatusConflict, CodeConflict, msg) }
+
+func TooManyRequests(msg string) *Error {
+	return New(http.StatusTooManyRequests, CodeRateLimited, msg)
+}
 
 func Validation(msg string, fields map[string]string) *Error {
 	return New(http.StatusUnprocessableEntity, CodeValidation, msg).WithFields(fields)
@@ -112,6 +117,8 @@ func translate(err error) (int, Body) {
 			code = CodeForbidden
 		case http.StatusNotFound:
 			code = CodeNotFound
+		case http.StatusTooManyRequests:
+			code = CodeRateLimited
 		case http.StatusInternalServerError:
 			code = CodeInternal
 		}

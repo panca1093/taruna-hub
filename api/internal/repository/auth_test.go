@@ -10,7 +10,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
+	"os"
+	"sync"
 )
 
 type sessionFixture struct {
@@ -204,3 +207,93 @@ func TestTouchOnlyMovesStaleSessions(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+func testRedis(t *testing.T) *redis.Client {
+	t.Helper()
+	url := os.Getenv("REDIS_URL")
+	if url == "" {
+		t.Skip("REDIS_URL not set")
+	}
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		t.Fatalf("parse REDIS_URL: %v", err)
+	}
+	rdb := redis.NewClient(opts)
+	t.Cleanup(func() { _ = rdb.Close() })
+	return rdb
+}
+
+func TestThrottleCountsConcurrentHitsAndRollsTheWindow(t *testing.T) {
+	repo := NewThrottleRepository(testRedis(t))
+	ctx := context.Background()
+	key := testHash()
+	window := time.Minute
+	start := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+
+	var wg sync.WaitGroup
+	seen := make(chan int, 20)
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			hits, _, err := repo.Hit(ctx, key, window, start)
+			if err != nil {
+				t.Errorf("hit: %v", err)
+				return
+			}
+			seen <- hits
+		}()
+	}
+	wg.Wait()
+	close(seen)
+	counts := map[int]bool{}
+	for hits := range seen {
+		counts[hits] = true
+	}
+	for i := 1; i <= 20; i++ {
+		if !counts[i] {
+			t.Fatalf("no hit saw count %d; concurrent hits were lost or doubled: %v", i, counts)
+		}
+	}
+
+	hits, end, err := repo.Hit(ctx, key, window, start.Add(59*time.Second))
+	if err != nil || hits != 21 || !end.Equal(start.Add(window)) {
+		t.Errorf("inside the window = %d, %s, %v; want 21, %s", hits, end, err, start.Add(window))
+	}
+	next := start.Add(window)
+	if hits, end, _ := repo.Hit(ctx, key, window, next); hits != 1 || !end.Equal(next.Add(window)) {
+		t.Errorf("the next window = %d ending %s, want 1 ending %s", hits, end, next.Add(window))
+	}
+	if err := repo.Clear(ctx, key, window, next); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if hits, _, _ := repo.Hit(ctx, key, window, next); hits != 1 {
+		t.Errorf("after clear = %d, want 1", hits)
+	}
+	if ttl := repo.rdb.TTL(ctx, throttleKey(key, next.UnixNano()/int64(window))).Val(); ttl <= 0 || ttl > 2*window {
+		t.Errorf("key TTL = %s, want it bounded by two windows", ttl)
+	}
+}
+
+func TestRotateIsConditionalAndKeepsThePreviousHash(t *testing.T) {
+	f := newSessionFixture(t)
+	ctx := context.Background()
+	at := time.Now().UTC().Truncate(time.Microsecond)
+	s := f.newSession(t, at)
+	next, stale := testHash(), testHash()
+
+	if ok, err := f.srepo.Rotate(ctx, s.ID, stale, testHash(), at); err != nil || ok {
+		t.Errorf("rotate from a token that is not current = %v, %v; want false, nil", ok, err)
+	}
+	if ok, err := f.srepo.Rotate(ctx, s.ID, s.RefreshHash, next, at); err != nil || !ok {
+		t.Fatalf("rotate = %v, %v; want true, nil", ok, err)
+	}
+	// The replaced hash still finds the session, so the service can tell a replay from a stranger.
+	byOld, err := f.srepo.FindByRefreshHash(ctx, s.RefreshHash)
+	if err != nil || byOld.ID != s.ID || string(byOld.RefreshHash) != string(next) || byOld.RotatedAt == nil {
+		t.Errorf("lookup by the replaced hash = %+v, %v; want the rotated session", byOld, err)
+	}
+	if ok, _ := f.srepo.Rotate(ctx, s.ID, s.RefreshHash, testHash(), at); ok {
+		t.Error("a second rotation from the replaced hash succeeded")
+	}
+}

@@ -80,7 +80,7 @@ func TestEnqueueRejectsInvalidInput(t *testing.T) {
 		"unknown channel":  func(n *NewNotification) { n.Channel = "telegram" },
 		"empty recipient":  func(n *NewNotification) { n.Recipient = "  " },
 		"empty event key":  func(n *NewNotification) { n.EventKey = "" },
-		"unknown template": func(n *NewNotification) { n.Template = "password-reset" },
+		"unknown template": func(n *NewNotification) { n.Template = "no-such-template" },
 		"past expiry":      func(n *NewNotification) { at := time.Now().Add(-time.Minute); n.ExpiresAt = &at },
 		"overlapping keys": func(n *NewNotification) {
 			n.Params = map[string]string{"otp": "public"}
@@ -109,10 +109,16 @@ func TestTemplateRegistryIsTheSeamForLaterSlices(t *testing.T) {
 	if err := svc.RegisterTemplate("smtp-test", "x", "y"); !errors.Is(err, ErrTemplateExists) {
 		t.Errorf("re-registering an existing template: err = %v, want ErrTemplateExists", err)
 	}
-	if err := svc.RegisterTemplate("password-reset", "Reset {{.Get \"subject\"}}", "token: {{.Get \"token\"}}"); err != nil {
+	// The P03b templates come built in, so a later slice's template stands in here.
+	for _, name := range []string{TemplateEmailCode, TemplatePasswordReset} {
+		if _, ok := svc.templates[name]; !ok {
+			t.Errorf("built-in template %s is missing", name)
+		}
+	}
+	if err := svc.RegisterTemplate("order-created", "Order {{.Get \"subject\"}}", "order: {{.Get \"order\"}}"); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	if _, ok := svc.templates["password-reset"]; !ok {
+	if _, ok := svc.templates["order-created"]; !ok {
 		t.Error("the registered template is not reachable by name")
 	}
 	if err := svc.RegisterTemplate("broken", "{{", "x"); err == nil {

@@ -27,6 +27,9 @@ import (
 // testJWTSecret is what newEcho signs with here; a real deployment gets it from JWT_SECRET.
 var testJWTSecret = []byte("p03a-server-test-secret-0123456789")
 
+// testSealKey is the 32-byte NOTIFICATION_SEAL_KEY the signup and reset emails are sealed with here.
+var testSealKey = []byte("p03b-server-test-seal-key-012345")
+
 const wiringPassword = "wiring-test-password"
 
 // Goes through newEcho so it covers the chain the server really runs in every environment.
@@ -46,8 +49,18 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 	student := seedUser(t, ctx, pool, tenants[0].ID, model.RoleStudent)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
-	// The P02 service has no route yet; the wiring still runs here so the assembly is exercised.
-	if _, err := newNotifications(config.Config{Env: "development", DatabaseURL: dsn}, logger, pool); err != nil {
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		t.Skip("REDIS_URL not set")
+	}
+	rdb, err := infra.NewRedisClient(ctx, redisURL)
+	if err != nil {
+		t.Fatalf("connect redis: %v", err)
+	}
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	notifications, err := newNotifications(config.Config{Env: "development", DatabaseURL: dsn, NotificationSealKey: testSealKey}, logger, pool)
+	if err != nil {
 		t.Fatalf("wire notifications: %v", err)
 	}
 
@@ -71,7 +84,7 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				CORSOrigins: origins,
 				BaseDomain:  baseDomain,
 				JWTSecret:   testJWTSecret,
-			}, logger, pool)
+			}, logger, pool, rdb, notifications)
 
 			for _, tc := range []struct {
 				path string

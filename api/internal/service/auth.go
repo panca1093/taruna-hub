@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -31,6 +32,8 @@ const (
 	IdleTTL        = 3 * time.Hour
 
 	refreshTokenBytes = 32
+	// refreshReuseGrace lets two tabs that refresh at once both succeed; a replay after it is theft.
+	refreshReuseGrace = 30 * time.Second
 	// activityWriteGap bounds how often one session may write last_activity_at.
 	activityWriteGap = time.Minute
 
@@ -46,6 +49,7 @@ const (
 )
 
 // The refresh token is returned only so the transport can set the HttpOnly cookie; no body or log carries it.
+// It is empty when the browser already holds the current one and the cookie must stay as it is.
 type Tokens struct {
 	AccessToken  string
 	RefreshToken string
@@ -54,12 +58,13 @@ type Tokens struct {
 }
 
 type AuthService struct {
-	users    *repository.UserRepository
-	sessions *repository.SessionRepository
-	secret   []byte
-	now      func() time.Time
-	compare  func(hash, password []byte) error
-	logger   *slog.Logger
+	users     *repository.UserRepository
+	sessions  *repository.SessionRepository
+	throttles *repository.ThrottleRepository
+	secret    []byte
+	now       func() time.Time
+	compare   func(hash, password []byte) error
+	logger    *slog.Logger
 
 	accessTTL time.Duration
 	idleTTL   time.Duration
@@ -87,10 +92,11 @@ func WithAuthPasswordCompare(fn func(hash, password []byte) error) AuthOption {
 	return func(s *AuthService) { s.compare = fn }
 }
 
-func NewAuthService(users *repository.UserRepository, sessions *repository.SessionRepository, secret []byte, logger *slog.Logger, opts ...AuthOption) *AuthService {
+func NewAuthService(users *repository.UserRepository, sessions *repository.SessionRepository, throttles *repository.ThrottleRepository, secret []byte, logger *slog.Logger, opts ...AuthOption) *AuthService {
 	s := &AuthService{
 		users:     users,
 		sessions:  sessions,
+		throttles: throttles,
 		secret:    secret,
 		now:       time.Now,
 		compare:   bcrypt.CompareHashAndPassword,
@@ -108,10 +114,26 @@ func NewAuthService(users *repository.UserRepository, sessions *repository.Sessi
 }
 
 // The identifier resolves inside the host's scope only, so one email in two tenants is two people.
+// Attempts are counted before the password is checked, so concurrent guesses cannot slip past the limit.
 func (s *AuthService) Login(ctx context.Context, scope HostScope, identifier, password string) (Tokens, error) {
 	if identifier == "" || password == "" || len(password) > maxPasswordBytes {
 		s.logger.Warn("login failed", slog.String("tenant_id", scopeTenantLabel(scope)))
 		return Tokens{}, ErrInvalidCredentials
+	}
+	identifier, ok := NormalizeIdentifier(identifier)
+	if !ok {
+		// No account can hold this identifier, which must still cost what an unknown account costs.
+		s.dummyCompare(password)
+		s.logger.Warn("login failed", slog.String("tenant_id", scopeTenantLabel(scope)))
+		return Tokens{}, ErrInvalidCredentials
+	}
+	throttleKey := throttleKey(loginThrottle, scopeTenantLabel(scope), identifier)
+	if err := hitThrottle(ctx, s.throttles, loginThrottle, throttleKey, s.now()); err != nil {
+		var limited *ThrottleError
+		if errors.As(err, &limited) {
+			s.logger.Warn("login throttled", slog.String("tenant_id", scopeTenantLabel(scope)))
+		}
+		return Tokens{}, err
 	}
 
 	user, err := s.findInScope(ctx, scope, identifier)
@@ -137,6 +159,10 @@ func (s *AuthService) Login(ctx context.Context, scope HostScope, identifier, pa
 	if err != nil {
 		return Tokens{}, err
 	}
+	// A success forgives earlier typos; a failure to clear only leaves the window to run out.
+	if err := s.throttles.Clear(ctx, throttleKey, loginThrottle.window, s.now()); err != nil {
+		s.logger.Error("clear login throttle", slog.String("error", err.Error()))
+	}
 	s.logger.Info("login",
 		slog.String("user_id", user.ID.String()),
 		slog.String("session_id", tokens.Principal.SessionID.String()),
@@ -146,11 +172,14 @@ func (s *AuthService) Login(ctx context.Context, scope HostScope, identifier, pa
 }
 
 // Refresh deliberately does not move last_activity_at: reloading a page must not extend the idle deadline.
+// Every refresh rotates the token. The replaced token still works for refreshReuseGrace so racing tabs
+// both succeed; replayed after that, it can only be a copy, and the whole session is revoked.
 func (s *AuthService) Refresh(ctx context.Context, scope HostScope, refreshToken string) (Tokens, error) {
 	if refreshToken == "" {
 		return Tokens{}, ErrUnauthenticated
 	}
-	session, err := s.sessions.FindByRefreshHash(ctx, hashRefreshToken(refreshToken))
+	presented := hashRefreshToken(refreshToken)
+	session, err := s.sessions.FindByRefreshHash(ctx, presented)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return Tokens{}, ErrUnauthenticated
@@ -172,7 +201,11 @@ func (s *AuthService) Refresh(ctx context.Context, scope HostScope, refreshToken
 		return Tokens{}, ErrUnauthenticated
 	}
 
-	tokens, err := s.issue(user, session.ID, refreshToken)
+	next, err := s.rotate(ctx, session, presented)
+	if err != nil {
+		return Tokens{}, err
+	}
+	tokens, err := s.issue(user, session.ID, next)
 	if err != nil {
 		return Tokens{}, err
 	}
@@ -244,6 +277,38 @@ func (s *AuthService) Authenticate(ctx context.Context, scope HostScope, rawAcce
 		return model.Principal{}, s.deny(err)
 	}
 	return principalFor(user, session.ID), nil
+}
+
+// rotate returns the token the browser should hold next, or "" when it already holds the current one.
+func (s *AuthService) rotate(ctx context.Context, session model.Session, presented []byte) (string, error) {
+	now := s.now()
+	if !bytes.Equal(session.RefreshHash, presented) {
+		if session.RotatedAt != nil && now.Sub(*session.RotatedAt) <= refreshReuseGrace {
+			return "", nil
+		}
+		if err := s.sessions.Revoke(ctx, session.ID, now); err != nil {
+			return "", s.deny(err)
+		}
+		s.logger.Warn("refresh token reused; session revoked",
+			slog.String("session_id", session.ID.String()),
+			slog.String("tenant_id", tenantLabel(session.TenantID)),
+		)
+		return "", ErrUnauthenticated
+	}
+
+	next, err := newRefreshToken()
+	if err != nil {
+		return "", fmt.Errorf("generate refresh token: %w", err)
+	}
+	rotated, err := s.sessions.Rotate(ctx, session.ID, presented, hashRefreshToken(next), now)
+	if err != nil {
+		return "", s.deny(err)
+	}
+	if !rotated {
+		// A concurrent refresh rotated first and its response carries the new cookie.
+		return "", nil
+	}
+	return next, nil
 }
 
 func (s *AuthService) startSession(ctx context.Context, user model.User) (Tokens, error) {
@@ -376,6 +441,8 @@ func principalFor(u model.User, sessionID uuid.UUID) model.Principal {
 		Email:     u.Email,
 		Phone:     u.Phone,
 		Role:      u.Role,
+		// The flag is read from the live row on every request, so the web app sees a verification at once.
+		EmailVerified: u.EmailVerifiedAt != nil,
 	}
 }
 
@@ -414,4 +481,41 @@ func claimMatchesTenant(claim string, scopeTenantID *uuid.UUID) bool {
 		return false
 	}
 	return scopeTenantID != nil && id == *scopeTenantID
+}
+
+// ThrottleError is a refusal the client may retry once RetryAfter has passed.
+type ThrottleError struct {
+	RetryAfter time.Duration
+}
+
+func (e *ThrottleError) Error() string { return "too many attempts" }
+
+type throttleRule struct {
+	name   string
+	limit  int
+	window time.Duration
+}
+
+// Budgets sit well above what a person mistypes and well below what a guesser needs.
+var (
+	loginThrottle  = throttleRule{name: "login", limit: 10, window: 15 * time.Minute}
+	codeThrottle   = throttleRule{name: "email-code", limit: 5, window: time.Hour}
+	forgotThrottle = throttleRule{name: "password-forgot", limit: 3, window: 15 * time.Minute}
+)
+
+// throttleKey is per rule, scope and subject; hashing keeps the identifier out of the table.
+func throttleKey(rule throttleRule, scope, subject string) []byte {
+	sum := sha256.Sum256([]byte(rule.name + "\x00" + scope + "\x00" + subject))
+	return sum[:]
+}
+
+func hitThrottle(ctx context.Context, repo *repository.ThrottleRepository, rule throttleRule, key []byte, now time.Time) error {
+	hits, end, err := repo.Hit(ctx, key, rule.window, now)
+	if err != nil {
+		return err
+	}
+	if hits > rule.limit {
+		return &ThrottleError{RetryAfter: end.Sub(now)}
+	}
+	return nil
 }

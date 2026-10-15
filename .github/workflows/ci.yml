@@ -31,9 +31,20 @@ jobs:
           --health-interval 3s
           --health-timeout 3s
           --health-retries 20
+      # Holds the auth throttles; the integration tests need it like they need Postgres.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
 
     env:
       DATABASE_URL: postgres://tryout:tryout@localhost:5433/tryout?sslmode=disable
+      REDIS_URL: redis://localhost:6380/0
 
     steps:
       - uses: actions/checkout@v4

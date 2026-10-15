@@ -9,7 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
+	"time"
 )
 
 // Built with pgxpool directly: infra now imports service, so importing infra from this package would cycle.
@@ -35,6 +37,11 @@ func newTenant(t *testing.T, repo *TenantRepository) model.Tenant {
 		t.Fatalf("create tenant: %v", err)
 	}
 	t.Cleanup(func() {
+		for _, table := range []string{"notification_logs"} {
+			if _, err := repo.db.Exec(ctx, `DELETE FROM `+table+` WHERE tenant_id = $1`, tenant.ID); err != nil {
+				t.Errorf("cleanup %s of tenant %s: %v", table, tenant.ID, err)
+			}
+		}
 		if _, err := repo.db.Exec(ctx, `DELETE FROM auth_sessions WHERE user_id IN (SELECT id FROM users WHERE tenant_id = $1)`, tenant.ID); err != nil {
 			t.Errorf("cleanup sessions of tenant %s: %v", tenant.ID, err)
 		}
@@ -185,5 +192,126 @@ func TestUserIsActiveRoundTrips(t *testing.T) {
 	}
 	if got, err := users.FindByID(ctx, a.ID, u.ID); err != nil || got.IsActive {
 		t.Errorf("after deactivation FindByID = active %v, err %v; want false, nil", got.IsActive, err)
+	}
+}
+
+func inTx(t *testing.T, pool *pgxpool.Pool, fn func(pgx.Tx) error) error {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func TestCreateUserReportsWhichIdentifierIsTaken(t *testing.T) {
+	pool := testPool(t)
+	tenant := newTenant(t, NewTenantRepository(pool))
+	users := NewUserRepository(pool)
+	ctx := context.Background()
+	email, phone := "dup-"+uuid.NewString()[:8]+"@example.com", "+6281255501234"
+	if _, err := users.Create(ctx, model.User{TenantID: &tenant.ID, Name: "A", Email: &email, Phone: &phone, PasswordHash: "x", Role: model.RoleStudent}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	other, otherPhone := "other-"+uuid.NewString()[:8]+"@example.com", "+6281299990000"
+	if _, err := users.Create(ctx, model.User{TenantID: &tenant.ID, Name: "B", Email: &email, Phone: &otherPhone, PasswordHash: "x", Role: model.RoleStudent}); !errors.Is(err, ErrDuplicateEmail) || !errors.Is(err, ErrDuplicate) {
+		t.Errorf("same email: err = %v, want ErrDuplicateEmail", err)
+	}
+	if _, err := users.Create(ctx, model.User{TenantID: &tenant.ID, Name: "C", Email: &other, Phone: &phone, PasswordHash: "x", Role: model.RoleStudent}); !errors.Is(err, ErrDuplicatePhone) {
+		t.Errorf("same phone: err = %v, want ErrDuplicatePhone", err)
+	}
+	upper, local := "Upper@Example.com", "081234567890"
+	if _, err := users.Create(ctx, model.User{TenantID: &tenant.ID, Name: "D", Email: &upper, PasswordHash: "x", Role: model.RoleStudent}); err == nil {
+		t.Error("a non-canonical email was stored, want the check constraint to refuse it")
+	}
+	if _, err := users.Create(ctx, model.User{TenantID: &tenant.ID, Name: "E", Email: &other, Phone: &local, PasswordHash: "x", Role: model.RoleStudent}); err == nil {
+		t.Error("a non-E.164 phone was stored, want the check constraint to refuse it")
+	}
+}
+
+func TestEmailCodeLifecycleIsScoped(t *testing.T) {
+	pool := testPool(t)
+	tenants, users := NewTenantRepository(pool), NewUserRepository(pool)
+	a, b := newTenant(t, tenants), newTenant(t, tenants)
+	user := newUser(t, users, &a.ID, model.RoleStudent, "code-"+uuid.NewString()[:8]+"@example.com")
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	hash := testHash()
+
+	if user.EmailVerifiedAt != nil {
+		t.Fatal("a new account is verified before any code")
+	}
+	if err := inTx(t, pool, func(tx pgx.Tx) error { return users.SetEmailCodeTx(ctx, tx, &b.ID, user.ID, hash, now) }); !errors.Is(err, ErrNotFound) {
+		t.Errorf("setting a code through another tenant: err = %v, want ErrNotFound", err)
+	}
+	if err := inTx(t, pool, func(tx pgx.Tx) error {
+		if err := users.SetEmailCodeTx(ctx, tx, &a.ID, user.ID, hash, now.Add(time.Minute)); err != nil {
+			return err
+		}
+		return users.CountEmailCodeAttemptTx(ctx, tx, &a.ID, user.ID)
+	}); err != nil {
+		t.Fatalf("set and count: %v", err)
+	}
+	var code model.EmailCode
+	if err := inTx(t, pool, func(tx pgx.Tx) error {
+		var err error
+		code, err = users.FindEmailCodeForUpdateTx(ctx, tx, &a.ID, user.ID)
+		return err
+	}); err != nil {
+		t.Fatalf("read code: %v", err)
+	}
+	if string(code.Hash) != string(hash) || code.Attempts != 1 || code.ExpiresAt == nil || code.VerifiedAt != nil {
+		t.Errorf("code = %+v, want the hash, one attempt and an expiry", code)
+	}
+	if err := inTx(t, pool, func(tx pgx.Tx) error { return users.MarkEmailVerifiedTx(ctx, tx, &a.ID, user.ID, now) }); err != nil {
+		t.Fatalf("mark verified: %v", err)
+	}
+	got, err := users.FindByID(ctx, a.ID, user.ID)
+	if err != nil || got.EmailVerifiedAt == nil || !got.EmailVerifiedAt.Equal(now) {
+		t.Errorf("verified at = %v, %v; want %s", got.EmailVerifiedAt, err, now)
+	}
+}
+
+// The swap only succeeds against the hash the caller saw, which is what makes a reset link single use.
+func TestReplacePasswordIsConditional(t *testing.T) {
+	pool := testPool(t)
+	tenant := newTenant(t, NewTenantRepository(pool))
+	users := NewUserRepository(pool)
+	user := newUser(t, users, &tenant.ID, model.RoleStudent, "pw-"+uuid.NewString()[:8]+"@example.com")
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+
+	replace := func(scope *uuid.UUID, current, next string) bool {
+		t.Helper()
+		var ok bool
+		if err := inTx(t, pool, func(tx pgx.Tx) error {
+			var err error
+			ok, err = users.ReplacePasswordTx(ctx, tx, scope, user.ID, current, next, now)
+			return err
+		}); err != nil {
+			t.Fatalf("replace: %v", err)
+		}
+		return ok
+	}
+	if replace(nil, user.PasswordHash, "y") {
+		t.Error("the platform scope replaced a tenant account's password")
+	}
+	if replace(&tenant.ID, "not-the-hash", "y") {
+		t.Error("a stale hash replaced the password")
+	}
+	if !replace(&tenant.ID, user.PasswordHash, "y") {
+		t.Fatal("the current hash did not replace the password")
+	}
+	if replace(&tenant.ID, user.PasswordHash, "z") {
+		t.Error("the same old hash replaced the password twice")
+	}
+	got, _ := users.FindByID(ctx, tenant.ID, user.ID)
+	if got.PasswordHash != "y" || got.EmailVerifiedAt == nil {
+		t.Errorf("after reset: hash = %q, verified = %v; want y and verified", got.PasswordHash, got.EmailVerifiedAt)
 	}
 }

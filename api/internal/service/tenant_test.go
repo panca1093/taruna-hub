@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
@@ -65,6 +66,22 @@ func TestValidSlug(t *testing.T) {
 	}
 }
 
+// testRedis is the throttle store; like the database, it is required and never mocked.
+func testRedis(t *testing.T) *redis.Client {
+	t.Helper()
+	url := os.Getenv("REDIS_URL")
+	if url == "" {
+		t.Skip("REDIS_URL not set")
+	}
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		t.Fatalf("parse REDIS_URL: %v", err)
+	}
+	rdb := redis.NewClient(opts)
+	t.Cleanup(func() { _ = rdb.Close() })
+	return rdb
+}
+
 func testTenantService(t *testing.T) (*TenantService, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("DATABASE_URL")
@@ -89,7 +106,12 @@ func provisionTenant(t *testing.T, svc *TenantService, pool *pgxpool.Pool) model
 	}
 	t.Cleanup(func() {
 		ctx := context.Background()
-		// Sessions reference users, so they go first or the user delete would fail.
+		// Rows that reference the tenant or its users go first, or the deletes below would fail.
+		for _, table := range []string{"notification_logs"} {
+			if _, err := pool.Exec(ctx, `DELETE FROM `+table+` WHERE tenant_id = $1`, tenant.ID); err != nil {
+				t.Errorf("cleanup %s of tenant %s: %v", table, tenant.ID, err)
+			}
+		}
 		if _, err := pool.Exec(ctx, `DELETE FROM auth_sessions WHERE tenant_id = $1`, tenant.ID); err != nil {
 			t.Errorf("cleanup sessions of tenant %s: %v", tenant.ID, err)
 		}

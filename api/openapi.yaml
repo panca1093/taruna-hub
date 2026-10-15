@@ -7,10 +7,14 @@ info:
     is generated from this file, so a breaking change here surfaces as a compile error in
     the frontend rather than a runtime surprise.
 
-    Scope today is slices P00–P03a. Later slices extend this file; they do not fork it.
+    Scope today is slices P00–P03b. Later slices extend this file; they do not fork it.
     Every `/api/v1/*` route resolves its tenant from the request host first, and the access token
     has to agree with that host, so a token minted for one tenant is refused everywhere else.
-    P03a ships the API and the generated types only — the login UI is P03c.
+    P03a and P03b ship the API and the generated types only — the auth screens are P03c.
+
+    Emails and phones are stored in one canonical form: a trimmed, lowercased email and an E.164
+    phone (`0812…`, `62812…` and `+62 812-…` all become `+62812…`). Every route that takes an
+    identifier normalizes it first, so any of those spellings reaches the same account.
 
 servers:
   - url: http://localhost:8081
@@ -114,6 +118,10 @@ paths:
         that does. A password longer than 72 bytes is refused the same way, because bcrypt ignores
         everything past that.
 
+        Attempts are counted per identifier and host before the password is checked: the 11th
+        attempt within 15 minutes answers `429` with `Retry-After`, even with the right password.
+        A successful login, or a password reset, clears the count.
+
         On success the refresh token is set as an `HttpOnly` cookie scoped to `/api/v1/auth` and is
         never part of the body. This route needs no `Origin`: it is authenticated by credentials.
       requestBody:
@@ -146,6 +154,8 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/auth/refresh:
     post:
@@ -157,12 +167,23 @@ paths:
         hours. Refreshing is not activity, so it does not move that deadline — only an authenticated
         request on `/me` (or any later protected route) does.
 
-        The refresh token never appears in the body, and this slice does not rotate it. A request is
-        refused with `403` unless its `Origin` is both accepted by the CORS policy and on the host
-        this request resolved to. A token that can never work again also clears the cookie.
+        Every refresh rotates the token and sets the new one in the cookie. The replaced token keeps
+        working for 30 seconds, so two tabs that refresh at once both succeed; such a response sets
+        no cookie, because the winning refresh already set it. Presented after those 30 seconds, a
+        replaced token can only be a copy, so the whole session is revoked and the current token
+        stops working too.
+
+        The refresh token never appears in the body. A request is refused with `403` unless its
+        `Origin` is both accepted by the CORS policy and on the host this request resolved to. A
+        token that can never work again also clears the cookie.
       responses:
         "200":
           description: A fresh access token for the same session
+          headers:
+            Set-Cookie:
+              description: The rotated `refresh_token`; absent on a refresh inside the 30-second grace.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -205,6 +226,156 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Create a student account and open its session
+      description: |
+        D01: email is required and the phone is optional; both must be free in this tenant, and an
+        account counts as holding them from the moment it is created, verified or not. The account
+        exists at once and the answer is exactly a login's: a token body and the refresh cookie.
+
+        A 6-digit code is emailed to verify the address. Verification never blocks a login; the web
+        app reads `user.email_verified` and shows an alert until it is true. Someone who signed up
+        with an address that is not theirs is undone by the real owner's password reset, which also
+        verifies the email.
+
+        At most 5 codes go to one email per hour across this route and `/me/email/resend`.
+        Registration exists only on tenant hosts; the platform host answers `404`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: The account exists and a session is open
+          headers:
+            Set-Cookie:
+              description: The `refresh_token` cookie, as on login.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: An account already holds the email (`fields.email`) or the phone (`fields.phone`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/auth/password/forgot:
+    post:
+      tags: [auth]
+      summary: Email a password reset link
+      description: |
+        FR-AUTH-03. Answers `202` with no body for every well-formed email, whether or not an account
+        on this host has it, so the answer reveals nothing. A matching active account gets a link to
+        `/reset-password#token=…` on this host's web app. The token is signed and bound to the
+        current password: it works for 30 minutes, and the first password change — through any link —
+        ends every outstanding link. The limit is 3 requests per email per 15 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailRequest"
+      responses:
+        "202":
+          description: A link is on its way if the email belongs to an account here
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/auth/password/reset:
+    post:
+      tags: [auth]
+      summary: Set a new password with a reset token
+      description: |
+        Sets the password, revokes every session of the account and marks its email verified, since
+        following the emailed link proves the inbox. A forged, used, expired or other-host token
+        answers `422` with `fields.token`. The user logs in again afterwards; no session is opened here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "204":
+          description: The password is changed and every session is ended
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/me/email/verify:
+    post:
+      tags: [auth]
+      summary: Verify the signed-in user's email with the emailed code
+      description: |
+        A code works for 10 minutes and 5 guesses; wrong guesses are counted even under concurrent
+        requests. A wrong, expired, used-up or missing code answers `422` with `fields.code`.
+        Verifying an already verified email is a `204` too.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CodeRequest"
+      responses:
+        "204":
+          description: The email is verified
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/me/email/resend:
+    post:
+      tags: [auth]
+      summary: Email the signed-in user a fresh verification code
+      description: |
+        Replaces the outstanding code and restores its 5 guesses. Within 60 seconds of the last
+        code, or past 5 codes in an hour, this answers `429`. An already verified email answers `409`.
+      security:
+        - bearerAuth: []
+      responses:
+        "202":
+          description: A code is on its way
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: The email is already verified, or the account has no email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/me:
     get:
@@ -272,10 +443,66 @@ components:
           format: password
           description: At most 72 bytes; anything longer is refused like any other wrong password.
 
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: Budi Santoso
+        email:
+          type: string
+          description: Required (D01). Stored trimmed and lowercased.
+          example: budi@example.com
+        phone:
+          type: string
+          description: Optional. Indonesian local or international form; stored as E.164.
+          example: 0812-3456-7890
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: 8 characters to 72 bytes.
+
+    EmailRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          example: budi@example.com
+
+    CodeRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          example: "042917"
+
+    ResetPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          description: The value after `#token=` in the emailed link.
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: 8 characters to 72 bytes.
+
     User:
       type: object
       additionalProperties: false
-      required: [id, name, email, phone, role]
+      required: [id, name, email, phone, role, email_verified]
       properties:
         id:
           type: string
@@ -295,6 +522,11 @@ components:
           enum: [student, operator, admin, platform_admin]
           description: |
             `platform_admin` only ever exists on the platform host; a tenant host sees its own roles.
+        email_verified:
+          type: boolean
+          description: |
+            False until the owner enters the emailed code or completes a password reset. D01: it
+            never blocks anything; the web app shows an alert while it is false.
 
     TokenResponse:
       type: object
@@ -332,6 +564,7 @@ components:
                 - not_found
                 - conflict
                 - validation_failed
+                - too_many_requests
                 - internal_error
             message:
               type: string
@@ -366,6 +599,17 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     NotFound:
       description: The request host selects no active tenant, or the resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    TooManyRequests:
+      description: Too many attempts; retry after the given number of seconds
+      headers:
+        Retry-After:
+          description: Whole seconds until the current window ends.
+          schema:
+            type: integer
       content:
         application/json:
           schema:

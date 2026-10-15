@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/config"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/handler"
@@ -45,12 +46,18 @@ func run() error {
 	}
 	defer pool.Close()
 
-	// The P02 service has no route yet, so it is built here but not threaded through the router.
-	if _, err := newNotifications(cfg, logger, pool); err != nil {
+	rdb, err := infra.NewRedisClient(ctx, cfg.RedisURL)
+	if err != nil {
+		return err
+	}
+	defer rdb.Close()
+
+	notifications, err := newNotifications(cfg, logger, pool)
+	if err != nil {
 		return err
 	}
 
-	e := newEcho(cfg, logger, pool)
+	e := newEcho(cfg, logger, pool, rdb, notifications)
 
 	go func() {
 		logger.Info("server listening", slog.String("port", cfg.Port), slog.String("env", cfg.Env))
@@ -69,15 +76,24 @@ func run() error {
 }
 
 // newEcho is the single assembly point, so tests run the real middleware chain.
-func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool) *echo.Echo {
+func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client, notifications *service.NotificationService) *echo.Echo {
 	tenants := service.NewTenantService(repository.NewTenantRepository(pool), cfg.BaseDomain)
-	auth := service.NewAuthService(
-		repository.NewUserRepository(pool),
-		repository.NewSessionRepository(pool),
-		cfg.JWTSecret,
-		logger,
-	)
-	h := handler.New(logger, handler.NewHealthHandler(pool), auth, handler.AuthOptions{
+	users := repository.NewUserRepository(pool)
+	sessions := repository.NewSessionRepository(pool)
+	throttles := repository.NewThrottleRepository(rdb)
+	auth := service.NewAuthService(users, sessions, throttles, cfg.JWTSecret, logger)
+	account := service.NewAccountService(service.AccountDeps{
+		DB:            pool,
+		Users:         users,
+		Sessions:      sessions,
+		Throttles:     throttles,
+		Notifications: notifications,
+		Auth:          auth,
+		Links:         service.WebLinks{Scheme: cfg.WebScheme, BaseDomain: cfg.BaseDomain, Port: cfg.WebPort},
+		Secret:        cfg.JWTSecret,
+		Logger:        logger,
+	})
+	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, handler.AuthOptions{
 		SecureCookies: !cfg.IsDevelopment(),
 		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
 	})

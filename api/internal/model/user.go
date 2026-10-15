@@ -26,6 +26,8 @@ type User struct {
 	Balance      float64
 	IsActive     bool
 	CreatedAt    time.Time
+	// EmailVerifiedAt is nil until the owner proves the inbox, by a code or a password reset.
+	EmailVerifiedAt *time.Time
 }
 
 type Program struct {

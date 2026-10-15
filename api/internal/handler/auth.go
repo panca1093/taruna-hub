@@ -105,6 +105,8 @@ type userResponse struct {
 	Email *string    `json:"email"`
 	Phone *string    `json:"phone"`
 	Role  model.Role `json:"role"`
+	// EmailVerified drives the web app's "verify your email" alert; it never blocks anything.
+	EmailVerified bool `json:"email_verified"`
 }
 
 type tokenResponse struct {
@@ -141,14 +143,14 @@ func (h *Handler) Login(c echo.Context) error {
 		return httpx.Unauthorized(invalidCredentials)
 	}
 	if err != nil {
-		return err
+		return rateLimited(c, err)
 	}
 
 	h.setRefreshCookie(c, tokens.RefreshToken)
 	return c.JSON(http.StatusOK, newTokenResponse(tokens))
 }
 
-// Refresh issues a new access token from the cookie. The refresh token is never echoed in a body.
+// Refresh issues a new access token and rotates the cookie. The refresh token is never echoed in a body.
 func (h *Handler) Refresh(c echo.Context) error {
 	scope, ok := hostScope(c)
 	if !ok {
@@ -163,6 +165,10 @@ func (h *Handler) Refresh(c echo.Context) error {
 			return httpx.Unauthorized(sessionInvalid)
 		}
 		return err
+	}
+	// Empty means a racing refresh already rotated, and its response carries the cookie to keep.
+	if tokens.RefreshToken != "" {
+		h.setRefreshCookie(c, tokens.RefreshToken)
 	}
 	return c.JSON(http.StatusOK, newTokenResponse(tokens))
 }
@@ -205,7 +211,10 @@ func bindStrict(c echo.Context, dst any) error {
 }
 
 func newUserResponse(p model.Principal) userResponse {
-	return userResponse{ID: p.UserID, Name: p.Name, Email: p.Email, Phone: p.Phone, Role: p.Role}
+	return userResponse{
+		ID: p.UserID, Name: p.Name, Email: p.Email, Phone: p.Phone, Role: p.Role,
+		EmailVerified: p.EmailVerified,
+	}
 }
 
 func newTokenResponse(t service.Tokens) tokenResponse {

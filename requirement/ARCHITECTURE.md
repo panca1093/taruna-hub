@@ -62,7 +62,7 @@ flowchart LR
 | Repositories | Raw SQL, mandatory scope, persistence and locking | Tenant repositories require scope; cross-tenant platform reporting is a separate explicit entry point |
 | Worker | Notifications, imports, PDFs, spreadsheet exports, deadline enforcement/recovery | Jobs carry immutable entity IDs and tenant/actor context; re-check scope before loading objects |
 | PostgreSQL | Authoritative identities, catalog, finance, access, answers, snapshots, results, audit, durable jobs | One database, shared schema with `tenant_id`; `river` is a separate schema, not a separate datastore |
-| Redis | Versioned pre-shuffle content and tenant-local ranking projections | Loss never loses money, answers, jobs, or sessions |
+| Redis | Versioned pre-shuffle content, tenant-local ranking projections, and auth throttle counters (P03b) | Loss never loses money, answers, jobs, or sessions; a lost throttle counter only resets a budget early |
 | Object storage | Validated public branding assets and protected exam/payment/export assets | Object identifiers are authorized through the API; URLs are not proof of permission |
 
 ### Routing and deployment
@@ -397,7 +397,7 @@ These are business/release decisions, not missing architecture sections. Affecte
 
 | ID | Specific uncertainty | Proposed treatment / alternatives | Owner and gate |
 |---|---|---|---|
-| D01 | OTP contradicts PRD; triggers and phone-only delivery/recovery unknown | Retain recorded OTP decision in draft; choose email-required recovery, SMS/WA delivery, or a clearly specified phone recovery process without silently disallowing phone signup | Product owner, before P03 auth contract |
+| D01 | OTP contradicts PRD; triggers and phone-only delivery/recovery unknown | **Resolved 2026-10-15 (owner):** OTP is retained as a 6-digit email code sent over SMTP for now. Email is required at registration and a phone is optional, so password recovery is always an email link. Signup creates the account and signs it in at once; verification is a flag the web app shows as an alert and **never blocks login**. Phone signup is kept as an extra identifier, not removed; this narrows PRD FR-AUTH-01 ("email atau nomor HP") by owner decision | Product owner — resolved for P03b |
 | D02 | Operator student CRUD and package mutation conflict with role table | Choose granular capabilities; until decided, privilege-restricted default rather than granting ambiguous writes | Product owner, before P03/P09/P22 permissions |
 | D03 | Kecermatan formula, N>10 comparison, zero denominators, 0–100 caps/rounding | Whole-half comparison proposed; confirm correction factor and expected outputs including zero/overflow cases | Client, before P18 scoring/UAT |
 | D04 | Global weights in tenant system, score display, rank ties, IRT distinct-student/revision counting | Propose tenant-wide weights frozen per test/session, raw scores plus agreed display, tenant-local version counts; no fitted IRT | Product owner, before P08/P16/P17 contracts |
@@ -409,7 +409,7 @@ These are business/release decisions, not missing architecture sections. Affecte
 | D10 | Access expiry during attempt, offline late answers, transition interval/tab closure | Server deadlines remain authoritative; define effective deadline and closed-tab progression without a hidden grace period | Product owner, before P16/P18 |
 | D11 | Landing download promise versus staff-only PDFs; kecermatan PDF request | Staff-only tryout PDFs remain required; proposed landing-copy correction, student/kecermatan PDF needs scope change | Product owner, before P11/P20 UAT |
 | D12 | Money precision/rounding, negative adjustment policy | Exact numeric ledger and canonical decimal serialization; decide denomination and insufficient-adjustment behavior | Finance/product, before P12/P14 |
-| D13 | JWT/refresh/idle lifetimes and active-exam behavior | Server-enforced idle/revocation with an explicit exam policy; do not auto-logout solely from a local timer | Product/security owner, before P03 |
+| D13 | JWT/refresh/idle lifetimes and active-exam behavior | **Resolved 2026-10-15 (owner):** 15-minute access token, rotating refresh session, 3-hour server-side idle limit. An active exam keeps the session alive: exam requests are authenticated activity, and P16 must not let an idle expiry end an attempt (server deadlines still govern) | Product/security owner — resolved; exam half applies in P16 |
 | D14 | Account delete versus history, data/object/audit retention and restore RPO/RTO | Deactivate accounts with preserved records proposed; approve retention and disaster-recovery objectives | Product/operations, before P22/P23 |
 | D15 | Paused-tenant behavior for payments/top-ups/jobs already in flight | Retain verified payment evidence; decide settlement/grant holds and resumption rules explicitly | Product/finance, before P14/P23 |
 | D16 | WhatsApp/email providers, credential/secrets handling, infra region/resources, launch budget/date | Verify selected providers in staging; estimate date/cost from reviewed slices and capacity evidence | Owner/operations, before P02/P23 release |
