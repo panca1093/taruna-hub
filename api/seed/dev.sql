@@ -108,9 +108,9 @@ JOIN programs p ON p.tenant_id = t.id AND p.code = v.program_code
 JOIN subjects s ON s.program_id = p.id AND s.name = v.subject_name
 ON CONFLICT (subject_id, lower(name)) DO NOTHING;
 
-INSERT INTO users (tenant_id, name, email, phone, password_hash, role, balance)
+INSERT INTO users (tenant_id, name, email, phone, password_hash, role, balance, email_verified_at)
 SELECT t.id, v.name, v.email, v.phone,
-       '$2a$10$gZ0w6wuB5MiODdtWAetlPetM3X84pFE04KlyoP3h0Wsoa43WzhEp.', v.role::user_role, v.balance
+       '$2a$10$gZ0w6wuB5MiODdtWAetlPetM3X84pFE04KlyoP3h0Wsoa43WzhEp.', v.role::user_role, v.balance, now()
 FROM (VALUES
     ('taruna',    'Naila Ramadhani',  'naila@example.com',       '+6281234567890', 'student',  150000),
     ('taruna',    'Siti Aminah',      'admin@tarunaeduka.id',    '+6281200000001', 'admin',    0),
@@ -121,7 +121,7 @@ FROM (VALUES
 JOIN tenants t ON t.slug = v.slug
 ON CONFLICT DO NOTHING;
 
-INSERT INTO users (tenant_id, name, email, phone, password_hash, role)
+INSERT INTO users (tenant_id, name, email, phone, password_hash, role, email_verified_at)
 VALUES (NULL, 'Platform Admin', 'root@tarunaeduka.id', '+6281200000009',
-        '$2a$10$gZ0w6wuB5MiODdtWAetlPetM3X84pFE04KlyoP3h0Wsoa43WzhEp.', 'platform_admin')
+        '$2a$10$gZ0w6wuB5MiODdtWAetlPetM3X84pFE04KlyoP3h0Wsoa43WzhEp.', 'platform_admin', now())
 ON CONFLICT DO NOTHING;
