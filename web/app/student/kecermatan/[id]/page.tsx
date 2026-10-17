@@ -7,7 +7,7 @@ import { Gauge, PlayCircle, ShoppingBag, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import {
   computeResult,
   getAttempts,
@@ -31,7 +31,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 export default function KecermatanOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useSession();
+  const user = useUser();
   const t = useKecermatanOverviewT();
   const test = getKecermatanTest(id);
   const hydrated = useHydrated();

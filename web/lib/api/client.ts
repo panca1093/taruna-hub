@@ -9,6 +9,10 @@ export type Ready = paths["/readyz"]["get"]["responses"][200]["content"]["applic
 export type NotReady = paths["/readyz"]["get"]["responses"][503]["content"]["application/json"];
 /** Success body of `GET /api/v1/tenant` — the tenant the request host resolves to. */
 export type Tenant = components["schemas"]["Tenant"];
+export type ApiUser = components["schemas"]["User"];
+export type TokenResponse = components["schemas"]["TokenResponse"];
+type LoginBody = components["schemas"]["LoginRequest"];
+type RegisterBody = components["schemas"]["RegisterRequest"];
 
 // Production sets NEXT_PUBLIC_API_URL to "" (same-origin); unset in dev, call the API on the page's own host.
 function baseUrl(): string {
@@ -54,6 +58,7 @@ async function request<T>(
 ): Promise<T> {
   const res = await fetch(`${baseUrl()}${path}`, {
     ...init,
+    credentials: "include",
     headers: { Accept: "application/json", ...init?.headers },
   });
 
@@ -67,7 +72,67 @@ async function request<T>(
     );
   }
 
+  if (res.status === 204 || res.status === 202) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+type Json = Record<string, unknown>;
+
+const post = <T>(path: keyof paths, body?: Json, headers?: HeadersInit) =>
+  request<T>(path, {
+    method: "POST",
+    headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...headers },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+// The access token lives in memory only; the refresh cookie is HttpOnly and never readable here.
+let accessToken: string | null = null;
+let sessionLost: (() => void) | null = null;
+let refreshing: Promise<TokenResponse> | null = null;
+
+/** Called once when a protected request can no longer be saved by a refresh. */
+export function onSessionLost(handler: (() => void) | null) {
+  sessionLost = handler;
+}
+
+function refresh(): Promise<TokenResponse> {
+  refreshing ??= post<TokenResponse>("/api/v1/auth/refresh")
+    .then((tokens) => {
+      accessToken = tokens.access_token;
+      return tokens;
+    })
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
+}
+
+function opened(tokens: TokenResponse): TokenResponse {
+  accessToken = tokens.access_token;
+  return tokens;
+}
+
+/** Sends the bearer token; on one 401 it refreshes once and retries once, then gives the session up. */
+async function authed<T>(path: keyof paths, init: RequestInit = {}): Promise<T> {
+  const send = () =>
+    request<T>(path, { ...init, headers: { ...init.headers, Authorization: `Bearer ${accessToken}` } });
+  if (accessToken !== null) {
+    try {
+      return await send();
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.status !== 401) throw err;
+    }
+  }
+  try {
+    await refresh();
+    return await send();
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      accessToken = null;
+      sessionLost?.();
+    }
+    throw err;
+  }
 }
 
 function envelopeError(body: unknown): ErrorEnvelope["error"] | undefined {
@@ -80,6 +145,11 @@ function fallbackError(status: number): ErrorEnvelope["error"] {
   return { code: "internal_error", message: `Request failed (${status})` };
 }
 
+/** The server's own message when it sent one, otherwise the caller's fallback (network, proxy). */
+export function errorText(err: unknown, fallback: string): string {
+  return err instanceof ApiError ? err.message : fallback;
+}
+
 export const api = {
   ready: (): Promise<Ready> =>
     request<Ready>("/readyz", undefined, (status, body) => {
@@ -88,4 +158,26 @@ export const api = {
       return reason ? new ServiceUnavailableError(reason) : undefined;
     }),
   tenant: (): Promise<Tenant> => request<Tenant>("/api/v1/tenant"),
+
+  login: (body: LoginBody) => post<TokenResponse>("/api/v1/auth/login", body).then(opened),
+  register: (body: RegisterBody) => post<TokenResponse>("/api/v1/auth/register", body).then(opened),
+  refresh,
+  logout: async () => {
+    try {
+      await post<void>("/api/v1/auth/logout");
+    } finally {
+      accessToken = null;
+    }
+  },
+  me: () => authed<ApiUser>("/api/v1/me"),
+  forgotPassword: (email: string) => post<void>("/api/v1/auth/password/forgot", { email }),
+  resetPassword: (token: string, password: string) =>
+    post<void>("/api/v1/auth/password/reset", { token, password }),
+  verifyEmail: (code: string) =>
+    authed<void>("/api/v1/me/email/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    }),
+  resendEmailCode: () => authed<void>("/api/v1/me/email/resend", { method: "POST" }),
 };

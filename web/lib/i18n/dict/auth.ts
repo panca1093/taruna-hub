@@ -9,7 +9,7 @@ const id = {
   passwordPlaceholder: "••••••••",
   emailLabel: "Email",
   emailPlaceholder: "nama@email.com",
-  prototypeNote: 'Prototipe — isi apa saja lalu tekan "Masuk" untuk melihat tampilan.',
+  networkError: "Tidak dapat terhubung ke server. Coba lagi.",
   backToLogin: "Kembali ke halaman masuk",
 
   // login (student)
@@ -26,10 +26,8 @@ const id = {
   // login/staff
   staffTitle: "Portal Internal",
   staffSubtitle: "Masuk sebagai operator atau admin untuk mengelola operasional.",
-  roleOperator: "Operator",
-  roleAdmin: "Admin",
   staffEmailOrPhonePlaceholder: "nama@tarunaeduka.id atau 08xxxxxxxxxx",
-  submitStaff: (role: string) => `Masuk sebagai ${role}`,
+  submitStaff: "Masuk ke portal internal",
   studentPrompt: "Siswa?",
   studentLoginLink: "Masuk ke akun siswa",
 
@@ -38,11 +36,9 @@ const id = {
   registerSubtitle: "Registrasi operator dan admin dibuat oleh admin dari dashboard, bukan di sini.",
   fullNameLabel: "Nama lengkap",
   fullNamePlaceholder: "Nama kamu",
-  phoneLabel: "No. HP",
+  phoneLabel: "No. HP (opsional)",
   phonePlaceholder: "08xxxxxxxxxx",
   registerPasswordPlaceholder: "Minimal 8 karakter",
-  programLabel: "Jenjang / program",
-  programPlaceholder: "Pilih jenjang",
   submitRegister: "Buat Akun",
   haveAccount: "Sudah punya akun?",
   loginLink: "Masuk",
@@ -56,6 +52,27 @@ const id = {
   sentDescriptionBefore: "Jika",
   sentDescriptionAfter: "terdaftar, kami sudah mengirim tautan untuk mengatur ulang kata sandi.",
   submitReset: "Kirim Tautan Reset",
+
+  // reset-password
+  resetTitle: "Atur ulang kata sandi",
+  resetSubtitle: "Masukkan kata sandi baru untuk akunmu.",
+  newPasswordLabel: "Kata sandi baru",
+  confirmPasswordLabel: "Ulangi kata sandi",
+  passwordMismatch: "Kata sandi tidak sama.",
+  submitNewPassword: "Simpan Kata Sandi",
+  resetDoneTitle: "Kata sandi diperbarui",
+  resetDoneDescription: "Semua sesi lama sudah diakhiri. Masuk dengan kata sandi barumu.",
+  resetLinkInvalid: "Tautan tidak valid atau sudah kedaluwarsa.",
+  requestNewLink: "Minta tautan baru",
+
+  // email verification banner
+  verifyTitle: "Email belum diverifikasi",
+  verifyDescription: (email: string) => `Masukkan kode 6 digit yang kami kirim ke ${email}.`,
+  codeLabel: "Kode verifikasi",
+  submitCode: "Verifikasi",
+  resendCode: "Kirim ulang kode",
+  verifiedToast: "Email berhasil diverifikasi",
+  resentToast: "Kode baru sudah dikirim",
 };
 
 const en: typeof id = {
@@ -65,7 +82,7 @@ const en: typeof id = {
   passwordPlaceholder: "••••••••",
   emailLabel: "Email",
   emailPlaceholder: "name@email.com",
-  prototypeNote: 'Prototype — fill in anything and press "Log In" to see the preview.',
+  networkError: "Cannot reach the server. Try again.",
   backToLogin: "Back to login page",
 
   // login (student)
@@ -82,10 +99,8 @@ const en: typeof id = {
   // login/staff
   staffTitle: "Internal Portal",
   staffSubtitle: "Log in as an operator or admin to manage operations.",
-  roleOperator: "Operator",
-  roleAdmin: "Admin",
   staffEmailOrPhonePlaceholder: "name@tarunaeduka.id or 08xxxxxxxxxx",
-  submitStaff: (role: string) => `Log in as ${role}`,
+  submitStaff: "Log in to the internal portal",
   studentPrompt: "Student?",
   studentLoginLink: "Log in to student account",
 
@@ -94,11 +109,9 @@ const en: typeof id = {
   registerSubtitle: "Operator and admin registration is created by an admin from the dashboard, not here.",
   fullNameLabel: "Full name",
   fullNamePlaceholder: "Your name",
-  phoneLabel: "Phone number",
+  phoneLabel: "Phone number (optional)",
   phonePlaceholder: "08xxxxxxxxxx",
   registerPasswordPlaceholder: "At least 8 characters",
-  programLabel: "Level / program",
-  programPlaceholder: "Choose a level",
   submitRegister: "Create Account",
   haveAccount: "Already have an account?",
   loginLink: "Log In",
@@ -112,6 +125,27 @@ const en: typeof id = {
   sentDescriptionBefore: "If",
   sentDescriptionAfter: "is registered, we've sent a link to reset your password.",
   submitReset: "Send Reset Link",
+
+  // reset-password
+  resetTitle: "Reset your password",
+  resetSubtitle: "Enter a new password for your account.",
+  newPasswordLabel: "New password",
+  confirmPasswordLabel: "Repeat password",
+  passwordMismatch: "Passwords do not match.",
+  submitNewPassword: "Save Password",
+  resetDoneTitle: "Password updated",
+  resetDoneDescription: "All earlier sessions have ended. Log in with your new password.",
+  resetLinkInvalid: "This link is invalid or has expired.",
+  requestNewLink: "Request a new link",
+
+  // email verification banner
+  verifyTitle: "Email not verified",
+  verifyDescription: (email: string) => `Enter the 6-digit code we sent to ${email}.`,
+  codeLabel: "Verification code",
+  submitCode: "Verify",
+  resendCode: "Resend code",
+  verifiedToast: "Email verified",
+  resentToast: "A new code is on its way",
 };
 
 export function useAuthT() {

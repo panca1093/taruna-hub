@@ -12,7 +12,7 @@ import { LinkButton } from "@/components/ui/link-button";
 import { cn } from "@/lib/cn";
 import { getProduct, getProgram, formatIDR, getBalance } from "@/lib/mock-data";
 import { createOrder } from "@/lib/demo-store";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import { useCheckoutT } from "@/lib/i18n/dict/checkout";
 
 type PaymentMethod = "manual" | "gateway" | "wallet";
@@ -20,7 +20,7 @@ type PaymentMethod = "manual" | "gateway" | "wallet";
 export default function CheckoutPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const product = getProduct(id);
-  const { user } = useSession();
+  const user = useUser();
   const t = useCheckoutT();
   const [method, setMethod] = useState<PaymentMethod>("manual");
   const [orderCode, setOrderCode] = useState<string | null>(null);

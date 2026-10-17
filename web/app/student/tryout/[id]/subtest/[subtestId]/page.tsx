@@ -14,7 +14,7 @@ import { CountdownRing } from "@/components/countdown-ring";
 import { LatexText } from "@/components/latex";
 import { QuestionTypeBadge } from "@/components/status-badge";
 import { LanguageToggle } from "@/components/language-toggle";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import { useCommonT } from "@/lib/i18n/dict/common";
 import { useTryoutSubtestT } from "@/lib/i18n/dict/tryout-subtest";
 import {
@@ -35,7 +35,7 @@ export default function SubtestPage({
 }) {
   const { id, subtestId } = use(params);
   const router = useRouter();
-  const { user } = useSession();
+  const user = useUser();
   const t = useTryoutSubtestT();
   const commonT = useCommonT();
 

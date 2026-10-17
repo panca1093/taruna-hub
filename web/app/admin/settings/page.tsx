@@ -1,35 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card, toast } from "@heroui/react";
-import { CreditCard, Scale, Settings as SettingsIcon } from "lucide-react";
+import { Card } from "@heroui/react";
+import { CreditCard, Scale } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
-import { SwitchInput, TextInput } from "@/components/ui/form";
-import { getSessionSettings, saveSessionSettings } from "@/lib/session-context";
-import { useHydrated } from "@/lib/use-hydrated";
+import { TextInput } from "@/components/ui/form";
 import { useSettingsT } from "@/lib/i18n/dict/settings";
 
 export default function SettingsPage() {
   const t = useSettingsT();
   const [weights, setWeights] = useState({ easy: 1, medium: 2, hard: 3 });
-  const [autoLogout, setAutoLogout] = useState(true);
-  const [idleMinutes, setIdleMinutes] = useState("30");
-
-  const hydrated = useHydrated();
-  const [seeded, setSeeded] = useState(false);
-
-  if (hydrated && !seeded) {
-    const stored = getSessionSettings();
-    setSeeded(true);
-    setAutoLogout(stored.autoLogout);
-    setIdleMinutes(String(stored.idleMinutes));
-  }
-
-  const handleSave = () => {
-    saveSessionSettings({ autoLogout, idleMinutes: Number(idleMinutes) || 30 });
-    toast.success(t.settingsSaved);
-  };
 
   const paymentOptions = [
     { title: t.paymentGatewayTitle, desc: t.paymentGatewayDescription },
@@ -39,15 +20,7 @@ export default function SettingsPage() {
 
   return (
     <RequireRole roles={["admin"]} title={t.pageTitle} deniedMessage={t.deniedMessage}>
-      <AppShell
-        title={t.pageTitle}
-        description={t.pageDescription}
-        actions={
-          <Button variant="primary" size="sm" onPress={handleSave}>
-            {t.saveChanges}
-          </Button>
-        }
-      >
+      <AppShell title={t.pageTitle} description={t.pageDescription}>
         <div className="mx-auto max-w-2xl space-y-6">
           <Card className="gap-4 p-5">
             <div className="flex items-center gap-2">
@@ -76,28 +49,6 @@ export default function SettingsPage() {
               <TextInput label={t.fieldMedium} type="number" value={String(weights.medium)} onChange={(e) => setWeights((w) => ({ ...w, medium: Number(e.target.value) || 0 }))} />
               <TextInput label={t.fieldHard} type="number" value={String(weights.hard)} onChange={(e) => setWeights((w) => ({ ...w, hard: Number(e.target.value) || 0 }))} />
             </div>
-          </Card>
-
-          <Card className="gap-4 p-5">
-            <div className="flex items-center gap-2">
-              <SettingsIcon className="size-4 text-accent" />
-              <p className="text-sm font-semibold text-foreground">{t.sessionSecurityTitle}</p>
-            </div>
-            <SwitchInput
-              label={t.autoLogoutLabel}
-              description={t.autoLogoutDescription}
-              isSelected={autoLogout}
-              onChange={setAutoLogout}
-            />
-            {autoLogout && (
-              <TextInput
-                label={t.idleLimitLabel}
-                type="number"
-                className="max-w-xs"
-                value={idleMinutes}
-                onChange={(e) => setIdleMinutes(e.target.value)}
-              />
-            )}
           </Card>
         </div>
       </AppShell>

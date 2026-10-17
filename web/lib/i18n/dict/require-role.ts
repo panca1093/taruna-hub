@@ -4,16 +4,18 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   dashboardOperatorTitle: "Dashboard Operator",
+  dashboardStudentTitle: "Dashboard Siswa",
   accessRestrictedTitle: "Akses terbatas",
   accessRestrictedDescription:
-    "Halaman ini hanya untuk tim internal. Ganti tampilan ke Operator atau Admin dari menu akun di sidebar.",
+    "Akun kamu tidak punya akses ke halaman ini.",
 };
 
 const en: typeof id = {
   dashboardOperatorTitle: "Operator Dashboard",
+  dashboardStudentTitle: "Student Dashboard",
   accessRestrictedTitle: "Access restricted",
   accessRestrictedDescription:
-    "This page is for internal team only. Switch to Operator or Admin view from the account menu in the sidebar.",
+    "Your account does not have access to this page.",
 };
 
 export function useRequireRoleT() {

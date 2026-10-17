@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import { loadSession } from "@/lib/tryout-session";
 import { remainingAttempts } from "@/lib/kecermatan-session";
 import { useTryoutsListT } from "@/lib/i18n/dict/tryouts-list";
@@ -26,7 +26,7 @@ type TryoutState = "not_started" | "in_progress" | "completed";
 
 export default function StudentTryoutsPage() {
   const t = useTryoutsListT();
-  const { user } = useSession();
+  const user = useUser();
   const hydrated = useHydrated();
 
   const enrollments = getEnrollmentsForUser(user.id);

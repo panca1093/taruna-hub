@@ -6,19 +6,19 @@ import { KeyRound, User as UserIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { SelectInput, TextInput } from "@/components/ui/form";
-import { useSession } from "@/lib/session-context";
-import { formatDate, programs } from "@/lib/mock-data";
+import { useUser } from "@/lib/session-context";
+import { programs } from "@/lib/mock-data";
 import type { ProgramCode } from "@/lib/types";
 import { useStudentProfileT } from "@/lib/i18n/dict/student-profile";
 
 const programOptions = programs.map((p) => ({ id: p.code, label: `${p.name} (${p.code})` }));
 
 export default function StudentProfilePage() {
-  const { user } = useSession();
+  const user = useUser();
   const t = useStudentProfileT();
   const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
-  const [program, setProgram] = useState<ProgramCode | null>(user.program ?? null);
+  const [email, setEmail] = useState(user.email ?? "");
+  const [program, setProgram] = useState<ProgramCode | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
@@ -45,10 +45,7 @@ export default function StudentProfilePage() {
           </div>
           <div className="flex items-center gap-3">
             <GradientAvatar user={user} size="lg" />
-            <div>
-              <p className="text-sm font-semibold text-foreground">{user.name}</p>
-              <p className="text-xs text-muted">{t.joinedSince(formatDate(user.createdAt))}</p>
-            </div>
+            <p className="text-sm font-semibold text-foreground">{user.name}</p>
           </div>
           <form onSubmit={handleSaveProfile} className="flex flex-col gap-4 border-t border-border pt-4">
             <TextInput label={t.fullName} required value={name} onChange={(e) => setName(e.target.value)} />

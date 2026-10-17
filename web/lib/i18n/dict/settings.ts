@@ -6,8 +6,6 @@ const id = {
   pageTitle: "Pengaturan",
   deniedMessage: "Hanya Admin yang dapat mengubah konfigurasi sistem.",
   pageDescription: "Konfigurasi sistem tryout",
-  saveChanges: "Simpan Perubahan",
-  settingsSaved: "Pengaturan disimpan",
   paymentModelTitle: "Model pembayaran",
   paymentModelDescription: "Ketiga metode aktif bersamaan — siswa memilih salah satu saat checkout.",
   paymentGatewayTitle: "Payment Gateway",
@@ -21,18 +19,12 @@ const id = {
   fieldEasy: "Mudah",
   fieldMedium: "Sedang",
   fieldHard: "Sulit",
-  sessionSecurityTitle: "Sesi & keamanan",
-  autoLogoutLabel: "Auto-logout saat idle",
-  autoLogoutDescription: "Keluarkan sesi otomatis setelah tidak ada aktivitas",
-  idleLimitLabel: "Batas idle (menit)",
 };
 
 const en: typeof id = {
   pageTitle: "Settings",
   deniedMessage: "Only Admins can change system configuration.",
   pageDescription: "Tryout system configuration",
-  saveChanges: "Save Changes",
-  settingsSaved: "Settings saved",
   paymentModelTitle: "Payment model",
   paymentModelDescription: "All three methods are active at once — students pick one at checkout.",
   paymentGatewayTitle: "Payment Gateway",
@@ -46,10 +38,6 @@ const en: typeof id = {
   fieldEasy: "Easy",
   fieldMedium: "Medium",
   fieldHard: "Hard",
-  sessionSecurityTitle: "Session & security",
-  autoLogoutLabel: "Auto-logout on idle",
-  autoLogoutDescription: "Automatically end the session after no activity",
-  idleLimitLabel: "Idle limit (minutes)",
 };
 
 export function useSettingsT() {

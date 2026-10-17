@@ -8,11 +8,11 @@ import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatIDR, getBalance, getWalletTransactionsForUser } from "@/lib/mock-data";
 import { STORE_EVENT } from "@/lib/demo-store";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import { useStudentWalletT } from "@/lib/i18n/dict/student-wallet";
 
 export default function StudentWalletPage() {
-  const { user } = useSession();
+  const user = useUser();
   const t = useStudentWalletT();
   const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
 

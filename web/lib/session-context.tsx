@@ -1,70 +1,108 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
-import type { AppUser, Role } from "./types";
-import { currentAdmin, currentOperator, currentStudent } from "./mock-data";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { api, onSessionLost, type ApiUser, type TokenResponse } from "./api/client";
+import type { Role } from "./types";
 
-const usersByRole: Record<Role, AppUser> = {
-  student: currentStudent,
-  operator: currentOperator,
-  admin: currentAdmin,
-};
+export interface SessionUser {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  /** Null for a role this app has no screens for (platform_admin). */
+  role: Role | null;
+  emailVerified: boolean;
+}
+
+type Status = "loading" | "anonymous" | "authenticated";
 
 interface SessionContextValue {
-  role: Role;
-  user: AppUser;
-  setRole: (role: Role) => void;
+  status: Status;
+  user: SessionUser | null;
+  role: Role | null;
+  login: (identifier: string, password: string) => Promise<SessionUser>;
+  register: (body: { name: string; email: string; phone?: string; password: string }) => Promise<SessionUser>;
+  logout: () => Promise<void>;
+  reloadUser: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-const STORAGE_KEY = "tryout-demo-role";
-const SESSION_SETTINGS_KEY = "tryout-session-settings";
+const appRoles: readonly string[] = ["student", "operator", "admin"];
+// The server moves the idle deadline on any authenticated request, at most once a minute.
+const ACTIVITY_INTERVAL_MS = 60_000;
 
-export interface SessionSettings {
-  autoLogout: boolean;
-  idleMinutes: number;
-}
+export const homeFor = (role: Role | null) => (role === "student" ? "/student" : role ? "/admin" : "/login");
 
-const defaultSessionSettings: SessionSettings = { autoLogout: true, idleMinutes: 30 };
-
-export function getSessionSettings(): SessionSettings {
-  if (typeof window === "undefined") return defaultSessionSettings;
-  try {
-    const raw = window.localStorage.getItem(SESSION_SETTINGS_KEY);
-    return raw ? { ...defaultSessionSettings, ...JSON.parse(raw) } : defaultSessionSettings;
-  } catch {
-    return defaultSessionSettings;
-  }
-}
-
-export function saveSessionSettings(settings: SessionSettings) {
-  window.localStorage.setItem(SESSION_SETTINGS_KEY, JSON.stringify(settings));
-}
-
-const roleListeners = new Set<() => void>();
-
-function subscribe(notify: () => void) {
-  roleListeners.add(notify);
-  return () => roleListeners.delete(notify);
-}
-
-function readRole(): Role {
-  const stored = window.localStorage.getItem(STORAGE_KEY) as Role | null;
-  return stored && usersByRole[stored] ? stored : "student";
+function toUser(u: ApiUser): SessionUser {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    phone: u.phone,
+    role: appRoles.includes(u.role) ? (u.role as Role) : null,
+    emailVerified: u.email_verified,
+  };
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const role = useSyncExternalStore(subscribe, readRole, () => "student" as Role);
+  const [state, setState] = useState<{ status: Status; user: SessionUser | null }>({
+    status: "loading",
+    user: null,
+  });
+  const lastActivity = useRef(0);
+  const pathname = usePathname();
 
-  const setRole = useCallback((next: Role) => {
-    window.localStorage.setItem(STORAGE_KEY, next);
-    roleListeners.forEach((notify) => notify());
+  const open = useCallback((tokens: TokenResponse) => {
+    const user = toUser(tokens.user);
+    lastActivity.current = Date.now();
+    setState({ status: "authenticated", user });
+    return user;
+  }, []);
+
+  useEffect(() => {
+    api.refresh().then(
+      (tokens) => setState({ status: "authenticated", user: toUser(tokens.user) }),
+      () => setState({ status: "anonymous", user: null }),
+    );
+    onSessionLost(() => setState({ status: "anonymous", user: null }));
+    return () => onSessionLost(null);
+  }, []);
+
+  const authenticated = state.status === "authenticated";
+  useEffect(() => {
+    if (!authenticated || Date.now() - lastActivity.current < ACTIVITY_INTERVAL_MS) return;
+    lastActivity.current = Date.now();
+    api.me().then(
+      (u) => setState({ status: "authenticated", user: toUser(u) }),
+      () => {},
+    );
+  }, [authenticated, pathname]);
+
+  const login = useCallback(
+    async (identifier: string, password: string) => open(await api.login({ identifier, password })),
+    [open],
+  );
+  const register = useCallback<SessionContextValue["register"]>(
+    async (body) => open(await api.register(body)),
+    [open],
+  );
+  const logout = useCallback(async () => {
+    try {
+      await api.logout();
+    } finally {
+      setState({ status: "anonymous", user: null });
+    }
+  }, []);
+  const reloadUser = useCallback(async () => {
+    const u = await api.me();
+    setState({ status: "authenticated", user: toUser(u) });
   }, []);
 
   const value = useMemo<SessionContextValue>(
-    () => ({ role, user: usersByRole[role], setRole }),
-    [role, setRole],
+    () => ({ ...state, role: state.user?.role ?? null, login, register, logout, reloadUser }),
+    [state, login, register, logout, reloadUser],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
@@ -74,4 +112,11 @@ export function useSession() {
   const ctx = useContext(SessionContext);
   if (!ctx) throw new Error("useSession must be used within SessionProvider");
   return ctx;
+}
+
+/** For screens that sit behind RequireRole, where a user is guaranteed. */
+export function useUser(): SessionUser {
+  const { user } = useSession();
+  if (!user) throw new Error("useUser needs an authenticated session");
+  return user;
 }

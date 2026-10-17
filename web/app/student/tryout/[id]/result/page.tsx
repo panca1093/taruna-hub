@@ -8,7 +8,7 @@ import { AppShell } from "@/components/app-shell";
 import { CountdownRing } from "@/components/countdown-ring";
 import { LatexText } from "@/components/latex";
 import { LinkButton } from "@/components/ui/link-button";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import { computeResult, estimateRank, getAttempts, loadSession } from "@/lib/tryout-session";
 import { formatDate, getQuestionsForSubtest, getSubtest, getTryout } from "@/lib/mock-data";
 import { cn } from "@/lib/cn";
@@ -18,7 +18,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 export default function ResultPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useSession();
+  const user = useUser();
   const tryout = getTryout(id);
   const t = useTryoutResultT();
   const hydrated = useHydrated();

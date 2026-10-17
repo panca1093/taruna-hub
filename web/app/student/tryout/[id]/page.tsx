@@ -6,7 +6,7 @@ import { Button, Card } from "@heroui/react";
 import { CheckCircle2, ChevronRight, Circle, Clock, Lock, PlayCircle, RotateCcw, Trophy } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { LinkButton } from "@/components/ui/link-button";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import { computeResult, getAttempts, initSession, nextPendingSubtest, startNewAttempt, type TryoutSessionState } from "@/lib/tryout-session";
 import { formatDateTime, getProgram, getSubtestsForTryout, getTryout, hasEnrollment } from "@/lib/mock-data";
 import { ProgramBadge } from "@/components/status-badge";
@@ -16,7 +16,7 @@ import { useTryoutOverviewT } from "@/lib/i18n/dict/tryout-overview";
 export default function TryoutOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useSession();
+  const user = useUser();
   const tryout = getTryout(id);
   const [session, setSession] = useState<TryoutSessionState | null>(null);
   const t = useTryoutOverviewT();

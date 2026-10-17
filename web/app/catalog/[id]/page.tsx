@@ -36,7 +36,7 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const kecermatanTest = product?.kecermatanTestId ? getKecermatanTest(product.kecermatanTestId) : undefined;
 
   const kecRemaining =
-    hydrated && role === "student" && kecermatanTest
+    hydrated && user && role === "student" && kecermatanTest
       ? remainingAttempts(kecermatanTest.id, user.id, getKecermatanAttemptsPurchased(user.id, kecermatanTest.id))
       : null;
 
@@ -45,12 +45,12 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
   const program = getProgram(product.programId);
   const isKecermatan = product.type === "kecermatan";
   const tryouts = product.tryoutIds.map((tid) => getTryout(tid)).filter((t) => !!t);
-  const alreadyOwned = !isKecermatan && role === "student" && tryouts.every((t) => hasEnrollment(user.id, t.id));
+  const alreadyOwned = !isKecermatan && !!user && role === "student" && tryouts.every((t) => hasEnrollment(user.id, t.id));
   const totalDurationMin = tryouts.reduce(
     (sum, t) => sum + getSubtestsForTryout(t.id).reduce((s, st) => s + st.durationSeconds, 0),
     0,
   ) / 60;
-  const ownsKecermatan = isKecermatan && kecermatanTest && role === "student" && hasKecermatanAccess(user.id, kecermatanTest.id);
+  const ownsKecermatan = isKecermatan && kecermatanTest && !!user && role === "student" && hasKecermatanAccess(user.id, kecermatanTest.id);
 
   const body = (
     <>

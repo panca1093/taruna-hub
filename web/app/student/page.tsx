@@ -9,16 +9,16 @@ import { StatCard } from "@/components/stat-card";
 import { DonutStat } from "@/components/charts";
 import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import { loadSession } from "@/lib/tryout-session";
-import { formatDateTime, formatIDR, getEnrollmentsForUser, getProgram, getResultsForUser, getTryout } from "@/lib/mock-data";
+import { formatDateTime, formatIDR, getBalance, getEnrollmentsForUser, getProgram, getResultsForUser, getTryout } from "@/lib/mock-data";
 import { useStudentDashboardT } from "@/lib/i18n/dict/student-dashboard";
 import { useHydrated } from "@/lib/use-hydrated";
 
 type TryoutState = "not_started" | "in_progress" | "completed";
 
 export default function StudentDashboardPage() {
-  const { user } = useSession();
+  const user = useUser();
   const t = useStudentDashboardT();
   const hydrated = useHydrated();
 
@@ -44,7 +44,7 @@ export default function StudentDashboardPage() {
         <StatCard label={t.ownedTryouts} value={String(enrollments.length)} icon={ClipboardList} />
         <StatCard label={t.completedTryouts} value={String(completed)} icon={Trophy} />
         <StatCard label={t.averageScore} value={avgScore === null ? "—" : String(avgScore)} icon={Award} />
-        <StatCard label={t.balance} value={formatIDR(user.balance ?? 0)} icon={Wallet} />
+        <StatCard label={t.balance} value={formatIDR(getBalance(user))} icon={Wallet} />
       </div>
 
       {enrollments.length === 0 ? (

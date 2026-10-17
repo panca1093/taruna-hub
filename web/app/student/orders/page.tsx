@@ -5,12 +5,12 @@ import { Receipt } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { OrderStatusBadge } from "@/components/status-badge";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import { formatDate, formatIDR, getOrdersForUser, getOrderTitle, TOPUP_PRODUCT_ID } from "@/lib/mock-data";
 import { useStudentOrdersT } from "@/lib/i18n/dict/student-orders";
 
 export default function StudentOrdersPage() {
-  const { user } = useSession();
+  const user = useUser();
   const t = useStudentOrdersT();
   const orders = getOrdersForUser(user.id).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
