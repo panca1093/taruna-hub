@@ -81,3 +81,17 @@ export function SessionStatusBadge({ status }: { status: SessionStatus }) {
     </Chip>
   );
 }
+
+const tryoutStatusClassName = {
+  draft: "bg-warning-soft text-warning-soft-foreground",
+  published: "bg-success-soft text-success-soft-foreground",
+};
+
+export function TryoutStatusBadge({ status }: { status: "draft" | "published" }) {
+  const t = useStatusBadgeT();
+  return (
+    <Chip size="sm" className={cn("font-medium", tryoutStatusClassName[status])}>
+      {t.tryoutStatus[status]}
+    </Chip>
+  );
+}

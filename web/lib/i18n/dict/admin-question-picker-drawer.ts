@@ -4,7 +4,6 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   filterAllProgram: "Semua program",
-  filterAllSubject: "Semua mapel",
   filterAllType: "Semua tipe",
   filterAllDifficulty: "Semua kesulitan",
   questionType: {
@@ -19,20 +18,24 @@ const id = {
     hard: "Sulit",
   },
   heading: "Pilih Soal",
-  subtitle: (selected: number, filtered: number, pool: number) => `${selected} soal terpilih · ${filtered} dari ${pool} soal ditampilkan`,
+  subtitle: (selected: number, shown: number, total: number) => `${selected} soal terpilih · ${shown} dari ${total} soal ditampilkan`,
   selectVisible: "Pilih yang tampil",
   clear: "Kosongkan",
-  searchPlaceholder: "Cari soal atau mapel...",
+  searchPlaceholder: "Cari soal...",
   onlySelected: "Hanya terpilih",
-  weightLabel: (n: number) => `bobot ${n}`,
   emptyText: "Tidak ada soal yang cocok dengan filter ini.",
+  loading: "Memuat soal...",
+  loadingMore: "Memuat...",
+  loadMore: "Muat Lebih Banyak",
+  loadErrorTitle: "Soal gagal dimuat",
+  loadErrorDescription: "Periksa koneksi Anda lalu coba lagi.",
+  retry: "Coba Lagi",
   cancel: "Batal",
   confirm: (n: number) => `Simpan ${n} Soal`,
 };
 
 const en: typeof id = {
   filterAllProgram: "All programs",
-  filterAllSubject: "All subjects",
   filterAllType: "All types",
   filterAllDifficulty: "All difficulty",
   questionType: {
@@ -47,13 +50,18 @@ const en: typeof id = {
     hard: "Hard",
   },
   heading: "Choose Questions",
-  subtitle: (selected: number, filtered: number, pool: number) => `${selected} selected · showing ${filtered} of ${pool} questions`,
+  subtitle: (selected: number, shown: number, total: number) => `${selected} selected · showing ${shown} of ${total} questions`,
   selectVisible: "Select visible",
   clear: "Clear",
-  searchPlaceholder: "Search question or subject...",
+  searchPlaceholder: "Search questions...",
   onlySelected: "Selected only",
-  weightLabel: (n: number) => `weight ${n}`,
   emptyText: "No questions match this filter.",
+  loading: "Loading questions...",
+  loadingMore: "Loading...",
+  loadMore: "Load More",
+  loadErrorTitle: "Questions failed to load",
+  loadErrorDescription: "Check your connection and try again.",
+  retry: "Try Again",
   cancel: "Cancel",
   confirm: (n: number) => `Save ${n} Questions`,
 };

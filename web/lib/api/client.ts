@@ -21,16 +21,29 @@ export type QuestionImportRow = components["schemas"]["QuestionImportRow"];
 export type QuestionImportCommit = components["schemas"]["QuestionImportCommit"];
 /** The three formats the import template is generated in. */
 export type QuestionTemplateFormat = "xlsx" | "csv" | "docx";
+export type Tryout = components["schemas"]["Tryout"];
+export type TryoutSummary = components["schemas"]["TryoutSummary"];
+export type TryoutList = components["schemas"]["TryoutList"];
+export type TryoutSubtest = components["schemas"]["Subtest"];
+export type TryoutAssignment = components["schemas"]["Assignment"];
 type LoginBody = components["schemas"]["LoginRequest"];
 type RegisterBody = components["schemas"]["RegisterRequest"];
 type CreateProgramBody = components["schemas"]["CreateProgramRequest"];
 type UpdateProgramBody = components["schemas"]["UpdateProgramRequest"];
 type CreateQuestionBody = components["schemas"]["CreateQuestionRequest"];
 type UpdateQuestionBody = components["schemas"]["UpdateQuestionRequest"];
+type CreateTryoutBody = components["schemas"]["CreateTryoutRequest"];
+type UpdateTryoutBody = components["schemas"]["UpdateTryoutRequest"];
 
 /** Filters of `GET /api/v1/questions`; an absent field is not sent at all. */
 export type QuestionFilters = Omit<
   NonNullable<paths["/api/v1/questions"]["get"]["parameters"]["query"]>,
+  "limit" | "offset"
+> & { limit?: number; offset?: number };
+
+/** Filters of `GET /api/v1/tryouts`; an absent field is not sent at all. */
+export type TryoutFilters = Omit<
+  NonNullable<paths["/api/v1/tryouts"]["get"]["parameters"]["query"]>,
   "limit" | "offset"
 > & { limit?: number; offset?: number };
 
@@ -117,8 +130,10 @@ const programPath = (id: string) => `/api/v1/programs/${id}` as keyof paths;
 
 const questionPath = (id: string) => `/api/v1/questions/${id}` as keyof paths;
 
-/** Query string of the question list; empty values are dropped so the server sees no filter. */
-function questionQuery(filters: QuestionFilters): string {
+const tryoutPath = (id: string) => `/api/v1/tryouts/${id}` as keyof paths;
+
+/** Query string of a list request; empty values are dropped so the server sees no filter. */
+function queryOf(filters: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (value !== undefined && value !== "") params.set(key, String(value));
@@ -268,7 +283,7 @@ export const api = {
 
   questions: {
     list: (filters: QuestionFilters = {}) =>
-      authed<QuestionList>(`/api/v1/questions${questionQuery(filters)}` as keyof paths),
+      authed<QuestionList>(`/api/v1/questions${queryOf(filters)}` as keyof paths),
     get: (id: string) => authed<Question>(questionPath(id)),
     create: (body: CreateQuestionBody) => mutate<Question>("POST", "/api/v1/questions", body),
     update: (id: string, body: UpdateQuestionBody) => mutate<Question>("PUT", questionPath(id), body),
@@ -279,5 +294,16 @@ export const api = {
       uploadForm<QuestionImportCommit>("/api/v1/questions/import/commit", file, rows),
     importTemplate: (format: QuestionTemplateFormat) =>
       authedBlob(`/api/v1/questions/import/template?format=${format}` as keyof paths),
+  },
+
+  tryouts: {
+    list: (filters: TryoutFilters = {}) =>
+      authed<TryoutList>(`/api/v1/tryouts${queryOf(filters)}` as keyof paths),
+    get: (id: string) => authed<Tryout>(tryoutPath(id)),
+    create: (body: CreateTryoutBody) => mutate<Tryout>("POST", "/api/v1/tryouts", body),
+    update: (id: string, body: UpdateTryoutBody) => mutate<Tryout>("PUT", tryoutPath(id), body),
+    remove: (id: string) => mutate<void>("DELETE", tryoutPath(id)),
+    publish: (id: string) => mutate<Tryout>("POST", `${tryoutPath(id)}/publish` as keyof paths),
+    unpublish: (id: string) => mutate<Tryout>("POST", `${tryoutPath(id)}/unpublish` as keyof paths),
   },
 };

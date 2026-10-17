@@ -7,6 +7,7 @@ const id = {
   difficulty: { easy: "Mudah", medium: "Sedang", hard: "Sulit" },
   questionType: { pg: "Pilihan Ganda", pg_multi: "PG Kompleks", isian: "Isian Singkat", benar_salah: "Benar/Salah" },
   sessionStatus: { in_progress: "Sedang mengerjakan", completed: "Selesai" },
+  tryoutStatus: { draft: "Draf", published: "Terbit" },
 };
 
 const en: typeof id = {
@@ -14,6 +15,7 @@ const en: typeof id = {
   difficulty: { easy: "Easy", medium: "Medium", hard: "Hard" },
   questionType: { pg: "Multiple Choice", pg_multi: "Complex MC", isian: "Short Answer", benar_salah: "True/False" },
   sessionStatus: { in_progress: "In progress", completed: "Completed" },
+  tryoutStatus: { draft: "Draft", published: "Published" },
 };
 
 export function useStatusBadgeT() {
