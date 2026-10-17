@@ -18,6 +18,9 @@ var (
 	ErrDuplicateCode = fmt.Errorf("%w: code", ErrDuplicate)
 	// ErrReferenced is SQLSTATE 23503: a row is still pointed at, so the delete must roll back.
 	ErrReferenced = errors.New("referenced")
+	// The two narrow forms let the 409 say which level of the tree is still in use.
+	ErrReferencedChapters = fmt.Errorf("%w: chapter", ErrReferenced)
+	ErrReferencedSubjects = fmt.Errorf("%w: subject", ErrReferenced)
 )
 
 const pgForeignKeyViolation = "23503"
@@ -159,6 +162,9 @@ func (r *CurriculumRepository) DeleteChaptersTx(ctx context.Context, tx pgx.Tx, 
 	err := execCurriculum(ctx, tx, "delete chapters",
 		`DELETE FROM chapters c USING subjects s
 		  WHERE c.subject_id = s.id AND s.tenant_id = $1 AND s.program_id = $2`, tenantID, programID)
+	if errors.Is(err, ErrReferenced) {
+		return ErrReferencedChapters
+	}
 	return err
 }
 
@@ -166,8 +172,12 @@ func (r *CurriculumRepository) DeleteSubjectsTx(ctx context.Context, tx pgx.Tx, 
 	if tenantID == uuid.Nil {
 		return ErrScopeRequired
 	}
-	return execCurriculum(ctx, tx, "delete subjects",
+	err := execCurriculum(ctx, tx, "delete subjects",
 		`DELETE FROM subjects WHERE tenant_id = $1 AND program_id = $2`, tenantID, programID)
+	if errors.Is(err, ErrReferenced) {
+		return ErrReferencedSubjects
+	}
+	return err
 }
 
 func (r *CurriculumRepository) DeleteProgramTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID) error {
@@ -340,14 +350,22 @@ func (r *CurriculumRepository) pruneChapters(ctx context.Context, tx pgx.Tx, ten
 		`DELETE FROM chapters c USING subjects s
 		  WHERE c.subject_id = s.id AND s.tenant_id = $1 AND s.program_id = $2
 		    AND c.id <> ALL($3::uuid[])`, tenantID, programID, kept)
-	return mapCurriculumError("delete chapters", err)
+	err = mapCurriculumError("delete chapters", err)
+	if errors.Is(err, ErrReferenced) {
+		return ErrReferencedChapters
+	}
+	return err
 }
 
 func (r *CurriculumRepository) pruneSubjects(ctx context.Context, tx pgx.Tx, tenantID, programID uuid.UUID, kept []string) error {
 	_, err := tx.Exec(ctx,
 		`DELETE FROM subjects WHERE tenant_id = $1 AND program_id = $2 AND id <> ALL($3::uuid[])`,
 		tenantID, programID, kept)
-	return mapCurriculumError("delete subjects", err)
+	err = mapCurriculumError("delete subjects", err)
+	if errors.Is(err, ErrReferenced) {
+		return ErrReferencedSubjects
+	}
+	return err
 }
 
 // inTx runs fn inside one transaction and rolls back on any error, so a restrict violation leaves
