@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Button, Drawer, Dropdown, Separator } from "@heroui/react";
+import { Button, Drawer, Dropdown, Separator, toast } from "@heroui/react";
 import { ChevronsLeft, LogOut, Menu } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { navForRole } from "@/lib/nav";
@@ -87,7 +87,7 @@ function UserMenu({ collapsed }: { collapsed?: boolean }) {
         <Separator />
         <Dropdown.Menu
           onAction={(key) => {
-            if (key === "logout") void logout().finally(() => router.push(goHome));
+            if (key === "logout") logout().then(() => router.push(goHome), () => toast.danger(commonT.logoutFailed));
           }}
         >
           <Dropdown.Item id="logout" className="gap-2.5 text-danger">

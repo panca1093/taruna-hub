@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldAlert } from "lucide-react";
+import { Button } from "@heroui/react";
+import { ShieldAlert, WifiOff } from "lucide-react";
 import { AppShell } from "./app-shell";
 import { EmptyState } from "./empty-state";
 import { useSession } from "@/lib/session-context";
@@ -20,7 +21,7 @@ export function RequireRole({
   deniedMessage?: string;
   children: React.ReactNode;
 }) {
-  const { status, role } = useSession();
+  const { status, role, retry } = useSession();
   const router = useRouter();
   const t = useRequireRoleT();
   const staffOnly = !roles.includes("student");
@@ -28,6 +29,23 @@ export function RequireRole({
   useEffect(() => {
     if (status === "anonymous") router.replace(staffOnly ? "/login/staff" : "/login");
   }, [status, staffOnly, router]);
+
+  if (status === "unavailable") {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background px-5">
+        <EmptyState
+          icon={WifiOff}
+          title={t.unavailableTitle}
+          description={t.unavailableDescription}
+          action={
+            <Button variant="primary" size="sm" onPress={retry}>
+              {t.retry}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   if (status !== "authenticated") return null;
 

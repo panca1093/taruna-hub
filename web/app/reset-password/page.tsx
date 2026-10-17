@@ -44,7 +44,10 @@ export default function ResetPasswordPage() {
       setDone(true);
     } catch (err) {
       if (err instanceof ApiError && err.fields?.token) setError(t.resetLinkInvalid);
-      else if (err instanceof ApiError && err.fields) setFields(err.fields);
+      else if (err instanceof ApiError && err.fields) {
+        setFields(err.fields);
+        if (!err.fields.password) setError(err.message);
+      }
       else setError(errorText(err, t.networkError));
     } finally {
       setPending(false);

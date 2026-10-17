@@ -2,7 +2,7 @@
 
 import { ThemeProvider } from "next-themes";
 import { MotionConfig } from "framer-motion";
-import { Toast, ToastProvider } from "@heroui/react";
+import { ToastProvider } from "@heroui/react";
 import { SessionProvider } from "@/lib/session-context";
 import { LocaleProvider } from "@/lib/i18n/locale-context";
 
@@ -13,9 +13,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <LocaleProvider>
           <SessionProvider>
             {children}
-            <ToastProvider placement="bottom end">
-              {({ toast }) => <Toast toast={toast} />}
-            </ToastProvider>
+            <ToastProvider placement="bottom end" />
           </SessionProvider>
         </LocaleProvider>
       </MotionConfig>

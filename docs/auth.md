@@ -104,6 +104,9 @@ minutes; the reset link still works and clears it.
 and never readable from JS. A protected call that gets a `401` refreshes once and retries once,
 and concurrent callers share one refresh. If that refresh also fails the session is dropped and
 `RequireRole` sends the visitor to `/login` (or `/login/staff` for staff-only pages).
+Only a `401`/`403` from the refresh on page load means "not signed in"; a network error or `5xx`
+shows a retry screen instead, because it says nothing about the session. Logout clears the local
+session only after the server confirmed it, so a failed logout leaves the user signed in and says so.
 
 `SessionProvider` (`web/lib/session-context.tsx`) asks `/auth/refresh` on every full page load, so a
 reload keeps the user signed in, and calls `GET /me` when the route changes, at most once a minute.

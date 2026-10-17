@@ -12,6 +12,8 @@ import { useSession } from "@/lib/session-context";
 import { ApiError, errorText } from "@/lib/api/client";
 import { useAuthT } from "@/lib/i18n/dict/auth";
 
+const registerFields = ["name", "email", "phone", "password"];
+
 export default function RegisterPage() {
   const router = useRouter();
   const { register } = useSession();
@@ -38,8 +40,10 @@ export default function RegisterPage() {
       toast.success(t.toastAccountCreatedTitle, { description: t.toastAccountCreatedDescription });
       router.push("/catalog");
     } catch (err) {
-      if (err instanceof ApiError && err.fields) setFields(err.fields);
-      else setError(errorText(err, t.networkError));
+      if (err instanceof ApiError && err.fields) {
+        setFields(err.fields);
+        if (!Object.keys(err.fields).some((k) => registerFields.includes(k))) setError(err.message);
+      } else setError(errorText(err, t.networkError));
     } finally {
       setPending(false);
     }
