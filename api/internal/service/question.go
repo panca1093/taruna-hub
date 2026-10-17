@@ -63,16 +63,12 @@ const (
 // markdownImage finds the URL of a markdown image; the slice rejects the schemes it cannot store.
 var markdownImage = regexp.MustCompile(`!\[[^\]]*\]\(\s*([^)\s]*)`)
 
-// QuestionOptionInput is one option as the caller sent it: an id that belongs to the question is
-// kept, anything else (or no id at all) becomes a new option.
 type QuestionOptionInput struct {
 	ID     string
 	Label  string
 	Points *float64
 }
 
-// QuestionInput is the editable content of a question; the head row's identity and version are the
-// server's business.
 type QuestionInput struct {
 	ProgramID      uuid.UUID
 	SubjectID      uuid.UUID
@@ -169,8 +165,6 @@ func (s *QuestionService) Create(ctx context.Context, scope HostScope, principal
 	return created, nil
 }
 
-// Update appends a new version only when the normalized payload differs from the current one, inside
-// one transaction with the head row locked so two editors of the same base version cannot both win.
 func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID, input QuestionInput) (model.Question, error) {
 	tenantID, err := questionTenant(scope, principal)
 	if err != nil {
@@ -183,9 +177,7 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 	if err != nil {
 		return model.Question{}, err
 	}
-	// The question is looked up before its body is checked, so an id of another tenant answers 404
-	// and never leaks what the body would have said. Both reads below run on the pool, so the write
-	// transaction never holds a connection while asking for a second one.
+	// Look the question up before checking the body so another tenant's id answers 404 and leaks nothing.
 	if _, err := s.repo.Find(ctx, tenantID, id); err != nil {
 		return model.Question{}, questionError(err)
 	}
@@ -239,8 +231,6 @@ func (s *QuestionService) Delete(ctx context.Context, scope HostScope, principal
 	})
 }
 
-// prepared normalizes the scalar fields and checks that the curriculum the question names exists in
-// this tenant.
 func (s *QuestionService) prepared(ctx context.Context, tenantID uuid.UUID, input QuestionInput) (QuestionInput, error) {
 	input, err := scalarOf(input)
 	if err != nil {
@@ -252,8 +242,7 @@ func (s *QuestionService) prepared(ctx context.Context, tenantID uuid.UUID, inpu
 	return input, nil
 }
 
-// checkRefs makes sure the program, subject and chapter exist in this tenant and belong together;
-// the composite foreign keys would only catch the tenant half of that.
+// Composite foreign keys only catch the tenant half of program/subject/chapter consistency.
 func (s *QuestionService) checkRefs(ctx context.Context, tenantID uuid.UUID, input QuestionInput) error {
 	fields := map[string]string{}
 	ok, err := s.repo.ProgramExists(ctx, tenantID, input.ProgramID)
@@ -323,8 +312,6 @@ func scalarOf(input QuestionInput) (QuestionInput, error) {
 	return input, nil
 }
 
-// validatedOptions resolves option ids, applies the true/false and short-answer shapes, and checks
-// every per-type rule. `existing` is the current version's options: their ids stay, new ones get one.
 func validatedOptions(input QuestionInput, existing []model.QuestionOption) (QuestionInput, error) {
 	fields := map[string]string{}
 	weighted := input.OptionWeighted
@@ -400,8 +387,7 @@ func validatedOptions(input QuestionInput, existing []model.QuestionOption) (Que
 	return input, nil
 }
 
-// resolvedOptions keeps this question's ids, turns everything else into a new option, and notes the
-// placeholder ids so `correct` can keep pointing at the option the editor meant.
+// Placeholder ids are noted so `correct` keeps pointing at the option the editor meant.
 func resolvedOptions(input []QuestionOptionInput, existing []model.QuestionOption, fields map[string]string) ([]QuestionOptionInput, map[string]string, bool) {
 	owned := make(map[string]bool, len(existing))
 	for _, option := range existing {
