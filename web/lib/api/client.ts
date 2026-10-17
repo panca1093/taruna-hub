@@ -13,10 +13,21 @@ export type ApiUser = components["schemas"]["User"];
 export type TokenResponse = components["schemas"]["TokenResponse"];
 export type Program = components["schemas"]["Program"];
 export type ProgramList = components["schemas"]["ProgramList"];
+export type Question = components["schemas"]["Question"];
+export type QuestionList = components["schemas"]["QuestionList"];
+export type QuestionOption = components["schemas"]["QuestionOption"];
 type LoginBody = components["schemas"]["LoginRequest"];
 type RegisterBody = components["schemas"]["RegisterRequest"];
 type CreateProgramBody = components["schemas"]["CreateProgramRequest"];
 type UpdateProgramBody = components["schemas"]["UpdateProgramRequest"];
+type CreateQuestionBody = components["schemas"]["CreateQuestionRequest"];
+type UpdateQuestionBody = components["schemas"]["UpdateQuestionRequest"];
+
+/** Filters of `GET /api/v1/questions`; an absent field is not sent at all. */
+export type QuestionFilters = Omit<
+  NonNullable<paths["/api/v1/questions"]["get"]["parameters"]["query"]>,
+  "limit" | "offset"
+> & { limit?: number; offset?: number };
 
 // Production sets NEXT_PUBLIC_API_URL to "" (same-origin); unset in dev, call the API on the page's own host.
 function baseUrl(): string {
@@ -98,6 +109,18 @@ const mutate = <T>(method: string, path: keyof paths, body?: unknown): Promise<T
   });
 
 const programPath = (id: string) => `/api/v1/programs/${id}` as keyof paths;
+
+const questionPath = (id: string) => `/api/v1/questions/${id}` as keyof paths;
+
+/** Query string of the question list; empty values are dropped so the server sees no filter. */
+function questionQuery(filters: QuestionFilters): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const query = params.toString();
+  return query === "" ? "" : `?${query}`;
+}
 
 // The access token lives in memory only; the refresh cookie is HttpOnly and never readable here.
 let accessToken: string | null = null;
@@ -199,5 +222,14 @@ export const api = {
     create: (body: CreateProgramBody) => mutate<Program>("POST", "/api/v1/programs", body),
     update: (id: string, body: UpdateProgramBody) => mutate<Program>("PUT", programPath(id), body),
     remove: (id: string) => mutate<void>("DELETE", programPath(id)),
+  },
+
+  questions: {
+    list: (filters: QuestionFilters = {}) =>
+      authed<QuestionList>(`/api/v1/questions${questionQuery(filters)}` as keyof paths),
+    get: (id: string) => authed<Question>(questionPath(id)),
+    create: (body: CreateQuestionBody) => mutate<Question>("POST", "/api/v1/questions", body),
+    update: (id: string, body: UpdateQuestionBody) => mutate<Question>("PUT", questionPath(id), body),
+    remove: (id: string) => mutate<void>("DELETE", questionPath(id)),
   },
 };
