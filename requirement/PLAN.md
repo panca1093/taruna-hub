@@ -273,7 +273,7 @@ For every slice, use this verification loop:
 
 ### P08 — Tryout builder with frozen assignments
 
-**Status:** planned · **Size:** M · **Depends:** P07
+**Status:** done — draft/published tryouts with ordered subtests, frozen question versions, stale-revision conflict, the first-attempt lock, the list and builder on the API, and a seed covering draft, published and locked; scoring stays a mode only (D04 open), participants/cover/student endpoints are deferred · **Size:** M · **Depends:** P07
 
 **Outcome:** Staff assemble tenant tryouts with ordered subtests, dates, explanation release and shuffle settings.
 
@@ -285,10 +285,11 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Subtest/question order, durations, date/release fields and randomization flags survive reload.
-- [ ] Invalid date window or empty playable definition cannot be published.
+- [x] Subtest/question order, durations, date/release fields and randomization flags survive reload.
+- [x] Invalid date window or empty playable definition cannot be published.
 - [ ] First session locks every editable field/delete; master update never changes assigned content.
-- [ ] A tenant cannot assign another tenant question or mutate master through the builder.
+      The lock is done and a question edit never changes assigned content; the master half awaits master content (P07a deferred it).
+- [x] A tenant cannot assign another tenant question or mutate master through the builder.
 
 **Decision / verification gate:** D04 scoring configuration ownership/normalization; original-order PDF input is preserved.
 
