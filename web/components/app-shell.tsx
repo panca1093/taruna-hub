@@ -1,19 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Button,
-  Drawer,
-  Dropdown,
-  Header,
-  Separator,
-} from "@heroui/react";
-import { ChevronsLeft, GraduationCap, LogOut, Menu, ShieldCheck, UserCog } from "lucide-react";
+import { Button, Drawer, Dropdown, Separator } from "@heroui/react";
+import { ChevronsLeft, LogOut, Menu } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { navForRole } from "@/lib/nav";
-import { getSessionSettings, useSession } from "@/lib/session-context";
+import { useSession, useUser } from "@/lib/session-context";
 import { useNavT } from "@/lib/i18n/dict/nav";
 import { useShellT } from "@/lib/i18n/dict/shell";
 import { useCommonT } from "@/lib/i18n/dict/common";
@@ -21,14 +15,13 @@ import { Logo } from "./logo";
 import { GradientAvatar } from "./gradient-avatar";
 import { ThemeToggle } from "./theme-toggle";
 import { LanguageToggle } from "./language-toggle";
+import { EmailVerifyBanner } from "./email-verify-banner";
 import type { Role } from "@/lib/types";
-
-const roleIcon: Record<Role, React.ElementType> = { student: GraduationCap, operator: UserCog, admin: ShieldCheck };
 
 function NavLinks({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const { role } = useSession();
-  const items = navForRole(role);
+  const items = role ? navForRole(role) : [];
   const navT = useNavT();
 
   return (
@@ -63,11 +56,12 @@ function NavLinks({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?:
 }
 
 function UserMenu({ collapsed }: { collapsed?: boolean }) {
-  const { user, role, setRole } = useSession();
+  const { role, logout } = useSession();
+  const user = useUser();
   const router = useRouter();
-  const shellT = useShellT();
   const commonT = useCommonT();
   const roleLabel: Record<Role, string> = { student: commonT.student, operator: commonT.operator, admin: commonT.admin };
+  const goHome = role === "student" ? "/login" : "/login/staff";
 
   return (
     <Dropdown>
@@ -81,38 +75,21 @@ function UserMenu({ collapsed }: { collapsed?: boolean }) {
         {!collapsed && (
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-medium text-foreground">{user.name}</span>
-            <span className="block truncate text-[11px] text-muted">{roleLabel[role]}</span>
+            <span className="block truncate text-[11px] text-muted">{role ? roleLabel[role] : ""}</span>
           </span>
         )}
       </Dropdown.Trigger>
       <Dropdown.Popover placement="top start" className="w-64">
         <div className="px-3 py-2.5">
           <p className="truncate text-sm font-medium text-foreground">{user.name}</p>
-          <p className="truncate text-xs text-muted">{user.email}</p>
+          <p className="truncate text-xs text-muted">{user.email ?? user.phone}</p>
         </div>
         <Separator />
         <Dropdown.Menu
           onAction={(key) => {
-            if (key === "logout") router.push(role === "student" ? "/login" : "/login/staff");
-            else if (typeof key === "string" && key.startsWith("role:")) setRole(key.slice(5) as Role);
+            if (key === "logout") void logout().finally(() => router.push(goHome));
           }}
         >
-          <Dropdown.Section>
-            <Header className="px-2.5 pt-2 pb-1 text-[11px] font-medium tracking-wide text-muted uppercase">
-              {shellT.viewAsDemo}
-            </Header>
-            {(["student", "operator", "admin"] as Role[]).map((r) => {
-              const Icon = roleIcon[r];
-              return (
-                <Dropdown.Item key={r} id={`role:${r}`} className="gap-2.5">
-                  <Icon className="size-4 text-muted" />
-                  <span className="flex-1">{roleLabel[r]}</span>
-                  {role === r && <span className="size-1.5 rounded-full bg-gradient-ring" />}
-                </Dropdown.Item>
-              );
-            })}
-          </Dropdown.Section>
-          <Separator className="my-1" />
           <Dropdown.Item id="logout" className="gap-2.5 text-danger">
             <LogOut className="size-4" />
             {commonT.logout}
@@ -139,30 +116,7 @@ export function AppShell({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { role } = useSession();
-  const router = useRouter();
   const shellT = useShellT();
-
-  useEffect(() => {
-    const { autoLogout, idleMinutes } = getSessionSettings();
-    if (!autoLogout) return;
-
-    let timer: ReturnType<typeof setTimeout>;
-    const reset = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        router.push(role === "student" ? "/login" : "/login/staff");
-      }, idleMinutes * 60_000);
-    };
-    const events = ["mousemove", "keydown", "click", "scroll"] as const;
-    events.forEach((e) => window.addEventListener(e, reset));
-    reset();
-    return () => {
-      clearTimeout(timer);
-      events.forEach((e) => window.removeEventListener(e, reset));
-    };
-  }, [role, router]);
-
   return (
     <div className="flex min-h-dvh bg-background">
       {/* Desktop sidebar */}
@@ -227,6 +181,7 @@ export function AppShell({
           </div>
         </header>
         <main className="flex-1 px-4 py-6 lg:px-6 lg:py-8">
+          <EmailVerifyBanner />
           {maxWidth ? <div className={cn("mx-auto", maxWidth)}>{children}</div> : children}
         </main>
       </div>

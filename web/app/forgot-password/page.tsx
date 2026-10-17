@@ -8,16 +8,28 @@ import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import { TextInput } from "@/components/ui/form";
+import { api, errorText } from "@/lib/api/client";
 import { useAuthT } from "@/lib/i18n/dict/auth";
 
 export default function ForgotPasswordPage() {
   const t = useAuthT();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSent(true);
+    setError("");
+    setPending(true);
+    try {
+      await api.forgotPassword(email);
+      setSent(true);
+    } catch (err) {
+      setError(errorText(err, t.networkError));
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -59,7 +71,8 @@ export default function ForgotPasswordPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
-                  <Button type="submit" variant="primary" fullWidth className="mt-1">
+                  {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+                  <Button type="submit" variant="primary" fullWidth className="mt-1" isDisabled={pending}>
                     {t.submitReset}
                   </Button>
                 </form>

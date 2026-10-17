@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Card } from "@heroui/react";
@@ -8,20 +8,35 @@ import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import { TextInput } from "@/components/ui/form";
-import { useSession } from "@/lib/session-context";
+import { homeFor, useSession } from "@/lib/session-context";
+import { errorText } from "@/lib/api/client";
 import { useAuthT } from "@/lib/i18n/dict/auth";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setRole } = useSession();
+  const { status, role, login } = useSession();
   const t = useAuthT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (status === "authenticated" && role) router.replace(homeFor(role));
+  }, [status, role, router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setRole("student");
-    router.push("/student");
+    setError("");
+    setPending(true);
+    try {
+      const user = await login(email, password);
+      router.push(homeFor(user.role));
+    } catch (err) {
+      setError(errorText(err, t.networkError));
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -60,7 +75,8 @@ export default function LoginPage() {
               <Link href="/forgot-password" className="-mt-2 text-right text-xs text-accent hover:underline">
                 {t.forgotPasswordLink}
               </Link>
-              <Button type="submit" variant="primary" fullWidth>
+              {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+              <Button type="submit" variant="primary" fullWidth isDisabled={pending}>
                 {t.submitStudent}
               </Button>
             </form>
@@ -72,7 +88,6 @@ export default function LoginPage() {
               {t.registerLink}
             </Link>
           </p>
-          <p className="mt-2 text-center text-xs text-muted/70">{t.prototypeNote}</p>
           <p className="mt-4 text-center text-xs text-muted">
             {t.staffPrompt}{" "}
             <Link href="/login/staff" className="font-medium text-accent hover:underline">

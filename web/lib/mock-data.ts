@@ -995,7 +995,7 @@ export const getWalletTransactionsForUser = (userId: string) =>
   );
 
 /** Seeded balance adjusted by anything spent or topped up during the demo. */
-export const getBalance = (user: AppUser) => (user.balance ?? 0) + runtimeBalanceDelta(user.id);
+export const getBalance = (user: Pick<AppUser, "id" | "balance">) => (user.balance ?? 0) + runtimeBalanceDelta(user.id);
 
 /* ---------------------------------------------------------------------- */
 /* Sessions, violations, and results                                      */

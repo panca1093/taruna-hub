@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { AppShell } from "./app-shell";
 import { EmptyState } from "./empty-state";
@@ -18,10 +20,18 @@ export function RequireRole({
   deniedMessage?: string;
   children: React.ReactNode;
 }) {
-  const { role: current } = useSession();
+  const { status, role } = useSession();
+  const router = useRouter();
   const t = useRequireRoleT();
+  const staffOnly = !roles.includes("student");
 
-  if (!roles.includes(current)) {
+  useEffect(() => {
+    if (status === "anonymous") router.replace(staffOnly ? "/login/staff" : "/login");
+  }, [status, staffOnly, router]);
+
+  if (status !== "authenticated") return null;
+
+  if (!role || !roles.includes(role)) {
     return (
       <AppShell title={title}>
         <EmptyState

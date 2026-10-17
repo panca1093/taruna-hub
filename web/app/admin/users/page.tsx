@@ -10,7 +10,7 @@ import { GradientAvatar } from "@/components/gradient-avatar";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput, TextInput } from "@/components/ui/form";
 import { admins, formatDate, operators as initialOperators } from "@/lib/mock-data";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import { useUsersT } from "@/lib/i18n/dict/users";
 import type { AppUser, Role } from "@/lib/types";
 
@@ -26,7 +26,7 @@ export default function UsersPage() {
     { id: "operator", label: t.roleOperator },
     { id: "admin", label: t.roleAdmin },
   ];
-  const { user: sessionUser } = useSession();
+  const sessionUser = useUser();
   const [rows, setRows] = useState<AppUser[]>([...initialOperators, ...admins]);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);

@@ -5,7 +5,7 @@ import { notFound, useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { CheckCircle2, ChevronRight, SkipForward } from "lucide-react";
 import { CountdownRing } from "@/components/countdown-ring";
-import { useSession } from "@/lib/session-context";
+import { useUser } from "@/lib/session-context";
 import {
   answerSoal,
   completeKolom,
@@ -23,7 +23,7 @@ type Phase = "instructions" | "kolom" | "jeda";
 export default function KecermatanAttemptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { user } = useSession();
+  const user = useUser();
   const test = getKecermatanTest(id);
   const t = useKecermatanAttemptT();
 
