@@ -46,7 +46,7 @@ func newTenantEcho(f tenantFixture, trustForwardedHost bool) *echo.Echo {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	e := echo.New()
 	e.HTTPErrorHandler = httpx.ErrorHandler(logger)
-	New(logger, NewHealthHandler(nil), newAuthService(f), nil, newCurriculumService(f), AuthOptions{
+	New(logger, NewHealthHandler(nil), newAuthService(f), nil, newCurriculumService(f), newQuestionService(f), AuthOptions{
 		AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
 	}).Register(e, ResolveHostScope(f.tenants, trustForwardedHost))
 	return e
@@ -87,8 +87,8 @@ func newTenantFixture(t *testing.T, baseDomain string) tenantFixture {
 
 	var ids []uuid.UUID
 	t.Cleanup(func() {
-		// Curriculum rows carry the tenant, so they go before the tenant itself.
-		for _, table := range []string{"chapters", "subjects", "programs", "notification_logs"} {
+		// Curriculum and question rows carry the tenant, so they go before the tenant itself.
+		for _, table := range []string{"question_versions", "questions", "chapters", "subjects", "programs", "notification_logs"} {
 			if _, err := pool.Exec(ctx, `DELETE FROM `+table+` WHERE tenant_id = ANY($1)`, ids); err != nil {
 				t.Errorf("cleanup %s of the fixture tenants: %v", table, err)
 			}

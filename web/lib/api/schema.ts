@@ -875,6 +875,255 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's question bank
+         * @description FR-ADM-SOA-01/05: Admin and Operator read the bank; a Student answers `403`, because an answer
+         *     key never leaves the staff API. Questions come back newest first (`number` descending), at most
+         *     100 per page, with `total` counting every question the filters match.
+         *
+         *     `q` is a case-insensitive substring of the content, and `%` or `_` in it match themselves.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    program_id?: string;
+                    subject_id?: string;
+                    type?: "pg" | "pg_multi" | "isian" | "benar_salah";
+                    difficulty?: "easy" | "medium" | "hard";
+                    /** @description Case-insensitive substring of the content; `%` and `_` are literal. */
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of this tenant's questions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["QuestionList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        /**
+         * Create a question
+         * @description Admin and Operator may write tenant content. Version 1 is created with the question, and its
+         *     option ids are assigned by the server; the client may send a placeholder id such as `a` in
+         *     `options[].id` and name it in `correct`, and the server answers with the real ids.
+         *
+         *     `pg` takes 2–8 options and exactly one correct id; with `option_weighted` every option is valid
+         *     instead and `correct` must be empty, each option carrying 0–100 points (at most 2 decimals).
+         *     `pg_multi` takes 2–8 options and at least two correct ids, all-or-nothing at scoring time.
+         *     `isian` takes no options and 1–10 accepted answers. `benar_salah` has the server's fixed
+         *     `benar`/`salah` options and exactly one of them as the answer.
+         *
+         *     Content is stored verbatim as text: markdown and LaTeX render in the client, no HTML is
+         *     interpreted, and a `data:` or `javascript:` image URL answers `422` because images are deferred.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateQuestionRequest"];
+                };
+            };
+            responses: {
+                /** @description The question as stored, at version 1 */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Question"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One question of this tenant
+         * @description A question id of another tenant answers `404`, never `403`, so an id reveals nothing.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The question at its current version */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Question"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        /**
+         * Save a new version of a question
+         * @description Editing never rewrites what a tryout already used: when the normalized payload differs from
+         *     the current version, a new immutable version is appended and the head row moves to it, in one
+         *     transaction with that row locked. A payload identical to the current version answers `200` with
+         *     the same version and writes nothing.
+         *
+         *     `base_version` is the version the editor started from. If someone else has saved since, it no
+         *     longer matches and the answer is `409`; the editor must reload rather than overwrite. An option
+         *     id that belongs to this question keeps it, a missing id creates a new option, and an id of
+         *     another question answers `422`.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateQuestionRequest"];
+                };
+            };
+            responses: {
+                /** @description The question at its (possibly new) current version */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Question"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /**
+                 * @description `base_version` is no longer the current version: someone else saved first. The message asks
+                 *     the editor to reload; no write happened.
+                 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        /**
+         * Delete a question and its versions
+         * @description Versions, then the head row, are removed in one transaction. A version another slice already
+         *     references (a tryout will, from P08) makes the database refuse and the whole delete roll back,
+         *     answering `409`.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The question and every version of it are gone */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description A version of this question is still referenced */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1044,6 +1293,124 @@ export interface components {
              */
             id?: string;
             name: string;
+        };
+        QuestionOption: {
+            /** @description Assigned by the server and stable across versions; `benar`/`salah` for `benar_salah`. */
+            id: string;
+            label: string;
+            /**
+             * @description Only in weighted mode, at most 2 decimals. An option without points counts as 1 at scoring
+             *     time (P16).
+             */
+            points?: number;
+        };
+        Question: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: int64
+             * @description The human ID the list shows (FR-ADM-SOA-06). Installation-wide, may skip.
+             */
+            number: number;
+            /** @description The current immutable version, starting at 1. */
+            version: number;
+            /**
+             * Format: uuid
+             * @description The version row later slices reference (P08 assigns questions by version).
+             */
+            version_id: string;
+            /** Format: uuid */
+            program_id: string;
+            /** Format: uuid */
+            subject_id: string;
+            /** Format: uuid */
+            chapter_id: string | null;
+            /** @enum {string} */
+            type: "pg" | "pg_multi" | "isian" | "benar_salah";
+            /** @description Stored verbatim as text; markdown and LaTeX render client-side. */
+            content: string;
+            /** @enum {string} */
+            difficulty: "easy" | "medium" | "hard";
+            explanation: string;
+            /** @description Weighted-option mode, `pg` only. */
+            option_weighted: boolean;
+            /** @description Short-answer matching, `isian` only. */
+            case_sensitive: boolean;
+            options: components["schemas"]["QuestionOption"][];
+            /** @description Option ids for the choice types, accepted answers for `isian`, empty when weighted. */
+            correct: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        QuestionList: {
+            questions: components["schemas"]["Question"][];
+            /** @description Every question the filters match, not only the page returned. */
+            total: number;
+        };
+        QuestionOptionInput: {
+            /**
+             * @description An option id of this question keeps it; omit it to let the server assign one. A placeholder
+             *     such as `a` may be named in `correct` and is replaced by the assigned id.
+             */
+            id?: string;
+            label: string;
+            /** @description Weighted mode only, at most 2 decimals. */
+            points?: number;
+        };
+        CreateQuestionRequest: {
+            /** Format: uuid */
+            program_id: string;
+            /**
+             * Format: uuid
+             * @description Must belong to `program_id`.
+             */
+            subject_id: string;
+            /**
+             * Format: uuid
+             * @description Optional; must belong to `subject_id`.
+             */
+            chapter_id?: string | null;
+            /** @enum {string} */
+            type: "pg" | "pg_multi" | "isian" | "benar_salah";
+            /** @description Trimmed, 1–20000 characters. No HTML; `data:`/`javascript:` images are refused. */
+            content: string;
+            /** @enum {string} */
+            difficulty: "easy" | "medium" | "hard";
+            explanation?: string;
+            /** @description `pg` only; then `correct` must be empty and every option may carry points. */
+            option_weighted?: boolean;
+            /** @description `isian` only. */
+            case_sensitive?: boolean;
+            /**
+             * @description 2–8 for the choice types, absent for `isian`, optional for `benar_salah` (the server fixes
+             *     `benar`/`salah`).
+             */
+            options?: components["schemas"]["QuestionOptionInput"][];
+            correct?: string[];
+        };
+        UpdateQuestionRequest: {
+            /** @description The version the editor started from; a mismatch answers `409`. */
+            base_version: number;
+            /** Format: uuid */
+            program_id: string;
+            /** Format: uuid */
+            subject_id: string;
+            /** Format: uuid */
+            chapter_id?: string | null;
+            /** @enum {string} */
+            type: "pg" | "pg_multi" | "isian" | "benar_salah";
+            content: string;
+            /** @enum {string} */
+            difficulty: "easy" | "medium" | "hard";
+            explanation?: string;
+            /** @description `pg` only; then `correct` must be empty and every option may carry points. */
+            option_weighted?: boolean;
+            /** @description `isian` only. */
+            case_sensitive?: boolean;
+            options?: components["schemas"]["QuestionOptionInput"][];
+            correct?: string[];
         };
         ErrorEnvelope: {
             error: {

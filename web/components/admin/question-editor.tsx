@@ -5,44 +5,86 @@ import { Button } from "@heroui/react";
 import { Plus, Trash2 } from "lucide-react";
 import { LatexText } from "@/components/latex";
 import { RichTextEditor } from "@/components/admin/rich-text-editor";
-import { SelectInput, SwitchInput, TextInput, TextareaInput } from "@/components/ui/form";
+import { SelectInput, SwitchInput, TextareaInput } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { getProgram, programs } from "@/lib/mock-data";
-import type { Difficulty, Question, QuestionOption, QuestionType } from "@/lib/types";
+import type { Program, Question } from "@/lib/api/client";
 import { useAdminQuestionEditorT } from "@/lib/i18n/dict/admin-question-editor";
 
-export type QuestionDraft = Omit<Question, "id">;
+export type QuestionType = Question["type"];
+export type QuestionDifficulty = Question["difficulty"];
 
-const weightByDifficulty: Record<Difficulty, number> = { easy: 1, medium: 2, hard: 3 };
+// A new option carries a placeholder id; the server accepts it in `correct` and answers with real ids.
+export interface DraftOption {
+  id?: string;
+  label: string;
+  points?: number;
+}
 
-export function emptyDraft(programId: string): QuestionDraft {
+export interface QuestionDraft {
+  programId: string;
+  subjectId: string;
+  chapterId: string;
+  type: QuestionType;
+  content: string;
+  difficulty: QuestionDifficulty;
+  explanation: string;
+  optionWeighted: boolean;
+  caseSensitive: boolean;
+  options: DraftOption[];
+  correct: string[];
+}
+
+const placeholderId = () => "new-" + Math.random().toString(36).slice(2, 10);
+
+export function emptyDraft(programId: string, subjectId: string): QuestionDraft {
   return {
     programId,
-    subject: "",
-    chapter: "",
+    subjectId,
+    chapterId: "",
     type: "pg",
     content: "",
-    options: [
-      { id: "a", label: "" },
-      { id: "b", label: "" },
-      { id: "c", label: "" },
-      { id: "d", label: "" },
-    ],
-    correctAnswer: [],
     difficulty: "easy",
-    weight: 1,
     explanation: "",
     optionWeighted: false,
+    caseSensitive: false,
+    options: [1, 2, 3, 4].map(() => ({ id: placeholderId(), label: "" })),
+    correct: [],
   };
 }
 
-const programOptions = programs.map((p) => ({ id: p.id, label: p.name }));
+/** draftOf turns a question the API returned into the editable form, keeping every server id. */
+export function draftOf(question: Question): QuestionDraft {
+  return {
+    programId: question.program_id,
+    subjectId: question.subject_id,
+    chapterId: question.chapter_id ?? "",
+    type: question.type,
+    content: question.content,
+    difficulty: question.difficulty,
+    explanation: question.explanation,
+    optionWeighted: question.option_weighted,
+    caseSensitive: question.case_sensitive,
+    options: question.options.map((option) => ({ id: option.id, label: option.label, points: option.points })),
+    correct: [...question.correct],
+  };
+}
+
+const trueFalseOptions: DraftOption[] = [
+  { id: "benar", label: "Benar" },
+  { id: "salah", label: "Salah" },
+];
 
 export function QuestionEditor({
   initial,
+  programs,
+  errors = {},
+  saving = false,
   onSubmit,
 }: {
   initial: QuestionDraft;
+  programs: Program[];
+  errors?: Record<string, string>;
+  saving?: boolean;
   onSubmit: (draft: QuestionDraft) => void;
 }) {
   const t = useAdminQuestionEditorT();
@@ -61,81 +103,73 @@ export function QuestionEditor({
     { id: "hard", label: t.difficultyOptions.hard },
   ];
 
-  const program = getProgram(draft.programId);
+  const programOptions = programs.map((program) => ({ id: program.id, label: program.name }));
+  const program = programs.find((candidate) => candidate.id === draft.programId);
   const subjectOptions = useMemo(
-    () => (program?.subjects ?? []).map((s) => ({ id: s.id, label: s.name })),
+    () => (program?.subjects ?? []).map((subject) => ({ id: subject.id, label: subject.name })),
     [program],
   );
-  const activeSubject = program?.subjects.find((s) => s.name === draft.subject);
   const chapterOptions = useMemo(
-    () => (activeSubject?.chapters ?? []).map((c) => ({ id: c, label: c })),
-    [activeSubject],
+    () => (program?.subjects.find((subject) => subject.id === draft.subjectId)?.chapters ?? []).map((chapter) => ({ id: chapter.id, label: chapter.name })),
+    [program, draft.subjectId],
   );
 
   const setType = (type: QuestionType) => {
     if (type === "benar_salah") {
-      setDraft((d) => ({
-        ...d,
-        type,
-        options: [
-          { id: "benar", label: "Benar" },
-          { id: "salah", label: "Salah" },
-        ],
-        correctAnswer: [],
-        optionWeighted: false,
-      }));
+      setDraft((d) => ({ ...d, type, options: trueFalseOptions.map((option) => ({ ...option })), correct: [], optionWeighted: false }));
     } else if (type === "isian") {
-      setDraft((d) => ({ ...d, type, options: undefined, correctAnswer: [], optionWeighted: false }));
+      setDraft((d) => ({ ...d, type, options: [], correct: [], optionWeighted: false }));
     } else {
       setDraft((d) => ({
         ...d,
         type,
-        options: d.options && d.options.length >= 2 ? d.options : emptyDraft(d.programId).options,
-        correctAnswer: [],
+        options: d.options.length >= 2 ? d.options : emptyDraft(d.programId, d.subjectId).options,
+        correct: [],
         optionWeighted: type === "pg" ? d.optionWeighted : false,
       }));
     }
   };
 
-  const updateOption = (id: string, label: string) => {
-    setDraft((d) => ({ ...d, options: d.options?.map((o) => (o.id === id ? { ...o, label } : o)) }));
-  };
-
-  const updateOptionPoints = (id: string, points: number | undefined) => {
-    setDraft((d) => ({ ...d, options: d.options?.map((o) => (o.id === id ? { ...o, points } : o)) }));
+  const updateOption = (index: number, patch: Partial<DraftOption>) => {
+    setDraft((d) => ({ ...d, options: d.options.map((option, i) => (i === index ? { ...option, ...patch } : option)) }));
   };
 
   const addOption = () => {
+    setDraft((d) => ({ ...d, options: [...d.options, { id: placeholderId(), label: "" }] }));
+  };
+
+  const removeOption = (index: number) => {
     setDraft((d) => {
-      const nextId = String.fromCharCode(97 + (d.options?.length ?? 0));
-      return { ...d, options: [...(d.options ?? []), { id: nextId, label: "" }] };
+      const removed = d.options[index];
+      return {
+        ...d,
+        options: d.options.filter((_, i) => i !== index),
+        correct: removed ? d.correct.filter((id) => id !== removed.id) : d.correct,
+      };
     });
   };
 
-  const removeOption = (id: string) => {
-    setDraft((d) => ({
-      ...d,
-      options: d.options?.filter((o) => o.id !== id),
-      correctAnswer: d.correctAnswer.filter((a) => a !== id),
-    }));
-  };
-
-  const toggleCorrect = (id: string) => {
+  const toggleCorrect = (option: DraftOption) => {
+    const key = option.id ?? "";
     setDraft((d) => {
       if (d.type === "pg_multi") {
-        const has = d.correctAnswer.includes(id);
-        return { ...d, correctAnswer: has ? d.correctAnswer.filter((a) => a !== id) : [...d.correctAnswer, id] };
+        return {
+          ...d,
+          correct: d.correct.includes(key) ? d.correct.filter((id) => id !== key) : [...d.correct, key],
+        };
       }
-      return { ...d, correctAnswer: [id] };
+      return { ...d, correct: [key] };
     });
   };
+
+  const answers = draft.correct.join("\n");
 
   return (
     <form
       id="question-editor-form"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit(draft);
+        if (!saving) onSubmit(draft);
       }}
       className="flex w-full flex-col gap-4"
     >
@@ -150,6 +184,7 @@ export function QuestionEditor({
             onChange={(content) => setDraft((d) => ({ ...d, content }))}
           />
           <p className="text-xs text-muted italic">{t.contentHelp}</p>
+          {errors.content && <p className="text-xs text-danger">{errors.content}</p>}
           {draft.content && (
             <div className="rounded-lg border border-dashed border-border bg-surface-secondary px-3.5 py-3 text-sm">
               <p className="mb-1 text-[11px] font-medium tracking-wide text-muted uppercase">{t.previewLabel}</p>
@@ -159,11 +194,11 @@ export function QuestionEditor({
 
           <TextareaInput
             label={t.explanationLabel}
-            required
             rows={4}
             placeholder={t.explanationPlaceholder}
             value={draft.explanation}
             onChange={(e) => setDraft((d) => ({ ...d, explanation: e.target.value }))}
+            error={errors.explanation}
           />
         </div>
 
@@ -172,85 +207,115 @@ export function QuestionEditor({
             label={t.programLabel}
             required
             options={programOptions}
-            selectedKey={draft.programId}
-            onSelectionChange={(k) => k && setDraft((d) => (d.programId === k ? d : { ...d, programId: k, subject: "", chapter: "" }))}
+            selectedKey={draft.programId || null}
+            onSelectionChange={(key) =>
+              key && setDraft((d) => (d.programId === key ? d : { ...d, programId: key, subjectId: "", chapterId: "" }))
+            }
+            error={errors.program_id}
           />
           <SelectInput
             label={t.subjectLabel}
             required
             placeholder={subjectOptions.length === 0 ? t.subjectPlaceholderEmpty : t.subjectPlaceholder}
             options={subjectOptions}
-            selectedKey={activeSubject?.id ?? null}
-            onSelectionChange={(k) => {
-              const s = program?.subjects.find((x) => x.id === k);
-              setDraft((d) => ({ ...d, subject: s?.name ?? "", chapter: "" }));
-            }}
+            selectedKey={draft.subjectId || null}
+            onSelectionChange={(key) => setDraft((d) => ({ ...d, subjectId: key ?? "", chapterId: "" }))}
             isDisabled={subjectOptions.length === 0}
+            error={errors.subject_id}
           />
           <SelectInput
             label={t.chapterLabel}
             placeholder={chapterOptions.length === 0 ? t.chapterPlaceholderEmpty : t.chapterPlaceholder}
             options={chapterOptions}
-            selectedKey={draft.chapter || null}
-            onSelectionChange={(k) => setDraft((d) => ({ ...d, chapter: k ?? "" }))}
+            selectedKey={draft.chapterId || null}
+            onSelectionChange={(key) => setDraft((d) => ({ ...d, chapterId: key ?? "" }))}
             isDisabled={chapterOptions.length === 0}
+            error={errors.chapter_id}
           />
-          <SelectInput label={t.typeLabel} options={typeOptions} selectedKey={draft.type} onSelectionChange={(k) => k && setType(k as QuestionType)} />
+          <SelectInput
+            label={t.typeLabel}
+            options={typeOptions}
+            selectedKey={draft.type}
+            onSelectionChange={(key) => key && setType(key as QuestionType)}
+            error={errors.type}
+          />
           <SelectInput
             label={t.difficultyLabel}
             options={difficultyOptions}
             selectedKey={draft.difficulty}
-            onSelectionChange={(k) => {
-              const difficulty = (k as Difficulty) ?? "easy";
-              setDraft((d) => ({ ...d, difficulty, weight: weightByDifficulty[difficulty] }));
-            }}
+            onSelectionChange={(key) => key && setDraft((d) => ({ ...d, difficulty: key as QuestionDifficulty }))}
+            error={errors.difficulty}
           />
 
           {draft.type === "pg" && (
             <SwitchInput
               label={t.optionWeightedLabel}
               description={t.optionWeightedDescription}
-              isSelected={!!draft.optionWeighted}
-              onChange={(checked) => setDraft((d) => ({ ...d, optionWeighted: checked, correctAnswer: [] }))}
+              isSelected={draft.optionWeighted}
+              onChange={(checked) => setDraft((d) => ({ ...d, optionWeighted: checked, correct: [] }))}
             />
           )}
 
           {draft.type === "isian" ? (
-            <TextInput
-              label={t.correctAnswerLabel}
-              description={t.correctAnswerDescription}
-              required
-              value={draft.correctAnswer[0] ?? ""}
-              onChange={(e) => setDraft((d) => ({ ...d, correctAnswer: [e.target.value] }))}
-            />
+            <div className="flex flex-col gap-3">
+              <TextareaInput
+                label={t.correctAnswerLabel}
+                description={t.correctAnswerDescription}
+                required
+                rows={3}
+                value={answers}
+                onChange={(e) => setDraft((d) => ({ ...d, correct: e.target.value.split("\n") }))}
+                error={errors.correct}
+              />
+              <SwitchInput
+                label={t.caseSensitiveLabel}
+                description={t.caseSensitiveDescription}
+                isSelected={draft.caseSensitive}
+                onChange={(checked) => setDraft((d) => ({ ...d, caseSensitive: checked }))}
+              />
+            </div>
           ) : (
             <div className="space-y-2.5">
               <p className="text-[13px] font-medium text-foreground">
                 {t.optionsLabel}{" "}
                 <span className="text-muted">{draft.optionWeighted ? t.optionsHintWeighted : t.optionsHintMark}</span>
               </p>
-              {draft.options?.map((opt) => (
-                <OptionRow
-                  key={opt.id}
-                  option={opt}
-                  multi={draft.type === "pg_multi"}
-                  checked={draft.correctAnswer.includes(opt.id)}
-                  editableLabel={draft.type !== "benar_salah"}
-                  weighted={draft.optionWeighted}
-                  onToggle={() => toggleCorrect(opt.id)}
-                  onChange={(label) => updateOption(opt.id, label)}
-                  onPointsChange={(points) => updateOptionPoints(opt.id, points)}
-                  onRemove={draft.type !== "benar_salah" && (draft.options?.length ?? 0) > 2 ? () => removeOption(opt.id) : undefined}
-                  optionPlaceholder={t.optionPlaceholder}
-                />
+              {draft.options.map((option, index) => (
+                <div key={option.id ?? `option-${index}`} className="flex flex-col gap-1">
+                  <OptionRow
+                    option={option}
+                    multi={draft.type === "pg_multi"}
+                    checked={option.id !== undefined && draft.correct.includes(option.id)}
+                    editableLabel={draft.type !== "benar_salah"}
+                    weighted={draft.optionWeighted}
+                    onToggle={() => toggleCorrect(option)}
+                    onChange={(label) => updateOption(index, { label })}
+                    onPointsChange={(points) => updateOption(index, { points })}
+                    onRemove={
+                      draft.type !== "benar_salah" && draft.options.length > 2 ? () => removeOption(index) : undefined
+                    }
+                    placeholder={t.optionPlaceholder(String.fromCharCode(65 + index))}
+                  />
+                  {errors[`options[${index}].label`] && (
+                    <p className="pl-8 text-xs text-danger">{errors[`options[${index}].label`]}</p>
+                  )}
+                  {errors[`options[${index}].points`] && (
+                    <p className="pl-8 text-xs text-danger">{errors[`options[${index}].points`]}</p>
+                  )}
+                </div>
               ))}
-              {draft.type !== "benar_salah" && (
+              {draft.type !== "benar_salah" && draft.options.length < 8 && (
                 <Button type="button" variant="ghost" size="sm" onPress={addOption}>
                   <Plus className="size-3.5" /> {t.addOption}
                 </Button>
               )}
+              {errors.correct && <p className="text-xs text-danger">{errors.correct}</p>}
+              {errors.options && <p className="text-xs text-danger">{errors.options}</p>}
+              {errors.option_weighted && <p className="text-xs text-danger">{errors.option_weighted}</p>}
             </div>
           )}
+          {draft.type === "isian" && errors.options && <p className="text-xs text-danger">{errors.options}</p>}
+          {draft.type === "isian" && errors.case_sensitive && <p className="text-xs text-danger">{errors.case_sensitive}</p>}
         </div>
       </div>
     </form>
@@ -267,9 +332,9 @@ function OptionRow({
   onChange,
   onPointsChange,
   onRemove,
-  optionPlaceholder,
+  placeholder,
 }: {
-  option: QuestionOption;
+  option: DraftOption;
   multi: boolean;
   checked: boolean;
   editableLabel: boolean;
@@ -278,7 +343,7 @@ function OptionRow({
   onChange: (label: string) => void;
   onPointsChange?: (points: number | undefined) => void;
   onRemove?: () => void;
-  optionPlaceholder: (label: string) => string;
+  placeholder: string;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -286,6 +351,8 @@ function OptionRow({
         <input
           type="number"
           min={0}
+          max={100}
+          step={0.01}
           value={option.points ?? ""}
           placeholder="1"
           onChange={(e) => onPointsChange?.(e.target.value === "" ? undefined : Number(e.target.value))}
@@ -309,7 +376,7 @@ function OptionRow({
         <input
           value={option.label}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={optionPlaceholder(option.id.toUpperCase())}
+          placeholder={placeholder}
           className="flex-1 rounded-lg border border-border bg-field px-3 py-2 text-sm text-field-foreground outline-none focus:border-accent"
         />
       ) : (

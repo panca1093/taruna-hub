@@ -29,6 +29,8 @@ tags:
     description: Sessions, tokens and the authenticated principal
   - name: programs
     description: Tenant curriculum — programs, subjects and chapters
+  - name: questions
+    description: Tenant question bank — four types, immutable versions
 
 paths:
   /healthz:
@@ -562,6 +564,230 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/questions:
+    get:
+      tags: [questions]
+      summary: The tenant's question bank
+      description: |
+        FR-ADM-SOA-01/05: Admin and Operator read the bank; a Student answers `403`, because an answer
+        key never leaves the staff API. Questions come back newest first (`number` descending), at most
+        100 per page, with `total` counting every question the filters match.
+
+        `q` is a case-insensitive substring of the content, and `%` or `_` in it match themselves.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: program_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: subject_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [pg, pg_multi, isian, benar_salah]
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+        - name: q
+          in: query
+          description: Case-insensitive substring of the content; `%` and `_` are literal.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of this tenant's questions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuestionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    post:
+      tags: [questions]
+      summary: Create a question
+      description: |
+        Admin and Operator may write tenant content. Version 1 is created with the question, and its
+        option ids are assigned by the server; the client may send a placeholder id such as `a` in
+        `options[].id` and name it in `correct`, and the server answers with the real ids.
+
+        `pg` takes 2–8 options and exactly one correct id; with `option_weighted` every option is valid
+        instead and `correct` must be empty, each option carrying 0–100 points (at most 2 decimals).
+        `pg_multi` takes 2–8 options and at least two correct ids, all-or-nothing at scoring time.
+        `isian` takes no options and 1–10 accepted answers. `benar_salah` has the server's fixed
+        `benar`/`salah` options and exactly one of them as the answer.
+
+        Content is stored verbatim as text: markdown and LaTeX render in the client, no HTML is
+        interpreted, and a `data:` or `javascript:` image URL answers `422` because images are deferred.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuestionRequest"
+      responses:
+        "201":
+          description: The question as stored, at version 1
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/questions/{id}:
+    get:
+      tags: [questions]
+      summary: One question of this tenant
+      description: |
+        A question id of another tenant answers `404`, never `403`, so an id reveals nothing.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The question at its current version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [questions]
+      summary: Save a new version of a question
+      description: |
+        Editing never rewrites what a tryout already used: when the normalized payload differs from
+        the current version, a new immutable version is appended and the head row moves to it, in one
+        transaction with that row locked. A payload identical to the current version answers `200` with
+        the same version and writes nothing.
+
+        `base_version` is the version the editor started from. If someone else has saved since, it no
+        longer matches and the answer is `409`; the editor must reload rather than overwrite. An option
+        id that belongs to this question keeps it, a missing id creates a new option, and an id of
+        another question answers `422`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateQuestionRequest"
+      responses:
+        "200":
+          description: The question at its (possibly new) current version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Question"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            `base_version` is no longer the current version: someone else saved first. The message asks
+            the editor to reload; no write happened.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      tags: [questions]
+      summary: Delete a question and its versions
+      description: |
+        Versions, then the head row, are removed in one transaction. A version another slice already
+        references (a tryout will, from P08) makes the database refuse and the whole delete roll back,
+        answering `409`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: The question and every version of it are gone
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: A version of this question is still referenced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -860,6 +1086,219 @@ components:
         name:
           type: string
           maxLength: 100
+
+    QuestionOption:
+      type: object
+      additionalProperties: false
+      required: [id, label]
+      properties:
+        id:
+          type: string
+          description: |
+            Assigned by the server and stable across versions; `benar`/`salah` for `benar_salah`.
+        label:
+          type: string
+          maxLength: 500
+        points:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: |
+            Only in weighted mode, at most 2 decimals. An option without points counts as 1 at scoring
+            time (P16).
+
+    Question:
+      type: object
+      additionalProperties: false
+      required: [id, number, version, version_id, program_id, subject_id, chapter_id, type, content,
+                 difficulty, explanation, option_weighted, case_sensitive, options, correct,
+                 created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          format: int64
+          description: The human ID the list shows (FR-ADM-SOA-06). Installation-wide, may skip.
+        version:
+          type: integer
+          description: The current immutable version, starting at 1.
+        version_id:
+          type: string
+          format: uuid
+          description: The version row later slices reference (P08 assigns questions by version).
+        program_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        chapter_id:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          type: string
+          enum: [pg, pg_multi, isian, benar_salah]
+        content:
+          type: string
+          description: Stored verbatim as text; markdown and LaTeX render client-side.
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        explanation:
+          type: string
+        option_weighted:
+          type: boolean
+          description: Weighted-option mode, `pg` only.
+        case_sensitive:
+          type: boolean
+          description: Short-answer matching, `isian` only.
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuestionOption"
+        correct:
+          type: array
+          description: Option ids for the choice types, accepted answers for `isian`, empty when weighted.
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    QuestionList:
+      type: object
+      additionalProperties: false
+      required: [questions, total]
+      properties:
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Question"
+        total:
+          type: integer
+          description: Every question the filters match, not only the page returned.
+
+    QuestionOptionInput:
+      type: object
+      additionalProperties: false
+      required: [label]
+      properties:
+        id:
+          type: string
+          description: |
+            An option id of this question keeps it; omit it to let the server assign one. A placeholder
+            such as `a` may be named in `correct` and is replaced by the assigned id.
+        label:
+          type: string
+          maxLength: 500
+        points:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Weighted mode only, at most 2 decimals.
+
+    CreateQuestionRequest:
+      type: object
+      additionalProperties: false
+      required: [program_id, subject_id, type, content, difficulty]
+      properties:
+        program_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+          description: Must belong to `program_id`.
+        chapter_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional; must belong to `subject_id`.
+        type:
+          type: string
+          enum: [pg, pg_multi, isian, benar_salah]
+        content:
+          type: string
+          maxLength: 20000
+          description: Trimmed, 1–20000 characters. No HTML; `data:`/`javascript:` images are refused.
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        explanation:
+          type: string
+          maxLength: 20000
+        option_weighted:
+          type: boolean
+          description: "`pg` only; then `correct` must be empty and every option may carry points."
+        case_sensitive:
+          type: boolean
+          description: "`isian` only."
+        options:
+          type: array
+          maxItems: 8
+          description: |
+            2–8 for the choice types, absent for `isian`, optional for `benar_salah` (the server fixes
+            `benar`/`salah`).
+          items:
+            $ref: "#/components/schemas/QuestionOptionInput"
+        correct:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+
+    UpdateQuestionRequest:
+      type: object
+      additionalProperties: false
+      required: [program_id, subject_id, type, content, difficulty, base_version]
+      properties:
+        base_version:
+          type: integer
+          description: The version the editor started from; a mismatch answers `409`.
+        program_id:
+          type: string
+          format: uuid
+        subject_id:
+          type: string
+          format: uuid
+        chapter_id:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          type: string
+          enum: [pg, pg_multi, isian, benar_salah]
+        content:
+          type: string
+          maxLength: 20000
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        explanation:
+          type: string
+          maxLength: 20000
+        option_weighted:
+          type: boolean
+          description: "`pg` only; then `correct` must be empty and every option may carry points."
+        case_sensitive:
+          type: boolean
+          description: "`isian` only."
+        options:
+          type: array
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/QuestionOptionInput"
+        correct:
+          type: array
+          maxItems: 10
+          items:
+            type: string
 
     ErrorEnvelope:
       type: object
