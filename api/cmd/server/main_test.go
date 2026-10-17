@@ -171,6 +171,16 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				t.Errorf("GET /api/v1/programs: Cache-Control = %q, want no-store", got)
 			}
 
+			// The question bank is staff content too: closed without a token, open to an admin.
+			if rec := serveOn(e, "/api/v1/questions", host); rec.Code != http.StatusUnauthorized {
+				t.Errorf("GET /api/v1/questions without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
+			}
+			if rec := getWithToken(e, host, "/api/v1/questions", adminTokens.AccessToken); rec.Code != http.StatusOK {
+				t.Errorf("GET /api/v1/questions as admin: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusOK)
+			} else if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("GET /api/v1/questions: Cache-Control = %q, want no-store", got)
+			}
+
 			login := postJSON(e, host, "/api/v1/auth/login", map[string]string{
 				"identifier": *student.Email,
 				"password":   wiringPassword,
