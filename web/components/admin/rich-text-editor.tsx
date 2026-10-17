@@ -1,13 +1,13 @@
 "use client";
 
 import { useRef } from "react";
-import { Button, toast } from "@heroui/react";
-import { Bold, ImagePlus, Italic, List, ListOrdered, Sigma, type LucideIcon } from "lucide-react";
+import { Button } from "@heroui/react";
+import { Bold, Italic, List, ListOrdered, Sigma, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useAdminRichTextEditorT } from "@/lib/i18n/dict/admin-rich-text-editor";
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
+// No image button: uploads and assets are deferred (P06), and the API refuses `data:` URLs, so the
+// editor only offers the formatting it can actually store.
 export function RichTextEditor({
   label,
   value,
@@ -27,7 +27,6 @@ export function RichTextEditor({
 }) {
   const t = useAdminRichTextEditorT();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const applyWrap = (before: string, after: string, placeholderText: string) => {
     const el = textareaRef.current;
@@ -57,28 +56,6 @@ export function RichTextEditor({
     });
   };
 
-  const insertImage = (file: File) => {
-    if (file.size > MAX_IMAGE_BYTES) {
-      toast.danger(t.toastImageTooBig, { description: t.toastImageTooBigDescription });
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const el = textareaRef.current;
-      const cursor = el ? el.selectionStart : value.length;
-      const needsLeadingBreak = cursor > 0 && value[cursor - 1] !== "\n";
-      const insertText = `${needsLeadingBreak ? "\n" : ""}![${t.imageAlt}](${dataUrl})\n`;
-      const next = value.slice(0, cursor) + insertText + value.slice(cursor);
-      onChange(next);
-      requestAnimationFrame(() => {
-        el?.focus();
-        el?.setSelectionRange(cursor + insertText.length, cursor + insertText.length);
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label && (
@@ -95,18 +72,6 @@ export function RichTextEditor({
           <ToolbarButton icon={ListOrdered} label={t.numberedList} onPress={() => applyLinePrefix("1. ")} />
           <span className="mx-1 h-4 w-px bg-border" />
           <ToolbarButton icon={Sigma} label={t.insertLatex} onPress={() => applyWrap("$", "$", "x^2")} />
-          <ToolbarButton icon={ImagePlus} label={t.insertImage} onPress={() => fileInputRef.current?.click()} />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) insertImage(file);
-              e.target.value = "";
-            }}
-          />
         </div>
         <textarea
           ref={textareaRef}
