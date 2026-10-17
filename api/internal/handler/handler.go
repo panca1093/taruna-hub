@@ -70,6 +70,10 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 
 	// Questions are tenant content, so an Operator writes them too; a Student never sees the keys.
 	v1.GET("/questions", h.ListQuestions, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	// Import is static before the :id routes, so a template or preview is never read as a question id.
+	v1.GET("/questions/import/template", h.QuestionImportTemplate, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/questions/import/preview", h.PreviewQuestionImport, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/questions/import/commit", h.CommitQuestionImport, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/questions/:id", h.GetQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/questions", h.CreateQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.PUT("/questions/:id", h.UpdateQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))

@@ -19,6 +19,7 @@ const (
 	CodeNotFound     Code = "not_found"
 	CodeConflict     Code = "conflict"
 	CodeValidation   Code = "validation_failed"
+	CodeTooLarge     Code = "payload_too_large"
 	CodeRateLimited  Code = "too_many_requests"
 	CodeInternal     Code = "internal_error"
 )
