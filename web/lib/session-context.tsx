@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { api, onSessionLost, type ApiUser, type TokenResponse } from "./api/client";
+import { ApiError, api, onSessionLost, type ApiUser, type TokenResponse } from "./api/client";
 import type { Role } from "./types";
 
 export interface SessionUser {
@@ -15,7 +15,8 @@ export interface SessionUser {
   emailVerified: boolean;
 }
 
-type Status = "loading" | "anonymous" | "authenticated";
+// "unavailable": the API could not be reached, which says nothing about the session.
+type Status = "loading" | "anonymous" | "authenticated" | "unavailable";
 
 interface SessionContextValue {
   status: Status;
@@ -24,6 +25,7 @@ interface SessionContextValue {
   login: (identifier: string, password: string) => Promise<SessionUser>;
   register: (body: { name: string; email: string; phone?: string; password: string }) => Promise<SessionUser>;
   logout: () => Promise<void>;
+  retry: () => void;
   reloadUser: () => Promise<void>;
 }
 
@@ -52,23 +54,45 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     user: null,
   });
   const lastActivity = useRef(0);
+  // Bumped by anything that decides the session, so a slower boot refresh cannot overwrite it.
+  const epoch = useRef(0);
   const pathname = usePathname();
 
   const open = useCallback((tokens: TokenResponse) => {
     const user = toUser(tokens.user);
+    epoch.current++;
     lastActivity.current = Date.now();
     setState({ status: "authenticated", user });
     return user;
   }, []);
 
-  useEffect(() => {
+  const boot = useCallback(() => {
+    const mine = epoch.current;
     api.refresh().then(
-      (tokens) => setState({ status: "authenticated", user: toUser(tokens.user) }),
-      () => setState({ status: "anonymous", user: null }),
+      (tokens) => {
+        if (epoch.current === mine) setState({ status: "authenticated", user: toUser(tokens.user) });
+      },
+      (err) => {
+        if (epoch.current !== mine) return;
+        const rejected = err instanceof ApiError && (err.status === 401 || err.status === 403);
+        setState({ status: rejected ? "anonymous" : "unavailable", user: null });
+      },
     );
-    onSessionLost(() => setState({ status: "anonymous", user: null }));
-    return () => onSessionLost(null);
   }, []);
+
+  const retry = useCallback(() => {
+    setState({ status: "loading", user: null });
+    boot();
+  }, [boot]);
+
+  useEffect(() => {
+    boot();
+    onSessionLost(() => {
+      epoch.current++;
+      setState({ status: "anonymous", user: null });
+    });
+    return () => onSessionLost(null);
+  }, [boot]);
 
   const authenticated = state.status === "authenticated";
   useEffect(() => {
@@ -89,11 +113,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [open],
   );
   const logout = useCallback(async () => {
-    try {
-      await api.logout();
-    } finally {
-      setState({ status: "anonymous", user: null });
-    }
+    await api.logout();
+    epoch.current++;
+    setState({ status: "anonymous", user: null });
   }, []);
   const reloadUser = useCallback(async () => {
     const u = await api.me();
@@ -101,8 +123,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<SessionContextValue>(
-    () => ({ ...state, role: state.user?.role ?? null, login, register, logout, reloadUser }),
-    [state, login, register, logout, reloadUser],
+    () => ({ ...state, role: state.user?.role ?? null, login, register, logout, retry, reloadUser }),
+    [state, login, register, logout, retry, reloadUser],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

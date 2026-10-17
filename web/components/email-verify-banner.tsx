@@ -14,6 +14,7 @@ export function EmailVerifyBanner() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [resending, setResending] = useState(false);
 
   if (!user || !user.email || user.emailVerified) return null;
 
@@ -34,11 +35,15 @@ export function EmailVerifyBanner() {
 
   const resend = async () => {
     setError("");
+    setResending(true);
     try {
       await api.resendEmailCode();
       toast.success(t.resentToast);
     } catch (err) {
-      setError(errorText(err, t.networkError));
+      if (err instanceof ApiError && err.status === 409) await reloadUser().catch(() => {});
+      else setError(errorText(err, t.networkError));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -50,7 +55,7 @@ export function EmailVerifyBanner() {
         <p className="mt-0.5 text-xs">{t.verifyDescription(user.email)}</p>
         <form onSubmit={verify} className="mt-3 flex flex-wrap items-end gap-2">
           <TextInput
-            aria-label={t.codeLabel}
+            label={t.codeLabel}
             inputMode="numeric"
             maxLength={6}
             placeholder="000000"
@@ -61,7 +66,7 @@ export function EmailVerifyBanner() {
           <Button type="submit" size="sm" variant="primary" isDisabled={pending || code.length !== 6}>
             {t.submitCode}
           </Button>
-          <Button type="button" size="sm" variant="ghost" onPress={resend}>
+          <Button type="button" size="sm" variant="ghost" onPress={resend} isDisabled={resending}>
             {t.resendCode}
           </Button>
         </form>

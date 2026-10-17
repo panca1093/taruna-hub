@@ -20,6 +20,7 @@ const id = {
   operator: "Operator",
   admin: "Admin",
   logout: "Keluar",
+  logoutFailed: "Gagal keluar. Coba lagi.",
   selectPlaceholder: "Pilih...",
 };
 
@@ -41,6 +42,7 @@ const en: typeof id = {
   operator: "Operator",
   admin: "Admin",
   logout: "Log out",
+  logoutFailed: "Could not log out. Try again.",
   selectPlaceholder: "Select...",
 };
 

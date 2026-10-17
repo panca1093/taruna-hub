@@ -116,7 +116,8 @@ function opened(tokens: TokenResponse): TokenResponse {
 async function authed<T>(path: keyof paths, init: RequestInit = {}): Promise<T> {
   const send = () =>
     request<T>(path, { ...init, headers: { ...init.headers, Authorization: `Bearer ${accessToken}` } });
-  if (accessToken !== null) {
+  const used = accessToken;
+  if (used !== null) {
     try {
       return await send();
     } catch (err) {
@@ -124,7 +125,8 @@ async function authed<T>(path: keyof paths, init: RequestInit = {}): Promise<T> 
     }
   }
   try {
-    await refresh();
+    // A concurrent caller may already have rotated the token this request was sent with.
+    if (accessToken === used) await refresh();
     return await send();
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
@@ -163,11 +165,8 @@ export const api = {
   register: (body: RegisterBody) => post<TokenResponse>("/api/v1/auth/register", body).then(opened),
   refresh,
   logout: async () => {
-    try {
-      await post<void>("/api/v1/auth/logout");
-    } finally {
-      accessToken = null;
-    }
+    await post<void>("/api/v1/auth/logout");
+    accessToken = null;
   },
   me: () => authed<ApiUser>("/api/v1/me"),
   forgotPassword: (email: string) => post<void>("/api/v1/auth/password/forgot", { email }),

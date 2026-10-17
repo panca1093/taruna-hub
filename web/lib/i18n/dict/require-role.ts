@@ -8,6 +8,9 @@ const id = {
   accessRestrictedTitle: "Akses terbatas",
   accessRestrictedDescription:
     "Akun kamu tidak punya akses ke halaman ini.",
+  unavailableTitle: "Server tidak dapat dihubungi",
+  unavailableDescription: "Sesi kamu tidak terpengaruh. Coba muat ulang sebentar lagi.",
+  retry: "Coba lagi",
 };
 
 const en: typeof id = {
@@ -16,6 +19,9 @@ const en: typeof id = {
   accessRestrictedTitle: "Access restricted",
   accessRestrictedDescription:
     "Your account does not have access to this page.",
+  unavailableTitle: "Cannot reach the server",
+  unavailableDescription: "Your session is not affected. Try again in a moment.",
+  retry: "Try again",
 };
 
 export function useRequireRoleT() {
