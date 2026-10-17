@@ -112,8 +112,6 @@ func (s *CurriculumService) Create(ctx context.Context, scope HostScope, princip
 	return tree, nil
 }
 
-// Replace rewrites the tree the body names, inside one transaction with the program row locked, so
-// two admins saving at once cannot interleave their diffs.
 func (s *CurriculumService) Replace(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID, input ProgramInput) (model.ProgramTree, error) {
 	tenantID, err := curriculumTenant(scope, principal)
 	if err != nil {
@@ -138,8 +136,6 @@ func (s *CurriculumService) Replace(ctx context.Context, scope HostScope, princi
 	return out, err
 }
 
-// Delete removes the tree bottom-up in one transaction; anything still referencing it answers 409
-// and rolls the whole delete back.
 func (s *CurriculumService) Delete(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) error {
 	tenantID, err := curriculumTenant(scope, principal)
 	if err != nil {
@@ -258,8 +254,6 @@ func treeOf(input ProgramInput) model.ProgramTree {
 	return tree
 }
 
-// programError turns the repository's causes into the answers the API promises; anything else is a
-// genuine failure and passes through to the error handler.
 func programError(err error) error {
 	switch {
 	case err == nil:
