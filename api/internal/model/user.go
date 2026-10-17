@@ -29,10 +29,3 @@ type User struct {
 	// EmailVerifiedAt is nil until the owner proves the inbox, by a code or a password reset.
 	EmailVerifiedAt *time.Time
 }
-
-type Program struct {
-	ID        uuid.UUID
-	Code      string
-	Name      string
-	CreatedAt time.Time
-}
