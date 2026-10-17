@@ -24,17 +24,19 @@ type Handler struct {
 	auth          *service.AuthService
 	account       *service.AccountService
 	curriculum    *service.CurriculumService
+	questions     *service.QuestionService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
 
-func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, opts AuthOptions) *Handler {
+func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, opts AuthOptions) *Handler {
 	return &Handler{
 		logger:        logger,
 		health:        health,
 		auth:          auth,
 		account:       account,
 		curriculum:    curriculum,
+		questions:     questions,
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
@@ -65,4 +67,11 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/programs", h.CreateProgram, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.PUT("/programs/:id", h.ReplaceProgram, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.DELETE("/programs/:id", h.DeleteProgram, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
+
+	// Questions are tenant content, so an Operator writes them too; a Student never sees the keys.
+	v1.GET("/questions", h.ListQuestions, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.GET("/questions/:id", h.GetQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/questions", h.CreateQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.PUT("/questions/:id", h.UpdateQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.DELETE("/questions/:id", h.DeleteQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 }
