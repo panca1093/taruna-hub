@@ -204,7 +204,7 @@ For every slice, use this verification loop:
 
 ### P05 — Master and tenant curriculum
 
-**Status:** planned · **Size:** M · **Depends:** P04
+**Status:** done, lean — tenant programs/subjects/chapters with role-scoped CRUD, tenant composite FKs, RESTRICT delete guards and the web programs page on the API; master content, copy-to-own and origin markers are deferred · **Size:** M · **Depends:** P04
 
 **Outcome:** Staff choose authorized master/tenant programs, subjects and chapters; Admin maintains the tenant hierarchy.
 

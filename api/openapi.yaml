@@ -7,7 +7,7 @@ info:
     is generated from this file, so a breaking change here surfaces as a compile error in
     the frontend rather than a runtime surprise.
 
-    Scope today is slices P00–P03b. Later slices extend this file; they do not fork it.
+    Scope today is slices P00–P05. Later slices extend this file; they do not fork it.
     Every `/api/v1/*` route resolves its tenant from the request host first, and the access token
     has to agree with that host, so a token minted for one tenant is refused everywhere else.
     P03a and P03b ship the API and the generated types only — the auth screens are P03c.
@@ -27,6 +27,8 @@ tags:
     description: Public tenant lookup by request host
   - name: auth
     description: Sessions, tokens and the authenticated principal
+  - name: programs
+    description: Tenant curriculum — programs, subjects and chapters
 
 paths:
   /healthz:
@@ -404,6 +406,162 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/programs:
+    get:
+      tags: [programs]
+      summary: The tenant's program tree
+      description: |
+        FR-ADM-PRG-02: the hierarchy the question and tryout dropdowns read. Programs come back in
+        their stored order, each with its subjects and their chapters in position order.
+
+        Admin and Operator may read it; a Student answers `403`. The tree is always the tenant the
+        request host resolves to — this slice has no master content and no copy-to-own.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Every program of this tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgramList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags: [programs]
+      summary: Create a program with optional subjects and chapters
+      description: |
+        Admin only (FR-ADM-PRG-01). `code` is trimmed and uppercased, then must be 2–12 characters
+        of `A-Z`, `0-9`, `_` or `-`; it is unique per tenant, so another tenant may use the same
+        code. Subject and chapter names are trimmed, 1–100 characters, and unique among their
+        siblings without regard to case. At most 50 subjects and 200 chapters per subject.
+
+        Positions follow the order of the arrays. A duplicate code answers `409` with
+        `fields.code`; a rule violation answers `422` with the failing field's path.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProgramRequest"
+      responses:
+        "201":
+          description: The program as stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Program"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: The request host selects no active tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The code is already used in this tenant (`fields.code`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/programs/{id}:
+    put:
+      tags: [programs]
+      summary: Replace a program's tree
+      description: |
+        Admin only. REPLACE semantics in one transaction with the program row locked: an item with an
+        `id` is updated, an item without one is created, and an existing item the body no longer
+        names is deleted. Positions are rewritten from the order of the arrays; the ids of kept items
+        never change. Chapter ids are checked against this program, so a chapter may move to another
+        of its own subjects but never to another program or tenant.
+
+        An `id` that belongs to another program answers `422` naming its path (for example
+        `subjects[1].id`). A program id of another tenant answers `404`, never `403`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProgramRequest"
+      responses:
+        "200":
+          description: The tree as stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Program"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The code is already used in this tenant (`fields.code`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      tags: [programs]
+      summary: Delete a program and its tree
+      description: |
+        Admin only. Chapters, then subjects, then the program are removed in one transaction. Nothing
+        is ever deleted implicitly: if a chapter or subject is still referenced (questions and
+        tryouts will do that from later slices), the database refuses and the whole delete rolls
+        back, answering `409`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: The program and its tree are gone
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The program, a subject or a chapter is still referenced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -545,6 +703,163 @@ components:
           example: 900
         user:
           $ref: "#/components/schemas/User"
+
+    ProgramList:
+      type: object
+      additionalProperties: false
+      required: [programs]
+      properties:
+        programs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Program"
+
+    Program:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, description, subjects]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          description: Unique per tenant. Always stored uppercased.
+          example: SD
+        name:
+          type: string
+        description:
+          type: string
+        subjects:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgramSubject"
+
+    ProgramSubject:
+      type: object
+      additionalProperties: false
+      required: [id, name, chapters]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        chapters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProgramChapter"
+
+    ProgramChapter:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    CreateProgramRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          description: Trimmed and uppercased, then 2–12 characters of `A-Z`, `0-9`, `_` or `-`.
+          example: SD
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        subjects:
+          type: array
+          maxItems: 50
+          description: Order becomes `position`.
+          items:
+            $ref: "#/components/schemas/CreateSubjectRequest"
+
+    CreateSubjectRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        chapters:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/CreateChapterRequest"
+
+    CreateChapterRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+
+    UpdateProgramRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, description, subjects]
+      properties:
+        code:
+          type: string
+          description: Trimmed and uppercased, then 2–12 characters of `A-Z`, `0-9`, `_` or `-`.
+          example: SD
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        subjects:
+          type: array
+          maxItems: 50
+          description: |
+            The complete tree: order becomes `position`, items without an `id` are created, and
+            existing items missing from this array are deleted.
+          items:
+            $ref: "#/components/schemas/UpdateSubjectRequest"
+
+    UpdateSubjectRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Omit to create a subject; an existing id must belong to this program.
+        name:
+          type: string
+          maxLength: 100
+        chapters:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/UpdateChapterRequest"
+
+    UpdateChapterRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Omit to create a chapter; an existing id must belong to this program.
+        name:
+          type: string
+          maxLength: 100
 
     ErrorEnvelope:
       type: object

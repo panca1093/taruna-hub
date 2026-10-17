@@ -93,7 +93,8 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 		Secret:        cfg.JWTSecret,
 		Logger:        logger,
 	})
-	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, handler.AuthOptions{
+	curriculum := service.NewCurriculumService(pool, repository.NewCurriculumRepository(pool))
+	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, handler.AuthOptions{
 		SecureCookies: !cfg.IsDevelopment(),
 		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
 	})

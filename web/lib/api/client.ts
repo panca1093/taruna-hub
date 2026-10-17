@@ -11,8 +11,12 @@ export type NotReady = paths["/readyz"]["get"]["responses"][503]["content"]["app
 export type Tenant = components["schemas"]["Tenant"];
 export type ApiUser = components["schemas"]["User"];
 export type TokenResponse = components["schemas"]["TokenResponse"];
+export type Program = components["schemas"]["Program"];
+export type ProgramList = components["schemas"]["ProgramList"];
 type LoginBody = components["schemas"]["LoginRequest"];
 type RegisterBody = components["schemas"]["RegisterRequest"];
+type CreateProgramBody = components["schemas"]["CreateProgramRequest"];
+type UpdateProgramBody = components["schemas"]["UpdateProgramRequest"];
 
 // Production sets NEXT_PUBLIC_API_URL to "" (same-origin); unset in dev, call the API on the page's own host.
 function baseUrl(): string {
@@ -84,6 +88,16 @@ const post = <T>(path: keyof paths, body?: Json, headers?: HeadersInit) =>
     headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...headers },
     body: body ? JSON.stringify(body) : undefined,
   });
+
+// The write verbs below take an already typed body; only the transport is shared.
+const mutate = <T>(method: string, path: keyof paths, body?: unknown): Promise<T> =>
+  authed<T>(path, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+const programPath = (id: string) => `/api/v1/programs/${id}` as keyof paths;
 
 // The access token lives in memory only; the refresh cookie is HttpOnly and never readable here.
 let accessToken: string | null = null;
@@ -179,4 +193,11 @@ export const api = {
       body: JSON.stringify({ code }),
     }),
   resendEmailCode: () => authed<void>("/api/v1/me/email/resend", { method: "POST" }),
+
+  programs: {
+    list: () => authed<ProgramList>("/api/v1/programs"),
+    create: (body: CreateProgramBody) => mutate<Program>("POST", "/api/v1/programs", body),
+    update: (id: string, body: UpdateProgramBody) => mutate<Program>("PUT", programPath(id), body),
+    remove: (id: string) => mutate<void>("DELETE", programPath(id)),
+  },
 };

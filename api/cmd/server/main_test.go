@@ -47,6 +47,7 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 
 	tenants := seedTenants(t, ctx, pool)
 	student := seedUser(t, ctx, pool, tenants[0].ID, model.RoleStudent)
+	admin := seedUser(t, ctx, pool, tenants[0].ID, model.RoleAdmin)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	redisURL := os.Getenv("REDIS_URL")
@@ -146,6 +147,28 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 			}
 			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
 				t.Errorf("GET /api/v1/me: Cache-Control = %q, want no-store", got)
+			}
+
+			// Curriculum is tenant staff only: no token is a rejection, an admin reads it everywhere.
+			if rec := serveOn(e, "/api/v1/programs", host); rec.Code != http.StatusUnauthorized {
+				t.Errorf("GET /api/v1/programs without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
+			}
+			adminLogin := postJSON(e, host, "/api/v1/auth/login", map[string]string{
+				"identifier": *admin.Email, "password": wiringPassword,
+			})
+			if adminLogin.Code != http.StatusOK {
+				t.Fatalf("POST /api/v1/auth/login as admin: status = %d body = %s, want %d", adminLogin.Code, adminLogin.Body.String(), http.StatusOK)
+			}
+			var adminTokens struct {
+				AccessToken string `json:"access_token"`
+			}
+			if err := json.Unmarshal(adminLogin.Body.Bytes(), &adminTokens); err != nil || adminTokens.AccessToken == "" {
+				t.Fatalf("admin login body %s carries no access token: %v", adminLogin.Body.String(), err)
+			}
+			if rec := getWithToken(e, host, "/api/v1/programs", adminTokens.AccessToken); rec.Code != http.StatusOK {
+				t.Errorf("GET /api/v1/programs as admin: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusOK)
+			} else if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("GET /api/v1/programs: Cache-Control = %q, want no-store", got)
 			}
 
 			login := postJSON(e, host, "/api/v1/auth/login", map[string]string{
