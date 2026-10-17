@@ -112,7 +112,7 @@ func (f authFixture) echo(t *testing.T, opts ...service.AuthOption) *echo.Echo {
 	e.Use(httpx.RequestLogger(logger))
 	e.Use(httpx.CORS(devOrigins, true))
 	auth := newAuthService(f.tenantFixture, opts...)
-	New(logger, NewHealthHandler(f.pool), auth, newAccountService(t, f.tenantFixture, auth), newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), AuthOptions{
+	New(logger, NewHealthHandler(f.pool), auth, newAccountService(t, f.tenantFixture, auth), newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), AuthOptions{
 		SecureCookies: f.secure,
 		AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
 	}).Register(e, ResolveHostScope(f.tenants, false))

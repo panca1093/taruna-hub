@@ -25,11 +25,12 @@ type Handler struct {
 	account       *service.AccountService
 	curriculum    *service.CurriculumService
 	questions     *service.QuestionService
+	tryouts       *service.TryoutService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
 
-func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, opts AuthOptions) *Handler {
+func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, opts AuthOptions) *Handler {
 	return &Handler{
 		logger:        logger,
 		health:        health,
@@ -37,6 +38,7 @@ func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, 
 		account:       account,
 		curriculum:    curriculum,
 		questions:     questions,
+		tryouts:       tryouts,
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
@@ -78,4 +80,13 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/questions", h.CreateQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.PUT("/questions/:id", h.UpdateQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.DELETE("/questions/:id", h.DeleteQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+
+	// Tryouts are tenant content too; a Student never reaches the builder (D02 pending, role-only).
+	v1.GET("/tryouts", h.ListTryouts, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/tryouts", h.CreateTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.GET("/tryouts/:id", h.GetTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.PUT("/tryouts/:id", h.UpdateTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.DELETE("/tryouts/:id", h.DeleteTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/tryouts/:id/publish", h.PublishTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/tryouts/:id/unpublish", h.UnpublishTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 }

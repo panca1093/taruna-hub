@@ -236,3 +236,70 @@ JOIN subjects s ON s.program_id = p.id AND s.name = v.subject_name
 LEFT JOIN chapters c ON c.subject_id = s.id AND c.name = v.chapter_name
 JOIN users u ON u.tenant_id = t.id AND u.email = v.author_email
 ON CONFLICT (question_id, version) DO NOTHING;
+
+-- P08: tryouts over the seeded questions. Rows are looked up by tenant, title and content,
+-- and every insert is guarded, so re-running the seed changes nothing.
+INSERT INTO tryouts (tenant_id, program_id, title, description, scoring_mode, status,
+        active_from, active_until, explanation_release_at, randomize_questions, randomize_options,
+        first_attempt_at, created_by)
+SELECT t.id, p.id, v.title, v.description, v.scoring_mode, v.status,
+       CASE WHEN v.active_offset IS NULL THEN NULL ELSE now() + v.active_offset::interval END,
+       now() + v.until_offset::interval,
+       CASE WHEN v.release_offset IS NULL THEN NULL ELSE now() + v.release_offset::interval END,
+       v.randomize_questions, v.randomize_options,
+       CASE WHEN v.attempt_offset IS NULL THEN NULL ELSE now() + v.attempt_offset::interval END,
+       u.id
+FROM (VALUES
+    ('taruna', 'SMA', 'Tryout UTBK SMA', 'Simulasi UTBK dua subtes untuk siswa SMA kelas 12.', 'weighted', 'published', '-7 days', '60 days', NULL, true, true, NULL, 'admin@tarunaeduka.id'),
+    ('taruna', 'SMP', 'Tryout SMP Bahasa Inggris', 'Draf tryout bahasa Inggris; belum dipublikasikan.', 'weighted', 'draft', NULL, '45 days', NULL, false, false, NULL, 'admin@tarunaeduka.id'),
+    ('taruna', 'SD', 'Tryout SD Matematika', 'Tryout yang sudah dikerjakan satu siswa, jadi terkunci.', 'weighted', 'published', '-14 days', '30 days', '7 days', false, true, '-1 day', 'admin@tarunaeduka.id'),
+    ('sekolah-b', 'SMA', 'Tryout SMA Sekolah B', 'Contoh tryout milik tenant kedua.', 'weighted', 'published', '-3 days', '30 days', NULL, false, false, NULL, 'admin@sekolah-b.test')
+) AS v (slug, program_code, title, description, scoring_mode, status, active_offset, until_offset,
+        release_offset, randomize_questions, randomize_options, attempt_offset, author_email)
+JOIN tenants t ON t.slug = v.slug
+JOIN programs p ON p.tenant_id = t.id AND p.code = v.program_code
+JOIN users u ON u.tenant_id = t.id AND u.email = v.author_email
+WHERE NOT EXISTS (SELECT 1 FROM tryouts x WHERE x.tenant_id = t.id AND x.title = v.title);
+
+INSERT INTO tryout_subtests (tryout_id, tenant_id, name, duration_seconds, position)
+SELECT x.id, x.tenant_id, v.name, v.duration_seconds, v.position
+FROM (VALUES
+    ('taruna', 'Tryout UTBK SMA', 'Penalaran Umum', 2700, 1),
+    ('taruna', 'Tryout UTBK SMA', 'Pengetahuan Kuantitatif', 1800, 2),
+    ('taruna', 'Tryout SMP Bahasa Inggris', 'Tenses', 1200, 1),
+    ('taruna', 'Tryout SD Matematika', 'Bilangan', 1800, 1),
+    ('sekolah-b', 'Tryout SMA Sekolah B', 'Matematika', 1500, 1)
+) AS v (slug, tryout_title, name, duration_seconds, position)
+JOIN tenants t ON t.slug = v.slug
+JOIN tryouts x ON x.tenant_id = t.id AND x.title = v.tryout_title
+WHERE NOT EXISTS (SELECT 1 FROM tryout_subtests s
+                   WHERE s.tenant_id = t.id AND s.tryout_id = x.id AND s.name = v.name);
+
+INSERT INTO tryout_questions (subtest_id, tryout_id, tenant_id, position, question_id,
+        question_version_id)
+SELECT s.id, x.id, x.tenant_id, v.position, q.id, qv.id
+FROM (VALUES
+    ('taruna', 'Tryout UTBK SMA', 'Penalaran Umum', 1, 'Semua siswa yang rajin belajar lulus ujian. Andi lulus ujian. Maka ...'),
+    ('taruna', 'Tryout UTBK SMA', 'Penalaran Umum', 2, '2, 6, 12, 20, 30, ... Angka selanjutnya dalam deret tersebut adalah ...'),
+    ('taruna', 'Tryout UTBK SMA', 'Penalaran Umum', 3, 'Percepatan gravitasi rata-rata di permukaan bumi adalah 9,8 m/s².'),
+    ('taruna', 'Tryout UTBK SMA', 'Pengetahuan Kuantitatif', 1, 'Akar-akar persamaan $x^2 - 5x + 6 = 0$ adalah ...'),
+    ('taruna', 'Tryout UTBK SMA', 'Pengetahuan Kuantitatif', 2, 'Nilai dari $\log_2 32$ adalah ...'),
+    ('taruna', 'Tryout UTBK SMA', 'Pengetahuan Kuantitatif', 3, 'Turunan pertama dari $f(x) = 3x^2 + 2x$ adalah ...'),
+    ('taruna', 'Tryout SMP Bahasa Inggris', 'Tenses', 1, 'Jika $2x + 5 = 17$, maka nilai $x$ adalah ...'),
+    ('taruna', 'Tryout SMP Bahasa Inggris', 'Tenses', 2, 'Luas permukaan kubus dengan panjang rusuk 6 cm adalah ... $cm^2$'),
+    ('taruna', 'Tryout SD Matematika', 'Bilangan', 1, 'Hasil dari 248 + 179 adalah ...'),
+    ('taruna', 'Tryout SD Matematika', 'Bilangan', 2, '7 × 8 = ...'),
+    ('taruna', 'Tryout SD Matematika', 'Bilangan', 3, 'Keliling persegi dengan panjang sisi 9 cm adalah ... cm'),
+    ('sekolah-b', 'Tryout SMA Sekolah B', 'Matematika', 1, 'Hasil dari $3x + 2x$ adalah ...'),
+    ('sekolah-b', 'Tryout SMA Sekolah B', 'Matematika', 2, 'Nilai dari $\sin 30^\circ$ adalah ...')
+) AS v (slug, tryout_title, subtest_name, position, content)
+JOIN tenants t ON t.slug = v.slug
+JOIN tryouts x ON x.tenant_id = t.id AND x.title = v.tryout_title
+JOIN tryout_subtests s ON s.tryout_id = x.id AND s.name = v.subtest_name
+JOIN questions q ON q.tenant_id = t.id AND q.seq = (
+    SELECT min(q2.seq) FROM questions q2
+      JOIN question_versions v2 ON v2.question_id = q2.id AND v2.version = q2.current_version
+     WHERE q2.tenant_id = t.id AND v2.content = v.content)
+JOIN question_versions qv ON qv.question_id = q.id AND qv.version = q.current_version
+WHERE NOT EXISTS (SELECT 1 FROM tryout_questions tq
+                   WHERE tq.tryout_id = x.id AND tq.question_id = q.id);

@@ -31,6 +31,8 @@ tags:
     description: Tenant curriculum — programs, subjects and chapters
   - name: questions
     description: Tenant question bank — four types, immutable versions
+  - name: tryouts
+    description: Tenant tryouts — draft or published, assignments frozen per question version
 
 paths:
   /healthz:
@@ -949,6 +951,282 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /api/v1/tryouts:
+    get:
+      tags: [tryouts]
+      summary: The tenant's tryouts
+      description: |
+        Admin and Operator read the builder's list; a Student answers `403`. Newest first, at most 100
+        per page, with `total` counting every tryout the filters match. Each row carries the subtest
+        and question counts only — the full definition is `GET /api/v1/tryouts/{id}`.
+
+        `q` is a case-insensitive substring of the title, and `%` or `_` in it match themselves.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: program_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, published]
+        - name: q
+          in: query
+          description: Case-insensitive substring of the title; `%` and `_` are literal.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of this tenant's tryouts, without their subtests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryoutList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    post:
+      tags: [tryouts]
+      summary: Create a draft tryout
+      description: |
+        Admin and Operator may write tenant content. The tryout starts as `draft` at revision 1, so an
+        incomplete definition is legal: drafts may have no subtests and a past `active_until`.
+
+        `subtests[].questions` assigns questions in array order. A question without `version_id` takes
+        its CURRENT version at this moment; that version id is frozen from then on, and editing the
+        question later never changes the tryout.
+
+        Limits: 30 subtests, 200 questions per subtest and 500 per tryout; a subtest lasts 60–28800
+        seconds. A question of another tenant answers `422` on its own path and never reveals that it
+        exists elsewhere.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTryoutRequest"
+      responses:
+        "201":
+          description: The draft as stored, with its subtests and frozen assignments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tryout"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/tryouts/{id}:
+    get:
+      tags: [tryouts]
+      summary: One tryout with its subtests and assignments
+      description: |
+        Admin and Operator only. An id of another tenant answers `404`, never `403`. Each assignment is
+        the read model of the frozen version and never carries `options`, `correct` or `explanation`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The tryout as stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tryout"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [tryouts]
+      summary: Replace a tryout's definition
+      description: |
+        REPLACE semantics in one transaction with the tryout row locked `FOR UPDATE`. A `base_revision`
+        that is no longer current answers `409` and writes nothing. A tryout whose
+        `first_attempt_at` is set (stamped by P16's admission transaction under the same row lock) is
+        locked: every edit answers `409` with "Tryout sudah dikerjakan siswa dan tidak bisa diubah."
+
+        Assignments keep their frozen version: a `version_id` equal to the version this tryout already
+        assigned to that question is kept, an absent `version_id` takes the question's current version,
+        and any other `version_id` answers `422` on `subtests[i].questions[j].version_id`. A published
+        tryout must still pass the publish rules on every save.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTryoutRequest"
+      responses:
+        "200":
+          description: The tryout as replaced, with a revision one higher
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tryout"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Stale `base_revision`, or the tryout is locked after a first attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      tags: [tryouts]
+      summary: Delete a tryout
+      description: |
+        Assignments, then subtests, then the tryout in one transaction. A locked tryout answers `409`
+        and nothing is deleted.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: The tryout and its definition are gone
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The tryout is locked after a first attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/tryouts/{id}/publish:
+    post:
+      tags: [tryouts]
+      summary: Publish a tryout
+      description: |
+        Publishing validates the playable definition: at least one subtest, every subtest with at least
+        one question, and `active_until` after now. An invalid definition answers `422` with the failing
+        field paths. Publishing an already published tryout is idempotent `200`; a locked tryout
+        answers `409`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The published tryout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tryout"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The tryout is locked after a first attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/tryouts/{id}/unpublish:
+    post:
+      tags: [tryouts]
+      summary: Return a tryout to draft
+      description: Answers `200` with the draft; already a draft is idempotent, and a locked tryout answers `409`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The draft tryout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tryout"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The tryout is locked after a first attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1552,6 +1830,299 @@ components:
           items:
             type: string
             format: uuid
+
+    TryoutSummary:
+      type: object
+      additionalProperties: false
+      required: [id, program_id, title, description, scoring_mode, status, active_from, active_until,
+                 explanation_release_at, randomize_questions, randomize_options, revision, locked,
+                 subtest_count, question_count, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        program_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        scoring_mode:
+          type: string
+          enum: [weighted, irt]
+          description: D04 is open; only the mode is stored, never a weight.
+        status:
+          type: string
+          enum: [draft, published]
+        active_from:
+          type: string
+          format: date-time
+          nullable: true
+        active_until:
+          type: string
+          format: date-time
+        explanation_release_at:
+          type: string
+          format: date-time
+          nullable: true
+        randomize_questions:
+          type: boolean
+        randomize_options:
+          type: boolean
+        revision:
+          type: integer
+          description: Bumped by every save; `base_revision` is what a concurrent save fails on.
+        locked:
+          type: boolean
+          description: True once `first_attempt_at` is set — every edit, delete, publish and unpublish then answers `409`.
+        subtest_count:
+          type: integer
+        question_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Assignment:
+      type: object
+      additionalProperties: false
+      required: [question_id, version_id, version, number, type, difficulty, content, position]
+      properties:
+        question_id:
+          type: string
+          format: uuid
+        version_id:
+          type: string
+          format: uuid
+          description: The frozen version; it is never replaced by a later edit of the question.
+        version:
+          type: integer
+        number:
+          type: integer
+          format: int64
+          description: The question's human number (`seq`).
+        type:
+          type: string
+          enum: [pg, pg_multi, isian, benar_salah]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        content:
+          type: string
+          description: The frozen content, verbatim. Answer keys stay on the question API.
+        position:
+          type: integer
+
+    Subtest:
+      type: object
+      additionalProperties: false
+      required: [id, name, duration_seconds, position, questions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        duration_seconds:
+          type: integer
+          minimum: 60
+          maximum: 28800
+        position:
+          type: integer
+          description: Stored order, starting at 1.
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Assignment"
+
+    Tryout:
+      type: object
+      additionalProperties: false
+      required: [id, program_id, title, description, scoring_mode, status, active_from, active_until,
+                 explanation_release_at, randomize_questions, randomize_options, revision, locked,
+                 subtest_count, question_count, created_at, updated_at, subtests]
+      properties:
+        id:
+          type: string
+          format: uuid
+        program_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        scoring_mode:
+          type: string
+          enum: [weighted, irt]
+        status:
+          type: string
+          enum: [draft, published]
+        active_from:
+          type: string
+          format: date-time
+          nullable: true
+        active_until:
+          type: string
+          format: date-time
+        explanation_release_at:
+          type: string
+          format: date-time
+          nullable: true
+        randomize_questions:
+          type: boolean
+        randomize_options:
+          type: boolean
+        revision:
+          type: integer
+        locked:
+          type: boolean
+        subtest_count:
+          type: integer
+        question_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        subtests:
+          type: array
+          items:
+            $ref: "#/components/schemas/Subtest"
+
+    TryoutList:
+      type: object
+      additionalProperties: false
+      required: [tryouts, total]
+      properties:
+        tryouts:
+          type: array
+          description: Counts only — GET one tryout for its subtests and assignments.
+          items:
+            $ref: "#/components/schemas/TryoutSummary"
+        total:
+          type: integer
+          description: Every tryout the filters match, not only the page returned.
+
+    TryoutQuestionRequest:
+      type: object
+      additionalProperties: false
+      required: [question_id]
+      properties:
+        question_id:
+          type: string
+          format: uuid
+        version_id:
+          type: string
+          format: uuid
+          description: |
+            Omit to assign the question's current version. A version this tryout already assigned to
+            the question is kept; any other id answers `422` on this path.
+
+    TryoutSubtestRequest:
+      type: object
+      additionalProperties: false
+      required: [name, duration_seconds]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        duration_seconds:
+          type: integer
+          minimum: 60
+          maximum: 28800
+        questions:
+          type: array
+          maxItems: 200
+          description: Array order becomes `position`.
+          items:
+            $ref: "#/components/schemas/TryoutQuestionRequest"
+
+    CreateTryoutRequest:
+      type: object
+      additionalProperties: false
+      required: [program_id, title, scoring_mode, active_until]
+      properties:
+        program_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        scoring_mode:
+          type: string
+          enum: [weighted, irt]
+        active_from:
+          type: string
+          format: date-time
+          nullable: true
+        active_until:
+          type: string
+          format: date-time
+        explanation_release_at:
+          type: string
+          format: date-time
+          nullable: true
+        randomize_questions:
+          type: boolean
+        randomize_options:
+          type: boolean
+        subtests:
+          type: array
+          maxItems: 30
+          items:
+            $ref: "#/components/schemas/TryoutSubtestRequest"
+
+    UpdateTryoutRequest:
+      type: object
+      additionalProperties: false
+      required: [program_id, title, scoring_mode, active_until, base_revision]
+      properties:
+        base_revision:
+          type: integer
+          description: The revision the builder opened; a mismatch answers `409`.
+        program_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+        scoring_mode:
+          type: string
+          enum: [weighted, irt]
+        active_from:
+          type: string
+          format: date-time
+          nullable: true
+        active_until:
+          type: string
+          format: date-time
+        explanation_release_at:
+          type: string
+          format: date-time
+          nullable: true
+        randomize_questions:
+          type: boolean
+        randomize_options:
+          type: boolean
+        subtests:
+          type: array
+          maxItems: 30
+          description: The complete definition; subtests and assignments missing here are deleted.
+          items:
+            $ref: "#/components/schemas/TryoutSubtestRequest"
 
     ErrorEnvelope:
       type: object
