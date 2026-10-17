@@ -1330,6 +1330,342 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tryouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's tryouts
+         * @description Admin and Operator read the builder's list; a Student answers `403`. Newest first, at most 100
+         *     per page, with `total` counting every tryout the filters match. Each row carries the subtest
+         *     and question counts only — the full definition is `GET /api/v1/tryouts/{id}`.
+         *
+         *     `q` is a case-insensitive substring of the title, and `%` or `_` in it match themselves.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    program_id?: string;
+                    status?: "draft" | "published";
+                    /** @description Case-insensitive substring of the title; `%` and `_` are literal. */
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of this tenant's tryouts, without their subtests */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TryoutList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        /**
+         * Create a draft tryout
+         * @description Admin and Operator may write tenant content. The tryout starts as `draft` at revision 1, so an
+         *     incomplete definition is legal: drafts may have no subtests and a past `active_until`.
+         *
+         *     `subtests[].questions` assigns questions in array order. A question without `version_id` takes
+         *     its CURRENT version at this moment; that version id is frozen from then on, and editing the
+         *     question later never changes the tryout.
+         *
+         *     Limits: 30 subtests, 200 questions per subtest and 500 per tryout; a subtest lasts 60–28800
+         *     seconds. A question of another tenant answers `422` on its own path and never reveals that it
+         *     exists elsewhere.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateTryoutRequest"];
+                };
+            };
+            responses: {
+                /** @description The draft as stored, with its subtests and frozen assignments */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Tryout"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tryouts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One tryout with its subtests and assignments
+         * @description Admin and Operator only. An id of another tenant answers `404`, never `403`. Each assignment is
+         *     the read model of the frozen version and never carries `options`, `correct` or `explanation`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The tryout as stored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Tryout"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        /**
+         * Replace a tryout's definition
+         * @description REPLACE semantics in one transaction with the tryout row locked `FOR UPDATE`. A `base_revision`
+         *     that is no longer current answers `409` and writes nothing. A tryout whose
+         *     `first_attempt_at` is set (stamped by P16's admission transaction under the same row lock) is
+         *     locked: every edit answers `409` with "Tryout sudah dikerjakan siswa dan tidak bisa diubah."
+         *
+         *     Assignments keep their frozen version: a `version_id` equal to the version this tryout already
+         *     assigned to that question is kept, an absent `version_id` takes the question's current version,
+         *     and any other `version_id` answers `422` on `subtests[i].questions[j].version_id`. A published
+         *     tryout must still pass the publish rules on every save.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateTryoutRequest"];
+                };
+            };
+            responses: {
+                /** @description The tryout as replaced, with a revision one higher */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Tryout"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description Stale `base_revision`, or the tryout is locked after a first attempt */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        /**
+         * Delete a tryout
+         * @description Assignments, then subtests, then the tryout in one transaction. A locked tryout answers `409`
+         *     and nothing is deleted.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The tryout and its definition are gone */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description The tryout is locked after a first attempt */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tryouts/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a tryout
+         * @description Publishing validates the playable definition: at least one subtest, every subtest with at least
+         *     one question, and `active_until` after now. An invalid definition answers `422` with the failing
+         *     field paths. Publishing an already published tryout is idempotent `200`; a locked tryout
+         *     answers `409`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The published tryout */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Tryout"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description The tryout is locked after a first attempt */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tryouts/{id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Return a tryout to draft
+         * @description Answers `200` with the draft; already a draft is idempotent, and a locked tryout answers `409`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The draft tryout */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Tryout"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description The tryout is locked after a first attempt */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1664,6 +2000,158 @@ export interface components {
             already_imported: number;
             /** @description The ids of the questions this commit created. */
             question_ids: string[];
+        };
+        TryoutSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            program_id: string;
+            title: string;
+            description: string;
+            /**
+             * @description D04 is open; only the mode is stored, never a weight.
+             * @enum {string}
+             */
+            scoring_mode: "weighted" | "irt";
+            /** @enum {string} */
+            status: "draft" | "published";
+            /** Format: date-time */
+            active_from: string | null;
+            /** Format: date-time */
+            active_until: string;
+            /** Format: date-time */
+            explanation_release_at: string | null;
+            randomize_questions: boolean;
+            randomize_options: boolean;
+            /** @description Bumped by every save; `base_revision` is what a concurrent save fails on. */
+            revision: number;
+            /** @description True once `first_attempt_at` is set — every edit, delete, publish and unpublish then answers `409`. */
+            locked: boolean;
+            subtest_count: number;
+            question_count: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        Assignment: {
+            /** Format: uuid */
+            question_id: string;
+            /**
+             * Format: uuid
+             * @description The frozen version; it is never replaced by a later edit of the question.
+             */
+            version_id: string;
+            version: number;
+            /**
+             * Format: int64
+             * @description The question's human number (`seq`).
+             */
+            number: number;
+            /** @enum {string} */
+            type: "pg" | "pg_multi" | "isian" | "benar_salah";
+            /** @enum {string} */
+            difficulty: "easy" | "medium" | "hard";
+            /** @description The frozen content, verbatim. Answer keys stay on the question API. */
+            content: string;
+            position: number;
+        };
+        Subtest: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            duration_seconds: number;
+            /** @description Stored order, starting at 1. */
+            position: number;
+            questions: components["schemas"]["Assignment"][];
+        };
+        Tryout: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            program_id: string;
+            title: string;
+            description: string;
+            /** @enum {string} */
+            scoring_mode: "weighted" | "irt";
+            /** @enum {string} */
+            status: "draft" | "published";
+            /** Format: date-time */
+            active_from: string | null;
+            /** Format: date-time */
+            active_until: string;
+            /** Format: date-time */
+            explanation_release_at: string | null;
+            randomize_questions: boolean;
+            randomize_options: boolean;
+            revision: number;
+            locked: boolean;
+            subtest_count: number;
+            question_count: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            subtests: components["schemas"]["Subtest"][];
+        };
+        TryoutList: {
+            /** @description Counts only — GET one tryout for its subtests and assignments. */
+            tryouts: components["schemas"]["TryoutSummary"][];
+            /** @description Every tryout the filters match, not only the page returned. */
+            total: number;
+        };
+        TryoutQuestionRequest: {
+            /** Format: uuid */
+            question_id: string;
+            /**
+             * Format: uuid
+             * @description Omit to assign the question's current version. A version this tryout already assigned to
+             *     the question is kept; any other id answers `422` on this path.
+             */
+            version_id?: string;
+        };
+        TryoutSubtestRequest: {
+            name: string;
+            duration_seconds: number;
+            /** @description Array order becomes `position`. */
+            questions?: components["schemas"]["TryoutQuestionRequest"][];
+        };
+        CreateTryoutRequest: {
+            /** Format: uuid */
+            program_id: string;
+            title: string;
+            description?: string;
+            /** @enum {string} */
+            scoring_mode: "weighted" | "irt";
+            /** Format: date-time */
+            active_from?: string | null;
+            /** Format: date-time */
+            active_until: string;
+            /** Format: date-time */
+            explanation_release_at?: string | null;
+            randomize_questions?: boolean;
+            randomize_options?: boolean;
+            subtests?: components["schemas"]["TryoutSubtestRequest"][];
+        };
+        UpdateTryoutRequest: {
+            /** @description The revision the builder opened; a mismatch answers `409`. */
+            base_revision: number;
+            /** Format: uuid */
+            program_id: string;
+            title: string;
+            description?: string;
+            /** @enum {string} */
+            scoring_mode: "weighted" | "irt";
+            /** Format: date-time */
+            active_from?: string | null;
+            /** Format: date-time */
+            active_until: string;
+            /** Format: date-time */
+            explanation_release_at?: string | null;
+            randomize_questions?: boolean;
+            randomize_options?: boolean;
+            /** @description The complete definition; subtests and assignments missing here are deleted. */
+            subtests?: components["schemas"]["TryoutSubtestRequest"][];
         };
         ErrorEnvelope: {
             error: {

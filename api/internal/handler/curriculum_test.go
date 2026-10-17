@@ -28,6 +28,10 @@ func newQuestionService(f tenantFixture) *service.QuestionService {
 	return service.NewQuestionService(f.pool, repository.NewQuestionRepository(f.pool))
 }
 
+func newTryoutService(f tenantFixture) *service.TryoutService {
+	return service.NewTryoutService(f.pool, repository.NewTryoutRepository(f.pool))
+}
+
 // curriculumToken gives one tenant its own account, so role checks never borrow another tenant's.
 func curriculumToken(t *testing.T, f authFixture, tenant model.Tenant, role model.Role) string {
 	t.Helper()

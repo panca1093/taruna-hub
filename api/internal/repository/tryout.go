@@ -180,6 +180,20 @@ func (r *TryoutRepository) SetStatusTx(ctx context.Context, tx pgx.Tx, tenantID,
 	return nil
 }
 
+// ProgramExists reports whether the program is this tenant's; the tryout's program FK needs it too.
+func (r *TryoutRepository) ProgramExists(ctx context.Context, tenantID, programID uuid.UUID) (bool, error) {
+	if tenantID == uuid.Nil {
+		return false, ErrScopeRequired
+	}
+	var ok bool
+	if err := r.db.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM programs WHERE tenant_id = $1 AND id = $2)`,
+		tenantID, programID).Scan(&ok); err != nil {
+		return false, fmt.Errorf("check tryout program: %w", err)
+	}
+	return ok, nil
+}
+
 // CurrentQuestions resolves the tenant's questions to the version that is current right now.
 func (r *TryoutRepository) CurrentQuestions(ctx context.Context, q queryer, tenantID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]model.QuestionKey, error) {
 	if tenantID == uuid.Nil {
