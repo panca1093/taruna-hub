@@ -194,8 +194,7 @@ func TestDeleteReferencedIsRejected(t *testing.T) {
 		t.Fatalf("tree = %+v, want the program, subject and chapter still intact", trees)
 	}
 
-	// A subject nobody references is still protected by its own chapters; ON DELETE CASCADE would
-	// quietly take them along, which is exactly what RESTRICT exists to prevent.
+	// ON DELETE CASCADE would quietly take the chapters along; RESTRICT must protect them.
 	clean := newCurriculumTenant(t)
 	owned := mustCreateTree(t, repo, clean.ID, programTree("SMA", "SMA", subjectTree("Fisika", "Mekanika")))
 	if err := inCurriculumTx(t, pool, func(tx pgx.Tx) error {
@@ -205,8 +204,7 @@ func TestDeleteReferencedIsRejected(t *testing.T) {
 	}
 }
 
-// The unique index on (parent, lower(name)) is what makes the case-insensitive rule hold in the
-// database, not only in the service.
+// The unique index is what makes the case-insensitive rule hold in the database.
 func TestCurriculumNameUniquenessIsCaseInsensitive(t *testing.T) {
 	pool := testPool(t)
 	repo := NewCurriculumRepository(pool)

@@ -34,8 +34,7 @@ type Chapter struct {
 	CreatedAt time.Time
 }
 
-// ProgramTree is a program with its ordered subjects and chapters; a Program.ID that is uuid.Nil
-// asks the repository to create it rather than update it.
+// A Program.ID of uuid.Nil asks the repository to create rather than update.
 type ProgramTree struct {
 	Program  Program
 	Subjects []SubjectTree

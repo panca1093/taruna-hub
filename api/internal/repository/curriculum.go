@@ -101,8 +101,6 @@ func (r *CurriculumRepository) CreateTree(ctx context.Context, tenantID uuid.UUI
 	return out, err
 }
 
-// ReplaceTreeTx persists an already validated tree: kept ids are updated, new items created, and
-// anything the input no longer names is deleted, chapters before subjects so RESTRICT is satisfied.
 func (r *CurriculumRepository) ReplaceTreeTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, tree model.ProgramTree) (model.ProgramTree, error) {
 	if tenantID == uuid.Nil {
 		return model.ProgramTree{}, ErrScopeRequired
@@ -114,8 +112,7 @@ func (r *CurriculumRepository) ReplaceTreeTx(ctx context.Context, tx pgx.Tx, ten
 		return model.ProgramTree{}, mapCurriculumError("update program", err)
 	}
 
-	// The name indexes are not deferrable, so free every name first: a removed item can then be
-	// re-added under the same name and two kept items can swap names inside one save.
+	// Name indexes are not deferrable: free every name first so one save can reuse or swap names.
 	if _, err := tx.Exec(ctx,
 		`UPDATE subjects SET name = '~' || id::text WHERE tenant_id = $1 AND program_id = $2`,
 		tenantID, id); err != nil {
@@ -202,8 +199,6 @@ func (r *CurriculumRepository) DeleteProgramTx(ctx context.Context, tx pgx.Tx, t
 		`DELETE FROM programs WHERE tenant_id = $1 AND id = $2`, tenantID, id)
 }
 
-// upsertChapter writes one chapter under subjectID, or creates it when the plan has no id yet, and
-// returns the id it ended up with so the caller can name what it kept.
 func upsertChapter(ctx context.Context, tx pgx.Tx, tenantID, programID, subjectID uuid.UUID, chapter model.Chapter, position int) (uuid.UUID, error) {
 	if chapter.ID == uuid.Nil {
 		return insertChapter(ctx, tx, tenantID, subjectID, chapter.Name, position)
@@ -382,8 +377,6 @@ func (r *CurriculumRepository) pruneSubjects(ctx context.Context, tx pgx.Tx, ten
 	return err
 }
 
-// inTx runs fn inside one transaction and rolls back on any error, so a restrict violation leaves
-// nothing half-written.
 func (r *CurriculumRepository) inTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
