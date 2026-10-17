@@ -43,8 +43,7 @@ const (
 	option_weighted, case_sensitive, options, correct, created_by`
 )
 
-// questionSource joins the head row to the version it currently points at; the tenant pair keeps a
-// version of another tenant from ever joining.
+// The tenant pair keeps a version of another tenant from ever joining.
 const questionSource = ` FROM questions q
 	JOIN question_versions v
 	  ON v.question_id = q.id AND v.version = q.current_version AND v.tenant_id = q.tenant_id`
@@ -111,8 +110,6 @@ func (r *QuestionRepository) Find(ctx context.Context, tenantID, id uuid.UUID) (
 	return r.find(ctx, r.db, tenantID, id, false)
 }
 
-// FindCurrentTx is the locked read an update diffs against; the lock serializes writers on the head
-// row, so two saves of the same base version cannot both insert the next one.
 func (r *QuestionRepository) FindCurrentTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, forUpdate bool) (model.Question, error) {
 	if tenantID == uuid.Nil {
 		return model.Question{}, ErrScopeRequired
@@ -120,8 +117,6 @@ func (r *QuestionRepository) FindCurrentTx(ctx context.Context, tx pgx.Tx, tenan
 	return r.find(ctx, tx, tenantID, id, forUpdate)
 }
 
-// Create writes the head row and version 1 in one transaction, so a question never exists without
-// content.
 func (r *QuestionRepository) Create(ctx context.Context, tenantID, createdBy uuid.UUID, q model.Question) (model.Question, error) {
 	if tenantID == uuid.Nil {
 		return model.Question{}, ErrScopeRequired
@@ -169,8 +164,6 @@ func (r *QuestionRepository) TouchHeadTx(ctx context.Context, tx pgx.Tx, tenantI
 	return nil
 }
 
-// DeleteTx removes the versions and then the head in one transaction; anything that still points at
-// a version makes the database refuse, and the whole delete rolls back.
 func (r *QuestionRepository) DeleteTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID) error {
 	if tenantID == uuid.Nil {
 		return ErrScopeRequired
@@ -222,9 +215,7 @@ func (r *QuestionRepository) exists(ctx context.Context, sql string, args ...any
 	return ok, nil
 }
 
-// find reads the head row (locking it when asked) and then its current version. Two statements are
-// deliberate: after a competing save commits, a single statement holding FOR UPDATE would re-check
-// the join against its original snapshot and miss the version row that has just appeared.
+// Two statements on purpose: one FOR UPDATE join would miss a version row committed after its snapshot.
 func (r *QuestionRepository) find(ctx context.Context, q queryer, tenantID, id uuid.UUID, forUpdate bool) (model.Question, error) {
 	sql := `SELECT ` + questionHeadColumns + ` FROM questions WHERE tenant_id = $1 AND id = $2`
 	if forUpdate {

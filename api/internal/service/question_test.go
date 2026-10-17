@@ -393,8 +393,7 @@ func TestQuestionValidation(t *testing.T) {
 		t.Errorf("benar_salah options = %v, want the server's fixed benar/salah", ids)
 	}
 
-	// Weighted mode keeps the points the editor set, and an option without points stays absent so
-	// scoring (P16) can default it to 1.
+	// An option without points stays absent so scoring (P16) can default it to 1.
 	weighted := h.create(t, tenant, QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
 		Type: model.QuestionPG, Content: "Sikap paling tepat adalah ...", Difficulty: model.DifficultyEasy,

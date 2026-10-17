@@ -12,8 +12,7 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
-// questionFixture owns two tenants, each with one program/subject/chapter, an author account and a
-// question. Cleanup is registered child-first, so questions go before users and curriculum.
+// Cleanup is registered child-first: questions go before users and curriculum.
 type questionFixture struct {
 	repo         *QuestionRepository
 	tenant       model.Tenant
@@ -43,8 +42,7 @@ func newQuestionFixture(t *testing.T) questionFixture {
 	otherBy := newUser(t, users, &other.ID, model.RoleAdmin, "author-"+uuid.NewString()[:8]+"@example.com")
 
 	repo := NewQuestionRepository(pool)
-	// Registered before the curriculum and user cleanups, so it runs after them: versions first,
-	// then the head rows, then the rows those heads point at.
+	// Registered before the curriculum and user cleanups so it runs after them.
 	t.Cleanup(func() {
 		ctx := context.Background()
 		for _, sql := range []string{
@@ -285,8 +283,7 @@ func TestDeleteQuestionReferencedByVersionFKIsRejected(t *testing.T) {
 	}
 }
 
-// A chapter a question still points at must survive a curriculum delete, the same guard P05 put in
-// place for tryouts: the database is the only place that rule can hold without a race.
+// Same guard P05 put in place for tryouts; only the database can hold it without a race.
 func TestChapterReferencedByQuestionBlocksCurriculumDelete(t *testing.T) {
 	f := newQuestionFixture(t)
 	ctx := context.Background()
