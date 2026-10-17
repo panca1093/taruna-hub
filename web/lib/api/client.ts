@@ -16,6 +16,11 @@ export type ProgramList = components["schemas"]["ProgramList"];
 export type Question = components["schemas"]["Question"];
 export type QuestionList = components["schemas"]["QuestionList"];
 export type QuestionOption = components["schemas"]["QuestionOption"];
+export type QuestionImportPreview = components["schemas"]["QuestionImportPreview"];
+export type QuestionImportRow = components["schemas"]["QuestionImportRow"];
+export type QuestionImportCommit = components["schemas"]["QuestionImportCommit"];
+/** The three formats the import template is generated in. */
+export type QuestionTemplateFormat = "xlsx" | "csv" | "docx";
 type LoginBody = components["schemas"]["LoginRequest"];
 type RegisterBody = components["schemas"]["RegisterRequest"];
 type CreateProgramBody = components["schemas"]["CreateProgramRequest"];
@@ -122,6 +127,14 @@ function questionQuery(filters: QuestionFilters): string {
   return query === "" ? "" : `?${query}`;
 }
 
+/** Multipart upload of a question file; `rows` is the confirmed selection of a commit. */
+function uploadForm<T>(path: keyof paths, file: File, rows?: number[]): Promise<T> {
+  const body = new FormData();
+  body.append("file", file);
+  if (rows !== undefined) body.append("rows", JSON.stringify(rows));
+  return authed<T>(path, { method: "POST", body });
+}
+
 // The access token lives in memory only; the refresh cookie is HttpOnly and never readable here.
 let accessToken: string | null = null;
 let sessionLost: (() => void) | null = null;
@@ -172,6 +185,35 @@ async function authed<T>(path: keyof paths, init: RequestInit = {}): Promise<T> 
     }
     throw err;
   }
+}
+
+/** A file download: the same auth and one-refresh retry as `authed`, but the body is not JSON. */
+async function authedBlob(path: keyof paths): Promise<Blob> {
+  const send = () =>
+    fetch(`${baseUrl()}${path}`, {
+      credentials: "include",
+      headers: { Accept: "*/*", Authorization: `Bearer ${accessToken}` },
+    });
+  const used = accessToken;
+  if (used !== null) {
+    const res = await send();
+    if (res.status !== 401) return blobOf(res);
+  }
+  if (accessToken === used) await refresh();
+  const res = await send();
+  if (res.status === 401) {
+    accessToken = null;
+    sessionLost?.();
+  }
+  return blobOf(res);
+}
+
+async function blobOf(res: Response): Promise<Blob> {
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    throw new ApiError(res.status, envelopeError(body) ?? fallbackError(res.status));
+  }
+  return res.blob();
 }
 
 function envelopeError(body: unknown): ErrorEnvelope["error"] | undefined {
@@ -231,5 +273,11 @@ export const api = {
     create: (body: CreateQuestionBody) => mutate<Question>("POST", "/api/v1/questions", body),
     update: (id: string, body: UpdateQuestionBody) => mutate<Question>("PUT", questionPath(id), body),
     remove: (id: string) => mutate<void>("DELETE", questionPath(id)),
+    importPreview: (file: File) =>
+      uploadForm<QuestionImportPreview>("/api/v1/questions/import/preview", file),
+    importCommit: (file: File, rows: number[]) =>
+      uploadForm<QuestionImportCommit>("/api/v1/questions/import/commit", file, rows),
+    importTemplate: (format: QuestionTemplateFormat) =>
+      authedBlob(`/api/v1/questions/import/template?format=${format}` as keyof paths),
   },
 };

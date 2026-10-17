@@ -352,9 +352,7 @@ export default function QuestionsPage() {
         <ImportQuestionsModal
           isOpen={importOpen}
           onOpenChange={setImportOpen}
-          onImported={(count) => {
-            toast.success(t.importedToast(count));
-          }}
+          onImported={() => setReloadKey((key) => key + 1)}
         />
 
         <FormModal
