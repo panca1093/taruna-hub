@@ -98,6 +98,31 @@ while it is unreachable, login, signup and forgot-password answer `500` rather t
 A login lockout keyed on the identifier lets someone who knows an address lock its owner out for 15
 minutes; the reset link still works and clears it.
 
+## The web app (P03c)
+
+`web/lib/api/client.ts` holds the access token **in memory only**; the refresh cookie is `HttpOnly`
+and never readable from JS. A protected call that gets a `401` refreshes once and retries once,
+and concurrent callers share one refresh. If that refresh also fails the session is dropped and
+`RequireRole` sends the visitor to `/login` (or `/login/staff` for staff-only pages).
+
+`SessionProvider` (`web/lib/session-context.tsx`) asks `/auth/refresh` on every full page load, so a
+reload keeps the user signed in, and calls `GET /me` when the route changes, at most once a minute.
+That call is what keeps the 3-hour idle deadline moving: a refresh alone does not count as
+activity, so a tab that makes no API call for 3 hours is signed out by the server. There is no
+local auto-logout timer and no role switcher; the role is whatever the server says.
+
+| Route | Does |
+|---|---|
+| `/login`, `/login/staff` | `POST /auth/login`, then `/student` or `/admin` by the role the server returns |
+| `/register` | `POST /auth/register` (name, email, optional phone, password); server field errors show under the field |
+| `/forgot-password` | `POST /auth/password/forgot`; always the same confirmation |
+| `/reset-password#token=…` | reads the token from the fragment, `POST /auth/password/reset`, then asks the user to log in |
+
+An unverified email shows a banner in the app shell with the code field and a resend button;
+it never blocks navigation. Screens that still read `lib/mock-data.ts` (wallet, enrollments,
+results, the admin tables) key it by the account's user id, so they are empty for a real account
+until their own slice replaces them.
+
 ## Not here yet
 
 No capability matrix — the guard is by role only (D02) — no absolute session cap, nothing per-IP
