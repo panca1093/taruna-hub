@@ -147,6 +147,71 @@ func (r *QuestionRepository) InsertVersionTx(ctx context.Context, tx pgx.Tx, ten
 	return insertQuestionVersion(ctx, tx, tenantID, questionID, version, createdBy, q)
 }
 
+// ImportCreateTx inserts one imported row and its first version, or reports the row already imported.
+func (r *QuestionRepository) ImportCreateTx(ctx context.Context, tx pgx.Tx, tenantID, createdBy uuid.UUID, importKey string, q model.Question) (uuid.UUID, bool, error) {
+	if tenantID == uuid.Nil {
+		return uuid.Nil, false, ErrScopeRequired
+	}
+	var id uuid.UUID
+	err := tx.QueryRow(ctx,
+		`INSERT INTO questions (tenant_id, current_version, created_by, import_key)
+		 VALUES ($1, 1, $2, $3)
+		 ON CONFLICT (tenant_id, import_key) WHERE import_key IS NOT NULL DO NOTHING
+		 RETURNING id`, tenantID, createdBy, importKey).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, nil
+	}
+	if err != nil {
+		return uuid.Nil, false, mapQuestionError("create imported question", err)
+	}
+	if err := insertQuestionVersion(ctx, tx, tenantID, id, 1, createdBy, q); err != nil {
+		return uuid.Nil, false, err
+	}
+	return id, true, nil
+}
+
+// CurriculumRef is one program, subject or chapter an imported row may name, with its parent id.
+type CurriculumRef struct {
+	Kind     string
+	ID       uuid.UUID
+	ParentID *uuid.UUID
+	Name     string
+}
+
+// CurriculumRefs loads the tenant's curriculum once, so a 500-row file names it without a query per row.
+func (r *QuestionRepository) CurriculumRefs(ctx context.Context, tenantID uuid.UUID) ([]CurriculumRef, error) {
+	if tenantID == uuid.Nil {
+		return nil, ErrScopeRequired
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT kind, id, parent_id, name FROM (
+			SELECT 'program' AS kind, id, NULL::uuid AS parent_id, name, position, 0 AS rank
+			  FROM programs WHERE tenant_id = $1
+			UNION ALL
+			SELECT 'subject', id, program_id, name, position, 1 FROM subjects WHERE tenant_id = $1
+			UNION ALL
+			SELECT 'chapter', id, subject_id, name, position, 2 FROM chapters WHERE tenant_id = $1
+		) AS refs
+		ORDER BY rank, position, name, id`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("read curriculum refs: %w", err)
+	}
+	defer rows.Close()
+
+	out := []CurriculumRef{}
+	for rows.Next() {
+		var ref CurriculumRef
+		if err := rows.Scan(&ref.Kind, &ref.ID, &ref.ParentID, &ref.Name); err != nil {
+			return nil, fmt.Errorf("scan curriculum ref: %w", err)
+		}
+		out = append(out, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read curriculum refs: %w", err)
+	}
+	return out, nil
+}
+
 // TouchHeadTx moves the head to the version that was just written.
 func (r *QuestionRepository) TouchHeadTx(ctx context.Context, tx pgx.Tx, tenantID, questionID uuid.UUID, version int) error {
 	if tenantID == uuid.Nil {

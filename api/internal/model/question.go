@@ -49,3 +49,41 @@ type Question struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
+
+// ImportRowError names the spreadsheet column a row failed on, with the service's reason code.
+type ImportRowError struct {
+	Field  string
+	Reason string
+}
+
+// ImportRowPreview is the short summary of one row the confirm step shows.
+type ImportRowPreview struct {
+	Type       string
+	Content    string
+	Program    string
+	Subject    string
+	Difficulty string
+}
+
+// ImportRow is one data row of an uploaded file with its real validation result.
+type ImportRow struct {
+	Row     int
+	Valid   bool
+	Errors  []ImportRowError
+	Preview *ImportRowPreview
+}
+
+type ImportPreview struct {
+	FileName string
+	Format   string
+	Total    int
+	Valid    int
+	Invalid  int
+	Rows     []ImportRow
+}
+
+type ImportCommit struct {
+	Created         int
+	AlreadyImported int
+	QuestionIDs     []uuid.UUID
+}
