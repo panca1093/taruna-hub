@@ -21,16 +21,13 @@ const (
 	DifficultyHard   = "hard"
 )
 
-// QuestionOption is one answer option. Points exists only in weighted mode, where an option without
-// points counts as 1 at scoring time (P16); the id is assigned by the service and never rewritten.
+// Points exist only in weighted mode; an option without points counts as 1 at scoring (P16).
 type QuestionOption struct {
 	ID     string   `json:"id"`
 	Label  string   `json:"label"`
 	Points *float64 `json:"points,omitempty"`
 }
 
-// Question is the current version of one question: the head row's identity and ordering plus the
-// immutable content of the version it points at.
 type Question struct {
 	ID             uuid.UUID
 	Number         int64
