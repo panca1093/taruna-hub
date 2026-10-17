@@ -13,11 +13,7 @@ import { useAdminQuestionEditorT } from "@/lib/i18n/dict/admin-question-editor";
 export type QuestionType = Question["type"];
 export type QuestionDifficulty = Question["difficulty"];
 
-/**
- * One answer option as the editor holds it: an id the server gave back for an existing option, or a
- * placeholder for a new one. The server also accepts the placeholder inside `correct` and answers
- * with the real ids, so a question can be created before it has any.
- */
+// A new option carries a placeholder id; the server accepts it in `correct` and answers with real ids.
 export interface DraftOption {
   id?: string;
   label: string;
