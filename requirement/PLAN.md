@@ -250,7 +250,7 @@ For every slice, use this verification loop:
 
 ### P07 — Question bank and imports
 
-**Status:** P07a done; P07b import pending — four question types with immutable versions, filters, the bank page and editor on the API; import (XLSX/CSV/DOCX), master content, copy, images and per-question weights are deferred · **Size:** L · **Depends:** P05, P06
+**Status:** P07a and P07b done — four question types with immutable versions, filters, the bank page and the confirmed XLSX/CSV/DOCX import; D08's default commit policy still awaits Panca, and master content, copy, images and per-question weights are deferred · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff create four question types or import real documents and maintain tenant/master content safely.
 
