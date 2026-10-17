@@ -297,6 +297,38 @@ func TestReplaceDeletesMissingAndCreatesNew(t *testing.T) {
 	}
 }
 
+func TestReplaceAllowsReusingAndSwappingNames(t *testing.T) {
+	h := newCurriculumHarness(t)
+	ctx := context.Background()
+	admin := h.principal(h.a, model.RoleAdmin)
+
+	created := h.create(t, h.a, ProgramInput{
+		Code: "SMA", Name: "SMA",
+		Subjects: []SubjectInput{
+			{Name: "Fisika", Chapters: []ChapterInput{{Name: "Gerak"}, {Name: "Listrik"}}},
+			{Name: "Kimia", Chapters: []ChapterInput{{Name: "Atom"}}},
+		},
+	})
+	fisika, kimia := created.Subjects[0], created.Subjects[1]
+
+	replaced, err := h.svc.Replace(ctx, h.scope(h.a), admin, created.Program.ID, ProgramInput{
+		Code: "SMA", Name: "SMA",
+		Subjects: []SubjectInput{
+			{ID: fisika.Subject.ID, Name: "Kimia", Chapters: []ChapterInput{{Name: "Gerak"}, {ID: fisika.Chapters[1].ID, Name: "Listrik"}}},
+			{ID: kimia.Subject.ID, Name: "Fisika", Chapters: []ChapterInput{{ID: kimia.Chapters[0].ID, Name: "Atom"}}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	if replaced.Subjects[0].Subject.Name != "Kimia" || replaced.Subjects[1].Subject.Name != "Fisika" {
+		t.Errorf("subjects = %q, %q, want the swapped names", replaced.Subjects[0].Subject.Name, replaced.Subjects[1].Subject.Name)
+	}
+	if got := replaced.Subjects[0].Chapters[0]; got.Name != "Gerak" || got.ID == fisika.Chapters[0].ID {
+		t.Errorf("re-added chapter = %+v, want a new row named Gerak (the old one was dropped from the body)", got)
+	}
+}
+
 func TestDuplicateCodeConflictsPerTenant(t *testing.T) {
 	h := newCurriculumHarness(t)
 	ctx := context.Background()

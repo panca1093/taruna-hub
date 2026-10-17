@@ -114,6 +114,20 @@ func (r *CurriculumRepository) ReplaceTreeTx(ctx context.Context, tx pgx.Tx, ten
 		return model.ProgramTree{}, mapCurriculumError("update program", err)
 	}
 
+	// The name indexes are not deferrable, so free every name first: a removed item can then be
+	// re-added under the same name and two kept items can swap names inside one save.
+	if _, err := tx.Exec(ctx,
+		`UPDATE subjects SET name = '~' || id::text WHERE tenant_id = $1 AND program_id = $2`,
+		tenantID, id); err != nil {
+		return model.ProgramTree{}, mapCurriculumError("free subject names", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE chapters SET name = '~' || id::text
+		  WHERE tenant_id = $1 AND subject_id IN (SELECT id FROM subjects WHERE tenant_id = $1 AND program_id = $2)`,
+		tenantID, id); err != nil {
+		return model.ProgramTree{}, mapCurriculumError("free chapter names", err)
+	}
+
 	keptSubjects := make([]string, 0, len(tree.Subjects))
 	subjectIDs := make([]uuid.UUID, len(tree.Subjects))
 	for si, subject := range tree.Subjects {
