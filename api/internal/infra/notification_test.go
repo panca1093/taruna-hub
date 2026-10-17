@@ -94,14 +94,14 @@ func TestCallerFlowRollsBackBusinessStateOnEnqueueError(t *testing.T) {
 	rec := &recordingInserter{fail: errors.New("simulated job insert failure")}
 	h := newHarness(t, harnessOpts{wrapJobs: rec.wrap})
 	ctx := context.Background()
-	code := "RB" + uuid.NewString()[:6]
+	code := "rb-" + uuid.NewString()[:8]
 
 	tx, err := h.pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
 	// A business row the caller would have committed together with the notification.
-	if _, err := tx.Exec(ctx, `INSERT INTO programs (code, name) VALUES ($1, $2)`, code, "rollback probe"); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO tenants (slug, name) VALUES ($1, 'rollback probe')`, code); err != nil {
 		t.Fatalf("insert business row: %v", err)
 	}
 	if err := h.enqueueTx(ctx, tx, h.newNotification(eventKey("enqueue-fail"), nil)); err == nil {
@@ -112,7 +112,7 @@ func TestCallerFlowRollsBackBusinessStateOnEnqueueError(t *testing.T) {
 		t.Fatalf("rollback: %v", err)
 	}
 
-	if got := h.count(`SELECT count(*) FROM programs WHERE code = $1`, code); got != 0 {
+	if got := h.count(`SELECT count(*) FROM tenants WHERE slug = $1`, code); got != 0 {
 		t.Errorf("business rows = %d, want 0 after the caller rolled back", got)
 	}
 	ids := rec.recorded()

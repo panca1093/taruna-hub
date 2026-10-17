@@ -6,6 +6,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
@@ -22,16 +23,18 @@ type Handler struct {
 	health        *HealthHandler
 	auth          *service.AuthService
 	account       *service.AccountService
+	curriculum    *service.CurriculumService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
 
-func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, opts AuthOptions) *Handler {
+func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, opts AuthOptions) *Handler {
 	return &Handler{
 		logger:        logger,
 		health:        health,
 		auth:          auth,
 		account:       account,
+		curriculum:    curriculum,
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
@@ -56,4 +59,10 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/me/email/verify", h.VerifyEmail, httpx.NoStore(), Authenticate(h.auth))
 	v1.POST("/me/email/resend", h.ResendEmailCode, httpx.NoStore(), Authenticate(h.auth))
 	v1.GET("/me", h.Me, httpx.NoStore(), Authenticate(h.auth))
+
+	// Curriculum: operators read the tree for their dropdowns, only admins change it (FR-ADM-PRG-01).
+	v1.GET("/programs", h.ListPrograms, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/programs", h.CreateProgram, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
+	v1.PUT("/programs/:id", h.ReplaceProgram, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
+	v1.DELETE("/programs/:id", h.DeleteProgram, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 }

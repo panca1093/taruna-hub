@@ -664,6 +664,217 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/programs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's program tree
+         * @description FR-ADM-PRG-02: the hierarchy the question and tryout dropdowns read. Programs come back in
+         *     their stored order, each with its subjects and their chapters in position order.
+         *
+         *     Admin and Operator may read it; a Student answers `403`. The tree is always the tenant the
+         *     request host resolves to — this slice has no master content and no copy-to-own.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Every program of this tenant */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProgramList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a program with optional subjects and chapters
+         * @description Admin only (FR-ADM-PRG-01). `code` is trimmed and uppercased, then must be 2–12 characters
+         *     of `A-Z`, `0-9`, `_` or `-`; it is unique per tenant, so another tenant may use the same
+         *     code. Subject and chapter names are trimmed, 1–100 characters, and unique among their
+         *     siblings without regard to case. At most 50 subjects and 200 chapters per subject.
+         *
+         *     Positions follow the order of the arrays. A duplicate code answers `409` with
+         *     `fields.code`; a rule violation answers `422` with the failing field's path.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateProgramRequest"];
+                };
+            };
+            responses: {
+                /** @description The program as stored */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Program"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                /** @description The request host selects no active tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The code is already used in this tenant (`fields.code`) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/programs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a program's tree
+         * @description Admin only. REPLACE semantics in one transaction with the program row locked: an item with an
+         *     `id` is updated, an item without one is created, and an existing item the body no longer
+         *     names is deleted. Positions are rewritten from the order of the arrays; the ids of kept items
+         *     never change. Chapter ids are checked against this program, so a chapter may move to another
+         *     of its own subjects but never to another program or tenant.
+         *
+         *     An `id` that belongs to another program answers `422` naming its path (for example
+         *     `subjects[1].id`). A program id of another tenant answers `404`, never `403`.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateProgramRequest"];
+                };
+            };
+            responses: {
+                /** @description The tree as stored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Program"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description The code is already used in this tenant (`fields.code`) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        /**
+         * Delete a program and its tree
+         * @description Admin only. Chapters, then subjects, then the program are removed in one transaction. Nothing
+         *     is ever deleted implicitly: if a chapter or subject is still referenced (questions and
+         *     tryouts will do that from later slices), the database refuses and the whole delete rolls
+         *     back, answering `409`.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The program and its tree are gone */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description The program, a subject or a chapter is still referenced */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -758,6 +969,81 @@ export interface components {
              */
             expires_in: number;
             user: components["schemas"]["User"];
+        };
+        ProgramList: {
+            programs: components["schemas"]["Program"][];
+        };
+        Program: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Unique per tenant. Always stored uppercased.
+             * @example SD
+             */
+            code: string;
+            name: string;
+            description: string;
+            subjects: components["schemas"]["ProgramSubject"][];
+        };
+        ProgramSubject: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            chapters: components["schemas"]["ProgramChapter"][];
+        };
+        ProgramChapter: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        CreateProgramRequest: {
+            /**
+             * @description Trimmed and uppercased, then 2–12 characters of `A-Z`, `0-9`, `_` or `-`.
+             * @example SD
+             */
+            code: string;
+            name: string;
+            description?: string;
+            /** @description Order becomes `position`. */
+            subjects?: components["schemas"]["CreateSubjectRequest"][];
+        };
+        CreateSubjectRequest: {
+            name: string;
+            chapters?: components["schemas"]["CreateChapterRequest"][];
+        };
+        CreateChapterRequest: {
+            name: string;
+        };
+        UpdateProgramRequest: {
+            /**
+             * @description Trimmed and uppercased, then 2–12 characters of `A-Z`, `0-9`, `_` or `-`.
+             * @example SD
+             */
+            code: string;
+            name: string;
+            description: string;
+            /**
+             * @description The complete tree: order becomes `position`, items without an `id` are created, and
+             *     existing items missing from this array are deleted.
+             */
+            subjects: components["schemas"]["UpdateSubjectRequest"][];
+        };
+        UpdateSubjectRequest: {
+            /**
+             * Format: uuid
+             * @description Omit to create a subject; an existing id must belong to this program.
+             */
+            id?: string;
+            name: string;
+            chapters?: components["schemas"]["UpdateChapterRequest"][];
+        };
+        UpdateChapterRequest: {
+            /**
+             * Format: uuid
+             * @description Omit to create a chapter; an existing id must belong to this program.
+             */
+            id?: string;
+            name: string;
         };
         ErrorEnvelope: {
             error: {
