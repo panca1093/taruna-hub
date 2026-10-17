@@ -181,6 +181,22 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				t.Errorf("GET /api/v1/questions: Cache-Control = %q, want no-store", got)
 			}
 
+			// Import is wired the same way: the upload routes are closed, the template downloads.
+			if rec := serveOn(e, "/api/v1/questions/import/template?format=xlsx", host); rec.Code != http.StatusUnauthorized {
+				t.Errorf("GET import template without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
+			}
+			if rec := getWithToken(e, host, "/api/v1/questions/import/template?format=csv", adminTokens.AccessToken); rec.Code != http.StatusOK {
+				t.Errorf("GET import template as admin: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusOK)
+			} else if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("GET import template: Cache-Control = %q, want no-store", got)
+			}
+			if rec := serveOn(e, "/api/v1/questions/import/preview", host); rec.Code != http.StatusUnauthorized {
+				t.Errorf("POST import preview without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
+			}
+			if rec := serveOn(e, "/api/v1/questions/import/commit", host); rec.Code != http.StatusUnauthorized {
+				t.Errorf("POST import commit without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
+			}
+
 			login := postJSON(e, host, "/api/v1/auth/login", map[string]string{
 				"identifier": *student.Email,
 				"password":   wiringPassword,
