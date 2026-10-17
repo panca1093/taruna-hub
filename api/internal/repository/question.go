@@ -34,9 +34,14 @@ func NewQuestionRepository(db *pgxpool.Pool) *QuestionRepository {
 	return &QuestionRepository{db: db}
 }
 
-const questionColumns = `q.id, q.seq, q.tenant_id, q.current_version, q.created_at, q.updated_at,
+const (
+	questionColumns = `q.id, q.seq, q.tenant_id, q.current_version, q.created_at, q.updated_at,
 	v.id, v.program_id, v.subject_id, v.chapter_id, v.type, v.content, v.difficulty, v.explanation,
 	v.option_weighted, v.case_sensitive, v.options, v.correct, v.created_by`
+	questionHeadColumns    = `id, seq, tenant_id, current_version, created_at, updated_at`
+	questionVersionColumns = `id, program_id, subject_id, chapter_id, type, content, difficulty, explanation,
+	option_weighted, case_sensitive, options, correct, created_by`
+)
 
 // questionSource joins the head row to the version it currently points at; the tenant pair keeps a
 // version of another tenant from ever joining.
@@ -217,23 +222,37 @@ func (r *QuestionRepository) exists(ctx context.Context, sql string, args ...any
 	return ok, nil
 }
 
+// find reads the head row (locking it when asked) and then its current version. Two statements are
+// deliberate: after a competing save commits, a single statement holding FOR UPDATE would re-check
+// the join against its original snapshot and miss the version row that has just appeared.
 func (r *QuestionRepository) find(ctx context.Context, q queryer, tenantID, id uuid.UUID, forUpdate bool) (model.Question, error) {
-	sql := `SELECT ` + questionColumns + questionSource + ` WHERE q.tenant_id = $1 AND q.id = $2`
+	sql := `SELECT ` + questionHeadColumns + ` FROM questions WHERE tenant_id = $1 AND id = $2`
 	if forUpdate {
-		sql += ` FOR UPDATE OF q`
+		sql += ` FOR UPDATE`
 	}
-	row := q.QueryRow(ctx, sql, tenantID, id)
 	var out model.Question
-	var chapter *uuid.UUID
-	var options, correct []byte
-	err := row.Scan(&out.ID, &out.Number, &out.TenantID, &out.Version, &out.CreatedAt, &out.UpdatedAt,
-		&out.VersionID, &out.ProgramID, &out.SubjectID, &chapter, &out.Type, &out.Content, &out.Difficulty,
-		&out.Explanation, &out.OptionWeighted, &out.CaseSensitive, &options, &correct, &out.CreatedBy)
+	err := q.QueryRow(ctx, sql, tenantID, id).Scan(&out.ID, &out.Number, &out.TenantID, &out.Version,
+		&out.CreatedAt, &out.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Question{}, ErrNotFound
 	}
 	if err != nil {
 		return model.Question{}, fmt.Errorf("read question: %w", err)
+	}
+
+	var chapter *uuid.UUID
+	var options, correct []byte
+	err = q.QueryRow(ctx,
+		`SELECT `+questionVersionColumns+` FROM question_versions
+		  WHERE tenant_id = $1 AND question_id = $2 AND version = $3`,
+		tenantID, out.ID, out.Version).Scan(&out.VersionID, &out.ProgramID, &out.SubjectID, &chapter,
+		&out.Type, &out.Content, &out.Difficulty, &out.Explanation, &out.OptionWeighted,
+		&out.CaseSensitive, &options, &correct, &out.CreatedBy)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.Question{}, ErrNotFound
+	}
+	if err != nil {
+		return model.Question{}, fmt.Errorf("read question version: %w", err)
 	}
 	out.ChapterID = chapter
 	if err := decodeQuestionJSON(&out, options, correct); err != nil {
