@@ -1227,6 +1227,279 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/products:
+    get:
+      tags: [products]
+      summary: The tenant's products
+      description: |
+        Admin and Operator read what the public catalog is built from; a Student answers `403`. Newest
+        first, at most 100 per page, with `total` counting every product the filters match.
+
+        `q` is a case-insensitive substring of the title, and `%` or `_` in it match themselves.
+        `status` is `active` or `inactive`; without it both are returned.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: program_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [individual, bundle]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: q
+          in: query
+          description: Case-insensitive substring of the title; `%` and `_` are literal.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of this tenant's products with their package members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    post:
+      tags: [products]
+      summary: Create a product
+      description: |
+        Admin and Operator may write tenant content. A new product starts inactive unless `is_active` is
+        true, and `is_active` may only be true when every attached tryout is still published.
+
+        `type` is `individual` with exactly one tryout or `bundle` with two to twenty. Every tryout must
+        belong to this tenant, be `published` and belong to `program_id`; another tenant's id answers `422`
+        on `tryout_ids[i]` exactly like a missing one, so existence never leaks.
+
+        `price` and `original_price` are decimal strings with at most two fraction digits, never floats.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRequest"
+      responses:
+        "201":
+          description: The product as stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/products/{id}:
+    get:
+      tags: [products]
+      summary: One product with its package members
+      description: Admin and Operator only. An id of another tenant answers `404`, never `403`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The product as stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [products]
+      summary: Replace a product
+      description: |
+        Replaces every editable field and the whole `tryout_ids` package in one transaction. The product row
+        is locked, so two concurrent saves each land whole and the last one wins outright.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductRequest"
+      responses:
+        "200":
+          description: The product as stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      tags: [products]
+      summary: Delete a product
+      description: Deletes the package links and the product in one transaction; the tryouts stay.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: The product and its links are gone
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/catalog/products:
+    get:
+      tags: [catalog]
+      summary: The public catalog of this host's tenant
+      description: |
+        Unauthenticated, and tenant-resolved from the request host exactly like `GET /api/v1/tenant`; the
+        platform host and an unknown host answer `404`. Only products that are active, inside their own
+        window and whose every tryout is published and inside its window are listed, newest first.
+
+        The body is display data only: no answer keys, no author, no revision, no other tenant.
+      parameters:
+        - name: program_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [individual, bundle]
+        - name: q
+          in: query
+          description: Case-insensitive substring of the title; `%` and `_` are literal.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of this tenant's public catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicProductList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/catalog/products/{id}:
+    get:
+      tags: [catalog]
+      summary: One public product
+      description: |
+        Unauthenticated and tenant-resolved from the host. A product that is inactive, outside its window or
+        backed by a tryout that is no longer playable answers `404`, as does another tenant's id.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The public product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicProduct"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/catalog/summary:
+    get:
+      tags: [catalog]
+      summary: Publicly visible counts for the landing page
+      description: |
+        Unauthenticated and tenant-resolved from the host. Counts only what this tenant's visitors can see:
+        its programs, the products the catalog lists and the published, open tryouts.
+      responses:
+        "200":
+          description: The three counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSummary"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2123,6 +2396,206 @@ components:
           description: The complete definition; subtests and assignments missing here are deleted.
           items:
             $ref: "#/components/schemas/TryoutSubtestRequest"
+
+    ProductTryout:
+      type: object
+      additionalProperties: false
+      required: [id, title, status, subtest_count, question_count]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+          enum: [draft, published]
+        subtest_count:
+          type: integer
+        question_count:
+          type: integer
+
+    Product:
+      type: object
+      additionalProperties: false
+      required: [id, type, title, description, program_id, price, original_price, is_active, active_until,
+                 tryouts, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [individual, bundle]
+        title:
+          type: string
+        description:
+          type: string
+        program_id:
+          type: string
+          format: uuid
+        price:
+          type: string
+          description: Canonical decimal string with two fraction digits, for example `"150000.00"`. Never a float.
+          example: "150000.00"
+        original_price:
+          type: string
+          nullable: true
+          description: The normal price when the product is discounted; never below `price`.
+          example: "200000.00"
+        is_active:
+          type: boolean
+        active_until:
+          type: string
+          format: date-time
+          nullable: true
+        tryouts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductTryout"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProductList:
+      type: object
+      additionalProperties: false
+      required: [products, total]
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        total:
+          type: integer
+
+    ProductRequest:
+      type: object
+      additionalProperties: false
+      required: [type, title, description, program_id, price, original_price, is_active, tryout_ids]
+      properties:
+        type:
+          type: string
+          enum: [individual, bundle]
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+        program_id:
+          type: string
+          format: uuid
+        price:
+          type: string
+          description: Decimal string, at most two fraction digits, greater than zero. `1e3`, `NaN` and `-1` are refused.
+          pattern: '^[0-9]+(\.[0-9]{1,2})?$'
+          example: "150000"
+        original_price:
+          type: string
+          nullable: true
+          description: Same grammar as `price` and never below it; `null` means no discount.
+          pattern: '^[0-9]+(\.[0-9]{1,2})?$'
+        is_active:
+          type: boolean
+        active_until:
+          type: string
+          format: date-time
+          nullable: true
+        tryout_ids:
+          type: array
+          description: The complete package, in order. One id for `individual`, two to twenty for `bundle`.
+          items:
+            type: string
+            format: uuid
+
+    PublicProductTryout:
+      type: object
+      additionalProperties: false
+      required: [id, title, subtest_count, question_count, duration_seconds_total]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        subtest_count:
+          type: integer
+        question_count:
+          type: integer
+        duration_seconds_total:
+          type: integer
+
+    PublicProduct:
+      type: object
+      additionalProperties: false
+      required: [id, type, title, description, program_id, program_code, program_name, price, original_price,
+                 discount_percent, active_until, tryouts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [individual, bundle]
+        title:
+          type: string
+        description:
+          type: string
+        program_id:
+          type: string
+          format: uuid
+        program_code:
+          type: string
+        program_name:
+          type: string
+        price:
+          type: string
+          description: Canonical decimal string; the client formats it for display and never divides it.
+          example: "150000.00"
+        original_price:
+          type: string
+          nullable: true
+        discount_percent:
+          type: integer
+          nullable: true
+          description: Rounded whole percent, computed by the server; `null` when there is no discount.
+        active_until:
+          type: string
+          format: date-time
+          nullable: true
+        tryouts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicProductTryout"
+
+    PublicProductList:
+      type: object
+      additionalProperties: false
+      required: [products, total]
+      properties:
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicProduct"
+        total:
+          type: integer
+
+    CatalogSummary:
+      type: object
+      additionalProperties: false
+      required: [programs, products, tryouts]
+      properties:
+        programs:
+          type: integer
+        products:
+          type: integer
+        tryouts:
+          type: integer
 
     ErrorEnvelope:
       type: object

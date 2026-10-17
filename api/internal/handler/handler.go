@@ -26,11 +26,12 @@ type Handler struct {
 	curriculum    *service.CurriculumService
 	questions     *service.QuestionService
 	tryouts       *service.TryoutService
+	products      *service.ProductService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
 
-func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, opts AuthOptions) *Handler {
+func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, opts AuthOptions) *Handler {
 	return &Handler{
 		logger:        logger,
 		health:        health,
@@ -39,6 +40,7 @@ func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, 
 		curriculum:    curriculum,
 		questions:     questions,
 		tryouts:       tryouts,
+		products:      products,
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
@@ -89,4 +91,16 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.DELETE("/tryouts/:id", h.DeleteTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/tryouts/:id/publish", h.PublishTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/tryouts/:id/unpublish", h.UnpublishTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+
+	// Products are tenant content like tryouts, so an Operator writes them too.
+	v1.GET("/products", h.ListProducts, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/products", h.CreateProduct, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.GET("/products/:id", h.GetProduct, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.PUT("/products/:id", h.UpdateProduct, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.DELETE("/products/:id", h.DeleteProduct, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+
+	// The catalog is anonymous and host-resolved; no-store because the tenant is in Host, not the path.
+	v1.GET("/catalog/products", h.CatalogProducts, httpx.NoStore())
+	v1.GET("/catalog/products/:id", h.CatalogProduct, httpx.NoStore())
+	v1.GET("/catalog/summary", h.CatalogSummary, httpx.NoStore())
 }

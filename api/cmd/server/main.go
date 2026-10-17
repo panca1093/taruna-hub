@@ -96,7 +96,8 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	curriculum := service.NewCurriculumService(pool, repository.NewCurriculumRepository(pool))
 	questions := service.NewQuestionService(pool, repository.NewQuestionRepository(pool))
 	tryouts := service.NewTryoutService(pool, repository.NewTryoutRepository(pool))
-	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, handler.AuthOptions{
+	products := service.NewProductService(pool, repository.NewProductRepository(pool))
+	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, products, handler.AuthOptions{
 		SecureCookies: !cfg.IsDevelopment(),
 		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
 	})

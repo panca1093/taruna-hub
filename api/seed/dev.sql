@@ -251,6 +251,8 @@ SELECT t.id, p.id, v.title, v.description, v.scoring_mode, v.status,
        u.id
 FROM (VALUES
     ('taruna', 'SMA', 'Tryout UTBK SMA', 'Simulasi UTBK dua subtes untuk siswa SMA kelas 12.', 'weighted', 'published', '-7 days', '60 days', NULL, true, true, NULL, 'admin@tarunaeduka.id'),
+    ('taruna', 'SMA', 'Tryout SMA Saintek', 'Latihan saintek untuk paket bundle.', 'weighted', 'published', '-5 days', '45 days', NULL, false, true, NULL, 'admin@tarunaeduka.id'),
+    ('taruna', 'SMA', 'Tryout SMA Soshum', 'Latihan soshum untuk paket bundle.', 'weighted', 'published', '-5 days', '45 days', NULL, false, false, NULL, 'admin@tarunaeduka.id'),
     ('taruna', 'SMP', 'Tryout SMP Bahasa Inggris', 'Draf tryout bahasa Inggris; belum dipublikasikan.', 'weighted', 'draft', NULL, '45 days', NULL, false, false, NULL, 'admin@tarunaeduka.id'),
     ('taruna', 'SD', 'Tryout SD Matematika', 'Tryout yang sudah dikerjakan satu siswa, jadi terkunci.', 'weighted', 'published', '-14 days', '30 days', '7 days', false, true, '-1 day', 'admin@tarunaeduka.id'),
     ('sekolah-b', 'SMA', 'Tryout SMA Sekolah B', 'Contoh tryout milik tenant kedua.', 'weighted', 'published', '-3 days', '30 days', NULL, false, false, NULL, 'admin@sekolah-b.test')
@@ -266,6 +268,8 @@ SELECT x.id, x.tenant_id, v.name, v.duration_seconds, v.position
 FROM (VALUES
     ('taruna', 'Tryout UTBK SMA', 'Penalaran Umum', 2700, 1),
     ('taruna', 'Tryout UTBK SMA', 'Pengetahuan Kuantitatif', 1800, 2),
+    ('taruna', 'Tryout SMA Saintek', 'Matematika Saintek', 1800, 1),
+    ('taruna', 'Tryout SMA Soshum', 'Penalaran Soshum', 1800, 1),
     ('taruna', 'Tryout SMP Bahasa Inggris', 'Tenses', 1200, 1),
     ('taruna', 'Tryout SD Matematika', 'Bilangan', 1800, 1),
     ('sekolah-b', 'Tryout SMA Sekolah B', 'Matematika', 1500, 1)
@@ -285,6 +289,10 @@ FROM (VALUES
     ('taruna', 'Tryout UTBK SMA', 'Pengetahuan Kuantitatif', 1, 'Akar-akar persamaan $x^2 - 5x + 6 = 0$ adalah ...'),
     ('taruna', 'Tryout UTBK SMA', 'Pengetahuan Kuantitatif', 2, 'Nilai dari $\log_2 32$ adalah ...'),
     ('taruna', 'Tryout UTBK SMA', 'Pengetahuan Kuantitatif', 3, 'Turunan pertama dari $f(x) = 3x^2 + 2x$ adalah ...'),
+    ('taruna', 'Tryout SMA Saintek', 'Matematika Saintek', 1, 'Turunan pertama dari $f(x) = 3x^2 + 2x$ adalah ...'),
+    ('taruna', 'Tryout SMA Saintek', 'Matematika Saintek', 2, 'Nilai dari $\log_2 32$ adalah ...'),
+    ('taruna', 'Tryout SMA Soshum', 'Penalaran Soshum', 1, 'Kata ''OPTIMIS'' berlawanan makna (antonim) dengan ...'),
+    ('taruna', 'Tryout SMA Soshum', 'Penalaran Soshum', 2, 'Semua siswa yang rajin belajar lulus ujian. Andi lulus ujian. Maka ...'),
     ('taruna', 'Tryout SMP Bahasa Inggris', 'Tenses', 1, 'Jika $2x + 5 = 17$, maka nilai $x$ adalah ...'),
     ('taruna', 'Tryout SMP Bahasa Inggris', 'Tenses', 2, 'Luas permukaan kubus dengan panjang rusuk 6 cm adalah ... $cm^2$'),
     ('taruna', 'Tryout SD Matematika', 'Bilangan', 1, 'Hasil dari 248 + 179 adalah ...'),
@@ -303,3 +311,41 @@ JOIN questions q ON q.tenant_id = t.id AND q.seq = (
 JOIN question_versions qv ON qv.question_id = q.id AND qv.version = q.current_version
 WHERE NOT EXISTS (SELECT 1 FROM tryout_questions tq
                    WHERE tq.tryout_id = x.id AND tq.question_id = q.id);
+
+-- P11: products over the seeded published tryouts; extra SMA tryouts exist so a bundle has two of one program.
+INSERT INTO products (tenant_id, type, title, description, program_id, price, original_price, is_active,
+        active_until, created_by)
+SELECT t.id, v.type, v.title, v.description, p.id, v.price::numeric(14,2),
+       v.original_price::numeric(14,2), v.is_active,
+       CASE WHEN v.until_offset IS NULL THEN NULL ELSE now() + v.until_offset::interval END, u.id
+FROM (VALUES
+    ('taruna',    'individual', 'Tryout UTBK SMA',        'Satu tryout UTBK lengkap untuk siswa SMA.',            'SMA', '150000.00', NULL,         true,  NULL,     'admin@tarunaeduka.id'),
+    ('taruna',    'individual', 'Tryout SD Matematika',   'Satu tryout matematika SD dengan pembahasan.',         'SD',  '75000.00',  '90000.00',  true,  '30 days', 'admin@tarunaeduka.id'),
+    ('taruna',    'bundle',     'Paket Sains SMA',        'Dua tryout saintek dengan harga lebih hemat.',         'SMA', '250000.00', '300000.00', true,  '45 days', 'admin@tarunaeduka.id'),
+    ('taruna',    'bundle',     'Paket Lengkap SMA',      'Tiga tryout SMA: UTBK, saintek, dan soshum.',          'SMA', '350000.00', '450000.00', true,  '45 days', 'admin@tarunaeduka.id'),
+    ('taruna',    'individual', 'Tryout SMA Soshum',      'Tryout soshum yang belum ditampilkan di katalog.',     'SMA', '100000.00', NULL,        false, NULL,     'admin@tarunaeduka.id'),
+    ('sekolah-b', 'individual', 'Tryout SMA Sekolah B',   'Produk contoh milik tenant kedua.',                    'SMA', '125000.00', NULL,        true,  NULL,     'admin@sekolah-b.test')
+) AS v (slug, type, title, description, program_code, price, original_price, is_active, until_offset, author_email)
+JOIN tenants t ON t.slug = v.slug
+JOIN programs p ON p.tenant_id = t.id AND p.code = v.program_code
+JOIN users u ON u.tenant_id = t.id AND u.email = v.author_email
+WHERE NOT EXISTS (SELECT 1 FROM products x WHERE x.tenant_id = t.id AND lower(x.title) = lower(v.title));
+
+INSERT INTO product_tryouts (product_id, tryout_id, tenant_id, position)
+SELECT pr.id, x.id, pr.tenant_id, v.position
+FROM (VALUES
+    ('taruna',    'Tryout UTBK SMA',      'Tryout UTBK SMA',    1),
+    ('taruna',    'Tryout SD Matematika', 'Tryout SD Matematika', 1),
+    ('taruna',    'Paket Sains SMA',      'Tryout UTBK SMA',    1),
+    ('taruna',    'Paket Sains SMA',      'Tryout SMA Saintek', 2),
+    ('taruna',    'Paket Lengkap SMA',    'Tryout UTBK SMA',    1),
+    ('taruna',    'Paket Lengkap SMA',    'Tryout SMA Saintek', 2),
+    ('taruna',    'Paket Lengkap SMA',    'Tryout SMA Soshum',  3),
+    ('taruna',    'Tryout SMA Soshum',    'Tryout SMA Soshum',  1),
+    ('sekolah-b', 'Tryout SMA Sekolah B', 'Tryout SMA Sekolah B', 1)
+) AS v (slug, product_title, tryout_title, position)
+JOIN tenants t ON t.slug = v.slug
+JOIN products pr ON pr.tenant_id = t.id AND lower(pr.title) = lower(v.product_title)
+JOIN tryouts x ON x.tenant_id = t.id AND x.title = v.tryout_title
+WHERE NOT EXISTS (SELECT 1 FROM product_tryouts pt
+                   WHERE pt.product_id = pr.id AND pt.tryout_id = x.id);

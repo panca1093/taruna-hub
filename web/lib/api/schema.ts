@@ -1666,6 +1666,341 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's products
+         * @description Admin and Operator read what the public catalog is built from; a Student answers `403`. Newest
+         *     first, at most 100 per page, with `total` counting every product the filters match.
+         *
+         *     `q` is a case-insensitive substring of the title, and `%` or `_` in it match themselves.
+         *     `status` is `active` or `inactive`; without it both are returned.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    program_id?: string;
+                    type?: "individual" | "bundle";
+                    status?: "active" | "inactive";
+                    /** @description Case-insensitive substring of the title; `%` and `_` are literal. */
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of this tenant's products with their package members */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProductList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        /**
+         * Create a product
+         * @description Admin and Operator may write tenant content. A new product starts inactive unless `is_active` is
+         *     true, and `is_active` may only be true when every attached tryout is still published.
+         *
+         *     `type` is `individual` with exactly one tryout or `bundle` with two to twenty. Every tryout must
+         *     belong to this tenant, be `published` and belong to `program_id`; another tenant's id answers `422`
+         *     on `tryout_ids[i]` exactly like a missing one, so existence never leaks.
+         *
+         *     `price` and `original_price` are decimal strings with at most two fraction digits, never floats.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProductRequest"];
+                };
+            };
+            responses: {
+                /** @description The product as stored */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Product"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/products/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One product with its package members
+         * @description Admin and Operator only. An id of another tenant answers `404`, never `403`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The product as stored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Product"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        /**
+         * Replace a product
+         * @description Replaces every editable field and the whole `tryout_ids` package in one transaction. The product row
+         *     is locked, so two concurrent saves each land whole and the last one wins outright.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProductRequest"];
+                };
+            };
+            responses: {
+                /** @description The product as stored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Product"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        /**
+         * Delete a product
+         * @description Deletes the package links and the product in one transaction; the tryouts stay.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The product and its links are gone */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The public catalog of this host's tenant
+         * @description Unauthenticated, and tenant-resolved from the request host exactly like `GET /api/v1/tenant`; the
+         *     platform host and an unknown host answer `404`. Only products that are active, inside their own
+         *     window and whose every tryout is published and inside its window are listed, newest first.
+         *
+         *     The body is display data only: no answer keys, no author, no revision, no other tenant.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    program_id?: string;
+                    type?: "individual" | "bundle";
+                    /** @description Case-insensitive substring of the title; `%` and `_` are literal. */
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of this tenant's public catalog */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicProductList"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/products/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One public product
+         * @description Unauthenticated and tenant-resolved from the host. A product that is inactive, outside its window or
+         *     backed by a tryout that is no longer playable answers `404`, as does another tenant's id.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The public product */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicProduct"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Publicly visible counts for the landing page
+         * @description Unauthenticated and tenant-resolved from the host. Counts only what this tenant's visitors can see:
+         *     its programs, the products the catalog lists and the published, open tryouts.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The three counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CatalogSummary"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2152,6 +2487,107 @@ export interface components {
             randomize_options?: boolean;
             /** @description The complete definition; subtests and assignments missing here are deleted. */
             subtests?: components["schemas"]["TryoutSubtestRequest"][];
+        };
+        ProductTryout: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @enum {string} */
+            status: "draft" | "published";
+            subtest_count: number;
+            question_count: number;
+        };
+        Product: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "individual" | "bundle";
+            title: string;
+            description: string;
+            /** Format: uuid */
+            program_id: string;
+            /**
+             * @description Canonical decimal string with two fraction digits, for example `"150000.00"`. Never a float.
+             * @example 150000.00
+             */
+            price: string;
+            /**
+             * @description The normal price when the product is discounted; never below `price`.
+             * @example 200000.00
+             */
+            original_price: string | null;
+            is_active: boolean;
+            /** Format: date-time */
+            active_until: string | null;
+            tryouts: components["schemas"]["ProductTryout"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ProductList: {
+            products: components["schemas"]["Product"][];
+            total: number;
+        };
+        ProductRequest: {
+            /** @enum {string} */
+            type: "individual" | "bundle";
+            title: string;
+            description: string;
+            /** Format: uuid */
+            program_id: string;
+            /**
+             * @description Decimal string, at most two fraction digits, greater than zero. `1e3`, `NaN` and `-1` are refused.
+             * @example 150000
+             */
+            price: string;
+            /** @description Same grammar as `price` and never below it; `null` means no discount. */
+            original_price: string | null;
+            is_active: boolean;
+            /** Format: date-time */
+            active_until?: string | null;
+            /** @description The complete package, in order. One id for `individual`, two to twenty for `bundle`. */
+            tryout_ids: string[];
+        };
+        PublicProductTryout: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            subtest_count: number;
+            question_count: number;
+            duration_seconds_total: number;
+        };
+        PublicProduct: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            type: "individual" | "bundle";
+            title: string;
+            description: string;
+            /** Format: uuid */
+            program_id: string;
+            program_code: string;
+            program_name: string;
+            /**
+             * @description Canonical decimal string; the client formats it for display and never divides it.
+             * @example 150000.00
+             */
+            price: string;
+            original_price: string | null;
+            /** @description Rounded whole percent, computed by the server; `null` when there is no discount. */
+            discount_percent: number | null;
+            /** Format: date-time */
+            active_until: string | null;
+            tryouts: components["schemas"]["PublicProductTryout"][];
+        };
+        PublicProductList: {
+            products: components["schemas"]["PublicProduct"][];
+            total: number;
+        };
+        CatalogSummary: {
+            programs: number;
+            products: number;
+            tryouts: number;
         };
         ErrorEnvelope: {
             error: {

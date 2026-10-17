@@ -191,6 +191,21 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				t.Errorf("GET /api/v1/tryouts: Cache-Control = %q, want no-store", got)
 			}
 
+			// Products are staff content as well, and the catalog beside them is anonymous.
+			if rec := serveOn(e, "/api/v1/products", host); rec.Code != http.StatusUnauthorized {
+				t.Errorf("GET /api/v1/products without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
+			}
+			if rec := getWithToken(e, host, "/api/v1/products", adminTokens.AccessToken); rec.Code != http.StatusOK {
+				t.Errorf("GET /api/v1/products as admin: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusOK)
+			} else if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("GET /api/v1/products: Cache-Control = %q, want no-store", got)
+			}
+			for _, path := range []string{"/api/v1/catalog/products", "/api/v1/catalog/summary"} {
+				if rec := serveOn(e, path, host); rec.Code != http.StatusOK {
+					t.Errorf("GET %s anonymously: status = %d body = %s, want %d", path, rec.Code, rec.Body.String(), http.StatusOK)
+				}
+			}
+
 			// Import is wired the same way: the upload routes are closed, the template downloads.
 			if rec := serveOn(e, "/api/v1/questions/import/template?format=xlsx", host); rec.Code != http.StatusUnauthorized {
 				t.Errorf("GET import template without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
