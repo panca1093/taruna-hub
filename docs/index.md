@@ -12,3 +12,4 @@ decisions behind them stay in `requirement/` (PRD, ARCHITECTURE, PLAN), and the 
 | Curriculum: programs, subjects and chapters | P05 | [curriculum.md](curriculum.md) |
 | Question bank: four types in immutable versions | P07a | [questions.md](questions.md) |
 | Tryouts: drafts, publishing and frozen assignments | P08 | [tryouts.md](tryouts.md) |
+| Products and the public catalog | P11 | [products.md](products.md) |

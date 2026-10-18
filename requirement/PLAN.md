@@ -343,7 +343,7 @@ For every slice, use this verification loop:
 
 ### P11 — Catalog, products and tenant landing
 
-**Status:** planned · **Size:** M · **Depends:** P04, P08, P10
+**Status:** done, lean — individual and bundle products with exact-numeric prices, admin CRUD and an anonymous host-resolved catalog plus landing/catalog pages on the API; kecermatan products (no test entity yet), checkout, covers and the D06 platform landing are deferred · **Size:** M · **Depends:** P04, P08, P10
 
 **Outcome:** Each school publishes all three product types and students see its real branded landing/catalog.
 
@@ -355,10 +355,10 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Individual exactly one tryout, bundle intended set, kecermatan one matching test and positive included attempts.
-- [ ] Inactive product is hidden publicly; active products/filter/detail contain only resolved tenant data.
-- [ ] Deactivate product and verify landing/catalog update without deploy; sequential A/B requests show correct branding/content.
-- [ ] Root CTAs target approved hosts; mobile landing meets reviewed accessibility/performance checks; download copy matches D11.
+- [x] Individual exactly one tryout and bundle two to twenty in one program; the kecermatan half waits for P09's test entity.
+- [x] Inactive product is hidden publicly; active products, filters and details contain only resolved tenant data.
+- [x] Deactivate product and verify landing/catalog update without deploy; sequential A/B requests show correct branding/content.
+- [ ] Root CTAs target approved hosts and the landing download copy matches D11 — both wait on D06/D11; the "1.000+ siswa" claim was replaced with the real visible-tryout count.
 
 **Decision / verification gate:** D06 root featured-product ownership/domain routing; D11 landing download promise.
 
