@@ -206,6 +206,25 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				}
 			}
 
+			// The wallet is the student's own; the staff reads beside it are closed without a token.
+			if rec := serveOn(e, "/api/v1/wallet", host); rec.Code != http.StatusUnauthorized {
+				t.Errorf("GET /api/v1/wallet without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
+			}
+			studentWallet := "/api/v1/students/" + student.ID.String() + "/wallet"
+			for _, path := range []string{"/api/v1/students", studentWallet, studentWallet + "/entries"} {
+				if rec := serveOn(e, path, host); rec.Code != http.StatusUnauthorized {
+					t.Errorf("GET %s without a token: status = %d body = %s, want %d", path, rec.Code, rec.Body.String(), http.StatusUnauthorized)
+				}
+				if rec := getWithToken(e, host, path, adminTokens.AccessToken); rec.Code != http.StatusOK {
+					t.Errorf("GET %s as admin: status = %d body = %s, want %d", path, rec.Code, rec.Body.String(), http.StatusOK)
+				} else if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+					t.Errorf("GET %s: Cache-Control = %q, want no-store", path, got)
+				}
+			}
+			if rec := postOn(e, studentWallet+"/adjustments", host, `{}`); rec.Code != http.StatusUnauthorized {
+				t.Errorf("POST %s without a token: status = %d body = %s, want %d", studentWallet+"/adjustments", rec.Code, rec.Body.String(), http.StatusUnauthorized)
+			}
+
 			// Import is wired the same way: the upload routes are closed, the template downloads.
 			if rec := serveOn(e, "/api/v1/questions/import/template?format=xlsx", host); rec.Code != http.StatusUnauthorized {
 				t.Errorf("GET import template without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
@@ -378,6 +397,17 @@ func postWithCookie(e *echo.Echo, host, path string, cookie *http.Cookie, origin
 		req.Header.Set(echo.HeaderOrigin, origin)
 	}
 	req.Host = host
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
+func postOn(e *echo.Echo, path, host, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	if host != "" {
+		req.Host = host
+	}
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	return rec

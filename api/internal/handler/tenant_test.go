@@ -46,7 +46,7 @@ func newTenantEcho(f tenantFixture, trustForwardedHost bool) *echo.Echo {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	e := echo.New()
 	e.HTTPErrorHandler = httpx.ErrorHandler(logger)
-	New(logger, NewHealthHandler(nil), newAuthService(f), nil, newCurriculumService(f), newQuestionService(f), newTryoutService(f), newProductService(f), AuthOptions{
+	New(logger, NewHealthHandler(nil), newAuthService(f), nil, newCurriculumService(f), newQuestionService(f), newTryoutService(f), newProductService(f), newWalletService(f), AuthOptions{
 		AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
 	}).Register(e, ResolveHostScope(f.tenants, trustForwardedHost))
 	return e

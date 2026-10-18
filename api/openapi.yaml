@@ -33,6 +33,10 @@ tags:
     description: Tenant question bank — four types, immutable versions
   - name: tryouts
     description: Tenant tryouts — draft or published, assignments frozen per question version
+  - name: wallet
+    description: The student's own balance and immutable ledger
+  - name: students
+    description: Tenant students, their wallets and staff adjustments
 
 paths:
   /healthz:
@@ -1500,6 +1504,242 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/wallet:
+    get:
+      tags: [wallet]
+      summary: The signed-in student's own wallet
+      description: |
+        Student only — tenant staff answer `403` here. `balance` is the projection; `total_credits`
+        and `total_debits` are summed from the ledger in SQL, debits as the magnitude of the negative
+        rows. Every value is a canonical decimal string with exactly two fraction digits.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The student's balance and ledger totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Wallet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/wallet/entries:
+    get:
+      tags: [wallet]
+      summary: The signed-in student's ledger
+      description: |
+        Student only. Newest first by `seq`, at most 100 per page, `total` counting every entry of
+        this student. `amount` is signed; `balance_after` is the running balance just after the
+        movement. `actor_name` is a staff member's display name only, and `null` for system and
+        provider rows.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of ledger entries, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletEntryList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/students:
+    get:
+      tags: [students]
+      summary: The tenant's students with their balances
+      description: |
+        Admin and Operator read this list; a Student answers `403`. Newest first, at most 100 per
+        page, `total` counting every student the filters match.
+
+        `q` is a case-insensitive substring of the name, email or phone, and `%` or `_` in it match
+        themselves. A student of another tenant is simply absent.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Case-insensitive substring of name, email or phone; `%` and `_` are literal.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of this tenant's students
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletStudentList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/students/{id}/wallet:
+    get:
+      tags: [students]
+      summary: One student's wallet
+      description: |
+        Admin and Operator only. An id of another tenant, or of somebody who is not a student,
+        answers `404` with the same message, never `403`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The student's balance and ledger totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Wallet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/students/{id}/wallet/entries:
+    get:
+      tags: [students]
+      summary: One student's ledger
+      description: Admin and Operator only, newest first. The id rules match the wallet above.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of the student's ledger, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletEntryList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/students/{id}/wallet/adjustments:
+    post:
+      tags: [students]
+      summary: Adjust one student's balance
+      description: |
+        Admin only (D02 is still open, so this is a role guard). A `credit` adds and a `debit`
+        subtracts; `amount` is a positive decimal string with at most two fraction digits and the
+        server signs it, so `1e3`, `1.234`, `0.00` and a minus sign all answer `422 on amount`.
+
+        A movement that would take the balance below zero answers `422 on amount` with "Saldo tidak
+        cukup." and writes nothing — it is never clamped. `reason` is required for every adjustment.
+
+        `idempotency_key` (8–64 characters, `[A-Za-z0-9_-]`) identifies the financial operation: the
+        same key with the same body answers `200` with the original entry and moves nothing, and the
+        same key with another amount, type or student answers `409`. The first call answers `201`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustmentRequest"
+      responses:
+        "201":
+          description: The new ledger entry and the balance after it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdjustmentResult"
+        "200":
+          description: The original entry for this idempotency key, nothing written
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdjustmentResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2597,6 +2837,150 @@ components:
         tryouts:
           type: integer
 
+    Wallet:
+      type: object
+      additionalProperties: false
+      required: [balance, total_credits, total_debits]
+      properties:
+        balance:
+          type: string
+          description: The projection, a canonical decimal string with exactly two fraction digits.
+          example: "150000.00"
+        total_credits:
+          type: string
+          description: Sum of the positive ledger amounts, computed in SQL.
+          example: "200000.00"
+        total_debits:
+          type: string
+          description: Sum of the magnitude of the negative ledger amounts, computed in SQL.
+          example: "50000.00"
+
+    WalletEntry:
+      type: object
+      additionalProperties: false
+      required: [id, seq, kind, amount, balance_after, actor_kind, actor_name, reason, source_type, source_id, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+          format: int64
+          description: Total order of the ledger; entries are listed newest first by it.
+        kind:
+          type: string
+          enum: [opening, topup, spend, adjustment]
+        amount:
+          type: string
+          description: Signed canonical decimal — `"50000.00"` or `"-25000.00"` — never a number.
+          example: "-25000.00"
+        balance_after:
+          type: string
+          description: The projection just after this movement, never negative.
+          example: "125000.00"
+        actor_kind:
+          type: string
+          enum: [system, student, provider, staff, platform]
+        actor_name:
+          type: string
+          nullable: true
+          description: A staff member's display name only, never their email or phone; null otherwise.
+        reason:
+          type: string
+          description: Required for an adjustment, empty for every other kind.
+        source_type:
+          type: string
+          description: The business source, for example `adjustment` or `order`.
+        source_id:
+          type: string
+          description: Unique within the tenant together with `source_type`; the idempotency key for an adjustment.
+        created_at:
+          type: string
+          format: date-time
+
+    WalletEntryList:
+      type: object
+      additionalProperties: false
+      required: [entries, total]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletEntry"
+        total:
+          type: integer
+
+    WalletStudent:
+      type: object
+      additionalProperties: false
+      required: [id, name, email, phone, balance, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        balance:
+          type: string
+          description: The student's projection, a canonical decimal string.
+          example: "150000.00"
+        created_at:
+          type: string
+          format: date-time
+
+    WalletStudentList:
+      type: object
+      additionalProperties: false
+      required: [students, total]
+      properties:
+        students:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletStudent"
+        total:
+          type: integer
+
+    AdjustmentRequest:
+      type: object
+      additionalProperties: false
+      required: [type, amount, reason, idempotency_key]
+      properties:
+        type:
+          type: string
+          enum: [credit, debit]
+          description: The direction; the server signs the amount, so `amount` itself is unsigned.
+        amount:
+          type: string
+          description: A plain decimal above zero with at most two fraction digits, for example `"50000.00"`.
+          example: "50000.00"
+        reason:
+          type: string
+          description: Required, trimmed; an empty or blank reason answers `422 reason`.
+        idempotency_key:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+          description: Identifies the financial operation; a retry with the same key moves money once.
+
+    AdjustmentResult:
+      type: object
+      additionalProperties: false
+      required: [entry, balance]
+      properties:
+        entry:
+          $ref: "#/components/schemas/WalletEntry"
+        balance:
+          type: string
+          description: The projection after the adjustment, a canonical decimal string.
+          example: "50000.00"
+
     ErrorEnvelope:
       type: object
       required: [error]
@@ -2672,6 +3056,13 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
+    Conflict:
+      description: The request conflicts with the resource's current state, for example a reused idempotency key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
     InternalError:
       description: Unexpected server error
       content:

@@ -2001,6 +2001,315 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in student's own wallet
+         * @description Student only — tenant staff answer `403` here. `balance` is the projection; `total_credits`
+         *     and `total_debits` are summed from the ledger in SQL, debits as the magnitude of the negative
+         *     rows. Every value is a canonical decimal string with exactly two fraction digits.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The student's balance and ledger totals */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Wallet"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wallet/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in student's ledger
+         * @description Student only. Newest first by `seq`, at most 100 per page, `total` counting every entry of
+         *     this student. `amount` is signed; `balance_after` is the running balance just after the
+         *     movement. `actor_name` is a staff member's display name only, and `null` for system and
+         *     provider rows.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of ledger entries, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WalletEntryList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's students with their balances
+         * @description Admin and Operator read this list; a Student answers `403`. Newest first, at most 100 per
+         *     page, `total` counting every student the filters match.
+         *
+         *     `q` is a case-insensitive substring of the name, email or phone, and `%` or `_` in it match
+         *     themselves. A student of another tenant is simply absent.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Case-insensitive substring of name, email or phone; `%` and `_` are literal. */
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of this tenant's students */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WalletStudentList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}/wallet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One student's wallet
+         * @description Admin and Operator only. An id of another tenant, or of somebody who is not a student,
+         *     answers `404` with the same message, never `403`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The student's balance and ledger totals */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Wallet"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}/wallet/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One student's ledger
+         * @description Admin and Operator only, newest first. The id rules match the wallet above.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of the student's ledger, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WalletEntryList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}/wallet/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adjust one student's balance
+         * @description Admin only (D02 is still open, so this is a role guard). A `credit` adds and a `debit`
+         *     subtracts; `amount` is a positive decimal string with at most two fraction digits and the
+         *     server signs it, so `1e3`, `1.234`, `0.00` and a minus sign all answer `422 on amount`.
+         *
+         *     A movement that would take the balance below zero answers `422 on amount` with "Saldo tidak
+         *     cukup." and writes nothing — it is never clamped. `reason` is required for every adjustment.
+         *
+         *     `idempotency_key` (8–64 characters, `[A-Za-z0-9_-]`) identifies the financial operation: the
+         *     same key with the same body answers `200` with the original entry and moves nothing, and the
+         *     same key with another amount, type or student answers `409`. The first call answers `201`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AdjustmentRequest"];
+                };
+            };
+            responses: {
+                /** @description The original entry for this idempotency key, nothing written */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdjustmentResult"];
+                    };
+                };
+                /** @description The new ledger entry and the balance after it */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdjustmentResult"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2589,6 +2898,102 @@ export interface components {
             products: number;
             tryouts: number;
         };
+        Wallet: {
+            /**
+             * @description The projection, a canonical decimal string with exactly two fraction digits.
+             * @example 150000.00
+             */
+            balance: string;
+            /**
+             * @description Sum of the positive ledger amounts, computed in SQL.
+             * @example 200000.00
+             */
+            total_credits: string;
+            /**
+             * @description Sum of the magnitude of the negative ledger amounts, computed in SQL.
+             * @example 50000.00
+             */
+            total_debits: string;
+        };
+        WalletEntry: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: int64
+             * @description Total order of the ledger; entries are listed newest first by it.
+             */
+            seq: number;
+            /** @enum {string} */
+            kind: "opening" | "topup" | "spend" | "adjustment";
+            /**
+             * @description Signed canonical decimal — `"50000.00"` or `"-25000.00"` — never a number.
+             * @example -25000.00
+             */
+            amount: string;
+            /**
+             * @description The projection just after this movement, never negative.
+             * @example 125000.00
+             */
+            balance_after: string;
+            /** @enum {string} */
+            actor_kind: "system" | "student" | "provider" | "staff" | "platform";
+            /** @description A staff member's display name only, never their email or phone; null otherwise. */
+            actor_name: string | null;
+            /** @description Required for an adjustment, empty for every other kind. */
+            reason: string;
+            /** @description The business source, for example `adjustment` or `order`. */
+            source_type: string;
+            /** @description Unique within the tenant together with `source_type`; the idempotency key for an adjustment. */
+            source_id: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        WalletEntryList: {
+            entries: components["schemas"]["WalletEntry"][];
+            total: number;
+        };
+        WalletStudent: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            email: string | null;
+            phone: string | null;
+            /**
+             * @description The student's projection, a canonical decimal string.
+             * @example 150000.00
+             */
+            balance: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        WalletStudentList: {
+            students: components["schemas"]["WalletStudent"][];
+            total: number;
+        };
+        AdjustmentRequest: {
+            /**
+             * @description The direction; the server signs the amount, so `amount` itself is unsigned.
+             * @enum {string}
+             */
+            type: "credit" | "debit";
+            /**
+             * @description A plain decimal above zero with at most two fraction digits, for example `"50000.00"`.
+             * @example 50000.00
+             */
+            amount: string;
+            /** @description Required, trimmed; an empty or blank reason answers `422 reason`. */
+            reason: string;
+            /** @description Identifies the financial operation; a retry with the same key moves money once. */
+            idempotency_key: string;
+        };
+        AdjustmentResult: {
+            entry: components["schemas"]["WalletEntry"];
+            /**
+             * @description The projection after the adjustment, a canonical decimal string.
+             * @example 50000.00
+             */
+            balance: string;
+        };
         ErrorEnvelope: {
             error: {
                 /**
@@ -2657,6 +3062,15 @@ export interface components {
         };
         /** @description The request body is larger than the upload limit (5 MB plus multipart framing) */
         PayloadTooLarge: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description The request conflicts with the resource's current state, for example a reused idempotency key */
+        Conflict: {
             headers: {
                 [name: string]: unknown;
             };

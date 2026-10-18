@@ -349,3 +349,59 @@ JOIN products pr ON pr.tenant_id = t.id AND lower(pr.title) = lower(v.product_ti
 JOIN tryouts x ON x.tenant_id = t.id AND x.title = v.tryout_title
 WHERE NOT EXISTS (SELECT 1 FROM product_tryouts pt
                    WHERE pt.product_id = pr.id AND pt.tryout_id = x.id);
+
+-- P12: the ledger explains every seeded balance. The opening row is the migration's own statement,
+-- here for the seed's users, and the chain below keeps `balance_after` and the projection exact.
+INSERT INTO wallet_entries (tenant_id, user_id, amount, balance_after, kind, actor_kind, reason,
+        source_type, source_id)
+SELECT u.tenant_id, u.id, u.balance, u.balance, 'opening', 'system', '', 'opening', u.id::text
+FROM users u
+WHERE u.tenant_id IS NOT NULL
+  AND u.balance <> 0
+  AND NOT EXISTS (
+      SELECT 1 FROM wallet_entries e
+       WHERE e.tenant_id = u.tenant_id
+         AND e.source_type = 'opening'
+         AND e.source_id = u.id::text);
+
+-- Three extra rows for taruna's Naila: a top-up, a spend and an admin's adjustment, each anchored
+-- to the balance of the row before it so re-running the seed changes nothing.
+INSERT INTO wallet_entries (tenant_id, user_id, amount, balance_after, kind, actor_kind, reason,
+        source_type, source_id)
+SELECT o.tenant_id, o.user_id, 50000.00, o.balance_after + 50000.00, 'topup', 'provider', '',
+       'topup', 'seed-topup-naila'
+FROM wallet_entries o
+JOIN users s ON s.id = o.user_id AND s.tenant_id = o.tenant_id
+JOIN tenants t ON t.id = o.tenant_id
+WHERE t.slug = 'taruna' AND s.email = 'naila@example.com' AND o.source_type = 'opening'
+  AND NOT EXISTS (SELECT 1 FROM wallet_entries e
+                   WHERE e.tenant_id = o.tenant_id AND e.source_type = 'topup'
+                     AND e.source_id = 'seed-topup-naila');
+
+INSERT INTO wallet_entries (tenant_id, user_id, amount, balance_after, kind, actor_kind, reason,
+        source_type, source_id)
+SELECT p.tenant_id, p.user_id, -75000.00, p.balance_after - 75000.00, 'spend', 'student', '',
+       'order', 'seed-order-naila'
+FROM wallet_entries p
+WHERE p.source_type = 'topup' AND p.source_id = 'seed-topup-naila'
+  AND NOT EXISTS (SELECT 1 FROM wallet_entries e
+                   WHERE e.tenant_id = p.tenant_id AND e.source_type = 'order'
+                     AND e.source_id = 'seed-order-naila');
+
+INSERT INTO wallet_entries (tenant_id, user_id, amount, balance_after, kind, actor_kind, actor_id,
+        reason, source_type, source_id)
+SELECT p.tenant_id, p.user_id, -5000.00, p.balance_after - 5000.00, 'adjustment', 'staff', a.id,
+       'Koreksi saldo awal semester', 'adjustment', 'seed-adjustment-naila'
+FROM wallet_entries p
+JOIN users a ON a.tenant_id = p.tenant_id AND a.email = 'admin@tarunaeduka.id'
+WHERE p.source_type = 'order' AND p.source_id = 'seed-order-naila'
+  AND NOT EXISTS (SELECT 1 FROM wallet_entries e
+                   WHERE e.tenant_id = p.tenant_id AND e.source_type = 'adjustment'
+                     AND e.source_id = 'seed-adjustment-naila');
+
+-- Whatever the chain above did, the projection equals the ledger sum, so the seed can run twice.
+UPDATE users u
+   SET balance = e.total
+  FROM (SELECT tenant_id, user_id, sum(amount) AS total
+          FROM wallet_entries GROUP BY tenant_id, user_id) e
+ WHERE u.tenant_id = e.tenant_id AND u.id = e.user_id AND u.balance <> e.total;
