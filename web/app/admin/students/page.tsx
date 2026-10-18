@@ -1,275 +1,313 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Button, Chip, toast } from "@heroui/react";
-import { ClipboardList, FileUp, KeyRound, ListChecks, Pencil, Plus, Trash2, Users, Wallet } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Button, toast } from "@heroui/react";
+import { CloudOff, Search, Users, Wallet } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
-import { ProgramBadge } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
-import { SelectInput, TextInput } from "@/components/ui/form";
-import {
-  findUser,
-  formatDate,
-  formatIDR,
-  getEnrollmentsForUser,
-  getResultsForUser,
-  getSubtestsForTryout,
-  getTryout,
-  orders,
-  programs,
-  students as initialStudents,
-  TOPUP_PRODUCT_ID,
-  tryouts,
-} from "@/lib/mock-data";
+import { SelectInput, TextInput, TextareaInput } from "@/components/ui/form";
+import { api, ApiError, errorText, type WalletEntry, type WalletStudent } from "@/lib/api/client";
+import { formatIDR, formatSignedIDR } from "@/lib/format-money";
 import { useSession } from "@/lib/session-context";
 import { useStudentsT } from "@/lib/i18n/dict/students";
-import type { AppUser, Order, ProgramCode } from "@/lib/types";
 
-const programOptions = programs.map((p) => ({ id: p.code, label: p.name }));
-const tryoutOptions = tryouts.map((t) => ({ id: t.id, label: t.title }));
-const gradients = [
-  ["#4f46e5", "#8b5cf6"],
-  ["#0ea5e9", "#22d3ee"],
-  ["#10b981", "#34d399"],
-  ["#f59e0b", "#f97316"],
-] as const;
+const PAGE_SIZE = 50;
+const LEDGER_SIZE = 20;
+
+// A fresh key per submit attempt, reused on a retry so a network error cannot credit twice.
+function newIdempotencyKey(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+const joined = (iso: string) => new Date(iso).toLocaleDateString();
 
 export default function StudentsPage() {
   const t = useStudentsT();
   const { role } = useSession();
-  const [rows, setRows] = useState<AppUser[]>(initialStudents);
-  const [editing, setEditing] = useState<AppUser | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [grantTarget, setGrantTarget] = useState<AppUser | null>(null);
-  const [grantTryout, setGrantTryout] = useState<string | null>(null);
-  const [topUpTarget, setTopUpTarget] = useState<AppUser | null>(null);
-  const [topUpAmount, setTopUpAmount] = useState("");
-  const [topUpProofName, setTopUpProofName] = useState<string | null>(null);
-  const topUpProofRef = useRef<HTMLInputElement>(null);
-  const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
-  const [detail, setDetail] = useState<AppUser | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", program: "" as string });
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm({ name: "", email: "", program: "" });
-    setModalOpen(true);
-  };
+  const [rows, setRows] = useState<WalletStudent[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
 
-  const openEdit = (s: AppUser) => {
-    setEditing(s);
-    setForm({ name: s.name, email: s.email, program: s.program ?? "" });
-    setModalOpen(true);
-  };
+  const [detail, setDetail] = useState<WalletStudent | null>(null);
+  const [detailEntries, setDetailEntries] = useState<WalletEntry[] | null>(null);
+  const [detailFailed, setDetailFailed] = useState(false);
 
-  const handleSave = () => {
-    const g = gradients[Math.floor(Math.random() * gradients.length)];
-    if (editing) {
-      setRows((prev) =>
-        prev.map((s) => (s.id === editing.id ? { ...s, name: form.name, email: form.email, program: form.program as ProgramCode } : s)),
-      );
-      toast.success(t.studentUpdated);
-    } else {
-      setRows((prev) => [
-        {
-          id: `u-student-new-${Date.now()}`,
-          name: form.name,
-          email: form.email,
-          role: "student",
-          program: form.program as ProgramCode,
-          createdAt: new Date().toISOString().slice(0, 10),
-          avatarColorFrom: g[0],
-          avatarColorTo: g[1],
-        },
-        ...prev,
-      ]);
-      toast.success(t.studentAdded);
+  const [adjustTarget, setAdjustTarget] = useState<WalletStudent | null>(null);
+  const [adjustType, setAdjustType] = useState<"credit" | "debit">("credit");
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const idempotencyKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.students
+      .list({ q: query, limit: PAGE_SIZE })
+      .then((page) => {
+        if (cancelled) return;
+        setRows(page.students);
+        setTotal(page.total);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [query, reloadKey]);
+
+  const reload = (next: string) => {
+    setRows(null);
+    setLoadFailed(false);
+    setMoreFailed("");
+    if (next === query) {
+      setReloadKey((key) => key + 1);
+      return;
     }
-    setModalOpen(false);
+    setQuery(next);
   };
 
-  const columns: Column<AppUser>[] = [
+  const loadMore = async () => {
+    setLoadingMore(true);
+    setMoreFailed("");
+    try {
+      const page = await api.students.list({ q: query, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      setRows((prev) => {
+        const seen = new Set((prev ?? []).map((row) => row.id));
+        return [...(prev ?? []), ...page.students.filter((row) => !seen.has(row.id))];
+      });
+      setTotal(page.total);
+    } catch (err) {
+      setMoreFailed(errorText(err, t.loadErrorDescription));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const loadLedger = async (studentId: string) => {
+    setDetailEntries(null);
+    setDetailFailed(false);
+    try {
+      const page = await api.students.entries(studentId, { limit: LEDGER_SIZE });
+      setDetailEntries(page.entries);
+    } catch {
+      setDetailFailed(true);
+    }
+  };
+
+  const openDetail = (student: WalletStudent) => {
+    setDetail(student);
+    void loadLedger(student.id);
+  };
+
+  const openAdjust = (student: WalletStudent) => {
+    setDetail(null);
+    setAdjustTarget(student);
+    setAdjustType("credit");
+    setAdjustAmount("");
+    setAdjustReason("");
+    setFormErrors({});
+    idempotencyKey.current = null;
+  };
+
+  const closeAdjust = () => {
+    setAdjustTarget(null);
+    setFormErrors({});
+    idempotencyKey.current = null;
+  };
+
+  const submitAdjustment = async () => {
+    const target = adjustTarget;
+    if (!target) return;
+    idempotencyKey.current ??= newIdempotencyKey();
+    setSaving(true);
+    setFormErrors({});
+    try {
+      const result = await api.students.adjust(target.id, {
+        type: adjustType,
+        amount: adjustAmount.trim(),
+        reason: adjustReason.trim(),
+        idempotency_key: idempotencyKey.current,
+      });
+      setRows((prev) => prev?.map((row) => (row.id === target.id ? { ...row, balance: result.balance } : row)) ?? []);
+      toast.success(t.adjustSaved, { description: t.adjustSavedDescription(formatIDR(result.balance)) });
+      setAdjustTarget(null);
+      idempotencyKey.current = null;
+    } catch (err) {
+      if (err instanceof ApiError && err.fields) setFormErrors(err.fields);
+      toast.danger(t.adjustFailed, { description: errorText(err, t.loadErrorDescription) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const columns: Column<WalletStudent>[] = [
     {
       key: "name",
       header: t.colStudent,
-      render: (s) => (
+      render: (student) => (
         <div className="flex items-center gap-2.5">
-          <GradientAvatar user={s} size="sm" />
+          <GradientAvatar user={student} size="sm" />
           <div>
-            <p className="font-medium text-foreground">{s.name}</p>
-            <p className="text-xs text-muted">{s.email}</p>
+            <p className="font-medium text-foreground">{student.name}</p>
+            <p className="text-xs text-muted">{student.email ?? "—"}</p>
           </div>
         </div>
       ),
     },
-    { key: "program", header: t.colProgram, render: (s) => (s.program ? <ProgramBadge code={s.program} /> : "—") },
-    { key: "enrollments", header: t.colEnrollments, render: (s) => getEnrollmentsForUser(s.id).length },
-    { key: "balance", header: t.colBalance, render: (s) => formatIDR(s.balance ?? 0) },
-    { key: "createdAt", header: t.colJoined, render: (s) => formatDate(s.createdAt) },
+    { key: "phone", header: t.colPhone, render: (student) => <span className="text-muted">{student.phone ?? "—"}</span> },
+    { key: "balance", header: t.colBalance, render: (student) => <span className="font-medium">{formatIDR(student.balance)}</span> },
+    { key: "joined", header: t.colJoined, render: (student) => joined(student.created_at) },
     {
       key: "actions",
       header: "",
       headerClassName: "text-right",
       className: "text-right",
-      render: (s) => (
-        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+      render: (student) => (
+        <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
           {role === "admin" && (
-            <Button variant="ghost" size="sm" isIconOnly onPress={() => { setTopUpTarget(s); setTopUpAmount(""); setTopUpProofName(null); }}>
+            <Button variant="ghost" size="sm" isIconOnly onPress={() => openAdjust(student)} aria-label={t.adjustTitle}>
               <Wallet className="size-3.5" />
             </Button>
           )}
-          <Button variant="ghost" size="sm" isIconOnly onPress={() => { setGrantTarget(s); setGrantTryout(null); }}>
-            <KeyRound className="size-3.5" />
-          </Button>
-          <Button variant="ghost" size="sm" isIconOnly onPress={() => openEdit(s)}>
-            <Pencil className="size-3.5" />
-          </Button>
-          <Button variant="ghost" size="sm" isIconOnly className="text-danger" onPress={() => setDeleteTarget(s)}>
-            <Trash2 className="size-3.5" />
-          </Button>
         </div>
       ),
     },
   ];
 
   return (
-    <AppShell
-      title={t.pageTitle}
-      description={t.studentCount(rows.length)}
-      actions={
-        <Button variant="primary" size="sm" onPress={openCreate}>
-          <Plus className="size-3.5" /> {t.addStudent}
+    <AppShell title={t.pageTitle} description={t.studentCount(total)}>
+      <form
+        className="mb-4 flex flex-wrap items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          reload(search.trim());
+        }}
+      >
+        <TextInput
+          className="w-full max-w-sm"
+          placeholder={t.searchPlaceholder}
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <Button variant="secondary" size="sm" type="submit">
+          <Search className="size-3.5" /> {t.searchAction}
         </Button>
-      }
-    >
-      {rows.length === 0 ? (
-        <EmptyState icon={Users} title={t.emptyTitle} />
+        {query !== "" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onPress={() => {
+              setSearch("");
+              reload("");
+            }}
+          >
+            {t.searchClear}
+          </Button>
+        )}
+      </form>
+
+      {loadFailed ? (
+        <EmptyState
+          icon={CloudOff}
+          title={t.loadErrorTitle}
+          description={t.loadErrorDescription}
+          action={
+            <Button variant="primary" size="sm" onPress={() => reload(query)}>
+              {t.retry}
+            </Button>
+          }
+        />
+      ) : rows === null ? (
+        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title={query === "" ? t.emptyTitle : t.noMatchTitle}
+          description={query === "" ? t.emptyDescription : t.noMatchDescription}
+        />
       ) : (
-        <DataTable columns={columns} rows={rows} rowKey={(s) => s.id} onRowClick={setDetail} />
+        <>
+          <DataTable columns={columns} rows={rows} rowKey={(student) => student.id} onRowClick={openDetail} />
+          {moreFailed !== "" && <p className="mt-3 text-center text-sm text-danger">{moreFailed}</p>}
+          {rows.length < total && (
+            <div className="mt-4 flex justify-center">
+              <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
+                {loadingMore ? t.loadingMore : t.loadMore}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       <FormModal
-        isOpen={modalOpen}
-        onOpenChange={setModalOpen}
-        title={editing ? t.editStudent : t.addStudent}
+        isOpen={!!adjustTarget}
+        onOpenChange={(open) => !open && closeAdjust()}
+        title={t.adjustTitle}
+        description={t.adjustDescription(adjustTarget?.name ?? "", formatIDR(adjustTarget?.balance ?? "0.00"))}
         footer={
           <>
-            <Button variant="ghost" onPress={() => setModalOpen(false)}>
-              {t.cancel}
-            </Button>
-            <Button variant="primary" onPress={handleSave} isDisabled={!form.name || !form.email}>
-              {t.save}
-            </Button>
-          </>
-        }
-      >
-        <TextInput label={t.fieldFullName} required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-        <TextInput label={t.fieldEmail} type="email" required value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
-        <SelectInput label={t.fieldProgram} options={programOptions} selectedKey={form.program} onSelectionChange={(k) => setForm((f) => ({ ...f, program: k ?? "" }))} />
-      </FormModal>
-
-      <FormModal
-        isOpen={!!grantTarget}
-        onOpenChange={(open) => !open && setGrantTarget(null)}
-        title={t.grantAccessTitle}
-        description={t.grantAccessDescription(grantTarget?.name ?? "")}
-        footer={
-          <>
-            <Button variant="ghost" onPress={() => setGrantTarget(null)}>
+            <Button variant="ghost" onPress={closeAdjust}>
               {t.cancel}
             </Button>
             <Button
               variant="primary"
-              isDisabled={!grantTryout}
-              onPress={() => {
-                toast.success(t.accessGranted, { description: tryoutOptions.find((opt) => opt.id === grantTryout)?.label });
-                setGrantTarget(null);
-              }}
+              onPress={submitAdjustment}
+              isDisabled={saving || adjustAmount.trim() === "" || adjustReason.trim() === ""}
             >
-              {t.grantAccessConfirm}
+              {saving ? t.adjustSaving : t.adjustSubmit}
             </Button>
           </>
         }
       >
-        <SelectInput label={t.fieldSelectTryout} options={tryoutOptions} selectedKey={grantTryout} onSelectionChange={setGrantTryout} />
-      </FormModal>
-
-      <FormModal
-        isOpen={!!topUpTarget}
-        onOpenChange={(open) => !open && setTopUpTarget(null)}
-        title={t.topUpTitle}
-        description={t.topUpDescription(topUpTarget?.name ?? "", formatIDR(topUpTarget?.balance ?? 0))}
-        footer={
-          <>
-            <Button variant="ghost" onPress={() => setTopUpTarget(null)}>
-              {t.cancel}
-            </Button>
-            <Button
-              variant="primary"
-              isDisabled={!topUpAmount || Number(topUpAmount) <= 0 || !topUpProofName}
-              onPress={() => {
-                if (!topUpTarget) return;
-                const amount = Number(topUpAmount) || 0;
-                const now = new Date().toISOString();
-                const order: Order = {
-                  id: `order-topup-${Date.now()}`,
-                  code: `TRX-2026-${1000 + orders.length + 1}`,
-                  userId: topUpTarget.id,
-                  productId: TOPUP_PRODUCT_ID,
-                  status: "confirmed",
-                  paymentMode: "manual",
-                  paymentProofUrl: "/mock/payment-proof.jpg",
-                  amount,
-                  confirmedAt: now,
-                  createdAt: now,
-                };
-                orders.unshift(order);
-                const user = findUser(topUpTarget.id);
-                const newBalance = (user?.balance ?? 0) + amount;
-                if (user) user.balance = newBalance;
-                setRows((prev) => prev.map((s) => (s.id === topUpTarget.id ? { ...s, balance: newBalance } : s)));
-                toast.success(t.balanceAdded, {
-                  description: t.balanceAddedDescription(formatIDR(amount), topUpTarget.name, order.code),
-                });
-                setTopUpTarget(null);
-              }}
-            >
-              {t.topUpConfirm}
-            </Button>
-          </>
-        }
-      >
-        <TextInput label={t.fieldTopUpAmount} type="number" min={1} value={topUpAmount} onChange={(e) => setTopUpAmount(e.target.value)} />
-        <div>
-          <p className="mb-1.5 text-[13px] font-medium text-foreground">{t.fieldPaymentProof}</p>
-          <input
-            ref={topUpProofRef}
-            type="file"
-            accept="image/*,.pdf"
-            className="hidden"
-            onChange={(e) => setTopUpProofName(e.target.files?.[0]?.name ?? null)}
-          />
-          <button
-            type="button"
-            onClick={() => topUpProofRef.current?.click()}
-            className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed border-border py-6 text-center transition-colors hover:border-accent/50 hover:bg-accent-soft/30"
-          >
-            <FileUp className="size-4 text-muted" />
-            <span className="text-sm font-medium text-foreground">{topUpProofName ?? t.uploadPaymentProof}</span>
-            <span className="text-xs text-muted">{t.uploadRequirement}</span>
-          </button>
-          <p className="mt-2 text-xs text-muted">{t.topUpAutoOrderNote}</p>
-        </div>
+        <SelectInput
+          label={t.adjustType}
+          options={[
+            { id: "credit", label: t.adjustTypeCredit },
+            { id: "debit", label: t.adjustTypeDebit },
+          ]}
+          selectedKey={adjustType}
+          onSelectionChange={(key) => setAdjustType(key === "debit" ? "debit" : "credit")}
+          error={formErrors.type}
+        />
+        <TextInput
+          label={t.adjustAmount}
+          required
+          inputMode="decimal"
+          placeholder="50000.00"
+          description={t.adjustAmountHint}
+          value={adjustAmount}
+          onChange={(event) => setAdjustAmount(event.target.value)}
+          error={formErrors.amount}
+        />
+        <TextareaInput
+          label={t.adjustReason}
+          required
+          rows={3}
+          placeholder={t.adjustReasonPlaceholder}
+          value={adjustReason}
+          onChange={(event) => setAdjustReason(event.target.value)}
+          error={formErrors.reason}
+        />
       </FormModal>
 
       <FormModal
         isOpen={!!detail}
         onOpenChange={(open) => !open && setDetail(null)}
         title={detail?.name ?? ""}
-        description={detail?.email}
+        description={detail?.email ?? ""}
         size="lg"
         footer={
           <Button variant="ghost" onPress={() => setDetail(null)}>
@@ -283,91 +321,63 @@ export default function StudentsPage() {
               <GradientAvatar user={detail} size="lg" />
               <div>
                 <p className="text-sm font-semibold text-foreground">{detail.name}</p>
-                <p className="text-xs text-muted">{detail.email}</p>
+                <p className="text-xs text-muted">{detail.email ?? "—"}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-border pt-4 text-sm">
               <div>
-                <p className="text-xs text-muted">{t.detailProgram}</p>
-                {detail.program ? <ProgramBadge code={detail.program} /> : <p className="font-medium text-foreground">—</p>}
-              </div>
-              <div>
                 <p className="text-xs text-muted">{t.detailJoined}</p>
-                <p className="font-medium text-foreground">{formatDate(detail.createdAt)}</p>
+                <p className="font-medium text-foreground">{joined(detail.created_at)}</p>
               </div>
               <div>
                 <p className="text-xs text-muted">{t.detailBalance}</p>
-                <p className="font-medium text-foreground">{formatIDR(detail.balance ?? 0)}</p>
+                <p className="font-medium text-foreground">{formatIDR(detail.balance)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted">{t.detailPhone}</p>
+                <p className="font-medium text-foreground">{detail.phone ?? "—"}</p>
               </div>
             </div>
             <div>
-              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-medium text-foreground">
-                <ClipboardList className="size-3.5 text-accent" />
-                {t.ownedTryouts(getEnrollmentsForUser(detail.id).length)}
-              </p>
-              {getEnrollmentsForUser(detail.id).length === 0 ? (
-                <p className="text-sm text-muted">{t.noOwnedTryouts}</p>
+              <p className="mb-2 text-[13px] font-medium text-foreground">{t.detailLedgerTitle}</p>
+              {detailFailed ? (
+                <p className="text-sm text-danger">{t.detailLedgerFailed}</p>
+              ) : detailEntries === null ? (
+                <p className="text-sm text-muted">{t.loading}</p>
+              ) : detailEntries.length === 0 ? (
+                <p className="text-sm text-muted">{t.detailLedgerEmpty}</p>
               ) : (
                 <ul className="space-y-2">
-                  {getEnrollmentsForUser(detail.id).map((e) => {
-                    const tryout = getTryout(e.tryoutId);
-                    if (!tryout) return null;
-                    const result = getResultsForUser(detail.id).find((r) => r.tryoutId === tryout.id);
-                    const subtests = getSubtestsForTryout(tryout.id);
-                    return (
-                      <li
-                        key={e.id}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">{tryout.title}</p>
-                          <p className="flex items-center gap-1.5 text-xs text-muted">
-                            <ListChecks className="size-3" /> {t.subtestCountUntil(subtests.length, formatDate(e.activeUntil))}
-                          </p>
-                        </div>
-                        {result ? (
-                          <Chip size="sm" className="bg-success-soft text-success-soft-foreground shrink-0 font-medium">
-                            {t.resultDone(result.totalScore)}
-                          </Chip>
-                        ) : (
-                          <Chip size="sm" className="bg-default text-default-foreground shrink-0 font-medium">
-                            {t.resultNotDone}
-                          </Chip>
-                        )}
-                      </li>
-                    );
-                  })}
+                  {detailEntries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                          {t.ledgerType[entry.kind] ?? entry.kind}
+                          <span className="text-xs font-normal text-muted">{new Date(entry.created_at).toLocaleString()}</span>
+                        </p>
+                        <p className="truncate text-xs text-muted">{entry.reason === "" ? "—" : entry.reason}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-mono text-sm font-medium text-foreground">{formatSignedIDR(entry.amount)}</p>
+                        <p className="font-mono text-xs text-muted">{formatIDR(entry.balance_after)}</p>
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>
+            {role === "admin" && (
+              <div className="border-t border-border pt-4">
+                <Button variant="secondary" size="sm" onPress={() => openAdjust(detail)}>
+                  <Wallet className="size-3.5" /> {t.adjustTitle}
+                </Button>
+              </div>
+            )}
           </>
         )}
-      </FormModal>
-
-      <FormModal
-        isOpen={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title={t.deleteTitle}
-        description={deleteTarget?.name}
-        footer={
-          <>
-            <Button variant="ghost" onPress={() => setDeleteTarget(null)}>
-              {t.cancel}
-            </Button>
-            <Button
-              variant="danger"
-              onPress={() => {
-                setRows((prev) => prev.filter((s) => s.id !== deleteTarget?.id));
-                toast.success(t.studentDeleted);
-                setDeleteTarget(null);
-              }}
-            >
-              {t.deleteConfirm}
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-muted">{t.deleteDescription}</p>
       </FormModal>
     </AppShell>
   );

@@ -1,108 +1,173 @@
 "use client";
 
-import { useEffect, useReducer } from "react";
-import { Card, Chip } from "@heroui/react";
-import { ArrowDownLeft, ArrowUpRight, Wallet } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button, Chip } from "@heroui/react";
+import { ArrowDownLeft, ArrowUpRight, CloudOff, Wallet as WalletIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { cn } from "@/lib/cn";
-import { formatDateTime, formatIDR, getBalance, getWalletTransactionsForUser } from "@/lib/mock-data";
-import { STORE_EVENT } from "@/lib/demo-store";
-import { useUser } from "@/lib/session-context";
+import { api, errorText, type Wallet, type WalletEntry } from "@/lib/api/client";
+import { formatIDR, formatSignedIDR } from "@/lib/format-money";
 import { useStudentWalletT } from "@/lib/i18n/dict/student-wallet";
 
+const PAGE_SIZE = 50;
+
+const when = (iso: string) => new Date(iso).toLocaleString();
+
 export default function StudentWalletPage() {
-  const user = useUser();
   const t = useStudentWalletT();
-  const [, forceUpdate] = useReducer((n: number) => n + 1, 0);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [entries, setEntries] = useState<WalletEntry[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    window.addEventListener(STORE_EVENT, forceUpdate);
-    return () => window.removeEventListener(STORE_EVENT, forceUpdate);
-  }, []);
+    let cancelled = false;
+    Promise.all([api.wallet.get(), api.wallet.entries({ limit: PAGE_SIZE })])
+      .then(([head, page]) => {
+        if (cancelled) return;
+        setWallet(head);
+        setEntries(page.entries);
+        setTotal(page.total);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
 
-  const transactions = getWalletTransactionsForUser(user.id);
-  const balance = getBalance(user);
+  const retry = () => {
+    setWallet(null);
+    setEntries(null);
+    setLoadFailed(false);
+    setReloadKey((key) => key + 1);
+  };
 
-  const totalTopUp = transactions.filter((w) => w.type === "topup").reduce((s, w) => s + w.amount, 0);
-  const totalSpent = transactions.filter((w) => w.type === "deduction").reduce((s, w) => s + w.amount, 0);
+  const loadMore = async () => {
+    setLoadingMore(true);
+    setMoreFailed("");
+    try {
+      const page = await api.wallet.entries({ limit: PAGE_SIZE, offset: entries?.length ?? 0 });
+      setEntries((prev) => {
+        const seen = new Set((prev ?? []).map((entry) => entry.id));
+        return [...(prev ?? []), ...page.entries.filter((entry) => !seen.has(entry.id))];
+      });
+      setTotal(page.total);
+    } catch (err) {
+      setMoreFailed(errorText(err, t.loadErrorDescription));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <AppShell title={t.title} description={t.description} maxWidth="max-w-4xl">
       <div className="space-y-6">
-        <Card className="gap-4 p-5">
-          <div className="flex items-start justify-between">
-            <span className="inline-flex size-9 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
-              <Wallet className="size-[18px]" strokeWidth={2} />
-            </span>
-          </div>
-          <div>
-            <p className="font-display text-3xl font-semibold tracking-tight text-foreground">{formatIDR(balance)}</p>
+        <div className="rounded-xl border border-border bg-surface p-5">
+          <span className="inline-flex size-9 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
+            <WalletIcon className="size-[18px]" strokeWidth={2} />
+          </span>
+          <div className="mt-3">
+            <p className="font-display text-3xl font-semibold tracking-tight text-foreground">
+              {wallet === null ? "—" : formatIDR(wallet.balance)}
+            </p>
             <p className="mt-0.5 text-sm text-muted">{t.balanceLabel}</p>
           </div>
-          <p className="text-xs text-muted">{t.topUpHint}</p>
-          <div className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
+          <p className="mt-1 text-xs text-muted">{t.topUpHint}</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
             <div>
-              <p className="text-xs text-muted">{t.totalTopUp}</p>
-              <p className="font-medium text-success">{formatIDR(totalTopUp)}</p>
+              <p className="text-xs text-muted">{t.totalCredits}</p>
+              <p className="font-medium text-success">{wallet === null ? "—" : formatIDR(wallet.total_credits)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted">{t.totalSpent}</p>
-              <p className="font-medium text-foreground">{formatIDR(totalSpent)}</p>
+              <p className="text-xs text-muted">{t.totalDebits}</p>
+              <p className="font-medium text-foreground">{wallet === null ? "—" : formatIDR(wallet.total_debits)}</p>
             </div>
           </div>
-        </Card>
+        </div>
 
-        {transactions.length === 0 ? (
-          <EmptyState icon={Wallet} title={t.emptyTitle} description={t.emptyDescription} />
+        {loadFailed ? (
+          <EmptyState
+            icon={CloudOff}
+            title={t.loadErrorTitle}
+            description={t.loadErrorDescription}
+            action={
+              <Button variant="primary" size="sm" onPress={retry}>
+                {t.retry}
+              </Button>
+            }
+          />
+        ) : entries === null ? (
+          <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        ) : entries.length === 0 ? (
+          <EmptyState icon={WalletIcon} title={t.emptyTitle} description={t.emptyDescription} />
         ) : (
-          <div className="overflow-hidden rounded-xl border border-border bg-surface">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-surface-secondary text-left text-[11px] font-medium tracking-wide text-muted uppercase">
-                  <th className="px-4 py-2.5">{t.colDate}</th>
-                  <th className="px-4 py-2.5">{t.colDescription}</th>
-                  <th className="px-4 py-2.5">{t.colType}</th>
-                  <th className="px-4 py-2.5 text-right">{t.colAmount}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((w) => (
-                  <tr key={w.id} className="border-b border-border last:border-b-0">
-                    <td className="px-4 py-3 text-muted">{formatDateTime(w.createdAt)}</td>
-                    <td className="px-4 py-3 text-foreground">{w.description}</td>
-                    <td className="px-4 py-3">
-                      <Chip
-                        size="sm"
-                        className={cn(
-                          "font-medium",
-                          w.type === "topup"
-                            ? "bg-success-soft text-success-soft-foreground"
-                            : "bg-surface-secondary text-muted",
-                        )}
-                      >
-                        {w.type === "topup" ? (
-                          <ArrowDownLeft className="size-3" />
-                        ) : (
-                          <ArrowUpRight className="size-3" />
-                        )}
-                        {t.typeLabel[w.type]}
-                      </Chip>
-                    </td>
-                    <td
-                      className={cn(
-                        "px-4 py-3 text-right font-mono font-medium",
-                        w.type === "topup" ? "text-success" : "text-foreground",
-                      )}
-                    >
-                      {w.type === "topup" ? "+" : "−"}
-                      {formatIDR(w.amount)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-surface-secondary text-left text-[11px] font-medium tracking-wide text-muted uppercase">
+                      <th className="px-4 py-2.5">{t.colDate}</th>
+                      <th className="px-4 py-2.5">{t.colType}</th>
+                      <th className="px-4 py-2.5">{t.colDescription}</th>
+                      <th className="px-4 py-2.5">{t.colSource}</th>
+                      <th className="px-4 py-2.5 text-right">{t.colAmount}</th>
+                      <th className="px-4 py-2.5 text-right">{t.colBalanceAfter}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entries.map((entry) => {
+                      const credit = !entry.amount.startsWith("-");
+                      return (
+                        <tr key={entry.id} className="border-b border-border last:border-b-0">
+                          <td className="px-4 py-3 whitespace-nowrap text-muted">{when(entry.created_at)}</td>
+                          <td className="px-4 py-3">
+                            <Chip
+                              size="sm"
+                              className={cn(
+                                "font-medium",
+                                credit ? "bg-success-soft text-success-soft-foreground" : "bg-surface-secondary text-muted",
+                              )}
+                            >
+                              {credit ? <ArrowDownLeft className="size-3" /> : <ArrowUpRight className="size-3" />}
+                              {t.typeLabel[entry.kind] ?? entry.kind}
+                            </Chip>
+                          </td>
+                          <td className="px-4 py-3 text-foreground">{entry.reason === "" ? "—" : entry.reason}</td>
+                          <td className="px-4 py-3 text-muted">{t.sourceLabel[entry.source_type] ?? entry.source_type}</td>
+                          <td
+                            className={cn(
+                              "px-4 py-3 text-right font-mono font-medium whitespace-nowrap",
+                              credit ? "text-success" : "text-foreground",
+                            )}
+                          >
+                            {formatSignedIDR(entry.amount)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-foreground whitespace-nowrap">
+                            {formatIDR(entry.balance_after)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {moreFailed !== "" && <p className="text-center text-sm text-danger">{moreFailed}</p>}
+            {entries.length < total && (
+              <div className="flex justify-center">
+                <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
+                  {loadingMore ? t.loadingMore : t.loadMore}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </AppShell>

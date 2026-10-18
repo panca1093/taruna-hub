@@ -26,6 +26,12 @@ export type ProductList = components["schemas"]["ProductList"];
 export type PublicProduct = components["schemas"]["PublicProduct"];
 export type PublicProductList = components["schemas"]["PublicProductList"];
 export type CatalogSummary = components["schemas"]["CatalogSummary"];
+export type Wallet = components["schemas"]["Wallet"];
+export type WalletEntry = components["schemas"]["WalletEntry"];
+export type WalletEntryList = components["schemas"]["WalletEntryList"];
+export type WalletStudent = components["schemas"]["WalletStudent"];
+export type WalletStudentList = components["schemas"]["WalletStudentList"];
+export type AdjustmentResult = components["schemas"]["AdjustmentResult"];
 export type Tryout = components["schemas"]["Tryout"];
 export type TryoutSummary = components["schemas"]["TryoutSummary"];
 export type TryoutList = components["schemas"]["TryoutList"];
@@ -64,6 +70,20 @@ export type CatalogFilters = Omit<
   NonNullable<paths["/api/v1/catalog/products"]["get"]["parameters"]["query"]>,
   "limit" | "offset"
 > & { limit?: number; offset?: number };
+
+/** Page of `GET /api/v1/wallet/entries`; the student's own ledger or one student's, by role. */
+export type WalletEntryFilters = Omit<
+  NonNullable<paths["/api/v1/wallet/entries"]["get"]["parameters"]["query"]>,
+  "limit" | "offset"
+> & { limit?: number; offset?: number };
+
+/** Filters of `GET /api/v1/students`; an absent field is not sent at all. */
+export type WalletStudentFilters = Omit<
+  NonNullable<paths["/api/v1/students"]["get"]["parameters"]["query"]>,
+  "limit" | "offset"
+> & { limit?: number; offset?: number };
+
+type AdjustmentBody = components["schemas"]["AdjustmentRequest"];
 
 // Production sets NEXT_PUBLIC_API_URL to "" (same-origin); unset in dev, call the API on the page's own host.
 function baseUrl(): string {
@@ -333,6 +353,23 @@ export const api = {
       request<PublicProductList>(`/api/v1/catalog/products${queryOf(filters)}` as keyof paths),
     product: (id: string) => request<PublicProduct>(catalogProductPath(id)),
     summary: () => request<CatalogSummary>("/api/v1/catalog/summary"),
+  },
+
+  /** The signed-in student's own wallet and ledger; staff routes live under `students`. */
+  wallet: {
+    get: () => authed<Wallet>("/api/v1/wallet"),
+    entries: (filters: WalletEntryFilters = {}) =>
+      authed<WalletEntryList>(`/api/v1/wallet/entries${queryOf(filters)}` as keyof paths),
+  },
+
+  students: {
+    list: (filters: WalletStudentFilters = {}) =>
+      authed<WalletStudentList>(`/api/v1/students${queryOf(filters)}` as keyof paths),
+    wallet: (id: string) => authed<Wallet>(`/api/v1/students/${id}/wallet` as keyof paths),
+    entries: (id: string, filters: WalletEntryFilters = {}) =>
+      authed<WalletEntryList>(`/api/v1/students/${id}/wallet/entries${queryOf(filters)}` as keyof paths),
+    adjust: (id: string, body: AdjustmentBody) =>
+      mutate<AdjustmentResult>("POST", `/api/v1/students/${id}/wallet/adjustments` as keyof paths, body),
   },
 
   tryouts: {

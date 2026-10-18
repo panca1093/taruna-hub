@@ -5,3 +5,9 @@ export function formatIDR(value: string): string {
   if (fraction === undefined || fraction === "00") return `Rp${grouped}`;
   return `Rp${grouped},${fraction}`;
 }
+
+/** A signed ledger amount: the sign is shown, the magnitude is formatted, nothing is recomputed. */
+export function formatSignedIDR(value: string): string {
+  const negative = value.startsWith("-");
+  return `${negative ? "−" : "+"}${formatIDR(negative ? value.slice(1) : value)}`;
+}
