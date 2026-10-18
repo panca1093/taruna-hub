@@ -1,86 +1,132 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Card, Chip } from "@heroui/react";
+import { Button, Card, Chip } from "@heroui/react";
 import { PackageSearch } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PublicNav } from "@/components/public-nav";
 import { EmptyState } from "@/components/empty-state";
-import { SelectInput } from "@/components/ui/form";
+import { SelectInput, TextInput } from "@/components/ui/form";
 import { useSession } from "@/lib/session-context";
 import { useCatalogT } from "@/lib/i18n/dict/catalog";
-import { programs, products, formatIDR, getProgram } from "@/lib/mock-data";
-import type { Product } from "@/lib/types";
+import { api, type PublicProduct } from "@/lib/api/client";
+import { formatIDR } from "@/lib/format-money";
 import { cn } from "@/lib/cn";
 
-type Category = "academic" | "psychometric";
+type TypeFilter = "all" | "individual" | "bundle";
+
+const PAGE_SIZE = 60;
 
 function CatalogContent() {
   const params = useSearchParams();
-  const [program, setProgram] = useState<string>(params.get("program") ?? "all");
-  const [category, setCategory] = useState<Category>(params.get("category") === "psychometric" ? "psychometric" : "academic");
+  const [programCode, setProgramCode] = useState<string>(params.get("program") ?? "all");
+  const [type, setType] = useState<TypeFilter>("all");
+  const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const { role } = useSession();
   const t = useCatalogT();
 
-  // Computed per render so the program dropdown follows programs configured by admin.
-  const programOptions: { label: string; id: string }[] = [
-    { id: "all", label: t.filterAll },
-    ...programs.map((p) => ({ id: p.code, label: p.code })),
-  ];
+  const [options, setOptions] = useState<PublicProduct[] | null>(null);
+  const [rows, setRows] = useState<PublicProduct[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const byProgram = useMemo(() => {
-    const activeProducts = products.filter((p) => p.isActive);
-    if (program === "all") return activeProducts;
-    const prog = programs.find((p) => p.code === program);
-    return activeProducts.filter((p) => p.programId === prog?.id);
-  }, [program]);
+  useEffect(() => {
+    let cancelled = false;
+    api.catalog
+      .products({ limit: 100 })
+      .then((page) => {
+        if (!cancelled) setOptions(page.products);
+      })
+      .catch(() => {
+        if (!cancelled) setOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const sectionProducts = byProgram.filter((p) => (category === "psychometric" ? p.type === "kecermatan" : p.type !== "kecermatan"));
+  useEffect(() => {
+    const timer = setTimeout(() => setAppliedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const renderCard = (product: Product) => {
-    const prog = getProgram(product.programId);
-    return (
-      <Link key={product.id} href={`/catalog/${product.id}`}>
-        <Card className="group h-full gap-0 overflow-hidden p-0 transition-shadow hover:shadow-overlay">
-          <div
-            className="relative h-32 w-full"
-            style={{ background: `linear-gradient(135deg, ${product.coverFrom}, ${product.coverTo})` }}
-          >
-            <div className="absolute top-3 left-3 flex gap-1.5">
-              {prog && (
-                <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
-                  {prog.code}
-                </Chip>
-              )}
-              <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
-                {product.type === "bundle"
-                  ? t.typeBundle(product.tryoutIds.length)
-                  : product.type === "kecermatan"
-                    ? t.typeKecermatan
-                    : t.typeIndividual}
-              </Chip>
-            </div>
-          </div>
-          <div className="space-y-2.5 p-4">
-            <p className="line-clamp-1 text-sm font-semibold text-foreground">{product.title}</p>
-            <p className="line-clamp-2 text-xs text-muted">{product.description}</p>
-            <div className="flex items-baseline gap-2 pt-1">
-              <span className="font-display text-base font-semibold text-foreground">
-                {formatIDR(product.price)}
-              </span>
-              <span className="text-xs text-muted line-through">{formatIDR(product.originalPrice)}</span>
-            </div>
-          </div>
-        </Card>
-      </Link>
-    );
+  const programs = (options ?? []).reduce<{ id: string; label: string }[]>((list, product) => {
+    if (!list.some((item) => item.id === product.program_code)) {
+      list.push({ id: product.program_code, label: `${product.program_code} · ${product.program_name}` });
+    }
+    return list;
+  }, []);
+
+  const programID = options?.find((product) => product.program_code === programCode)?.program_id;
+  const unknownProgram = options !== null && programCode !== "all" && programID === undefined;
+
+  useEffect(() => {
+    if (options === null || unknownProgram) return;
+    let cancelled = false;
+    api.catalog
+      .products({
+        ...(programID ? { program_id: programID } : {}),
+        ...(type === "all" ? {} : { type }),
+        ...(appliedSearch === "" ? {} : { q: appliedSearch }),
+        limit: PAGE_SIZE,
+      })
+      .then((page) => {
+        if (cancelled) return;
+        setRows(page.products);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [options, unknownProgram, programID, type, appliedSearch, reloadKey]);
+
+  const retry = () => {
+    setRows(null);
+    setLoadFailed(false);
+    setReloadKey((key) => key + 1);
   };
 
-  const tabs: { key: Category; label: string }[] = [
-    { key: "academic", label: t.sectionAcademic },
-    { key: "psychometric", label: t.sectionPsychometric },
+  const renderCard = (product: PublicProduct) => (
+    <Link key={product.id} href={`/catalog/${product.id}`}>
+      <Card className="group h-full gap-0 overflow-hidden p-0 transition-shadow hover:shadow-overlay">
+        <div className="relative h-32 w-full bg-gradient-ring">
+          <div className="absolute top-3 left-3 flex gap-1.5">
+            <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
+              {product.program_code}
+            </Chip>
+            <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
+              {product.type === "bundle" ? t.bundleSize(product.tryouts.length) : t.typeIndividual}
+            </Chip>
+            {product.discount_percent !== null && (
+              <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
+                {t.discountChip(product.discount_percent)}
+              </Chip>
+            )}
+          </div>
+        </div>
+        <div className="space-y-2.5 p-4">
+          <p className="line-clamp-1 text-sm font-semibold text-foreground">{product.title}</p>
+          <p className="line-clamp-2 text-xs text-muted">{product.description}</p>
+          <div className="flex items-baseline gap-2 pt-1">
+            <span className="font-display text-base font-semibold text-foreground">{formatIDR(product.price)}</span>
+            {product.original_price && (
+              <span className="text-xs text-muted line-through">{formatIDR(product.original_price)}</span>
+            )}
+          </div>
+        </div>
+      </Card>
+    </Link>
+  );
+
+  const tabs: { key: TypeFilter; label: string }[] = [
+    { key: "all", label: t.filterAllType },
+    { key: "individual", label: t.typeIndividual },
+    { key: "bundle", label: t.typeBundle },
   ];
 
   const body = (
@@ -90,32 +136,60 @@ function CatalogContent() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setCategory(tab.key)}
+              onClick={() => setType(tab.key)}
               className={cn(
                 "relative flex-1 pb-3 text-sm font-medium whitespace-nowrap transition-colors sm:flex-none",
-                category === tab.key ? "text-foreground" : "text-muted hover:text-foreground",
+                type === tab.key ? "text-foreground" : "text-muted hover:text-foreground",
               )}
             >
               {tab.label}
-              {category === tab.key && (
+              {type === tab.key && (
                 <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gradient-ring" aria-hidden />
               )}
             </button>
           ))}
         </div>
-        <div className="pb-3 sm:w-48 sm:pb-2.5">
-          <SelectInput
-            options={programOptions}
-            selectedKey={program}
-            onSelectionChange={(k) => setProgram(k ?? "all")}
-          />
+        <div className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:pb-2.5">
+          <div className="sm:w-52">
+            <TextInput
+              aria-label={t.searchLabel}
+              placeholder={t.searchPlaceholder}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="sm:w-52">
+            <SelectInput
+              options={[{ id: "all", label: t.filterAllProgram }, ...programs]}
+              selectedKey={programCode}
+              onSelectionChange={(key) => setProgramCode(key ?? "all")}
+            />
+          </div>
         </div>
       </div>
 
-      {sectionProducts.length === 0 ? (
+      {loadFailed ? (
+        <EmptyState
+          className="mt-10"
+          icon={PackageSearch}
+          title={t.loadErrorTitle}
+          description={t.loadErrorDescription}
+          action={
+            <Button variant="primary" size="sm" onPress={retry}>
+              {t.retry}
+            </Button>
+          }
+        />
+      ) : rows === null ? (
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="h-64 animate-pulse rounded-xl border border-border bg-surface-secondary" />
+          ))}
+        </div>
+      ) : unknownProgram || rows.length === 0 ? (
         <EmptyState className="mt-10" icon={PackageSearch} title={t.emptyTitle} description={t.emptyDescription} />
       ) : (
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{sectionProducts.map(renderCard)}</div>
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{rows.map(renderCard)}</div>
       )}
     </>
   );
