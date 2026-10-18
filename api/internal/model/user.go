@@ -23,9 +23,10 @@ type User struct {
 	Phone        *string
 	PasswordHash string
 	Role         Role
-	Balance      float64
-	IsActive     bool
-	CreatedAt    time.Time
+	// Balance is the wallet projection, read as the canonical decimal string it is stored as.
+	Balance   string
+	IsActive  bool
+	CreatedAt time.Time
 	// EmailVerifiedAt is nil until the owner proves the inbox, by a code or a password reset.
 	EmailVerifiedAt *time.Time
 }

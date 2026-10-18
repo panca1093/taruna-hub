@@ -30,7 +30,7 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-const userColumns = `id, tenant_id, name, email, phone, password_hash, role, balance, created_at, is_active, email_verified_at`
+const userColumns = `id, tenant_id, name, email, phone, password_hash, role, balance::text, created_at, is_active, email_verified_at`
 
 func (r *UserRepository) FindByID(ctx context.Context, tenantID, id uuid.UUID) (model.User, error) {
 	if tenantID == uuid.Nil {
