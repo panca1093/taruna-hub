@@ -366,7 +366,7 @@ For every slice, use this verification loop:
 
 ### P12 — Wallet ledger and staff adjustments
 
-**Status:** planned · **Size:** M · **Depends:** P03, P04
+**Status:** done, lean — an exact-numeric ledger behind one transaction-aware movement path, a non-negative balance projection enforced twice, admin-only adjustments with a required reason and an idempotency key, the student wallet page and the admin students page on the API, and a seed whose ledger explains every balance; top-up requests, checkout spending (P13 calls the same path), minimums, refunds and the D12 denomination follow-ups are deferred · **Size:** M · **Depends:** P03, P04
 
 **Outcome:** Students view exact running balances and authorized staff make audited adjustments.
 
