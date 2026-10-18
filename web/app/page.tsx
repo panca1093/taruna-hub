@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, Chip } from "@heroui/react";
 import {
@@ -16,7 +17,8 @@ import {
 import { PublicNav } from "@/components/public-nav";
 import { HeroExamPreview } from "@/components/marketing/hero-exam-preview";
 import { LinkButton } from "@/components/ui/link-button";
-import { products, formatIDR, getProgram } from "@/lib/mock-data";
+import { api, type CatalogSummary, type PublicProduct } from "@/lib/api/client";
+import { formatIDR } from "@/lib/format-money";
 import { useLandingT } from "@/lib/i18n/dict/landing";
 
 const valuePropIcons = [Sparkles, Timer, Award, FileDown, BarChart3, BadgePercent];
@@ -29,10 +31,35 @@ const diklatMeta = [
 
 const stepIcons = [ShoppingCart, ClipboardCheck, FileSearch];
 
-const featured = products.slice(0, 4);
-
 export default function HomePage() {
   const t = useLandingT();
+  const [featured, setFeatured] = useState<PublicProduct[]>([]);
+  const [summary, setSummary] = useState<CatalogSummary | null>(null);
+
+  // The landing reads only the public catalog; a failure leaves the numbers empty, never invented.
+  useEffect(() => {
+    let cancelled = false;
+    api.catalog
+      .products({ limit: 4 })
+      .then((page) => {
+        if (!cancelled) setFeatured(page.products);
+      })
+      .catch(() => {
+        if (!cancelled) setFeatured([]);
+      });
+    api.catalog
+      .summary()
+      .then((counts) => {
+        if (!cancelled) setSummary(counts);
+      })
+      .catch(() => {
+        if (!cancelled) setSummary(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="min-h-dvh bg-background">
       <PublicNav />
@@ -59,12 +86,12 @@ export default function HomePage() {
             </div>
             <dl className="mt-12 grid max-w-md grid-cols-3 gap-6 border-t border-border pt-6">
               <div>
-                <dt className="font-display text-2xl font-semibold text-foreground">3</dt>
+                <dt className="font-display text-2xl font-semibold text-foreground">{summary?.programs ?? 0}</dt>
                 <dd className="text-xs text-muted">{t.statPrograms}</dd>
               </div>
               <div>
-                <dt className="font-display text-2xl font-semibold text-foreground">1.000+</dt>
-                <dd className="text-xs text-muted">{t.statStudents}</dd>
+                <dt className="font-display text-2xl font-semibold text-foreground">{summary?.tryouts ?? 0}</dt>
+                <dd className="text-xs text-muted">{t.statTryouts}</dd>
               </div>
               <div>
                 <dt className="font-display text-2xl font-semibold text-foreground">{t.statInstant}</dt>
@@ -136,21 +163,17 @@ export default function HomePage() {
             {t.featuredViewAll}
           </Link>
         </div>
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {featured.map((product) => {
-            const program = getProgram(product.programId);
-            return (
+        {featured.length === 0 ? (
+          <p className="mt-8 text-sm text-muted">{t.featuredEmpty}</p>
+        ) : (
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {featured.map((product) => (
               <Link key={product.id} href={`/catalog/${product.id}`}>
                 <Card className="group h-full gap-0 overflow-hidden p-0 transition-shadow hover:shadow-overlay">
-                  <div
-                    className="relative h-28 w-full"
-                    style={{ background: `linear-gradient(135deg, ${product.coverFrom}, ${product.coverTo})` }}
-                  >
-                    {program && (
-                      <Chip size="sm" className="absolute top-3 left-3 bg-white/20 text-white backdrop-blur-sm">
-                        {program.code}
-                      </Chip>
-                    )}
+                  <div className="relative h-28 w-full bg-gradient-ring">
+                    <Chip size="sm" className="absolute top-3 left-3 bg-white/20 text-white backdrop-blur-sm">
+                      {product.program_code}
+                    </Chip>
                   </div>
                   <div className="space-y-2 p-4">
                     <p className="line-clamp-1 text-sm font-semibold text-foreground">{product.title}</p>
@@ -158,14 +181,16 @@ export default function HomePage() {
                       <span className="font-display text-base font-semibold text-foreground">
                         {formatIDR(product.price)}
                       </span>
-                      <span className="text-xs text-muted line-through">{formatIDR(product.originalPrice)}</span>
+                      {product.original_price && (
+                        <span className="text-xs text-muted line-through">{formatIDR(product.original_price)}</span>
+                      )}
                     </div>
                   </div>
                 </Card>
               </Link>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* How it works */}

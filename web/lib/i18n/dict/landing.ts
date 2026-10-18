@@ -10,7 +10,7 @@ const id = {
   ctaRegister: "Daftar Sekarang",
   ctaCatalog: "Lihat Katalog Tryout",
   statPrograms: "program diklat",
-  statStudents: "siswa terdaftar",
+  statTryouts: "tryout tersedia",
   statInstant: "Instan",
   statScoreDiscussion: "skor & pembahasan",
 
@@ -59,6 +59,7 @@ const id = {
   featuredEyebrow: "Paket populer",
   featuredHeading: "Mulai dari tryout ini",
   featuredViewAll: "Lihat semua katalog →",
+  featuredEmpty: "Katalog sedang disiapkan. Silakan cek lagi nanti.",
 
   howItWorksEyebrow: "Cara kerja",
   howItWorksHeading: "Tiga langkah, dari beli sampai lihat hasil.",
@@ -95,7 +96,7 @@ const en: typeof id = {
   ctaRegister: "Register Now",
   ctaCatalog: "View Tryout Catalog",
   statPrograms: "training programs",
-  statStudents: "registered students",
+  statTryouts: "tryouts available",
   statInstant: "Instant",
   statScoreDiscussion: "score & discussion",
 
@@ -142,6 +143,7 @@ const en: typeof id = {
   featuredEyebrow: "Popular packages",
   featuredHeading: "Start with these tryouts",
   featuredViewAll: "View full catalog →",
+  featuredEmpty: "The catalog is being prepared. Please check back later.",
 
   howItWorksEyebrow: "How it works",
   howItWorksHeading: "Three steps, from purchase to results.",

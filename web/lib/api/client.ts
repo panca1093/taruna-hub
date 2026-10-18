@@ -21,6 +21,11 @@ export type QuestionImportRow = components["schemas"]["QuestionImportRow"];
 export type QuestionImportCommit = components["schemas"]["QuestionImportCommit"];
 /** The three formats the import template is generated in. */
 export type QuestionTemplateFormat = "xlsx" | "csv" | "docx";
+export type Product = components["schemas"]["Product"];
+export type ProductList = components["schemas"]["ProductList"];
+export type PublicProduct = components["schemas"]["PublicProduct"];
+export type PublicProductList = components["schemas"]["PublicProductList"];
+export type CatalogSummary = components["schemas"]["CatalogSummary"];
 export type Tryout = components["schemas"]["Tryout"];
 export type TryoutSummary = components["schemas"]["TryoutSummary"];
 export type TryoutList = components["schemas"]["TryoutList"];
@@ -34,6 +39,7 @@ type CreateQuestionBody = components["schemas"]["CreateQuestionRequest"];
 type UpdateQuestionBody = components["schemas"]["UpdateQuestionRequest"];
 type CreateTryoutBody = components["schemas"]["CreateTryoutRequest"];
 type UpdateTryoutBody = components["schemas"]["UpdateTryoutRequest"];
+type ProductBody = components["schemas"]["ProductRequest"];
 
 /** Filters of `GET /api/v1/questions`; an absent field is not sent at all. */
 export type QuestionFilters = Omit<
@@ -44,6 +50,18 @@ export type QuestionFilters = Omit<
 /** Filters of `GET /api/v1/tryouts`; an absent field is not sent at all. */
 export type TryoutFilters = Omit<
   NonNullable<paths["/api/v1/tryouts"]["get"]["parameters"]["query"]>,
+  "limit" | "offset"
+> & { limit?: number; offset?: number };
+
+/** Filters of `GET /api/v1/products`; an absent field is not sent at all. */
+export type ProductFilters = Omit<
+  NonNullable<paths["/api/v1/products"]["get"]["parameters"]["query"]>,
+  "limit" | "offset"
+> & { limit?: number; offset?: number };
+
+/** Filters of the public `GET /api/v1/catalog/products`; there is no status filter in public. */
+export type CatalogFilters = Omit<
+  NonNullable<paths["/api/v1/catalog/products"]["get"]["parameters"]["query"]>,
   "limit" | "offset"
 > & { limit?: number; offset?: number };
 
@@ -131,6 +149,10 @@ const programPath = (id: string) => `/api/v1/programs/${id}` as keyof paths;
 const questionPath = (id: string) => `/api/v1/questions/${id}` as keyof paths;
 
 const tryoutPath = (id: string) => `/api/v1/tryouts/${id}` as keyof paths;
+
+const productPath = (id: string) => `/api/v1/products/${id}` as keyof paths;
+
+const catalogProductPath = (id: string) => `/api/v1/catalog/products/${id}` as keyof paths;
 
 /** Query string of a list request; empty values are dropped so the server sees no filter. */
 function queryOf(filters: Record<string, string | number | undefined>): string {
@@ -294,6 +316,23 @@ export const api = {
       uploadForm<QuestionImportCommit>("/api/v1/questions/import/commit", file, rows),
     importTemplate: (format: QuestionTemplateFormat) =>
       authedBlob(`/api/v1/questions/import/template?format=${format}` as keyof paths),
+  },
+
+  products: {
+    list: (filters: ProductFilters = {}) =>
+      authed<ProductList>(`/api/v1/products${queryOf(filters)}` as keyof paths),
+    get: (id: string) => authed<Product>(productPath(id)),
+    create: (body: ProductBody) => mutate<Product>("POST", "/api/v1/products", body),
+    update: (id: string, body: ProductBody) => mutate<Product>("PUT", productPath(id), body),
+    remove: (id: string) => mutate<void>("DELETE", productPath(id)),
+  },
+
+  /** The public catalog: no Authorization header, so it works for an anonymous visitor. */
+  catalog: {
+    products: (filters: CatalogFilters = {}) =>
+      request<PublicProductList>(`/api/v1/catalog/products${queryOf(filters)}` as keyof paths),
+    product: (id: string) => request<PublicProduct>(catalogProductPath(id)),
+    summary: () => request<CatalogSummary>("/api/v1/catalog/summary"),
   },
 
   tryouts: {
