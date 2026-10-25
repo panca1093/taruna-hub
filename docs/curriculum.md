@@ -17,8 +17,7 @@ chapters: [{id, name}]}]}`.
 
 Master content (`tenant_id NULL`), copy-to-own and origin markers are deferred (FR-TEN-09..13); there
 is exactly one real tenant today, so `tenant_id` is `NOT NULL` and dropping a master scope later is a
-non-destructive change. There is no capability matrix either: the guard is by role until D02 is
-settled. `web/lib/mock-data.ts` keeps feeding the question editor, catalog and product pages until
+non-destructive change. There is no capability matrix either: the guard is by role (D02). `web/lib/mock-data.ts` keeps feeding the question editor, catalog and product pages until
 their own slices.
 
 ## Why the keys are composite and every delete is RESTRICT

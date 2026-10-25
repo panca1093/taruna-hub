@@ -86,7 +86,7 @@ anchored to the row before it, and re-running it changes nothing.
 | `GET /api/v1/students` | admin, operator | the tenant's students with balances, `q` over name/email/phone |
 | `GET /api/v1/students/{id}/wallet` | admin, operator | that student's wallet |
 | `GET /api/v1/students/{id}/wallet/entries` | admin, operator | that student's ledger |
-| `POST /api/v1/students/{id}/wallet/adjustments` | admin only | `201` a new entry, `200` a replay |
+| `POST /api/v1/students/{id}/wallet/adjustments` | admin, operator | `201` a new entry, `200` a replay |
 
 `total_credits` and `total_debits` are summed in SQL, debits as the magnitude of the negative rows.
 The listing joins the actor's display name **for staff rows only**, so a student never sees a staff
@@ -106,7 +106,7 @@ with another amount, type or student is a `409`. Insufficient funds answers `422
 `app/student/wallet` reads `api.wallet.get` and `api.wallet.entries` and shows the balance, the two
 totals, and the ledger with its running balance, type label, signed amount, reference and note, with
 loading, empty, error and load-more states. `app/admin/students` lists real accounts with server-side
-search; the wallet button (admin only) opens the adjustment dialog, which shows the current balance,
+search; the wallet button (admin and operator) opens the adjustment dialog, which shows the current balance,
 requires an amount and a reason, shows the server's field errors inline, and refreshes the row's
 balance on success. Each submit attempt generates one idempotency key and a retry after a network
 error reuses it, so a lost response cannot credit twice.
@@ -120,5 +120,5 @@ registration, and student operations are P22.
 
 No self-service top-up, gateway or manual transfer and no approval queue (P13/P14/P15), no spending
 at checkout (P13 — it calls `Apply`), no minimum top-up setting (FR-PAY-W-09), no refunds, exports,
-notifications or rate limits, and no capability matrix: D02 is still open, so every guard here is by
+notifications or rate limits, and no capability matrix: D02 allows the Operator, so every guard here is by
 role. D12's remaining questions (denomination and rounding for percentages and refunds) are untouched.

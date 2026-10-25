@@ -158,7 +158,7 @@ For every slice, use this verification loop:
 
 ### P03 — Real tenant accounts and sessions
 
-**Status:** done except D02 — P03a sessions/login/role guard, P03b registration, email code, reset, rotation and throttling, and P03c web login, registration, recovery and session screens are done; the Operator capability matrix waits on D02 · **Size:** L · **Depends:** P01, P02
+**Status:** done — D02 is resolved (the Operator is allowed what the PRD leaves ambiguous); P03a sessions/login/role guard, P03b registration, email code, reset, rotation and throttling, and P03c web login, registration, recovery and session screens are done; the Operator guard on user and settings mutations has nothing to test until P04/P22 add those endpoints · **Size:** L · **Depends:** P01, P02
 
 **Outcome:** Students and staff authenticate in their own tenant and recover accounts through the approved channel.
 
@@ -314,7 +314,7 @@ For every slice, use this verification loop:
 - [ ] Used package delete/shrink below any referencing test threshold fails; existing frozen assets remain renderable.
 - [ ] Emoji is catalog-only and consistent across devices; pasted emoji in symbols fails with guidance; preview does not consume quota.
 
-**Decision / verification gate:** D02 operator package permissions; D09 bounded extraction/session size and emoji licenses.
+**Decision / verification gate:** D02 (resolved: the Operator may mutate packages); D09 bounded extraction/session size and emoji licenses.
 
 <a id="p10"></a>
 
@@ -366,7 +366,7 @@ For every slice, use this verification loop:
 
 ### P12 — Wallet ledger and staff adjustments
 
-**Status:** done, lean — an exact-numeric ledger behind one transaction-aware movement path, a non-negative balance projection enforced twice, admin-only adjustments with a required reason and an idempotency key, the student wallet page and the admin students page on the API, and a seed whose ledger explains every balance; top-up requests, checkout spending (P13 calls the same path), minimums, refunds and the D12 denomination follow-ups are deferred · **Size:** M · **Depends:** P03, P04
+**Status:** done, lean — an exact-numeric ledger behind one transaction-aware movement path, a non-negative balance projection enforced twice, admin and operator adjustments with a required reason and an idempotency key, the student wallet page and the admin students page on the API, and a seed whose ledger explains every balance; top-up requests, checkout spending (P13 calls the same path), minimums, refunds and the D12 denomination follow-ups are deferred · **Size:** M · **Depends:** P03, P04
 
 **Outcome:** Students view exact running balances and authorized staff make audited adjustments.
 
@@ -613,7 +613,7 @@ For every slice, use this verification loop:
 - [ ] Tenant Admin sees own orders/revenue; Platform Admin sees counts/value per tenant/period without automated settlement.
 - [ ] Support grant/user/financial action keeps actual platform actor; count/report queries are scoped and paginated.
 
-**Decision / verification gate:** D02 operator student operations; D14 deletion/retention. No per-tenant merchant credentials or settlement engine.
+**Decision / verification gate:** D02 (resolved: the Operator may run student operations); D14 deletion/retention. No per-tenant merchant credentials or settlement engine.
 
 <a id="p23"></a>
 
