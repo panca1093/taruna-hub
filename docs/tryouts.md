@@ -99,7 +99,7 @@ stays small; `GET /api/v1/tryouts/{id}` returns the definition. The list filters
 `status` and a case-insensitive `q` over the title where `%` and `_` match themselves, newest first,
 `limit` 50 by default and 100 at most.
 
-Every route is Admin + Operator (D02 is still open, so the guard is by role), answers `Cache-Control:
+Every route is Admin + Operator (D02: the guard is by role), answers `Cache-Control:
 no-store`, and an id of another tenant is `404`, never `403`. Unknown JSON fields are refused by
 `bindStrict`.
 

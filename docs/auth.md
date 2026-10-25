@@ -128,6 +128,6 @@ until their own slice replaces them.
 
 ## Not here yet
 
-No capability matrix — the guard is by role only (D02) — no absolute session cap, nothing per-IP
+No capability matrix — the guard is by role only (D02: the Operator is allowed what the PRD leaves ambiguous) — no absolute session cap, nothing per-IP
 (that needs a trusted-proxy client-IP decision), and no policy yet on what an unverified email may
 not do (for example checkout); verification is only a flag today. `GET /api/v1/me` carries identity only: balance and the ledger are not part of it.

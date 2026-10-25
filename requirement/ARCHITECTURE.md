@@ -90,8 +90,8 @@ The original plan explicitly records an owner decision to use OTP, while PRD §7
 | Own purchases, answers, results, wallet | Own records | No student impersonation | No student impersonation | Support context is audited; identity is preserved |
 | Tenant questions/tests/products/orders/results | No | Yes | Yes | Yes in explicit support context |
 | Tenant program mutations, user-role management, settings | No | No | Yes | Yes in support context |
-| Student CRUD | No | **D02 conflict**: §4 denies account management; FR-ADM-STU-01 grants CRUD | Yes | Yes in support context |
-| Item-package mutations | No | **D02 conflict**: section title includes Operator, body names Admin | Yes | Master or explicit support context |
+| Student CRUD | No | Yes (D02: FR-ADM-STU-01 wins over §4 for student accounts only) | Yes | Yes in support context |
+| Item-package mutations | No | Yes (D02: the section title wins over the body) | Yes | Master or explicit support context |
 | Tenant provisioning, master mutations, global reports | No | No | No | Yes |
 
 Platform support uses a short-lived scoped context tied to the actual Platform Admin principal. Never mint a student token or overwrite the audit actor. A paused tenant blocks tenant users and public content but remains accessible to authenticated platform support. D15 governs background financial events already in flight while a tenant is paused.
@@ -398,7 +398,7 @@ These are business/release decisions, not missing architecture sections. Affecte
 | ID | Specific uncertainty | Proposed treatment / alternatives | Owner and gate |
 |---|---|---|---|
 | D01 | OTP contradicts PRD; triggers and phone-only delivery/recovery unknown | **Resolved 2026-10-15 (owner):** OTP is retained as a 6-digit email code sent over SMTP for now. Email is required at registration and a phone is optional, so password recovery is always an email link. Signup creates the account and signs it in at once; verification is a flag the web app shows as an alert and **never blocks login**. Phone signup is kept as an extra identifier, not removed; this narrows PRD FR-AUTH-01 ("email atau nomor HP") by owner decision | Product owner — resolved for P03b |
-| D02 | Operator student CRUD and package mutation conflict with role table | Choose granular capabilities; until decided, privilege-restricted default rather than granting ambiguous writes | Product owner, before P03/P09/P22 permissions |
+| D02 | Operator student CRUD and package mutation conflict with role table | **Resolved 2026-10-24 (owner), for now:** the Operator is allowed what the PRD leaves ambiguous — student account CRUD, item-package mutations and student wallet adjustments (FR-PAY-W-06). Programs, operator/admin accounts and tenant settings stay Admin-only. Guards are by role; no capability matrix. Revisit if the owner wants a narrower Operator | Product owner, before P03/P09/P22 permissions |
 | D03 | Kecermatan formula, N>10 comparison, zero denominators, 0–100 caps/rounding | Whole-half comparison proposed; confirm correction factor and expected outputs including zero/overflow cases | Client, before P18 scoring/UAT |
 | D04 | Global weights in tenant system, score display, rank ties, IRT distinct-student/revision counting | Propose tenant-wide weights frozen per test/session, raw scores plus agreed display, tenant-local version counts; no fitted IRT | Product owner, before P08/P16/P17 contracts |
 | D05 | Repeat tryout expiry, kecermatan quota consumption/abandonment | Same enrollment plus distinct grants; consume once at start proposed; define renewals and abandoned-credit policy | Product owner, before P13/P18 |

@@ -121,7 +121,7 @@ Redis counter inside login/forgot/resend, not a reusable middleware, and no impo
 
 Master content and copy-to-own (FR-TEN-09..13), images, and any per-question or per-difficulty weight
 (D04 is still open; weights are tenant-level and belong to P08/P16). There is no capability matrix
-either (D02): the guard is by role until it is settled, and both Admin and Operator write tenant
+either (D02): the guard is by role, and both Admin and Operator write tenant
 content — Operator is content, per `decisions.md`. The page therefore lost its "Bobot" column and the
 editor no longer derives a weight from difficulty; both return with P08.
 

@@ -59,7 +59,7 @@ saves hold the product row lock, so the stored package is always exactly one cal
 ## Wire and guards
 
 Admin (`GET/POST /api/v1/products`, `GET/PUT/DELETE /api/v1/products/{id}`) is Admin + Operator only —
-D02 is still open, so the guard is by role; anonymous answers `401`, a Student `403`, and another
+the guard is by role (D02); anonymous answers `401`, a Student `403`, and another
 tenant's id `404`, never `403`. Responses carry `Cache-Control: no-store`, unknown JSON fields are
 refused by `bindStrict`, and the body is capped at 64 KiB before it is mapped, so an oversized package
 is one error rather than tens of thousands of field errors. `PUT` replaces every editable field and the
