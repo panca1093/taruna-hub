@@ -177,7 +177,7 @@ export default function StudentsPage() {
       className: "text-right",
       render: (student) => (
         <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
-          {role === "admin" && (
+          {(role === "admin" || role === "operator") && (
             <Button variant="ghost" size="sm" isIconOnly onPress={() => openAdjust(student)} aria-label={t.adjustTitle}>
               <Wallet className="size-3.5" />
             </Button>
@@ -369,7 +369,7 @@ export default function StudentsPage() {
                 </ul>
               )}
             </div>
-            {role === "admin" && (
+            {(role === "admin" || role === "operator") && (
               <div className="border-t border-border pt-4">
                 <Button variant="secondary" size="sm" onPress={() => openAdjust(detail)}>
                   <Wallet className="size-3.5" /> {t.adjustTitle}

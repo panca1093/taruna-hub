@@ -2253,7 +2253,7 @@ export interface paths {
         put?: never;
         /**
          * Adjust one student's balance
-         * @description Admin only (D02 is still open, so this is a role guard). A `credit` adds and a `debit`
+         * @description Admin or Operator (D02: a role guard). A `credit` adds and a `debit`
          *     subtracts; `amount` is a positive decimal string with at most two fraction digits and the
          *     server signs it, so `1e3`, `1.234`, `0.00` and a minus sign all answer `422 on amount`.
          *

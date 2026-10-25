@@ -85,7 +85,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.PUT("/questions/:id", h.UpdateQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.DELETE("/questions/:id", h.DeleteQuestion, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 
-	// Tryouts are tenant content too; a Student never reaches the builder (D02 pending, role-only).
+	// Tryouts are tenant content too; a Student never reaches the builder (D02: role-only).
 	v1.GET("/tryouts", h.ListTryouts, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/tryouts", h.CreateTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/tryouts/:id", h.GetTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
@@ -106,12 +106,11 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.GET("/catalog/products/:id", h.CatalogProduct, httpx.NoStore())
 	v1.GET("/catalog/summary", h.CatalogSummary, httpx.NoStore())
 
-	// A wallet belongs to one student, so only that student reaches /wallet (D02 pending, role-only).
+	// A wallet belongs to one student, so only that student reaches /wallet (D02: role-only).
 	v1.GET("/wallet", h.Wallet, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/wallet/entries", h.WalletEntries, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/students", h.ListStudents, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/students/:id/wallet", h.StudentWallet, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/students/:id/wallet/entries", h.StudentWalletEntries, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
-	// Only an admin adjusts a balance; an operator reads it (FR-PAY-W-06, D02 pending).
-	v1.POST("/students/:id/wallet/adjustments", h.AdjustStudentWallet, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
+	v1.POST("/students/:id/wallet/adjustments", h.AdjustStudentWallet, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 }
