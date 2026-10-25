@@ -242,7 +242,7 @@ func TestWalletRoles(t *testing.T) {
 
 		{"POST", studentPath + "/wallet/adjustments", adjustmentBody("credit", "1000.00", "Hadiah", "role-a-"+uuid.NewString()[:8]), "", http.StatusUnauthorized},
 		{"POST", studentPath + "/wallet/adjustments", adjustmentBody("credit", "1000.00", "Hadiah", "role-s-"+uuid.NewString()[:8]), f.tokenA, http.StatusForbidden},
-		{"POST", studentPath + "/wallet/adjustments", adjustmentBody("credit", "1000.00", "Hadiah", "role-o-"+uuid.NewString()[:8]), f.tokenOperatorA, http.StatusForbidden},
+		{"POST", studentPath + "/wallet/adjustments", adjustmentBody("credit", "1000.00", "Hadiah", "role-o-"+uuid.NewString()[:8]), f.tokenOperatorA, http.StatusCreated},
 		{"POST", studentPath + "/wallet/adjustments", adjustmentBody("credit", "1000.00", "Hadiah", "role-d-"+uuid.NewString()[:8]), f.tokenAdminA, http.StatusCreated},
 	}
 	for _, tc := range cases {
@@ -253,9 +253,9 @@ func TestWalletRoles(t *testing.T) {
 		}
 	}
 
-	// The operator reached no adjustment: the balance is only what the admin's one credit made it.
-	if wallet := decodeWallet(t, getWithToken(e, f.hostA, "/api/v1/wallet", f.tokenA)); wallet.Balance != "1000.00" {
-		t.Errorf("balance = %s, want only the admin's 1000.00", wallet.Balance)
+	// The operator's credit and the admin's credit both landed.
+	if wallet := decodeWallet(t, getWithToken(e, f.hostA, "/api/v1/wallet", f.tokenA)); wallet.Balance != "2000.00" {
+		t.Errorf("balance = %s, want the operator's and the admin's 1000.00", wallet.Balance)
 	}
 }
 
