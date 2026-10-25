@@ -90,7 +90,7 @@ For every slice, use this verification loop:
 
 ### P00 — Foundation health and integration baseline
 
-**Status:** partial baseline; acceptance not complete · **Size:** M · **Depends:** None
+**Status:** done — the demo identity is gone in every APP_ENV, `/readyz` proves the API → PostgreSQL round trip (`/dev/api-check`), returned 401/500 are logged with their real status, and CI enforces build/vet/race, tsc/lint/build and generated-schema drift · **Size:** M · **Depends:** None
 
 **Outcome:** A developer can start a fresh local stack and demonstrate a real scoped browser/API/PostgreSQL round trip.
 
@@ -102,10 +102,10 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Fresh database migrations and local fixtures succeed; browser renders live API and database readiness from /readyz, not a mock.
-- [ ] No request can authenticate through a client-supplied header or fallback identity in any APP_ENV.
-- [ ] Returned 401/500 is logged as its actual status.
-- [ ] Go build/vet/race tests, TypeScript/build and lint are enforced in CI; generated schema drift fails.
+- [x] Fresh database migrations and local fixtures succeed; browser renders live API and database readiness from /readyz, not a mock.
+- [x] No request can authenticate through a client-supplied header or fallback identity in any APP_ENV.
+- [x] Returned 401/500 is logged as its actual status.
+- [x] Go build/vet/race tests, TypeScript/build and lint are enforced in CI; generated schema drift fails.
 
 **Decision / verification gate:** Direct browser/database verification; existing lint failures and no-running-container baseline are addressed here.
 
@@ -113,7 +113,7 @@ For every slice, use this verification loop:
 
 ### P01 — Tenant-safe bootstrap
 
-**Status:** planned · **Size:** M · **Depends:** P00
+**Status:** done — hosts resolve to tenants independently, platform and tenant accounts have separate unique indexes, and the first tenant and admin come from the bootstrap command only; no deployed data existed, so the ownership migration was folded into `000001_init` instead of mapping rows · **Size:** M · **Depends:** P00
 
 **Outcome:** Two tenant hosts resolve independently and the initial platform/tenant identities can be provisioned without a public privilege-escalation path.
 
@@ -125,10 +125,10 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Tenant A and B can contain the same email/phone; duplicates inside A fail.
-- [ ] Unknown host, misleading suffix, reserved slug and spoofed forwarding header do not select a tenant.
-- [ ] Child/root repository probes cannot return tenant B resources under A scope.
-- [ ] Existing data is inventoried; any ownership migration uses an explicit mapping and preserves IDs.
+- [x] Tenant A and B can contain the same email/phone; duplicates inside A fail.
+- [x] Unknown host, misleading suffix, reserved slug and spoofed forwarding header do not select a tenant.
+- [x] Child/root repository probes cannot return tenant B resources under A scope.
+- [x] Existing data is inventoried; any ownership migration uses an explicit mapping and preserves IDs.
 
 **Decision / verification gate:** Bootstrap credentials remain local/secret; production provisioning is an explicit operational action.
 
@@ -136,7 +136,7 @@ For every slice, use this verification loop:
 
 ### P02 — Durable jobs and delivery transport
 
-**Status:** planned · **Size:** M · **Depends:** P00
+**Status:** done for email — River jobs enqueue in the caller's transaction, SMTP delivery retries up to six attempts, and unconfigured channels report unavailable; WhatsApp has no provider, so D16 stays open for it · **Size:** M · **Depends:** P00
 
 **Outcome:** A committed business event survives a worker restart and reaches the configured email/WhatsApp provider.
 
@@ -148,10 +148,10 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Rollback business transaction leaves neither state nor job.
-- [ ] Kill worker after enqueue; restart sends the committed job; provider failure is visible and recoverable.
-- [ ] Duplicate event/channel identity is suppressed; ambiguous provider timeout is recorded without claiming exactly-once delivery.
-- [ ] Unconfigured WhatsApp is marked unavailable, never delivered; expired reset/OTP messages are not sent.
+- [x] Rollback business transaction leaves neither state nor job.
+- [x] Kill worker after enqueue; restart sends the committed job; provider failure is visible and recoverable.
+- [x] Duplicate event/channel identity is suppressed; ambiguous provider timeout is recorded without claiming exactly-once delivery.
+- [x] Unconfigured WhatsApp is marked unavailable, never delivered; expired reset/OTP messages are not sent.
 
 **Decision / verification gate:** D16 provider/secret decisions; bounded retry policy must be specified and tested before slice sign-off.
 
