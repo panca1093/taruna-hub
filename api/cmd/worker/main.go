@@ -17,6 +17,9 @@ import (
 
 const reconcileInterval = 10 * time.Minute
 
+// stagedAssetTTL is how long an upload nobody finalized survives; a preview is never open that long.
+const stagedAssetTTL = 24 * time.Hour
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("fatal", slog.String("error", err.Error()))
@@ -58,6 +61,16 @@ func run() error {
 		return err
 	}
 
+	// Only needed when S3_ENDPOINT is set; without it no asset was ever stored.
+	var assets *service.AssetService
+	if cfg.S3.Endpoint != "" {
+		storage, err := infra.NewStorage(cfg.S3)
+		if err != nil {
+			return err
+		}
+		assets = service.NewAssetService(pool, repository.NewAssetRepository(pool), storage, 0)
+	}
+
 	client, err := infra.NewRiverWorker(pool, notifications, service.RetryDelay, logger)
 	if err != nil {
 		return err
@@ -76,18 +89,18 @@ func run() error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				reconcile(ctx, notifications, logger)
+				reconcile(ctx, notifications, assets, logger)
 			}
 		}
 	}()
-	reconcile(ctx, notifications, logger)
+	reconcile(ctx, notifications, assets, logger)
 
 	<-ctx.Done()
 	logger.Info("shutting down")
 	return infra.StopGracefully(ctx, client, cfg.ShutdownGrace)
 }
 
-func reconcile(ctx context.Context, notifications *service.NotificationService, logger *slog.Logger) {
+func reconcile(ctx context.Context, notifications *service.NotificationService, assets *service.AssetService, logger *slog.Logger) {
 	failed, err := notifications.Reconcile(ctx)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("reconcile failed", slog.String("error", err.Error()))
@@ -95,6 +108,16 @@ func reconcile(ctx context.Context, notifications *service.NotificationService, 
 	}
 	if failed > 0 {
 		logger.Warn("reconciled orphaned notifications", slog.Int("count", failed))
+	}
+	if assets == nil {
+		return
+	}
+	purged, err := assets.PurgeStaged(ctx, stagedAssetTTL)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		logger.Error("purge staged assets failed", slog.String("error", err.Error()))
+	}
+	if purged > 0 {
+		logger.Info("purged abandoned staged assets", slog.Int("count", purged))
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -38,6 +39,10 @@ func newProductService(f tenantFixture) *service.ProductService {
 
 func newWalletService(f tenantFixture) *service.WalletService {
 	return service.NewWalletService(f.pool, repository.NewWalletRepository(f.pool))
+}
+
+func newAssetService(f tenantFixture, store service.ObjectStore, ttl time.Duration) *service.AssetService {
+	return service.NewAssetService(f.pool, repository.NewAssetRepository(f.pool), store, ttl)
 }
 
 // curriculumToken gives one tenant its own account, so role checks never borrow another tenant's.

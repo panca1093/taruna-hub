@@ -22,6 +22,7 @@ const (
 	CodeTooLarge     Code = "payload_too_large"
 	CodeRateLimited  Code = "too_many_requests"
 	CodeInternal     Code = "internal_error"
+	CodeUnavailable  Code = "service_unavailable"
 )
 
 // Envelope is the single response shape for every failing request.
@@ -66,6 +67,10 @@ func Unauthorized(msg string) *Error { return New(http.StatusUnauthorized, CodeU
 func Forbidden(msg string) *Error    { return New(http.StatusForbidden, CodeForbidden, msg) }
 func NotFound(msg string) *Error     { return New(http.StatusNotFound, CodeNotFound, msg) }
 func Conflict(msg string) *Error     { return New(http.StatusConflict, CodeConflict, msg) }
+
+func Unavailable(msg string) *Error {
+	return New(http.StatusServiceUnavailable, CodeUnavailable, msg)
+}
 
 func TooManyRequests(msg string) *Error {
 	return New(http.StatusTooManyRequests, CodeRateLimited, msg)

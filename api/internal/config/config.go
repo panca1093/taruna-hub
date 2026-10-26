@@ -27,6 +27,17 @@ type SMTPConfig struct {
 	TLS      string
 }
 
+// S3Config is S3-compatible object storage: MinIO locally, GCS through its S3 interoperability in
+// production. An empty Endpoint means the asset routes answer 503 and nothing else is affected.
+type S3Config struct {
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Bucket    string
+	UseSSL    bool
+	Region    string
+}
+
 type Config struct {
 	Env         string
 	Port        string
@@ -38,6 +49,7 @@ type Config struct {
 	BaseDomain         string
 	TrustForwardedHost bool
 	SMTP               SMTPConfig
+	S3                 S3Config
 	// NotificationSealKey seals the codes and reset links queued for delivery. Required everywhere.
 	NotificationSealKey []byte
 	// WebScheme and WebPort place links in emails on <slug>.<BaseDomain>; never taken from a request.
@@ -79,6 +91,11 @@ func Load() (Config, error) {
 		}
 		c.RedisURL = "redis://localhost:6380/0"
 	}
+	s3, err := loadS3(c.IsDevelopment())
+	if err != nil {
+		return Config{}, err
+	}
+	c.S3 = s3
 	if c.BaseDomain == "" {
 		if !c.IsDevelopment() {
 			return Config{}, fmt.Errorf("BASE_DOMAIN is required outside development")
@@ -130,6 +147,28 @@ func Load() (Config, error) {
 		}
 	}
 	return c, nil
+}
+
+func loadS3(development bool) (S3Config, error) {
+	s := S3Config{
+		Endpoint:  env("S3_ENDPOINT", ""),
+		AccessKey: env("S3_ACCESS_KEY", ""),
+		SecretKey: env("S3_SECRET_KEY", ""),
+		Bucket:    env("S3_BUCKET", ""),
+		Region:    env("S3_REGION", ""),
+		UseSSL:    !development,
+	}
+	if raw := env("S3_USE_SSL", ""); raw != "" {
+		ssl, err := strconv.ParseBool(raw)
+		if err != nil {
+			return S3Config{}, fmt.Errorf("S3_USE_SSL must be true or false, got %q", raw)
+		}
+		s.UseSSL = ssl
+	}
+	if s.Endpoint != "" && (s.AccessKey == "" || s.SecretKey == "" || s.Bucket == "") {
+		return S3Config{}, fmt.Errorf("S3_ACCESS_KEY, S3_SECRET_KEY and S3_BUCKET are required when S3_ENDPOINT is set")
+	}
+	return s, nil
 }
 
 func (s SMTPConfig) validate(development bool) error {

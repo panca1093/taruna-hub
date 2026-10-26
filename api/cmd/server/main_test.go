@@ -85,7 +85,7 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				CORSOrigins: origins,
 				BaseDomain:  baseDomain,
 				JWTSecret:   testJWTSecret,
-			}, logger, pool, rdb, notifications)
+			}, logger, pool, rdb, notifications, nil)
 
 			for _, tc := range []struct {
 				path string
