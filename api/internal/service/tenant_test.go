@@ -15,44 +15,6 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
 )
 
-func TestHostLabel(t *testing.T) {
-	cases := []struct {
-		host      string
-		wantLabel string
-		wantOK    bool
-	}{
-		{"taruna.tarunaeduka.id", "taruna", true},
-		{"TARUNA.TarunaEduka.ID", "taruna", true},
-		{"taruna.tarunaeduka.id:3000", "taruna", true},
-		{"taruna.tarunaeduka.id.", "taruna", true},
-		{"a1.tarunaeduka.id", "a1", true},
-		{"tarunaeduka.id", "", false},
-		{"", "", false},
-		{"taruna.tarunaeduka.id.evil.com", "", false},
-		{"taruna.tarunaeduka.idx", "", false},
-		{"taruna-tarunaeduka.id", "", false},
-		{"nottarunaeduka.id", "", false},
-		{"evil.com", "", false},
-		{"a.b.tarunaeduka.id", "", false},
-		{".tarunaeduka.id", "", false},
-		{"-bad.tarunaeduka.id", "", false},
-		{"bad-.tarunaeduka.id", "", false},
-		{"under_score.tarunaeduka.id", "", false},
-		{"xn--e1afmkfd.tarunaeduka.id", "xn--e1afmkfd", true},
-		{"taruna.tarunaeduka.id:abc", "", false},
-		{"127.0.0.1", "", false},
-		{"[::1]:8081", "", false},
-		{"taruna.tarunaeduka.id, evil.com", "", false},
-		{strings.Repeat("a", 33) + ".tarunaeduka.id", "", false},
-	}
-	for _, tc := range cases {
-		label, ok := hostLabel(tc.host, "tarunaeduka.id")
-		if label != tc.wantLabel || ok != tc.wantOK {
-			t.Errorf("hostLabel(%q) = %q, %v; want %q, %v", tc.host, label, ok, tc.wantLabel, tc.wantOK)
-		}
-	}
-}
-
 func TestValidSlug(t *testing.T) {
 	for _, slug := range []string{"taruna", "sekolah-a", "a", "abc123", strings.Repeat("a", 32)} {
 		if !validSlug(slug) {
@@ -94,7 +56,7 @@ func testTenantService(t *testing.T) (*TenantService, *pgxpool.Pool) {
 		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(pool.Close)
-	return NewTenantService(repository.NewTenantRepository(pool), "tarunaeduka.id"), pool
+	return NewTenantService(repository.NewTenantRepository(pool)), pool
 }
 
 // Tests share one database and run in parallel, so nothing may be deleted by name or prefix.
@@ -125,37 +87,30 @@ func provisionTenant(t *testing.T, svc *TenantService, pool *pgxpool.Pool) model
 	return tenant
 }
 
-func TestResolveHost(t *testing.T) {
+func TestActiveLoadsTheConfiguredTenant(t *testing.T) {
 	svc, pool := testTenantService(t)
 	ctx := context.Background()
 	tenant := provisionTenant(t, svc, pool)
-	slug := tenant.Slug
 
-	got, err := svc.ResolveHost(ctx, slug+".tarunaeduka.id:3000")
-	if err != nil || got.Platform || got.Tenant.ID != tenant.ID {
-		t.Fatalf("ResolveHost(tenant) = %+v, %v; want tenant %s", got, err, tenant.ID)
+	got, err := svc.Active(ctx, tenant.Slug)
+	if err != nil || got.Tenant.ID != tenant.ID {
+		t.Fatalf("Active(%q) = %+v, %v; want tenant %s", tenant.Slug, got, err, tenant.ID)
 	}
-
-	got, err = svc.ResolveHost(ctx, "admin.tarunaeduka.id")
-	if err != nil || !got.Platform {
-		t.Fatalf("ResolveHost(admin) = %+v, %v; want platform", got, err)
-	}
-
-	for _, host := range []string{"nope-" + slug + ".tarunaeduka.id", "tarunaeduka.id", "www.tarunaeduka.id", slug + ".tarunaeduka.id.evil.com"} {
-		if _, err := svc.ResolveHost(ctx, host); !errors.Is(err, ErrTenantNotFound) {
-			t.Errorf("ResolveHost(%q): err = %v, want ErrTenantNotFound", host, err)
+	for _, slug := range []string{"nope-" + tenant.Slug, ""} {
+		if _, err := svc.Active(ctx, slug); !errors.Is(err, ErrTenantNotFound) {
+			t.Errorf("Active(%q): err = %v, want ErrTenantNotFound", slug, err)
 		}
 	}
 }
 
-func TestResolveHostSkipsInactiveTenant(t *testing.T) {
+func TestActiveSkipsInactiveTenant(t *testing.T) {
 	svc, pool := testTenantService(t)
 	ctx := context.Background()
 	tenant := provisionTenant(t, svc, pool)
 	if _, err := pool.Exec(ctx, `UPDATE tenants SET is_active = false WHERE id = $1`, tenant.ID); err != nil {
 		t.Fatalf("deactivate: %v", err)
 	}
-	if _, err := svc.ResolveHost(ctx, tenant.Slug+".tarunaeduka.id"); !errors.Is(err, ErrTenantNotFound) {
+	if _, err := svc.Active(ctx, tenant.Slug); !errors.Is(err, ErrTenantNotFound) {
 		t.Errorf("inactive tenant: err = %v, want ErrTenantNotFound", err)
 	}
 }

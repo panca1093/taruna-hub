@@ -54,19 +54,19 @@ must never run them.
 go run ./cmd/worker     # delivers queued notifications (email); one process, one queue
 ```
 
-## Local tenants
+## Local tenant
 
-In development `BASE_DOMAIN` defaults to `localhost` and browsers resolve `*.localhost` to
-loopback, so after `make reset`:
+`TENANT_SLUG` names the one tenant the API serves; `.env.example` sets the seeded `taruna`. After
+`make reset`, run the API with it and use plain `localhost`:
 
 ```bash
-curl http://taruna.localhost:8081/api/v1/tenant     # {"slug":"taruna","name":"Taruna Eduka"}
-curl http://sekolah-b.localhost:8081/api/v1/tenant  # the other seed tenant, on its own host
+TENANT_SLUG=taruna make run
+curl http://localhost:8081/api/v1/tenant     # {"slug":"taruna","name":"Taruna Eduka"}
 ```
 
-`admin.localhost` is the platform host. Leave `NEXT_PUBLIC_API_URL` unset locally: the client then
-calls the API on the page's own host, so `http://taruna.localhost:3000` talks to
-`http://taruna.localhost:8081`.
+Leave `NEXT_PUBLIC_API_URL` unset locally: the client then calls the API on the page's own hostname,
+so `http://localhost:3000` talks to `http://localhost:8081`. `sekolah-b` is a second seed tenant that
+only the repository tests use.
 
 ## Bootstrap
 
@@ -89,10 +89,9 @@ BOOTSTRAP_PASSWORD=... go run ./cmd/bootstrap admin -platform -name "Root" -emai
 | `REDIS_URL` | outside development | Redis; development defaults to `redis://localhost:6380/0` |
 | `JWT_SECRET` | always | Base64, at least 32 bytes |
 | `NOTIFICATION_SEAL_KEY` | always | Base64, exactly 32 bytes; replacing it voids undelivered secret messages |
-| `BASE_DOMAIN` | outside development | Tenants live at `<slug>.<BASE_DOMAIN>`; development defaults to `localhost` |
-| `TRUST_FORWARDED_HOST` | no | `true` only behind a proxy that strips the client's `X-Forwarded-Host` |
+| `TENANT_SLUG` | always | The one tenant this deployment serves; `bootstrap` needs it set too |
 | `CORS_ORIGINS` | no | Comma-separated; default `http://localhost:3000` |
-| `PUBLIC_WEB_SCHEME`, `PUBLIC_WEB_PORT` | no | Where links in emails point; default `https` and no port, or `http` and `3000` in development |
+| `APP_URL` | outside development | Web origin that links in emails point at, `https` outside development; development defaults to `http://localhost:3000` |
 | `SMTP_HOST` | no | Unset means email is unavailable |
 | `SMTP_PORT` | no | Default `587` |
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | no | Optional AUTH credentials |

@@ -63,7 +63,7 @@ func curriculumToken(t *testing.T, f authFixture, tenant model.Tenant, role mode
 	return loginToken(t, newAuthService(f.tenantFixture), service.HostScope{Tenant: tenant}, *user.Email, authTestPassword)
 }
 
-func sendCurriculum(e *echo.Echo, method, host, path string, body any, token string) *httptest.ResponseRecorder {
+func sendCurriculum(e http.Handler, method, host, path string, body any, token string) *httptest.ResponseRecorder {
 	var buf bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
@@ -108,7 +108,7 @@ func sdBody(code, name string) map[string]any {
 }
 
 func TestCurriculumIsolatedBetweenTenants(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenantA, tenantB := f.active[0], f.active[1]
 	hostA, hostB := f.host(tenantA.Slug), f.host(tenantB.Slug)
@@ -154,7 +154,7 @@ func TestCurriculumIsolatedBetweenTenants(t *testing.T) {
 }
 
 func TestCurriculumRoles(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -206,7 +206,7 @@ func TestCurriculumRoles(t *testing.T) {
 }
 
 func TestCurriculumResponsesAreNoStore(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -235,7 +235,7 @@ func TestCurriculumResponsesAreNoStore(t *testing.T) {
 }
 
 func TestCurriculumErrorEnvelope(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)

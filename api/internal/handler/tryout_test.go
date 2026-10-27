@@ -17,7 +17,7 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
-func sendTryoutJSON(e *echo.Echo, method, host, path string, body any, token string) *httptest.ResponseRecorder {
+func sendTryoutJSON(e http.Handler, method, host, path string, body any, token string) *httptest.ResponseRecorder {
 	var buf bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
@@ -69,7 +69,7 @@ func tryoutBody(program programResponse, questionIDs ...string) map[string]any {
 }
 
 // tryoutQuestion creates one question over HTTP and returns the response the body needs.
-func createTryoutQuestion(t *testing.T, e *echo.Echo, host, token string, program programResponse) questionResponse {
+func createTryoutQuestion(t *testing.T, e http.Handler, host, token string, program programResponse) questionResponse {
 	t.Helper()
 	rec := sendQuestionJSON(e, http.MethodPost, host, "/api/v1/questions", pgQuestionBody(program), token)
 	if rec.Code != http.StatusCreated {
@@ -79,7 +79,7 @@ func createTryoutQuestion(t *testing.T, e *echo.Echo, host, token string, progra
 }
 
 func TestTryoutsIsolatedBetweenTenants(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenantA, tenantB := f.active[0], f.active[1]
 	hostA, hostB := f.host(tenantA.Slug), f.host(tenantB.Slug)
@@ -137,7 +137,7 @@ func TestTryoutsIsolatedBetweenTenants(t *testing.T) {
 }
 
 func TestTryoutRoles(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -215,7 +215,7 @@ func TestTryoutRoles(t *testing.T) {
 }
 
 func TestTryoutResponsesAreNoStore(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -256,7 +256,7 @@ func TestTryoutResponsesAreNoStore(t *testing.T) {
 }
 
 func TestTryoutErrorEnvelope(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -318,7 +318,7 @@ func TestTryoutErrorEnvelope(t *testing.T) {
 }
 
 func TestTryoutResponsesNeverCarryAnswerKeys(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -360,7 +360,7 @@ func TestTryoutResponsesNeverCarryAnswerKeys(t *testing.T) {
 }
 
 func TestTryoutBodyIsBoundedBeforeItIsMapped(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)

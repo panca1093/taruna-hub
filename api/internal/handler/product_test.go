@@ -14,7 +14,7 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
-func sendProductJSON(e *echo.Echo, method, host, path string, body any, token string) *httptest.ResponseRecorder {
+func sendProductJSON(e http.Handler, method, host, path string, body any, token string) *httptest.ResponseRecorder {
 	return sendTryoutJSON(e, method, host, path, body, token)
 }
 
@@ -84,7 +84,7 @@ func productBody(program programResponse, tryoutIDs []string, extra map[string]a
 	return body
 }
 
-func publishedTryout(t *testing.T, e *echo.Echo, host, token string, program programResponse) tryoutResponse {
+func publishedTryout(t *testing.T, e http.Handler, host, token string, program programResponse) tryoutResponse {
 	t.Helper()
 	question := createTryoutQuestion(t, e, host, token, program)
 	created := decodeTryout(t, sendTryoutJSON(e, http.MethodPost, host, "/api/v1/tryouts",
@@ -96,7 +96,7 @@ func publishedTryout(t *testing.T, e *echo.Echo, host, token string, program pro
 	return decodeTryout(t, rec)
 }
 
-func createProduct(t *testing.T, e *echo.Echo, host, token string, body map[string]any) productResponse {
+func createProduct(t *testing.T, e http.Handler, host, token string, body map[string]any) productResponse {
 	t.Helper()
 	rec := sendProductJSON(e, http.MethodPost, host, "/api/v1/products", body, token)
 	if rec.Code != http.StatusCreated {
@@ -106,7 +106,7 @@ func createProduct(t *testing.T, e *echo.Echo, host, token string, body map[stri
 }
 
 func TestProductsIsolatedBetweenTenants(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenantA, tenantB := f.active[0], f.active[1]
 	hostA, hostB := f.host(tenantA.Slug), f.host(tenantB.Slug)
@@ -150,7 +150,7 @@ func TestProductsIsolatedBetweenTenants(t *testing.T) {
 }
 
 func TestProductRoles(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -211,7 +211,7 @@ func TestProductRoles(t *testing.T) {
 }
 
 func TestProductResponsesAreNoStore(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -248,7 +248,7 @@ func TestProductResponsesAreNoStore(t *testing.T) {
 }
 
 func TestProductErrorEnvelope(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -295,7 +295,7 @@ func TestProductErrorEnvelope(t *testing.T) {
 }
 
 func TestProductBodyIsBoundedBeforeItIsMapped(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -323,7 +323,7 @@ func TestProductBodyIsBoundedBeforeItIsMapped(t *testing.T) {
 }
 
 func TestCatalogIsPublicAndTenantResolved(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenantA, tenantB := f.active[0], f.active[1]
 	hostA, hostB := f.host(tenantA.Slug), f.host(tenantB.Slug)
@@ -379,12 +379,10 @@ func TestCatalogIsPublicAndTenantResolved(t *testing.T) {
 		}
 	}
 
-	// No usable tenant: the same 404 as GET /tenant, for the platform and every unknown host.
+	// No usable tenant: the same 404 as GET /tenant, for a missing and an inactive configured tenant.
 	for _, tc := range []struct{ name, host string }{
-		{"unknown tenant", "nope-" + tenantA.Slug + "." + f.baseDomain},
-		{"platform", "admin." + f.baseDomain},
-		{"base domain", f.baseDomain},
-		{"inactive tenant", f.inactive.Slug + "." + f.baseDomain},
+		{"missing tenant", f.host(f.missingSlug)},
+		{"inactive tenant", f.host(f.inactive.Slug)},
 	} {
 		for _, path := range []string{"/api/v1/catalog/products", "/api/v1/catalog/summary"} {
 			rec := getWithToken(e, tc.host, path, "")
@@ -400,7 +398,7 @@ func TestCatalogIsPublicAndTenantResolved(t *testing.T) {
 }
 
 func TestCatalogNeverLeaks(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenantA, tenantB := f.active[0], f.active[1]
 	hostA, hostB := f.host(tenantA.Slug), f.host(tenantB.Slug)
@@ -457,7 +455,7 @@ func TestCatalogNeverLeaks(t *testing.T) {
 }
 
 func TestCatalogHidesDeactivatedProductImmediately(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -488,7 +486,7 @@ func TestCatalogHidesDeactivatedProductImmediately(t *testing.T) {
 }
 
 func TestCatalogSummaryCountsOnlyVisible(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)

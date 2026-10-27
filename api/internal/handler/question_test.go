@@ -17,7 +17,7 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
-func sendQuestionJSON(e *echo.Echo, method, host, path string, body any, token string) *httptest.ResponseRecorder {
+func sendQuestionJSON(e http.Handler, method, host, path string, body any, token string) *httptest.ResponseRecorder {
 	var buf bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
@@ -52,7 +52,7 @@ func decodeQuestions(t *testing.T, rec *httptest.ResponseRecorder) questionsResp
 }
 
 // questionCurriculum creates the program/subject a question needs; the tenant cleanup removes it.
-func questionCurriculum(t *testing.T, e *echo.Echo, host, token string) programResponse {
+func questionCurriculum(t *testing.T, e http.Handler, host, token string) programResponse {
 	t.Helper()
 	rec := sendCurriculum(e, http.MethodPost, host, "/api/v1/programs", sdBody("QSD", "Sekolah Soal"), token)
 	if rec.Code != http.StatusCreated {
@@ -95,7 +95,7 @@ func updateBodyOf(question questionResponse) map[string]any {
 }
 
 func TestQuestionsIsolatedBetweenTenants(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenantA, tenantB := f.active[0], f.active[1]
 	hostA, hostB := f.host(tenantA.Slug), f.host(tenantB.Slug)
@@ -136,7 +136,7 @@ func TestQuestionsIsolatedBetweenTenants(t *testing.T) {
 }
 
 func TestQuestionRoles(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -192,7 +192,7 @@ func TestQuestionRoles(t *testing.T) {
 }
 
 func TestQuestionResponsesAreNoStore(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -226,7 +226,7 @@ func TestQuestionResponsesAreNoStore(t *testing.T) {
 }
 
 func TestQuestionErrorEnvelope(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -301,7 +301,7 @@ func TestQuestionErrorEnvelope(t *testing.T) {
 }
 
 func TestStudentNeverSeesAnswerKeys(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)

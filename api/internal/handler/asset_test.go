@@ -93,7 +93,7 @@ func newAssetHTTPFixture(t *testing.T) assetHTTPFixture {
 	return f
 }
 
-func (f assetHTTPFixture) server(t *testing.T, ttl time.Duration) *echo.Echo {
+func (f assetHTTPFixture) server(t *testing.T, ttl time.Duration) http.Handler {
 	t.Helper()
 	return f.echoWithAssets(t, newAssetService(f.tenantFixture, f.store, ttl))
 }
@@ -108,7 +108,7 @@ func pngBytes(t *testing.T, w, h int) []byte {
 }
 
 // upload sends a multipart body whose part claims whatever name and type the test wants.
-func upload(e *echo.Echo, host, token, filename, partType string, data []byte, fields map[string]string) *httptest.ResponseRecorder {
+func upload(e http.Handler, host, token, filename, partType string, data []byte, fields map[string]string) *httptest.ResponseRecorder {
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
 	for name, value := range fields {
@@ -129,7 +129,7 @@ func upload(e *echo.Echo, host, token, filename, partType string, data []byte, f
 	return serve(e, req)
 }
 
-func assetCall(e *echo.Echo, method, host, token, path string) *httptest.ResponseRecorder {
+func assetCall(e http.Handler, method, host, token, path string) *httptest.ResponseRecorder {
 	return sendTryoutJSON(e, method, host, path, nil, token)
 }
 
@@ -151,7 +151,7 @@ func errorBody(t *testing.T, rec *httptest.ResponseRecorder) httpx.Body {
 	return env.Error
 }
 
-func (f assetHTTPFixture) uploadPNG(t *testing.T, e *echo.Echo, host, token, purpose string) assetResponse {
+func (f assetHTTPFixture) uploadPNG(t *testing.T, e http.Handler, host, token, purpose string) assetResponse {
 	t.Helper()
 	rec := upload(e, host, token, "a.png", "image/png", pngBytes(t, 4, 4), map[string]string{"purpose": purpose})
 	if rec.Code != http.StatusCreated {

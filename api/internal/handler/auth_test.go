@@ -67,11 +67,11 @@ type authFixture struct {
 	secure bool
 }
 
-func newAuthFixture(t *testing.T, baseDomain string, secure bool) authFixture {
+func newAuthFixture(t *testing.T, secure bool) authFixture {
 	t.Helper()
 	buf := &syncBuffer{}
 	return authFixture{
-		tenantFixture: newTenantFixture(t, baseDomain),
+		tenantFixture: newTenantFixture(t),
 		logs:          buf,
 		logger:        slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		secure:        secure,
@@ -96,37 +96,38 @@ func (f tenantFixture) newUser(t *testing.T, role model.Role, password string) m
 	return user
 }
 
-// origin is the browser page origin for a tenant host: same hostname, the web dev port.
-func (f tenantFixture) origin(slug string) string {
-	return "http://" + slug + "." + f.baseDomain + ":3000"
-}
+// origin is the browser page origin: the one web origin the development CORS policy accepts.
+func (f tenantFixture) origin(string) string { return devOrigins[0] }
 
 // echo builds the real middleware chain, so CORS, the host scope and the loggers all take part.
-func (f authFixture) echo(t *testing.T, opts ...service.AuthOption) *echo.Echo {
+func (f authFixture) echo(t *testing.T, opts ...service.AuthOption) http.Handler {
 	t.Helper()
 	return f.echoWithAssets(t, newAssetService(f.tenantFixture, nil, time.Minute), opts...)
 }
 
 // echoWithAssets lets an asset test choose the store the asset routes talk to.
-func (f authFixture) echoWithAssets(t *testing.T, assets *service.AssetService, opts ...service.AuthOption) *echo.Echo {
+func (f authFixture) echoWithAssets(t *testing.T, assets *service.AssetService, opts ...service.AuthOption) http.Handler {
 	t.Helper()
 	logger := f.logger
-	e := echo.New()
-	e.HideBanner = true
-	e.HTTPErrorHandler = httpx.ErrorHandler(logger)
-	e.Use(httpx.RequestID())
-	e.Use(httpx.Recover(logger))
-	e.Use(httpx.RequestLogger(logger))
-	e.Use(httpx.CORS(devOrigins, true))
 	auth := newAuthService(f.tenantFixture, opts...)
-	New(logger, NewHealthHandler(f.pool), auth, newAccountService(t, f.tenantFixture, auth), newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets, AuthOptions{
-		SecureCookies: f.secure,
-		AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
-	}).Register(e, ResolveHostScope(f.tenants, false))
-	return e
+	account := newAccountService(t, f.tenantFixture, auth)
+	return f.deployments(func(slug string) *echo.Echo {
+		e := echo.New()
+		e.HideBanner = true
+		e.HTTPErrorHandler = httpx.ErrorHandler(logger)
+		e.Use(httpx.RequestID())
+		e.Use(httpx.Recover(logger))
+		e.Use(httpx.RequestLogger(logger))
+		e.Use(httpx.CORS(devOrigins, true))
+		New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets, AuthOptions{
+			SecureCookies: f.secure,
+			AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
+		}).Register(e, ResolveHostScope(f.tenants, slug))
+		return e
+	})
 }
 
-func postJSON(e *echo.Echo, host, path string, body any, headers map[string]string) *httptest.ResponseRecorder {
+func postJSON(e http.Handler, host, path string, body any, headers map[string]string) *httptest.ResponseRecorder {
 	var buf bytes.Buffer
 	if body != nil {
 		if err := json.NewEncoder(&buf).Encode(body); err != nil {
@@ -142,7 +143,7 @@ func postJSON(e *echo.Echo, host, path string, body any, headers map[string]stri
 	return serve(e, req)
 }
 
-func postWithCookie(e *echo.Echo, host, path string, cookie *http.Cookie, origin string) *httptest.ResponseRecorder {
+func postWithCookie(e http.Handler, host, path string, cookie *http.Cookie, origin string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, path, nil)
 	if cookie != nil {
 		req.AddCookie(cookie)
@@ -154,7 +155,7 @@ func postWithCookie(e *echo.Echo, host, path string, cookie *http.Cookie, origin
 	return serve(e, req)
 }
 
-func getWithToken(e *echo.Echo, host, path, token string) *httptest.ResponseRecorder {
+func getWithToken(e http.Handler, host, path, token string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Host = host
 	if token != "" {
@@ -163,7 +164,7 @@ func getWithToken(e *echo.Echo, host, path, token string) *httptest.ResponseReco
 	return serve(e, req)
 }
 
-func serve(e *echo.Echo, req *http.Request) *httptest.ResponseRecorder {
+func serve(e http.Handler, req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	return rec
@@ -202,7 +203,7 @@ func credentials(identifier string) map[string]string {
 
 // TestRequireRole uses a probe route that exists only here, so the guard is the only thing tested.
 func TestRequireRole(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	auth := newAuthService(f.tenantFixture)
 	scope := service.HostScope{Tenant: f.active[0]}
 	host := f.host(f.active[0].Slug)
@@ -212,10 +213,11 @@ func TestRequireRole(t *testing.T) {
 	studentToken := loginToken(t, auth, scope, *student.Email, authTestPassword)
 	adminToken := loginToken(t, auth, scope, *admin.Email, authTestPassword)
 
-	e := f.echo(t)
+	e := echo.New()
+	e.HTTPErrorHandler = httpx.ErrorHandler(f.logger)
 	probe := func(c echo.Context) error { return c.NoContent(http.StatusOK) }
-	// The host-scope middleware is listed explicitly because this route is outside the v1 group.
-	e.GET("/api/v1/probe/admin", probe, ResolveHostScope(f.tenants, false), Authenticate(auth), RequireRole(model.RoleAdmin))
+	// The tenant middleware is listed explicitly because this route is outside the v1 group.
+	e.GET("/api/v1/probe/admin", probe, ResolveHostScope(f.tenants, f.active[0].Slug), Authenticate(auth), RequireRole(model.RoleAdmin))
 
 	cases := []struct {
 		name  string
@@ -244,7 +246,7 @@ func TestRefreshCookieFlags(t *testing.T) {
 		{"outside development", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f := newAuthFixture(t, "localhost", tc.secure)
+			f := newAuthFixture(t, tc.secure)
 			e := f.echo(t)
 			user := f.newUser(t, model.RoleStudent, authTestPassword)
 			host := f.host(f.active[0].Slug)
@@ -320,14 +322,13 @@ func TestRefreshCookieFlags(t *testing.T) {
 	}
 }
 
-// Cookie-only routes need an Origin that CORS accepts and that sits on this request's host.
+// Cookie-only routes need an Origin that CORS accepts.
 func TestRefreshAndLogoutRequireAcceptedOrigin(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	user := f.newUser(t, model.RoleStudent, authTestPassword)
 	host := f.host(f.active[0].Slug)
-	sameHostOtherPort := f.origin(f.active[0].Slug)
-	sibling := f.origin(f.active[1].Slug)
+	allowedOrigin := f.origin(f.active[0].Slug)
 
 	login := postJSON(e, host, "/api/v1/auth/login", credentials(*user.Email), nil)
 	if login.Code != http.StatusOK {
@@ -348,7 +349,6 @@ func TestRefreshAndLogoutRequireAcceptedOrigin(t *testing.T) {
 		}{
 			{"no origin header", ""},
 			{"an origin CORS rejects", "http://example.com"},
-			{"a sibling tenant origin CORS accepts", sibling},
 		}
 		for _, c := range rejected {
 			rec := postWithCookie(e, host, tc.path, refresh, c.origin)
@@ -357,16 +357,16 @@ func TestRefreshAndLogoutRequireAcceptedOrigin(t *testing.T) {
 			}
 		}
 
-		rec := postWithCookie(e, host, tc.path, refresh, sameHostOtherPort)
+		rec := postWithCookie(e, host, tc.path, refresh, allowedOrigin)
 		if rec.Code != tc.ok {
-			t.Errorf("%s with the same-hostname dev origin: status = %d body = %s, want %d", tc.path, rec.Code, rec.Body.String(), tc.ok)
+			t.Errorf("%s with the allowed dev origin: status = %d body = %s, want %d", tc.path, rec.Code, rec.Body.String(), tc.ok)
 		}
 	}
 }
 
 // Nothing sensitive may reach a log line, an error body or an unexpected body property.
 func TestLogsAndErrorsAreRedacted(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	user := f.newUser(t, model.RoleStudent, authTestPassword)
 	host := f.host(f.active[0].Slug)
@@ -468,7 +468,7 @@ func loginToken(t *testing.T, auth *service.AuthService, scope service.HostScope
 
 // Every failed credential attempt must look identical from outside and cost the same comparison.
 func TestLoginErrorsAreIndistinguishable(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	tenantA, tenantB := f.active[0], f.active[1]
 
 	active := f.newUser(t, model.RoleStudent, authTestPassword)
