@@ -26,6 +26,22 @@
 - The PR that delivers a slice, or part of one, updates that slice here in the same PR: the **Status** line says `done`, `done, lean` or `in progress` and names what is deferred; each acceptance box the PR proves with a test or demo is ticked; each box left open gets one indented line saying why. A slice PR without this update is not finished.
 - Every changed API is defined in `api/openapi.yaml`; regenerate client and enforce drift checks. Read installed Next.js documentation before frontend code changes.
 - Go commands use `GOROOT=/opt/homebrew/Cellar/go/1.26.3/libexec` on this workstation and a writable cache. Run Next build and browser checks sequentially to protect `.next` state.
+- Multi-tenancy is out of MVP ([D17](ARCHITECTURE.md#decision-register)). §1.1 overrides the tenant parts of every slice below.
+
+### 1.1 MVP tenancy override (D17, 2026-10-28)
+
+MVP is one platform with one configured tenant on one domain. Keep the `tenant_id` columns and the repository scope arguments as built, and keep passing the configured tenant through them. New slices add no cross-tenant adversarial cases, master-content logic or platform-admin surface; role and ownership adversarial cases still apply.
+
+| Slice | Effect |
+|---|---|
+| P01 | Built with host resolution. Replaced by **P01b** below |
+| **P01b** | New, size S: the API takes the tenant from configuration instead of the request host, and the web app runs on one domain without a tenant subdomain. Existing tenant-scoped tests stay |
+| P04 | Shrinks to tenant settings and branding for the one tenant (including the FR-PAY-W-09 minimum top-up). Provisioning, pausing and support context are post-MVP |
+| P05, P07, P09 | Tenant-owned content only. Master content, copy-to-own and platform master UI are post-MVP |
+| P11 | One landing and catalog on one domain; no root/tenant host split |
+| P17 | Ranking within the tenant is ranking across the platform |
+| P22 | Tenant Admin financial view stays; Platform Admin cross-tenant recap is post-MVP |
+| P23 | Host routing, two-tenant fixtures and cross-tenant adversarial checks are dropped from MVP release evidence |
 
 ## 2. Review focus
 
@@ -657,7 +673,7 @@ For every slice, use this verification loop:
 | Dependency | First needed | Completion evidence |
 |---|---|---|
 | Email/WhatsApp provider and templates | P02/P03 | Real staging delivery, failure/retry/expiry behavior and credential/log handling |
-| Domain and trusted origin/TLS | P04/P11 | Root and two tenant hosts, unknown/paused host behavior and forwarded-host spoof rejection |
+| Domain and trusted origin/TLS | P11 | One production domain with valid TLS (D17) |
 | Storage credentials/private buckets | P06/P09/P20/P21 | Authorized uploads/downloads and inaccessible foreign/private objects |
 | Platform-owned Midtrans merchant | P14 | Sandbox success/failure/duplicate/uncertain outcomes, then reviewed production configuration |
 | Emoji catalog/assets/font license | P09 | Visual consistency and license evidence |
@@ -670,7 +686,7 @@ Start provider/domain acquisition alongside foundation work. Exact providers, co
 
 | Milestone | Slices | Exit evidence |
 |---|---|---|
-| M1 Tenant-safe foundation | P00–P04 | Two tenants, real auth/support, durable real provider delivery |
+| M1 Foundation | P00–P04, P01b | One configured tenant, real auth, durable real provider delivery |
 | M2 Both content formats | P05–P10 | Master/copy/version invariants and deterministic generator fixtures |
 | M3 All commerce paths | P11–P15 | Real catalog/landing, three payments, both top-up paths, ledger and grants |
 | M4 Both runtimes/results | P16–P18 | Authoritative expiry/recovery and approved grading/ranking |
@@ -681,6 +697,6 @@ Milestones group sign-off; independent later-slice work can start when its actua
 
 ## 8. Decision gates and handoff
 
-[ARCHITECTURE.md §9](ARCHITECTURE.md#9-risks--open-questions) owns D01–D16. The key early blockers are OTP/phone-only recovery, Operator capabilities, scoring ownership/normalization, domain ownership and resource bounds. Finance/session policies and confirmed kecermatan formulas gate their own slices; they do not prevent review of independent architecture sections.
+[ARCHITECTURE.md §9](ARCHITECTURE.md#9-risks--open-questions) owns D01–D17. The key early blockers are OTP/phone-only recovery, Operator capabilities, scoring ownership/normalization, domain ownership and resource bounds. Finance/session policies and confirmed kecermatan formulas gate their own slices; they do not prevent review of independent architecture sections.
 
 This plan is ready for architecture/scope review, not automatic execution or production deployment. Preserve the documented decisions and evidence when turning each slice into its implementation checklist. The original plan is recoverable with `git show 4f2246a:requirement/PLAN.md`.

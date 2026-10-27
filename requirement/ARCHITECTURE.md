@@ -16,21 +16,23 @@ This design translates [PRD v1.3](PRD.md) into a target system and replaces the 
 
 The source baseline is Git `4f2246a`, inspected on 2026-10-08 and refreshed on 2026-10-09. `web/` contains 35 Next.js pages, mostly backed by mock data/localStorage. `api/` is a Go walking skeleton with users/programs, health probes, and a demo-identity `/api/v1/me`. No live production deployment, production data, or actual capacity has been established by this review.
 
-**Document status:** this is a complete architecture proposal for review, not a claim that features exist or that business policies have been approved. PRD requirements are distinguished from proposed implementation choices. Decisions D01–D16 in §9 remain explicit gates for affected implementation/release work. The PRD itself is preserved unchanged. No application implementation is authorized by this documentation task.
+**Document status:** this is a complete architecture proposal for review, not a claim that features exist or that business policies have been approved. PRD requirements are distinguished from proposed implementation choices. Decisions D01–D17 in §9 remain explicit gates for affected implementation/release work. The PRD itself is preserved unchanged.
+
+**MVP tenancy override (D17, 2026-10-28):** multi-tenancy is deferred out of MVP. MVP runs as one platform with one configured tenant on one domain. The `tenant_id` columns and scoped repositories stay as built, so tenancy can return later without a schema rewrite. Sections below that describe subdomains, Platform Admin, master content, support context or cross-tenant reporting are the post-MVP target, not MVP scope. No application implementation is authorized by this documentation task.
 
 ## 2. Goals & Non-Goals
 
 ### Goals
 
-- One installation serves multiple schools with tenant-scoped identity, branding, curriculum, catalog, money, access, sessions, results, and reporting.
+- One installation serves one tenant (D17) on a schema that keeps `tenant_id` scoping for a later multi-tenant release.
 - Students register, purchase through gateway/manual/wallet, complete repeatable tryouts or metered kecermatan attempts, and review their history.
-- Staff manage content and operations; Platform Admin manages tenants/master content and has audited tenant support access.
-- Tenant isolation and financial/session invariants hold under retries, concurrent requests, crashes, stale caches, and direct API access.
+- Staff manage content and operations.
+- Financial/session invariants hold under retries, concurrent requests, crashes, stale caches, and direct API access.
 - Meet the PRD targets: 10,000 registered users and 1,000 aggregate CCU; non-exam API p95 ≤500ms; question load ≤1s; expiry submission tolerance ±5s; availability 99.5%; daily backups retained 30 days.
 
 ### Non-Goals
 
-No live classes, native mobile application, national ranking, scheduled competition, automated revenue-share settlement, per-tenant merchant credentials, advanced predictive analytics, or student PDF downloads. Kecermatan PDF is an open scope question, not an approved feature. Full scope means everything currently required by PRD v1.3, including the expanded kecermatan/item-package requirements, not its separately listed post-MVP roadmap.
+Multi-tenancy in MVP (D17): subdomain resolution, tenant provisioning/pausing, Platform Admin, master content and copy-to-own, support context and cross-tenant reports. No live classes, native mobile application, national ranking, scheduled competition, automated revenue-share settlement, per-tenant merchant credentials, advanced predictive analytics, or student PDF downloads. Kecermatan PDF is an open scope question, not an approved feature. Full scope means everything currently required by PRD v1.3, including the expanded kecermatan/item-package requirements, not its separately listed post-MVP roadmap.
 
 ## 3. High-Level Architecture
 
@@ -67,6 +69,8 @@ flowchart LR
 
 ### Routing and deployment
 
+**MVP (D17):** one domain serves the landing, catalog and portals. The API takes the tenant from configuration, not from the request host, and no tenant host or platform admin host exists. The rest of this section is the post-MVP target.
+
 The PRD target is root `tarunaeduka.id` for platform marketing and `<slug>.tarunaeduka.id` for tenant landing/catalog/portals. A proposed reserved `admin.tarunaeduka.id` hosts Platform Admin. The exact production names, first Taruna tenant slug, and DNS ownership remain D06. Use one Next.js build with host-dependent rendering, rather than the old plan's separate landing deployment.
 
 Route `/api/v1/*` on each tenant host to Echo at the trusted origin proxy. Browser calls are same-origin; Next.js server-side calls use an internal API address while propagating host only through a trusted proxy contract. A fixed platform-owned webhook route accepts Midtrans notifications and resolves tenant from a stored payment reference, not the request host or a supplied tenant ID. Origin access is restricted; strip untrusted forwarding headers before setting canonical host metadata.
@@ -78,6 +82,8 @@ Same application images run across replicas. Tenant pages initially render dynam
 ## 4. Detailed Design
 
 ### 4.1 Tenant and identity
+
+**MVP (D17):** the chain is **configured tenant → JWT/session → token tenant match → role → resource ownership**. Every account belongs to the configured tenant, so identifier uniqueness is effectively global. Platform Admin and support context are post-MVP; the roles in MVP are Student, Operator and Admin.
 
 The authorization chain is **validated host → active tenant → JWT/session → token tenant match → role → resource ownership**. Resolve it on every API request; a frontend role guard is presentation only. JWT includes subject, role, tenant identity, expiry, and server-session linkage. Proposed short-lived access JWT in browser memory plus a rotating, hashed server-side refresh session with a Secure/HttpOnly host-only cookie. Validate issuer/audience and revoke refresh sessions on logout/deactivation; exact lifetimes/idle policy are D13. Origin/CSRF protection applies to cookie-authenticated mutations. No wildcard-domain refresh cookie.
 
@@ -402,7 +408,7 @@ These are business/release decisions, not missing architecture sections. Affecte
 | D03 | Kecermatan formula, N>10 comparison, zero denominators, 0–100 caps/rounding | Whole-half comparison proposed; confirm correction factor and expected outputs including zero/overflow cases | Client, before P18 scoring/UAT |
 | D04 | Global weights in tenant system, score display, rank ties, IRT distinct-student/revision counting | Propose tenant-wide weights frozen per test/session, raw scores plus agreed display, tenant-local version counts; no fitted IRT | Product owner, before P08/P16/P17 contracts |
 | D05 | Repeat tryout expiry, kecermatan quota consumption/abandonment | Same enrollment plus distinct grants; consume once at start proposed; define renewals and abandoned-credit policy | Product owner, before P13/P18 |
-| D06 | Production host names, root CTAs, first tenant slug, DNS ownership | Root platform landing, tenant slug apps, reserved platform admin host; confirm root featured-product ownership/linking | Product owner/infra, before P04/P11 production routing |
+| D06 | Production host names, root CTAs, first tenant slug, DNS ownership | **Narrowed by D17:** MVP needs only one production domain; tenant slug and platform admin hosts are post-MVP | Product owner/infra, before P11 production routing |
 | D07 | Late paid cancelled orders, refund/chargeback and contradictory gateway events | Record money/event and reconcile; do not auto-reopen cancelled access or silently refund | Product owner/finance, before P14 release |
 | D08 | Question import all-or-nothing versus accepted-row behavior | Propose explicit preview, user-confirmed accepted set, one atomic commit; alternative reject entire file | Product owner, before P07 import contract |
 | D09 | ZIP extract/file-count limits, package/test upper bounds, emoji asset license | Establish hard resource bounds with a generator/upload probe; enforce the 10MB ZIP/5MB image ceilings already specified | Engineering/product, before P09/P10 |
@@ -411,8 +417,9 @@ These are business/release decisions, not missing architecture sections. Affecte
 | D12 | Money precision/rounding, negative adjustment policy | Exact numeric ledger and canonical decimal serialization; decide denomination and insufficient-adjustment behavior | Finance/product, before P12/P14 |
 | D13 | JWT/refresh/idle lifetimes and active-exam behavior | **Resolved 2026-10-15 (owner):** 15-minute access token, rotating refresh session, 3-hour server-side idle limit. An active exam keeps the session alive: exam requests are authenticated activity, and P16 must not let an idle expiry end an attempt (server deadlines still govern) | Product/security owner — resolved; exam half applies in P16 |
 | D14 | Account delete versus history, data/object/audit retention and restore RPO/RTO | Deactivate accounts with preserved records proposed; approve retention and disaster-recovery objectives | Product/operations, before P22/P23 |
-| D15 | Paused-tenant behavior for payments/top-ups/jobs already in flight | Retain verified payment evidence; decide settlement/grant holds and resumption rules explicitly | Product/finance, before P14/P23 |
+| D15 | Paused-tenant behavior for payments/top-ups/jobs already in flight | **Deferred by D17:** no tenant can be paused in MVP | Product/finance, before multi-tenant release |
 | D16 | WhatsApp/email providers, credential/secrets handling, infra region/resources, launch budget/date | Verify selected providers in staging; estimate date/cost from reviewed slices and capacity evidence | Owner/operations, before P02/P23 release |
+| D17 | Multi-tenancy in MVP, and its future shape (organizations may be schools or bimbels, users may join several, features may differ per organization) | **Resolved 2026-10-28 (owner):** multi-tenancy is out of MVP. MVP is one platform with one configured tenant on one domain; `tenant_id` columns and scoped repositories stay as built. A future design will likely resolve the tenant from the account instead of the host, but that design is not yet decided. This narrows PRD v1.3 FR-TEN-01..19 and FR-AUTH-06..08 by owner decision | Product owner — resolved; client confirmation of the PRD v1.3 scope change still pending |
 
 ## 10. Effort & Milestones
 

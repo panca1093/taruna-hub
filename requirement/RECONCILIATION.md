@@ -8,9 +8,9 @@
 
 The user authorized steps 1–3 for the **full scope**, not a reduced first release. All 161 numbered FR definitions and the unnumbered requirements of PRD §§5.5, 5.6, 6, 7 and 8 are covered. Full coverage means a design and owning verification slice exist; it does not mean implementation or unresolved policy is complete.
 
-The PRD defines required product behavior. The old plan's explicit recorded owner choices remain evidence (notably OTP) and are surfaced where they conflict. The architecture proposes implementation details; it cannot silently change product policy. Keep PRD unchanged and record owner resolutions against D01–D16 before executing dependent work.
+The PRD defines required product behavior. The old plan's explicit recorded owner choices remain evidence (notably OTP) and are surfaced where they conflict. The architecture proposes implementation details; it cannot silently change product policy. Keep PRD unchanged and record owner resolutions against D01–D17 before executing dependent work.
 
-The source PRD's post-MVP roadmap remains outside this release: predictive analytics, automated revenue-share settlement, tenant-specific merchant credentials and student PDF downloads. Kecermatan PDF is an unapproved open question. Nothing required in the current MVP is deferred to post-MVP by this plan.
+The source PRD's post-MVP roadmap remains outside this release: predictive analytics, automated revenue-share settlement, tenant-specific merchant credentials and student PDF downloads. Kecermatan PDF is an unapproved open question. One owner decision defers MVP scope: [D17](ARCHITECTURE.md#decision-register) moves multi-tenancy (FR-TEN-01..19, FR-AUTH-06..08) to post-MVP. Their rows below keep the post-MVP design; the MVP effect per slice is in [PLAN §1.1](PLAN.md#11-mvp-tenancy-override-d17-2026-10-28).
 
 ## 2. Reconciliation findings
 
@@ -19,7 +19,7 @@ The source PRD's post-MVP roadmap remains outside this release: predictive analy
 | Plan targets PRD v1.2 | Header, old 14-slice schedule and cost predate v1.3 | Replace with full-scope P00–P23; no old launch/cost promise |
 | Backend is no longer zero | Current API/schema/CI exists, although only walking skeleton | Mark P00 partial; keep real integration verification incomplete |
 | Historical UI gap claims are stale | Demo store, wallet screen and shuffle type fields exist now | Preserve useful UI; use current code baseline instead of repeating zero-percent claims |
-| Tenant model missing in old plan/code | FR-TEN-01..19 and AUTH-06..08 require it everywhere | Tenancy moves before real identity/content/finance; include jobs/cache/assets/support |
+| Tenant model missing in old plan/code | FR-TEN-01..19 and AUTH-06..08 require it everywhere | Tenancy moves before real identity/content/finance; include jobs/cache/assets/support. **Superseded by D17:** multi-tenancy is post-MVP; the schema keeps `tenant_id` |
 | OTP conflict | PRD §7 says no OTP; old plan records owner approval | Retain planned OTP and gate exact policy/channel under D01 |
 | Auth/notification circular dependency | Old S1 depends on S2 while S2 depends on S1 | P02 transport depends on P00; P03 consumes it; domain templates come with domain slices |
 | Operator privileges contradict | PRD §4 denies user administration; FR-ADM-STU-01 grants CRUD; package section says both Operator and Admin | Explicit D02 capability matrix; no silent privilege expansion |
