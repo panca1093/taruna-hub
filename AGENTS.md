@@ -61,6 +61,7 @@ cd web && npm run gen:api   # after any openapi.yaml change
 4. Test first: service rules get unit tests, repositories and money/session flows get Postgres integration tests, and every endpoint gets tenant/role adversarial cases.
 5. Replace the slice's mock reads in `web/` with `lib/api` calls. Keep the UI states that already exist: loading, empty, error, saved.
 6. A slice is done only after a real browser → API → database demo passes, along with the checks under [Definition of done](#definition-of-done).
+7. **Mark the slice in `PLAN.md` in the same PR.** Update its **Status** line (`done`, `done, lean` or `in progress`, naming what is deferred), tick every acceptance box the PR proves with a test or demo, and give each box left open one indented line saying why. Never tick a box on intent alone. A partial PR (P03a, P07b…) marks its part.
 
 ## Backend rules
 
@@ -107,6 +108,8 @@ cd web && npx tsc --noEmit && npm run lint && npm run build
 ```
 
 For UI changes, also run the DESIGN §10 checklist in a browser. Report check results honestly. If something was skipped or failed, say so with the output.
+
+A slice PR is not done until `requirement/PLAN.md` shows its new status and acceptance boxes (slice workflow step 7).
 
 ## Conventions
 
