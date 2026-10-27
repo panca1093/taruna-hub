@@ -11,7 +11,7 @@ Read the relevant document before changing behavior. Never silently contradict o
 | Product behavior | `requirement/PRD.md` (v1.3) | Read-only for agents. Flag conflicts; don't edit the PRD to match code |
 | System design | `requirement/ARCHITECTURE.md` | Tenancy, data ownership, runtime and job invariants |
 | Delivery order | `requirement/PLAN.md` (slices P00–P23) | Work happens one slice at a time |
-| Open policy | `requirement/RECONCILIATION.md`, decisions D01–D16 in ARCHITECTURE §9 | Don't invent policy for an unresolved decision; stop and ask |
+| Open policy | `requirement/RECONCILIATION.md`, decisions D01–D17 in ARCHITECTURE §9 | Don't invent policy for an unresolved decision; stop and ask |
 | UI / UX | `requirement/DESIGN.md` | Tokens, components, patterns, copy and interaction rules |
 | HTTP contract | `api/openapi.yaml` | The only wire contract. The frontend client is generated from it |
 
@@ -67,7 +67,7 @@ cd web && npm run gen:api   # after any openapi.yaml change
 
 - **Layering:** `handler → service → repository → model`. Business rules live in `service`, never in `repository` or `handler`. Repositories require a tenant scope argument and only persist.
 - **Compact over modular.** One file per domain in each layer. Don't create a package for a single-use helper.
-- **Tenancy:** the tenant comes from the validated host, and the JWT tenant must match it. Never trust a tenant or role sent by the client. Master content is read-only to tenants, not a null-tenant escape hatch.
+- **Tenancy:** multi-tenancy is out of MVP (D17, PLAN §1.1). Keep `tenant_id` and repository scope arguments, and pass the one tenant through them. Don't add cross-tenant tests, master content or platform-admin features in new slices. Never trust a tenant or role sent by the client.
 - **Money and access:** ledger writes, balance projection, grants and critical jobs commit in one transaction. Gateway calls happen outside DB locks. Every retry keeps the same business identity (idempotency key).
 - **Exam runtime:** server deadlines are authoritative. Randomization is stable per session. A completed session yields exactly one result. Content and scoring are snapshotted at assignment/admission.
 - **Never** put grading keys, correct answers or internal snapshots in student DTOs.
