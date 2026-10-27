@@ -118,6 +118,5 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 
 	// Any tenant user may upload; the purpose narrows who, and every read is re-authorized in the service.
 	v1.POST("/assets", h.UploadAsset, httpx.NoStore(), Authenticate(h.auth))
-	v1.POST("/assets/:id/finalize", h.FinalizeAsset, httpx.NoStore(), Authenticate(h.auth))
 	v1.GET("/assets/:id/url", h.AssetURL, httpx.NoStore(), Authenticate(h.auth))
 }

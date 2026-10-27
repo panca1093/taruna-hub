@@ -180,6 +180,33 @@ func (f assetHTTPFixture) row(t *testing.T, id string) model.Asset {
 	return a
 }
 
+// finalize runs FinalizeTx the way a consumer slice does: inside its own transaction, committed on success.
+func (f assetHTTPFixture) finalize(t *testing.T, tenant model.Tenant, p model.Principal, id uuid.UUID) (model.Asset, error) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	asset, err := newAssetService(f.tenantFixture, f.store, time.Minute).FinalizeTx(ctx, tx, service.HostScope{Tenant: tenant}, p, id)
+	if err != nil {
+		return model.Asset{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	return asset, nil
+}
+
+func (f assetHTTPFixture) uploaderA() model.Principal {
+	return model.Principal{UserID: f.studentA.ID, TenantID: &f.tenantA.ID, Role: model.RoleStudent}
+}
+
+func staffOf(tenant model.Tenant, role model.Role) model.Principal {
+	return model.Principal{UserID: uuid.New(), TenantID: &tenant.ID, Role: role}
+}
+
 func TestAssetUploadStoresTheDetectedTypeUnderAServerKey(t *testing.T) {
 	f := newAssetHTTPFixture(t)
 	e := f.server(t, time.Minute)
@@ -265,7 +292,7 @@ func TestAssetRefusesBadFilesBeforeAnythingIsStored(t *testing.T) {
 		"pdf named png":     {"proof.png", "image/png", []byte("%PDF-1.7\n")},
 		"corrupt png":       {"proof.png", "image/png", flipped},
 		"truncated png":     {"proof.png", "image/png", good[:len(good)/2]},
-		"absurd dimensions": {"proof.png", "image/png", pngBytes(t, 8001, 1)},
+		"absurd dimensions": {"proof.png", "image/png", pngBytes(t, 4097, 1)},
 		"empty file":        {"proof.png", "image/png", nil},
 	}
 	for name, c := range cases {
@@ -347,14 +374,16 @@ func TestAssetOfAnotherTenantIsNotFoundNotForbidden(t *testing.T) {
 		t.Fatalf("unknown id = %d, want 404", unknown.Code)
 	}
 	for name, rec := range map[string]*httptest.ResponseRecorder{
-		"B admin url":      assetCall(e, http.MethodGet, f.hostB, f.tokenAdmB, "/api/v1/assets/"+id+"/url"),
-		"B student url":    assetCall(e, http.MethodGet, f.hostB, f.tokenB, "/api/v1/assets/"+id+"/url"),
-		"B admin finalize": assetCall(e, http.MethodPost, f.hostB, f.tokenAdmB, "/api/v1/assets/"+id+"/finalize"),
+		"B admin url":   assetCall(e, http.MethodGet, f.hostB, f.tokenAdmB, "/api/v1/assets/"+id+"/url"),
+		"B student url": assetCall(e, http.MethodGet, f.hostB, f.tokenB, "/api/v1/assets/"+id+"/url"),
 	} {
 		got := errorBody(t, rec)
 		if rec.Code != http.StatusNotFound || got.Code != httpx.CodeNotFound || got.Message != errorBody(t, unknown).Message {
 			t.Errorf("%s = %d %s, want the same 404 as an unknown id", name, rec.Code, rec.Body.String())
 		}
+	}
+	if _, err := f.finalize(t, f.tenantB, staffOf(f.tenantB, model.RoleAdmin), a.ID); !errors.Is(err, service.ErrAssetNotFound) {
+		t.Errorf("tenant B finalizing A's asset: err = %v, want ErrAssetNotFound", err)
 	}
 	if row := f.row(t, id); row.Status != model.AssetStaged {
 		t.Errorf("status after tenant B's finalize = %q, want staged", row.Status)
@@ -379,11 +408,11 @@ func TestAssetStagedIsHiddenFromEveryoneButTheUploader(t *testing.T) {
 		t.Fatalf("uploader reading its staged asset = %d %s, want 200", rec.Code, rec.Body.String())
 	}
 
-	if rec := assetCall(e, http.MethodPost, f.hostA, f.tokenSecond, "/api/v1/assets/"+a.ID.String()+"/finalize"); rec.Code != http.StatusNotFound {
-		t.Errorf("other student finalizing = %d, want 404", rec.Code)
+	if _, err := f.finalize(t, f.tenantA, model.Principal{UserID: f.secondStudent.ID, TenantID: &f.tenantA.ID, Role: model.RoleStudent}, a.ID); !errors.Is(err, service.ErrAssetNotFound) {
+		t.Errorf("other student finalizing: err = %v, want ErrAssetNotFound", err)
 	}
-	if rec := assetCall(e, http.MethodPost, f.hostA, f.tokenAdminA, "/api/v1/assets/"+a.ID.String()+"/finalize"); rec.Code != http.StatusOK {
-		t.Fatalf("admin finalizing = %d %s, want 200", rec.Code, rec.Body.String())
+	if _, err := f.finalize(t, f.tenantA, staffOf(f.tenantA, model.RoleAdmin), a.ID); err != nil {
+		t.Fatalf("admin finalizing: %v", err)
 	}
 	for name, want := range map[string]int{"admin": 200, "operator": 200, "uploader": 200, "other student": 404} {
 		token := map[string]string{"admin": f.tokenAdminA, "operator": f.tokenOperatorA, "uploader": f.tokenA, "other student": f.tokenSecond}[name]
@@ -397,16 +426,15 @@ func TestAssetFinalizeIsIdempotent(t *testing.T) {
 	f := newAssetHTTPFixture(t)
 	e := f.server(t, time.Minute)
 	a := f.uploadPNG(t, e, f.hostA, f.tokenA, "payment_proof")
-	path := "/api/v1/assets/" + a.ID.String() + "/finalize"
 
-	first := assetCall(e, http.MethodPost, f.hostA, f.tokenA, path)
-	if first.Code != http.StatusOK || decodeAsset(t, first).Status != "final" {
-		t.Fatalf("first finalize = %d %s, want 200 final", first.Code, first.Body.String())
+	first, err := f.finalize(t, f.tenantA, f.uploaderA(), a.ID)
+	if err != nil || first.Status != model.AssetFinal {
+		t.Fatalf("first finalize = %+v, %v; want final", first, err)
 	}
 	stamp := f.row(t, a.ID.String()).FinalizedAt
-	second := assetCall(e, http.MethodPost, f.hostA, f.tokenA, path)
-	if second.Code != http.StatusOK || decodeAsset(t, second).Status != "final" {
-		t.Errorf("second finalize = %d %s, want 200 final", second.Code, second.Body.String())
+	second, err := f.finalize(t, f.tenantA, f.uploaderA(), a.ID)
+	if err != nil || second.Status != model.AssetFinal {
+		t.Errorf("second finalize = %+v, %v; want final", second, err)
 	}
 	if got := f.row(t, a.ID.String()).FinalizedAt; stamp == nil || !got.Equal(*stamp) {
 		t.Errorf("finalized_at moved from %v to %v", stamp, got)
@@ -504,8 +532,8 @@ func TestAssetPurgeDeletesOldStagedAndKeepsFinal(t *testing.T) {
 	oldStaged := f.uploadPNG(t, e, f.hostA, f.tokenA, "payment_proof")
 	freshStaged := f.uploadPNG(t, e, f.hostA, f.tokenA, "payment_proof")
 	oldFinal := f.uploadPNG(t, e, f.hostA, f.tokenA, "payment_proof")
-	if rec := assetCall(e, http.MethodPost, f.hostA, f.tokenA, "/api/v1/assets/"+oldFinal.ID.String()+"/finalize"); rec.Code != 200 {
-		t.Fatalf("finalize = %d", rec.Code)
+	if _, err := f.finalize(t, f.tenantA, f.uploaderA(), oldFinal.ID); err != nil {
+		t.Fatalf("finalize: %v", err)
 	}
 	keys := map[string]string{}
 	for _, a := range []assetResponse{oldStaged, freshStaged, oldFinal} {
@@ -557,9 +585,8 @@ func TestAssetRoutesAnswer503WhenStorageIsNotConfigured(t *testing.T) {
 	id := uuid.NewString()
 
 	for name, rec := range map[string]*httptest.ResponseRecorder{
-		"upload":   upload(e, f.hostA, f.tokenA, "a.png", "image/png", pngBytes(t, 4, 4), map[string]string{"purpose": "payment_proof"}),
-		"finalize": assetCall(e, http.MethodPost, f.hostA, f.tokenA, "/api/v1/assets/"+id+"/finalize"),
-		"url":      assetCall(e, http.MethodGet, f.hostA, f.tokenA, "/api/v1/assets/"+id+"/url"),
+		"upload": upload(e, f.hostA, f.tokenA, "a.png", "image/png", pngBytes(t, 4, 4), map[string]string{"purpose": "payment_proof"}),
+		"url":    assetCall(e, http.MethodGet, f.hostA, f.tokenA, "/api/v1/assets/"+id+"/url"),
 	} {
 		if body := errorBody(t, rec); rec.Code != http.StatusServiceUnavailable || body.Code != httpx.CodeUnavailable || body.Message == "" {
 			t.Errorf("%s = %d %s, want 503 service_unavailable in the envelope", name, rec.Code, rec.Body.String())

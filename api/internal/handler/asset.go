@@ -74,22 +74,6 @@ func (h *Handler) UploadAsset(c echo.Context) error {
 	return c.JSON(http.StatusCreated, assetResponseOf(asset))
 }
 
-func (h *Handler) FinalizeAsset(c echo.Context) error {
-	scope, principal, ok := walletCaller(c)
-	if !ok {
-		return httpx.Unauthorized(sessionInvalid)
-	}
-	id, err := assetID(c)
-	if err != nil {
-		return err
-	}
-	asset, err := h.assets.Finalize(c.Request().Context(), scope, principal, id)
-	if err != nil {
-		return assetError(err)
-	}
-	return c.JSON(http.StatusOK, assetResponseOf(asset))
-}
-
 func (h *Handler) AssetURL(c echo.Context) error {
 	scope, principal, ok := walletCaller(c)
 	if !ok {
