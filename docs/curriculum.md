@@ -57,7 +57,7 @@ service.
 
 Business rules live in `internal/service/curriculum.go`; the repository only persists - including the
 replace diff, which is given an already validated tree. Every route answers `Cache-Control: no-store`,
-and the tree is always the tenant of the request host, because a token minted for another host never
+and the tree is always the configured tenant, because a token minted for another tenant never
 authenticates here.
 
 ## Tryout count column

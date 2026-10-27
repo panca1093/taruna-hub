@@ -6,7 +6,7 @@ decisions behind them stay in `requirement/` (PRD, ARCHITECTURE, PLAN), and the 
 
 | Area | Slices | File |
 |---|---|---|
-| Tenancy from the request host | P01 | [tenancy.md](tenancy.md) |
+| Tenancy: the one configured tenant | P01, P01b | [tenancy.md](tenancy.md) |
 | Notifications and durable jobs | P02 | [notifications.md](notifications.md) |
 | Authentication, sessions, registration and recovery | P03a, P03b | [auth.md](auth.md) |
 | Curriculum: programs, subjects and chapters | P05 | [curriculum.md](curriculum.md) |

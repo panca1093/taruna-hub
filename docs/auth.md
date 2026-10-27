@@ -70,7 +70,7 @@ The code lives on the account row as an HMAC keyed from `JWT_SECRET` (`email_cod
 `email_code_expires_at`, `email_code_attempts`), works for 10 minutes and 5 guesses, and the guesses
 are counted under a row lock, so a burst of concurrent requests buys no extra tries.
 
-A reset link is `<scheme>://<slug>.<BASE_DOMAIN>[:port]/reset-password#token=…`, built from
+A reset link is `<APP_URL>/reset-password#token=…`, built from
 configuration only — never from a request header, or a forged `Origin` could put an attacker's host
 into a genuine email. The token sits in the fragment so it never reaches a server log or a `Referer`.
 It is stateless: the user id and expiry, signed with an HMAC over the **current password hash**. No
