@@ -445,7 +445,7 @@ func productOf(input ProductInput) model.Product {
 }
 
 func publicTenant(scope HostScope) (uuid.UUID, error) {
-	if scope.Platform || scope.Tenant.ID == uuid.Nil {
+	if scope.Tenant.ID == uuid.Nil {
 		return uuid.Nil, ErrTenantNotFound
 	}
 	return scope.Tenant.ID, nil

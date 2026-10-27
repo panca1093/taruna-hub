@@ -8,8 +8,8 @@ info:
     the frontend rather than a runtime surprise.
 
     Scope today is slices P00–P05. Later slices extend this file; they do not fork it.
-    Every `/api/v1/*` route resolves its tenant from the request host first, and the access token
-    has to agree with that host, so a token minted for one tenant is refused everywhere else.
+    Every `/api/v1/*` route runs under the one tenant the deployment is configured with, and the
+    access token has to name that tenant, so a token minted for any other tenant is refused.
     P03a and P03b ship the API and the generated types only — the auth screens are P03c.
 
     Emails and phones are stored in one canonical form: a trimmed, lowercased email and an E.164
@@ -24,7 +24,7 @@ tags:
   - name: system
     description: Liveness and readiness probes
   - name: tenant
-    description: Public tenant lookup by request host
+    description: Public lookup of the configured tenant
   - name: auth
     description: Sessions, tokens and the authenticated principal
   - name: programs
@@ -98,16 +98,17 @@ paths:
   /api/v1/tenant:
     get:
       tags: [tenant]
-      summary: Tenant for the request host
+      summary: The configured tenant
       description: |
-        Resolves the tenant from the request host: `<slug>.<BASE_DOMAIN>` selects a tenant.
+        Returns the tenant this deployment is configured with (`TENANT_SLUG`); the request host and
+        headers never select it.
 
         An active tenant's slug and display name are public — the landing page needs them.
-        An inactive, unknown, reserved, malformed or platform host answers the same `404`
-        with the same code and message, so those cases cannot be told apart from outside.
+        A missing or inactive configured tenant answers `404` on every route, with the same code
+        and message, so the API serves nothing until it is fixed.
       responses:
         "200":
-          description: The tenant the request host resolves to
+          description: The configured tenant
           content:
             application/json:
               schema:
@@ -122,15 +123,15 @@ paths:
       tags: [auth]
       summary: Exchange credentials for an access token
       description: |
-        `identifier` matches either the email or the phone column, but only inside the tenant the
-        request host resolves to, so the same email in two tenants is two different people.
+        `identifier` matches either the email or the phone column, but only inside the
+        configured tenant.
 
         Unknown identifier, inactive account and wrong password all answer the same `401` with the
         same message, and an account that does not exist costs the same password comparison as one
         that does. A password longer than 72 bytes is refused the same way, because bcrypt ignores
         everything past that.
 
-        Attempts are counted per identifier and host before the password is checked: the 11th
+        Attempts are counted per identifier before the password is checked: the 11th
         attempt within 15 minutes answers `429` with `Retry-After`, even with the right password.
         A successful login, or a password reset, clears the count.
 
@@ -159,7 +160,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -174,7 +175,7 @@ paths:
       tags: [auth]
       summary: Issue a new access token from the refresh cookie
       description: |
-        Reads the refresh cookie, which must name a live session of this host's tenant. Idle time is
+        Reads the refresh cookie, which must name a live session of the configured tenant. Idle time is
         enforced here: the server expires a session that has had no authenticated request for three
         hours. Refreshing is not activity, so it does not move that deadline — only an authenticated
         request on `/me` (or any later protected route) does.
@@ -186,7 +187,7 @@ paths:
         stops working too.
 
         The refresh token never appears in the body. A request is refused with `403` unless its
-        `Origin` is both accepted by the CORS policy and on the host this request resolved to. A
+        `Origin` is accepted by the CORS policy. A
         token that can never work again also clears the cookie.
       responses:
         "200":
@@ -205,7 +206,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -220,8 +221,7 @@ paths:
         because every request re-reads the session row. Always answers `204` and always clears the
         cookie, so a retry, a stale token or no token at all is not an error to the client.
 
-        Like refresh, this route requires an `Origin` that is both CORS-accepted and on this
-        request's host.
+        Like refresh, this route requires an `Origin` that the CORS policy accepts.
       responses:
         "204":
           description: The session is gone; the cookie is cleared with `Max-Age=0`
@@ -233,7 +233,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -254,7 +254,6 @@ paths:
         verifies the email.
 
         At most 5 codes go to one email per hour across this route and `/me/email/resend`.
-        Registration exists only on tenant hosts; the platform host answers `404`.
       requestBody:
         required: true
         content:
@@ -292,8 +291,8 @@ paths:
       summary: Email a password reset link
       description: |
         FR-AUTH-03. Answers `202` with no body for every well-formed email, whether or not an account
-        on this host has it, so the answer reveals nothing. A matching active account gets a link to
-        `/reset-password#token=…` on this host's web app. The token is signed and bound to the
+        has it, so the answer reveals nothing. A matching active account gets a link to
+        `/reset-password#token=…` on the web app (`APP_URL`). The token is signed and bound to the
         current password: it works for 30 minutes, and the first password change — through any link —
         ends every outstanding link. The limit is 3 requests per email per 15 minutes.
       requestBody:
@@ -306,7 +305,7 @@ paths:
         "202":
           description: A link is on its way if the email belongs to an account here
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -322,7 +321,7 @@ paths:
       summary: Set a new password with a reset token
       description: |
         Sets the password, revokes every session of the account and marks its email verified, since
-        following the emailed link proves the inbox. A forged, used, expired or other-host token
+        following the emailed link proves the inbox. A forged, used or expired token
         answers `422` with `fields.token`. The user logs in again afterwards; no session is opened here.
       requestBody:
         required: true
@@ -334,7 +333,7 @@ paths:
         "204":
           description: The password is changed and every session is ended
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -410,7 +409,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -424,8 +423,8 @@ paths:
         FR-ADM-PRG-02: the hierarchy the question and tryout dropdowns read. Programs come back in
         their stored order, each with its subjects and their chapters in position order.
 
-        Admin and Operator may read it; a Student answers `403`. The tree is always the tenant the
-        request host resolves to — this slice has no master content and no copy-to-own.
+        Admin and Operator may read it; a Student answers `403`. The tree is always the configured
+        tenant — this slice has no master content and no copy-to-own.
       security:
         - bearerAuth: []
       responses:
@@ -440,7 +439,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -476,7 +475,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -634,7 +633,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -677,7 +676,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -844,7 +843,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -891,7 +890,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -947,7 +946,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: The request host selects no active tenant
+          description: The configured tenant is missing or inactive
           content:
             application/json:
               schema:
@@ -1418,10 +1417,10 @@ paths:
   /api/v1/catalog/products:
     get:
       tags: [catalog]
-      summary: The public catalog of this host's tenant
+      summary: The public catalog of the configured tenant
       description: |
-        Unauthenticated, and tenant-resolved from the request host exactly like `GET /api/v1/tenant`; the
-        platform host and an unknown host answer `404`. Only products that are active, inside their own
+        Unauthenticated, and scoped to the configured tenant exactly like `GET /api/v1/tenant`, which answers
+        `404` when that tenant is missing or inactive. Only products that are active, inside their own
         window and whose every tryout is published and inside its window are listed, newest first.
 
         The body is display data only: no answer keys, no author, no revision, no other tenant.
@@ -1470,7 +1469,7 @@ paths:
       tags: [catalog]
       summary: One public product
       description: |
-        Unauthenticated and tenant-resolved from the host. A product that is inactive, outside its window or
+        Unauthenticated and scoped to the configured tenant. A product that is inactive, outside its window or
         backed by a tryout that is no longer playable answers `404`, as does another tenant's id.
       parameters:
         - name: id
@@ -1494,7 +1493,7 @@ paths:
       tags: [catalog]
       summary: Publicly visible counts for the landing page
       description: |
-        Unauthenticated and tenant-resolved from the host. Counts only what this tenant's visitors can see:
+        Unauthenticated and scoped to the configured tenant. Counts only what this tenant's visitors can see:
         its programs, the products the catalog lists and the published, open tryouts.
       responses:
         "200":
@@ -1857,7 +1856,7 @@ components:
       properties:
         slug:
           type: string
-          description: Subdomain label under `BASE_DOMAIN`. Immutable once created.
+          description: Tenant slug, matching `TENANT_SLUG`. Immutable once created.
           example: taruna
         name:
           type: string
@@ -1871,7 +1870,7 @@ components:
       properties:
         identifier:
           type: string
-          description: Email or phone. Matched only within the tenant scope of the request host.
+          description: Email or phone. Matched only within the configured tenant.
           example: naila@example.com
         password:
           type: string
@@ -1956,7 +1955,7 @@ components:
           type: string
           enum: [student, operator, admin, platform_admin]
           description: |
-            `platform_admin` only ever exists on the platform host; a tenant host sees its own roles.
+            `platform_admin` accounts have no tenant and cannot sign in to the configured tenant.
         email_verified:
           type: boolean
           description: |
@@ -3168,7 +3167,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     NotFound:
-      description: The request host selects no active tenant, or the resource does not exist
+      description: The configured tenant is missing or inactive, or the resource does not exist
       content:
         application/json:
           schema:

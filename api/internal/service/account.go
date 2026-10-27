@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
-	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -27,12 +26,10 @@ import (
 )
 
 var (
-	// ErrRegistrationClosed is the platform host: Platform Admins are provisioned, never self-registered.
-	ErrRegistrationClosed = errors.New("registration is not offered on this host")
-	ErrEmailTaken         = errors.New("email already registered")
-	ErrPhoneTaken         = errors.New("phone already registered")
-	ErrAlreadyVerified    = errors.New("email already verified")
-	ErrNoEmail            = errors.New("account has no email")
+	ErrEmailTaken      = errors.New("email already registered")
+	ErrPhoneTaken      = errors.New("phone already registered")
+	ErrAlreadyVerified = errors.New("email already verified")
+	ErrNoEmail         = errors.New("account has no email")
 	// ErrInvalidCode covers a wrong, expired, used-up or missing code alike.
 	ErrInvalidCode = errors.New("invalid or expired code")
 	// ErrInvalidResetToken covers a forged, expired, used, foreign or malformed token alike.
@@ -68,22 +65,12 @@ const (
 // WebLinks builds links into the web app from configuration only: never from a request header,
 // or a forged Origin would put an attacker's host into a genuine reset email.
 type WebLinks struct {
-	Scheme     string
-	BaseDomain string
-	Port       string
+	BaseURL string
 }
 
-func (w WebLinks) resetURL(scope HostScope, token string) string {
-	label := platformLabel
-	if !scope.Platform {
-		label = scope.Tenant.Slug
-	}
-	host := label + "." + w.BaseDomain
-	if w.Port != "" {
-		host = net.JoinHostPort(host, w.Port)
-	}
+func (w WebLinks) resetURL(token string) string {
 	// A fragment never reaches a server, so the token stays out of access logs and Referer headers.
-	return w.Scheme + "://" + host + "/reset-password#token=" + token
+	return w.BaseURL + "/reset-password#token=" + token
 }
 
 type AccountDeps struct {
@@ -151,9 +138,6 @@ type RegisterInput struct {
 // Register creates the student and logs them in at once. D01: email is required, a phone is
 // optional, and the emailed code only verifies the address; it never gates the account.
 func (s *AccountService) Register(ctx context.Context, scope HostScope, in RegisterInput) (Tokens, error) {
-	if scope.Platform {
-		return Tokens{}, ErrRegistrationClosed
-	}
 	fields := map[string]string{}
 	name := strings.TrimSpace(in.Name)
 	if name == "" || utf8.RuneCountInString(name) > maxNameRunes {
@@ -331,7 +315,7 @@ func (s *AccountService) ForgotPassword(ctx context.Context, scope HostScope, ra
 			Params: map[string]string{
 				"tenant_name": tenantName(scope), "name": user.Name, "minutes": minutes(resetTTL),
 			},
-			SecretParams: map[string]string{"reset_url": s.Links.resetURL(scope, token)},
+			SecretParams: map[string]string{"reset_url": s.Links.resetURL(token)},
 			ExpiresAt:    &expires,
 		})
 	})
@@ -515,9 +499,6 @@ func validCodeShape(code string) bool {
 }
 
 func tenantName(scope HostScope) string {
-	if scope.Platform {
-		return "Taruna Eduka"
-	}
 	return scope.Tenant.Name
 }
 

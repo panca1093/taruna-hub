@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -43,18 +44,17 @@ type Config struct {
 	Port        string
 	DatabaseURL string
 	// RedisURL holds the auth throttles: disposable counters, so losing Redis only resets them.
-	RedisURL           string
-	CORSOrigins        []string
-	ShutdownGrace      time.Duration
-	BaseDomain         string
-	TrustForwardedHost bool
-	SMTP               SMTPConfig
-	S3                 S3Config
+	RedisURL      string
+	CORSOrigins   []string
+	ShutdownGrace time.Duration
+	// TenantSlug is the one tenant this deployment serves (D17).
+	TenantSlug string
+	SMTP       SMTPConfig
+	S3         S3Config
 	// NotificationSealKey seals the codes and reset links queued for delivery. Required everywhere.
 	NotificationSealKey []byte
-	// WebScheme and WebPort place links in emails on <slug>.<BaseDomain>; never taken from a request.
-	WebScheme string
-	WebPort   string
+	// AppURL is the web origin that links in emails point at; never taken from a request.
+	AppURL string
 	// JWTSecret signs access tokens. Required everywhere: an unauthenticated API is not a mode.
 	JWTSecret []byte
 }
@@ -69,9 +69,7 @@ func Load() (Config, error) {
 		DatabaseURL:   env("DATABASE_URL", ""),
 		CORSOrigins:   split(env("CORS_ORIGINS", "http://localhost:3000")),
 		ShutdownGrace: 10 * time.Second,
-		BaseDomain:    strings.ToLower(env("BASE_DOMAIN", "")),
-		// Only true behind a proxy that strips client-sent X-Forwarded-Host and sets its own.
-		TrustForwardedHost: env("TRUST_FORWARDED_HOST", "") == "true",
+		TenantSlug:    strings.ToLower(env("TENANT_SLUG", "")),
 		SMTP: SMTPConfig{
 			Host:     env("SMTP_HOST", ""),
 			Port:     env("SMTP_PORT", "587"),
@@ -96,11 +94,8 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	c.S3 = s3
-	if c.BaseDomain == "" {
-		if !c.IsDevelopment() {
-			return Config{}, fmt.Errorf("BASE_DOMAIN is required outside development")
-		}
-		c.BaseDomain = "localhost"
+	if c.TenantSlug == "" {
+		return Config{}, fmt.Errorf("TENANT_SLUG is required")
 	}
 	if err := c.SMTP.validate(c.IsDevelopment()); err != nil {
 		return Config{}, err
@@ -132,19 +127,19 @@ func Load() (Config, error) {
 	}
 	c.NotificationSealKey = key
 
-	c.WebScheme, c.WebPort = "https", ""
-	if c.IsDevelopment() {
-		c.WebScheme, c.WebPort = "http", "3000"
-	}
-	c.WebScheme = env("PUBLIC_WEB_SCHEME", c.WebScheme)
-	c.WebPort = env("PUBLIC_WEB_PORT", c.WebPort)
-	if c.WebScheme != "https" && !(c.WebScheme == "http" && c.IsDevelopment()) {
-		return Config{}, fmt.Errorf("PUBLIC_WEB_SCHEME must be https outside development, got %q", c.WebScheme)
-	}
-	if c.WebPort != "" {
-		if port, err := strconv.Atoi(c.WebPort); err != nil || port < 1 || port > 65535 {
-			return Config{}, fmt.Errorf("PUBLIC_WEB_PORT must be a port number, got %q", c.WebPort)
+	c.AppURL = strings.TrimRight(env("APP_URL", ""), "/")
+	if c.AppURL == "" {
+		if !c.IsDevelopment() {
+			return Config{}, fmt.Errorf("APP_URL is required outside development")
 		}
+		c.AppURL = "http://localhost:3000"
+	}
+	appURL, err := url.Parse(c.AppURL)
+	if err != nil || appURL.Host == "" || appURL.Path != "" || appURL.RawQuery != "" || appURL.Fragment != "" {
+		return Config{}, fmt.Errorf("APP_URL must be an origin such as https://example.com, got %q", c.AppURL)
+	}
+	if appURL.Scheme != "https" && !(appURL.Scheme == "http" && c.IsDevelopment()) {
+		return Config{}, fmt.Errorf("APP_URL must be https outside development, got %q", c.AppURL)
 	}
 	return c, nil
 }

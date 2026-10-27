@@ -18,7 +18,6 @@ const (
 	incomplete        = "Isi permintaan belum lengkap."
 	invalidFormat     = "Format tidak valid."
 	passwordRule      = "Kata sandi 8–72 karakter."
-	registrationGone  = "Pendaftaran tidak tersedia di alamat ini."
 	emailTaken        = "Email sudah terdaftar."
 	phoneTaken        = "Nomor HP sudah terdaftar."
 	alreadyRegistered = "Akun sudah terdaftar."
@@ -166,8 +165,6 @@ func accountError(c echo.Context, err error) error {
 		return httpx.Validation(incomplete, fields)
 	}
 	switch {
-	case errors.Is(err, service.ErrRegistrationClosed):
-		return httpx.NotFound(registrationGone)
 	case errors.Is(err, service.ErrEmailTaken):
 		return httpx.Conflict(alreadyRegistered).WithFields(map[string]string{"email": emailTaken})
 	case errors.Is(err, service.ErrPhoneTaken):

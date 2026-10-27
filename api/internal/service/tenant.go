@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"regexp"
 	"strings"
 
@@ -18,9 +17,6 @@ var (
 	ErrSlugTaken      = errors.New("tenant slug taken")
 )
 
-// platformLabel is the one reserved label that selects the platform scope instead of a tenant.
-const platformLabel = "admin"
-
 // FR-TEN-02 names www, api, admin, tryout; the rest are infrastructure names no tenant may claim.
 var reservedSlugs = map[string]bool{
 	"www": true, "api": true, "admin": true, "tryout": true,
@@ -29,40 +25,24 @@ var reservedSlugs = map[string]bool{
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$`)
 
-// HostScope is what a request host resolves to: exactly one tenant, or the platform.
+// HostScope is the one tenant every request in this deployment runs under (D17).
 type HostScope struct {
-	Tenant   model.Tenant
-	Platform bool
+	Tenant model.Tenant
 }
 
 type TenantService struct {
-	tenants    *repository.TenantRepository
-	baseDomain string
+	tenants *repository.TenantRepository
 }
 
-func NewTenantService(tenants *repository.TenantRepository, baseDomain string) *TenantService {
-	return &TenantService{tenants: tenants, baseDomain: strings.ToLower(baseDomain)}
+func NewTenantService(tenants *repository.TenantRepository) *TenantService {
+	return &TenantService{tenants: tenants}
 }
 
-// ResolveHost maps a host to its scope; every failure is ErrTenantNotFound so hosts are indistinguishable.
-func (s *TenantService) ResolveHost(ctx context.Context, host string) (HostScope, error) {
-	label, ok := hostLabel(host, s.baseDomain)
-	if !ok {
-		return HostScope{}, ErrTenantNotFound
-	}
-	if label == platformLabel {
-		return HostScope{Platform: true}, nil
-	}
-	if reservedSlugs[label] {
-		return HostScope{}, ErrTenantNotFound
-	}
-
-	tenant, err := s.tenants.FindBySlug(ctx, label)
-	if errors.Is(err, repository.ErrNotFound) {
-		return HostScope{}, ErrTenantNotFound
-	}
+// Active loads the configured tenant; a missing or inactive one is ErrTenantNotFound so requests fail closed.
+func (s *TenantService) Active(ctx context.Context, slug string) (HostScope, error) {
+	tenant, err := s.BySlug(ctx, slug)
 	if err != nil {
-		return HostScope{}, fmt.Errorf("find tenant by slug: %w", err)
+		return HostScope{}, err
 	}
 	if !tenant.IsActive {
 		return HostScope{}, ErrTenantNotFound
@@ -98,24 +78,4 @@ func (s *TenantService) Provision(ctx context.Context, slug, name string) (model
 
 func validSlug(slug string) bool {
 	return slugPattern.MatchString(slug) && !reservedSlugs[slug]
-}
-
-// hostLabel matches the suffix with its leading dot, so look-alike hosts never resolve.
-func hostLabel(host, baseDomain string) (string, bool) {
-	host = strings.ToLower(host)
-	if h, port, err := net.SplitHostPort(host); err == nil {
-		if port == "" || strings.Trim(port, "0123456789") != "" {
-			return "", false
-		}
-		host = h
-	} else if strings.Contains(host, ":") {
-		return "", false
-	}
-	host = strings.TrimSuffix(host, ".")
-
-	label, ok := strings.CutSuffix(host, "."+baseDomain)
-	if !ok || !slugPattern.MatchString(label) {
-		return "", false
-	}
-	return label, true
 }

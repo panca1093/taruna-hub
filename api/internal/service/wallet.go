@@ -341,7 +341,7 @@ func validActorKind(actor string) bool {
 
 // walletTenant pins every query to the host's tenant and refuses a principal from another one.
 func walletTenant(scope HostScope, principal model.Principal) (uuid.UUID, error) {
-	if scope.Platform || scope.Tenant.ID == uuid.Nil || principal.TenantID == nil || *principal.TenantID != scope.Tenant.ID {
+	if scope.Tenant.ID == uuid.Nil || principal.TenantID == nil || *principal.TenantID != scope.Tenant.ID {
 		return uuid.Nil, ErrTenantNotFound
 	}
 	return scope.Tenant.ID, nil
