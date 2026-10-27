@@ -266,3 +266,59 @@ func TestConfigRequiresRedisOutsideDevelopment(t *testing.T) {
 		}
 	}
 }
+
+func TestS3ConfigValidation(t *testing.T) {
+	base := func() {
+		t.Setenv("APP_ENV", "production")
+		t.Setenv("DATABASE_URL", "postgres://x")
+		t.Setenv("REDIS_URL", "redis://x:6379/0")
+		t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+		t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
+		t.Setenv("JWT_SECRET", validJWTSecret())
+		for _, k := range []string{"S3_ENDPOINT", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET", "S3_USE_SSL", "S3_REGION"} {
+			t.Setenv(k, "")
+		}
+	}
+
+	t.Run("unset endpoint is legal and means no storage", func(t *testing.T) {
+		base()
+		cfg, err := Load()
+		if err != nil || cfg.S3.Endpoint != "" {
+			t.Errorf("endpoint = %q, err = %v; want empty, nil", cfg.S3.Endpoint, err)
+		}
+	})
+
+	t.Run("endpoint without credentials or bucket", func(t *testing.T) {
+		for _, missing := range []string{"S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET"} {
+			base()
+			t.Setenv("S3_ENDPOINT", "storage.googleapis.com")
+			for _, k := range []string{"S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET"} {
+				if k != missing {
+					t.Setenv(k, "x")
+				}
+			}
+			if _, err := Load(); err == nil {
+				t.Errorf("S3_ENDPOINT without %s was accepted, want an error", missing)
+			}
+		}
+	})
+
+	t.Run("ssl defaults on outside development and off in it", func(t *testing.T) {
+		base()
+		t.Setenv("S3_ENDPOINT", "storage.googleapis.com")
+		t.Setenv("S3_ACCESS_KEY", "k")
+		t.Setenv("S3_SECRET_KEY", "s")
+		t.Setenv("S3_BUCKET", "b")
+		if cfg, err := Load(); err != nil || !cfg.S3.UseSSL {
+			t.Errorf("production: UseSSL = %v, err = %v; want true, nil", cfg.S3.UseSSL, err)
+		}
+		t.Setenv("APP_ENV", "development")
+		if cfg, err := Load(); err != nil || cfg.S3.UseSSL {
+			t.Errorf("development: UseSSL = %v, err = %v; want false, nil", cfg.S3.UseSSL, err)
+		}
+		t.Setenv("S3_USE_SSL", "maybe")
+		if _, err := Load(); err == nil {
+			t.Error("an unparsable S3_USE_SSL was accepted, want an error")
+		}
+	})
+}

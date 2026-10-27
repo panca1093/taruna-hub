@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -20,6 +21,9 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
+
+// assetURLTTL is how long a presigned download link works; the client asks again instead of keeping it.
+const assetURLTTL = 60 * time.Second
 
 func main() {
 	if err := run(); err != nil {
@@ -57,7 +61,12 @@ func run() error {
 		return err
 	}
 
-	e := newEcho(cfg, logger, pool, rdb, notifications)
+	store, err := newStorage(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	e := newEcho(cfg, logger, pool, rdb, notifications, store)
 
 	go func() {
 		logger.Info("server listening", slog.String("port", cfg.Port), slog.String("env", cfg.Env))
@@ -76,7 +85,7 @@ func run() error {
 }
 
 // newEcho is the single assembly point, so tests run the real middleware chain.
-func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client, notifications *service.NotificationService) *echo.Echo {
+func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client, notifications *service.NotificationService, store service.ObjectStore) *echo.Echo {
 	tenants := service.NewTenantService(repository.NewTenantRepository(pool), cfg.BaseDomain)
 	users := repository.NewUserRepository(pool)
 	sessions := repository.NewSessionRepository(pool)
@@ -98,7 +107,8 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	tryouts := service.NewTryoutService(pool, repository.NewTryoutRepository(pool))
 	products := service.NewProductService(pool, repository.NewProductRepository(pool))
 	wallets := service.NewWalletService(pool, repository.NewWalletRepository(pool))
-	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, products, wallets, handler.AuthOptions{
+	assets := service.NewAssetService(pool, repository.NewAssetRepository(pool), store, assetURLTTL)
+	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, products, wallets, assets, handler.AuthOptions{
 		SecureCookies: !cfg.IsDevelopment(),
 		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
 	})
@@ -114,6 +124,21 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	h.Register(e, handler.ResolveHostScope(tenants, cfg.TrustForwardedHost))
 
 	return e
+}
+
+// newStorage is nil without S3_ENDPOINT, which turns the asset routes into 503s and breaks nothing else.
+func newStorage(ctx context.Context, cfg config.Config) (service.ObjectStore, error) {
+	if cfg.S3.Endpoint == "" {
+		return nil, nil
+	}
+	storage, err := infra.NewStorage(cfg.S3)
+	if err != nil {
+		return nil, err
+	}
+	if err := storage.EnsureBucket(ctx, cfg.IsDevelopment()); err != nil {
+		return nil, err
+	}
+	return storage, nil
 }
 
 // newNotifications is the P02 wiring: one service over the insert-only River client.

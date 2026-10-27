@@ -249,7 +249,7 @@ For every slice, use this verification loop:
 
 ### P06 — Authorized asset upload and download
 
-**Status:** planned · **Size:** M · **Depends:** P03, P04
+**Status:** done, lean — authenticated PNG/JPEG/WebP upload (PNG/JPEG decoded, WebP header-checked), staged→final through a transaction-only `FinalizeTx` with no HTTP finalize route, 60-second presigned downloads re-authorized on every call, and a worker purge of abandoned staged uploads, all against MinIO; public branding assets, cover/export purposes and GCS staging verification are deferred · **Size:** M · **Depends:** P03, P04
 
 **Outcome:** Users upload allowed images/proofs and only authorized users retrieve protected assets.
 
@@ -257,16 +257,16 @@ For every slice, use this verification loop:
 
 **Files / frontend:** api adapter storage and asset handlers/services/migrations; web upload controls used by builders and student orders.
 
-**Interfaces:** Produces asset references and scoped upload/finalize/download operations, not permanently public URLs for private files.
+**Interfaces:** Produces asset references and scoped upload/download operations plus a `FinalizeTx` for consumer transactions, not permanently public URLs for private files.
 
 **Acceptance scenarios:**
 
-- [ ] Validate actual image type and maximum 5MB; incorrect type/oversize files fail before attachment.
-- [ ] Tenant B cannot attach, finalize or download A assets; client path/purpose does not change owner.
-- [ ] Private objects are not anonymously readable; authorized access expires and is not cached publicly.
-- [ ] Abandoned previews clean up safely without deleting referenced frozen assets.
+- [x] Validate actual image type and maximum 5MB; incorrect type/oversize files fail before attachment.
+- [x] Tenant B cannot attach, finalize or download A assets; client path/purpose does not change owner. (Upload, `FinalizeTx` and download are tested; "attach" has no consumer until P07/P13 call `FinalizeTx`.)
+- [ ] Private objects are not anonymously readable; authorized access expires and is not cached publicly. (Proved on MinIO: an unsigned GET is `403`, the 60 s link works and then stops, the response is `private, no-store`. Open until the same is shown against the real GCS bucket in staging, and until P04 decides which assets are public.)
+- [x] Abandoned previews clean up safely without deleting referenced frozen assets.
 
-**Decision / verification gate:** Storage credentials and final authorization must be verified in staging, not just mocked.
+**Decision / verification gate:** Storage credentials and final authorization must be verified in staging, not just mocked. **Open:** only MinIO has been exercised (no mocks); GCS HMAC interoperability, uniform bucket-level access and the staging credentials still need a run.
 
 <a id="p07"></a>
 

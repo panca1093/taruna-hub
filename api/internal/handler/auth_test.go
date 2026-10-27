@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -103,6 +104,12 @@ func (f tenantFixture) origin(slug string) string {
 // echo builds the real middleware chain, so CORS, the host scope and the loggers all take part.
 func (f authFixture) echo(t *testing.T, opts ...service.AuthOption) *echo.Echo {
 	t.Helper()
+	return f.echoWithAssets(t, newAssetService(f.tenantFixture, nil, time.Minute), opts...)
+}
+
+// echoWithAssets lets an asset test choose the store the asset routes talk to.
+func (f authFixture) echoWithAssets(t *testing.T, assets *service.AssetService, opts ...service.AuthOption) *echo.Echo {
+	t.Helper()
 	logger := f.logger
 	e := echo.New()
 	e.HideBanner = true
@@ -112,7 +119,7 @@ func (f authFixture) echo(t *testing.T, opts ...service.AuthOption) *echo.Echo {
 	e.Use(httpx.RequestLogger(logger))
 	e.Use(httpx.CORS(devOrigins, true))
 	auth := newAuthService(f.tenantFixture, opts...)
-	New(logger, NewHealthHandler(f.pool), auth, newAccountService(t, f.tenantFixture, auth), newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), AuthOptions{
+	New(logger, NewHealthHandler(f.pool), auth, newAccountService(t, f.tenantFixture, auth), newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets, AuthOptions{
 		SecureCookies: f.secure,
 		AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
 	}).Register(e, ResolveHostScope(f.tenants, false))

@@ -14,3 +14,4 @@ decisions behind them stay in `requirement/` (PRD, ARCHITECTURE, PLAN), and the 
 | Tryouts: drafts, publishing and frozen assignments | P08 | [tryouts.md](tryouts.md) |
 | Products and the public catalog | P11 | [products.md](products.md) |
 | Wallet ledger, balance projection and staff adjustments | P12 | [wallet.md](wallet.md) |
+| Assets: private image uploads and short-lived downloads | P06 | [assets.md](assets.md) |
