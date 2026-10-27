@@ -124,8 +124,7 @@ func (s *AssetService) discardStaged(ctx context.Context, tenantID, id uuid.UUID
 	}
 }
 
-// FinalizeTx runs inside the consumer's transaction, so the attachment and the finalize commit together;
-// it is idempotent on an already-final asset.
+// FinalizeTx runs in the consumer's transaction so attachment and finalize commit together; it is idempotent.
 func (s *AssetService) FinalizeTx(ctx context.Context, tx pgx.Tx, scope HostScope, principal model.Principal, id uuid.UUID) (model.Asset, error) {
 	tenantID, err := walletTenant(scope, principal)
 	if err != nil {
