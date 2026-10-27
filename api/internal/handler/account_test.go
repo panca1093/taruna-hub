@@ -46,7 +46,7 @@ func newAccountService(t *testing.T, f tenantFixture, auth *service.AuthService)
 		Throttles:     repository.NewThrottleRepository(f.redis),
 		Notifications: notifications,
 		Auth:          auth,
-		Links:         service.WebLinks{Scheme: "http", BaseDomain: f.baseDomain, Port: "3000"},
+		Links:         service.WebLinks{BaseURL: devOrigins[0]},
 		Secret:        authTestSecret,
 		Logger:        logger,
 	}, service.WithAccountPasswordCost(bcrypt.MinCost))
@@ -96,7 +96,7 @@ func wantError(t *testing.T, name string, rec *httptest.ResponseRecorder, status
 
 // D01 over HTTP: signup answers like a login, and the email is verified later by the signed-in user.
 func TestSignUpOverHTTP(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	host := f.host(f.active[0].Slug)
 	email := "signup-" + uuid.NewString()[:8] + "@example.com"
@@ -145,8 +145,6 @@ func TestSignUpOverHTTP(t *testing.T) {
 	wantError(t, "resend after verifying", postJSON(e, host, "/api/v1/me/email/resend", nil, bearer), http.StatusConflict, httpx.CodeConflict)
 
 	wantError(t, "email taken", postJSON(e, host, "/api/v1/auth/register", signup, nil), http.StatusConflict, httpx.CodeConflict, "email")
-	wantError(t, "platform host", postJSON(e, "admin."+f.baseDomain+":8081", "/api/v1/auth/register", signup, nil),
-		http.StatusNotFound, httpx.CodeNotFound)
 	wantError(t, "missing fields", postJSON(e, host, "/api/v1/auth/register", map[string]string{"phone": "0812"}, nil),
 		http.StatusUnprocessableEntity, httpx.CodeValidation, "name", "email", "password")
 	wantError(t, "bad formats", postJSON(e, host, "/api/v1/auth/register",
@@ -165,7 +163,7 @@ func TestSignUpOverHTTP(t *testing.T) {
 }
 
 func TestPasswordResetOverHTTP(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	slug := f.active[0].Slug
 	host := f.host(slug)
@@ -180,7 +178,7 @@ func TestPasswordResetOverHTTP(t *testing.T) {
 	}
 
 	link := f.secretParam(t, *user.Email, service.TemplatePasswordReset, "reset_url")
-	prefix := "http://" + slug + "." + f.baseDomain + ":3000/reset-password#token="
+	prefix := devOrigins[0] + "/reset-password#token="
 	if !strings.HasPrefix(link, prefix) {
 		t.Fatalf("reset link %q, want it under %q", link, prefix)
 	}
@@ -206,7 +204,7 @@ func TestPasswordResetOverHTTP(t *testing.T) {
 }
 
 func TestThrottledLoginAnswers429WithRetryAfter(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	host := f.host(f.active[0].Slug)
 	user := f.newUser(t, model.RoleStudent, authTestPassword)
@@ -227,7 +225,7 @@ func TestThrottledLoginAnswers429WithRetryAfter(t *testing.T) {
 
 // The browser sees rotation as a new cookie; a racing tab inside the grace window keeps the one it has.
 func TestRefreshRotatesTheCookie(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	slug := f.active[0].Slug
 	host, origin := f.host(slug), f.origin(slug)

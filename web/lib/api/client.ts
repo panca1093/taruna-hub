@@ -7,7 +7,7 @@ export type ErrorCode = ErrorEnvelope["error"]["code"];
 export type Ready = paths["/readyz"]["get"]["responses"][200]["content"]["application/json"];
 /** 503 body of `GET /readyz`. This endpoint does not use the error envelope. */
 export type NotReady = paths["/readyz"]["get"]["responses"][503]["content"]["application/json"];
-/** Success body of `GET /api/v1/tenant` — the tenant the request host resolves to. */
+/** Success body of `GET /api/v1/tenant` — the tenant this deployment is configured with. */
 export type Tenant = components["schemas"]["Tenant"];
 export type ApiUser = components["schemas"]["User"];
 export type TokenResponse = components["schemas"]["TokenResponse"];

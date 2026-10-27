@@ -86,7 +86,7 @@ func run() error {
 
 // newEcho is the single assembly point, so tests run the real middleware chain.
 func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *redis.Client, notifications *service.NotificationService, store service.ObjectStore) *echo.Echo {
-	tenants := service.NewTenantService(repository.NewTenantRepository(pool), cfg.BaseDomain)
+	tenants := service.NewTenantService(repository.NewTenantRepository(pool))
 	users := repository.NewUserRepository(pool)
 	sessions := repository.NewSessionRepository(pool)
 	throttles := repository.NewThrottleRepository(rdb)
@@ -98,7 +98,7 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 		Throttles:     throttles,
 		Notifications: notifications,
 		Auth:          auth,
-		Links:         service.WebLinks{Scheme: cfg.WebScheme, BaseDomain: cfg.BaseDomain, Port: cfg.WebPort},
+		Links:         service.WebLinks{BaseURL: cfg.AppURL},
 		Secret:        cfg.JWTSecret,
 		Logger:        logger,
 	})
@@ -121,7 +121,7 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	e.Use(httpx.Recover(logger))
 	e.Use(httpx.RequestLogger(logger))
 	e.Use(httpx.CORS(cfg.CORSOrigins, cfg.IsDevelopment()))
-	h.Register(e, handler.ResolveHostScope(tenants, cfg.TrustForwardedHost))
+	h.Register(e, handler.ResolveHostScope(tenants, cfg.TenantSlug))
 
 	return e
 }

@@ -35,7 +35,7 @@ MVP is one platform with one configured tenant on one domain. Keep the `tenant_i
 | Slice | Effect |
 |---|---|
 | P01 | Built with host resolution. Replaced by **P01b** below |
-| **P01b** | New, size S: the API takes the tenant from configuration instead of the request host, and the web app runs on one domain without a tenant subdomain. Existing tenant-scoped tests stay |
+| **P01b** | New, size S: the API takes the tenant from configuration instead of the request host, and the web app runs on one domain without a tenant subdomain. Existing tenant-scoped tests stay. **Status:** done — `TENANT_SLUG` and `APP_URL` replace `BASE_DOMAIN`, `TRUST_FORWARDED_HOST` and `PUBLIC_WEB_*`; the middleware loads the configured tenant and answers `404` on every route when it is missing or inactive; HTTP isolation tests run two routers, one per configured tenant; evidence: `make build vet test` with Postgres and Redis, `gen:api` drift check, and a login against plain `localhost` |
 | P04 | Shrinks to tenant settings and branding for the one tenant (including the FR-PAY-W-09 minimum top-up). Provisioning, pausing and support context are post-MVP |
 | P05, P07, P09 | Tenant-owned content only. Master content, copy-to-own and platform master UI are post-MVP |
 | P11 | One landing and catalog on one domain; no root/tenant host split |

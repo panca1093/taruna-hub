@@ -113,12 +113,13 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Tenant for the request host
-         * @description Resolves the tenant from the request host: `<slug>.<BASE_DOMAIN>` selects a tenant.
+         * The configured tenant
+         * @description Returns the tenant this deployment is configured with (`TENANT_SLUG`); the request host and
+         *     headers never select it.
          *
          *     An active tenant's slug and display name are public — the landing page needs them.
-         *     An inactive, unknown, reserved, malformed or platform host answers the same `404`
-         *     with the same code and message, so those cases cannot be told apart from outside.
+         *     A missing or inactive configured tenant answers `404` on every route, with the same code
+         *     and message, so the API serves nothing until it is fixed.
          */
         get: {
             parameters: {
@@ -129,7 +130,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description The tenant the request host resolves to */
+                /** @description The configured tenant */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -161,15 +162,15 @@ export interface paths {
         put?: never;
         /**
          * Exchange credentials for an access token
-         * @description `identifier` matches either the email or the phone column, but only inside the tenant the
-         *     request host resolves to, so the same email in two tenants is two different people.
+         * @description `identifier` matches either the email or the phone column, but only inside the
+         *     configured tenant.
          *
          *     Unknown identifier, inactive account and wrong password all answer the same `401` with the
          *     same message, and an account that does not exist costs the same password comparison as one
          *     that does. A password longer than 72 bytes is refused the same way, because bcrypt ignores
          *     everything past that.
          *
-         *     Attempts are counted per identifier and host before the password is checked: the 11th
+         *     Attempts are counted per identifier before the password is checked: the 11th
          *     attempt within 15 minutes answers `429` with `Retry-After`, even with the right password.
          *     A successful login, or a password reset, clears the count.
          *
@@ -204,7 +205,7 @@ export interface paths {
                     };
                 };
                 401: components["responses"]["Unauthorized"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -234,7 +235,7 @@ export interface paths {
         put?: never;
         /**
          * Issue a new access token from the refresh cookie
-         * @description Reads the refresh cookie, which must name a live session of this host's tenant. Idle time is
+         * @description Reads the refresh cookie, which must name a live session of the configured tenant. Idle time is
          *     enforced here: the server expires a session that has had no authenticated request for three
          *     hours. Refreshing is not activity, so it does not move that deadline — only an authenticated
          *     request on `/me` (or any later protected route) does.
@@ -246,7 +247,7 @@ export interface paths {
          *     stops working too.
          *
          *     The refresh token never appears in the body. A request is refused with `403` unless its
-         *     `Origin` is both accepted by the CORS policy and on the host this request resolved to. A
+         *     `Origin` is accepted by the CORS policy. A
          *     token that can never work again also clears the cookie.
          */
         post: {
@@ -271,7 +272,7 @@ export interface paths {
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -303,8 +304,7 @@ export interface paths {
          *     because every request re-reads the session row. Always answers `204` and always clears the
          *     cookie, so a retry, a stale token or no token at all is not an error to the client.
          *
-         *     Like refresh, this route requires an `Origin` that is both CORS-accepted and on this
-         *     request's host.
+         *     Like refresh, this route requires an `Origin` that the CORS policy accepts.
          */
         post: {
             parameters: {
@@ -325,7 +325,7 @@ export interface paths {
                     content?: never;
                 };
                 403: components["responses"]["Forbidden"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -363,7 +363,6 @@ export interface paths {
          *     verifies the email.
          *
          *     At most 5 codes go to one email per hour across this route and `/me/email/resend`.
-         *     Registration exists only on tenant hosts; the platform host answers `404`.
          */
         post: {
             parameters: {
@@ -421,8 +420,8 @@ export interface paths {
         /**
          * Email a password reset link
          * @description FR-AUTH-03. Answers `202` with no body for every well-formed email, whether or not an account
-         *     on this host has it, so the answer reveals nothing. A matching active account gets a link to
-         *     `/reset-password#token=…` on this host's web app. The token is signed and bound to the
+         *     has it, so the answer reveals nothing. A matching active account gets a link to
+         *     `/reset-password#token=…` on the web app (`APP_URL`). The token is signed and bound to the
          *     current password: it works for 30 minutes, and the first password change — through any link —
          *     ends every outstanding link. The limit is 3 requests per email per 15 minutes.
          */
@@ -446,7 +445,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -477,7 +476,7 @@ export interface paths {
         /**
          * Set a new password with a reset token
          * @description Sets the password, revokes every session of the account and marks its email verified, since
-         *     following the emailed link proves the inbox. A forged, used, expired or other-host token
+         *     following the emailed link proves the inbox. A forged, used or expired token
          *     answers `422` with `fields.token`. The user logs in again afterwards; no session is opened here.
          */
         post: {
@@ -500,7 +499,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -645,7 +644,7 @@ export interface paths {
                     };
                 };
                 401: components["responses"]["Unauthorized"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -676,8 +675,8 @@ export interface paths {
          * @description FR-ADM-PRG-02: the hierarchy the question and tryout dropdowns read. Programs come back in
          *     their stored order, each with its subjects and their chapters in position order.
          *
-         *     Admin and Operator may read it; a Student answers `403`. The tree is always the tenant the
-         *     request host resolves to — this slice has no master content and no copy-to-own.
+         *     Admin and Operator may read it; a Student answers `403`. The tree is always the configured
+         *     tenant — this slice has no master content and no copy-to-own.
          */
         get: {
             parameters: {
@@ -699,7 +698,7 @@ export interface paths {
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -745,7 +744,7 @@ export interface paths {
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -920,7 +919,7 @@ export interface paths {
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -972,7 +971,7 @@ export interface paths {
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -1168,7 +1167,7 @@ export interface paths {
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -1237,7 +1236,7 @@ export interface paths {
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -1311,7 +1310,7 @@ export interface paths {
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
-                /** @description The request host selects no active tenant */
+                /** @description The configured tenant is missing or inactive */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -1872,9 +1871,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The public catalog of this host's tenant
-         * @description Unauthenticated, and tenant-resolved from the request host exactly like `GET /api/v1/tenant`; the
-         *     platform host and an unknown host answer `404`. Only products that are active, inside their own
+         * The public catalog of the configured tenant
+         * @description Unauthenticated, and scoped to the configured tenant exactly like `GET /api/v1/tenant`, which answers
+         *     `404` when that tenant is missing or inactive. Only products that are active, inside their own
          *     window and whose every tryout is published and inside its window are listed, newest first.
          *
          *     The body is display data only: no answer keys, no author, no revision, no other tenant.
@@ -1926,7 +1925,7 @@ export interface paths {
         };
         /**
          * One public product
-         * @description Unauthenticated and tenant-resolved from the host. A product that is inactive, outside its window or
+         * @description Unauthenticated and scoped to the configured tenant. A product that is inactive, outside its window or
          *     backed by a tryout that is no longer playable answers `404`, as does another tenant's id.
          */
         get: {
@@ -1969,7 +1968,7 @@ export interface paths {
         };
         /**
          * Publicly visible counts for the landing page
-         * @description Unauthenticated and tenant-resolved from the host. Counts only what this tenant's visitors can see:
+         * @description Unauthenticated and scoped to the configured tenant. Counts only what this tenant's visitors can see:
          *     its programs, the products the catalog lists and the published, open tryouts.
          */
         get: {
@@ -2438,7 +2437,7 @@ export interface components {
     schemas: {
         Tenant: {
             /**
-             * @description Subdomain label under `BASE_DOMAIN`. Immutable once created.
+             * @description Tenant slug, matching `TENANT_SLUG`. Immutable once created.
              * @example taruna
              */
             slug: string;
@@ -2450,7 +2449,7 @@ export interface components {
         };
         LoginRequest: {
             /**
-             * @description Email or phone. Matched only within the tenant scope of the request host.
+             * @description Email or phone. Matched only within the configured tenant.
              * @example naila@example.com
              */
             identifier: string;
@@ -2505,7 +2504,7 @@ export interface components {
             /** @description Null when the account was created with an email only. */
             phone: string | null;
             /**
-             * @description `platform_admin` only ever exists on the platform host; a tenant host sees its own roles.
+             * @description `platform_admin` accounts have no tenant and cannot sign in to the configured tenant.
              * @enum {string}
              */
             role: "student" | "operator" | "admin" | "platform_admin";
@@ -3183,7 +3182,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorEnvelope"];
             };
         };
-        /** @description The request host selects no active tenant, or the resource does not exist */
+        /** @description The configured tenant is missing or inactive, or the resource does not exist */
         NotFound: {
             headers: {
                 [name: string]: unknown;

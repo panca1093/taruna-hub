@@ -175,7 +175,6 @@ func (h *authHarness) hashed(password string) string {
 }
 
 func (h *authHarness) scope(tenant model.Tenant) HostScope { return HostScope{Tenant: tenant} }
-func (h *authHarness) platformScope() HostScope            { return HostScope{Platform: true} }
 
 // login is the one way a test gets a real token pair.
 func (h *authHarness) login(scope HostScope, identifier, password string) Tokens {
@@ -299,9 +298,6 @@ func TestLoginSameIdentifierTwoTenants(t *testing.T) {
 
 func mustTenant(t *testing.T, scope HostScope) uuid.UUID {
 	t.Helper()
-	if scope.Platform {
-		t.Fatal("a platform scope has no tenant")
-	}
 	return scope.Tenant.ID
 }
 
@@ -326,31 +322,13 @@ func TestPasswordOver72BytesRejected(t *testing.T) {
 	}
 }
 
-func TestPlatformAdminOnlyOnPlatformHost(t *testing.T) {
+func TestPlatformAdminCannotLogInOnTheTenant(t *testing.T) {
 	h := newAuthHarness(t)
 	tenant := h.tenant()
 	root := h.user(nil, model.RolePlatformAdmin, authPassword)
-	student := h.user(&tenant.ID, model.RoleStudent, authPassword)
 
-	if tokens := h.login(h.platformScope(), *root.Email, authPassword); tokens.Principal.TenantID != nil {
-		t.Errorf("platform login tenant = %v, want nil", tokens.Principal.TenantID)
-	}
-	if tokens := h.login(h.scope(tenant), *student.Email, authPassword); tokens.Principal.TenantID == nil {
-		t.Error("tenant login tenant = nil, want the host's tenant")
-	}
-
-	cases := []struct {
-		name       string
-		scope      HostScope
-		identifier string
-	}{
-		{"platform admin on a tenant host", h.scope(tenant), *root.Email},
-		{"tenant student on the platform host", h.platformScope(), *student.Email},
-	}
-	for _, tc := range cases {
-		if _, err := h.auth.Login(context.Background(), tc.scope, tc.identifier, authPassword); !errors.Is(err, ErrInvalidCredentials) {
-			t.Errorf("%s: err = %v, want ErrInvalidCredentials", tc.name, err)
-		}
+	if _, err := h.auth.Login(context.Background(), h.scope(tenant), *root.Email, authPassword); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("platform admin on the tenant: err = %v, want ErrInvalidCredentials", err)
 	}
 }
 
@@ -474,30 +452,6 @@ func TestForeignTenantTokenRejected(t *testing.T) {
 	}
 	if _, err := h.auth.Refresh(context.Background(), h.scope(a), bTokens.RefreshToken); !errors.Is(err, ErrUnauthenticated) {
 		t.Errorf("B's refresh token on A's host: err = %v, want ErrUnauthenticated", err)
-	}
-}
-
-func TestPlatformTokenRejectedOnTenantHostAndReverse(t *testing.T) {
-	h := newAuthHarness(t)
-	tenant := h.tenant()
-	root := h.user(nil, model.RolePlatformAdmin, authPassword)
-	student := h.user(&tenant.ID, model.RoleStudent, authPassword)
-
-	platformTokens := h.login(h.platformScope(), *root.Email, authPassword)
-	tenantTokens := h.login(h.scope(tenant), *student.Email, authPassword)
-
-	if _, err := h.authenticate(h.platformScope(), platformTokens.AccessToken); err != nil {
-		t.Fatalf("the platform token on the platform host was rejected: %v", err)
-	}
-	if _, err := h.authenticate(h.scope(tenant), tenantTokens.AccessToken); err != nil {
-		t.Fatalf("the tenant token on its own host was rejected: %v", err)
-	}
-
-	if _, err := h.authenticate(h.scope(tenant), platformTokens.AccessToken); !errors.Is(err, ErrUnauthenticated) {
-		t.Errorf("the platform token on a tenant host: err = %v, want ErrUnauthenticated", err)
-	}
-	if _, err := h.authenticate(h.platformScope(), tenantTokens.AccessToken); !errors.Is(err, ErrUnauthenticated) {
-		t.Errorf("the tenant token on the platform host: err = %v, want ErrUnauthenticated", err)
 	}
 }
 

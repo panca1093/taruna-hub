@@ -10,7 +10,8 @@ func TestSMTPConfigValidation(t *testing.T) {
 		t.Setenv("APP_ENV", "production")
 		t.Setenv("DATABASE_URL", "postgres://x")
 		t.Setenv("REDIS_URL", "redis://x:6379/0")
-		t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+		t.Setenv("TENANT_SLUG", "taruna")
+		t.Setenv("APP_URL", "https://app.tarunaeduka.id")
 		t.Setenv("SMTP_HOST", "")
 		t.Setenv("SMTP_PORT", "587")
 		t.Setenv("SMTP_TLS", "starttls")
@@ -124,7 +125,8 @@ func TestConfigRequiresJWTSecret(t *testing.T) {
 		t.Setenv("APP_ENV", "development")
 		t.Setenv("DATABASE_URL", "postgres://x")
 		t.Setenv("REDIS_URL", "redis://x:6379/0")
-		t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+		t.Setenv("TENANT_SLUG", "taruna")
+		t.Setenv("APP_URL", "https://app.tarunaeduka.id")
 		t.Setenv("SMTP_HOST", "")
 		t.Setenv("SMTP_PORT", "587")
 		t.Setenv("SMTP_TLS", "starttls")
@@ -169,31 +171,25 @@ func TestConfigRequiresJWTSecret(t *testing.T) {
 	})
 }
 
-func TestLoadRequiresBaseDomainOutsideDevelopment(t *testing.T) {
+func TestLoadRequiresTenantSlug(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
 	t.Setenv("REDIS_URL", "redis://x:6379/0")
-	t.Setenv("BASE_DOMAIN", "")
+	t.Setenv("APP_URL", "https://app.tarunaeduka.id")
 	t.Setenv("JWT_SECRET", validJWTSecret())
 	t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
+	t.Setenv("TENANT_SLUG", "")
 
-	t.Setenv("APP_ENV", "development")
-	cfg, err := Load()
-	if err != nil || cfg.BaseDomain != "localhost" {
-		t.Fatalf("development: BaseDomain = %q, err = %v; want localhost, nil", cfg.BaseDomain, err)
-	}
-
-	for _, env := range []string{"production", "staging"} {
+	for _, env := range []string{"development", "production"} {
 		t.Setenv("APP_ENV", env)
 		if _, err := Load(); err == nil {
-			t.Errorf("%s without BASE_DOMAIN: err = nil, want error", env)
+			t.Errorf("%s without TENANT_SLUG: err = nil, want error", env)
 		}
 	}
 
-	t.Setenv("APP_ENV", "production")
-	t.Setenv("BASE_DOMAIN", "TarunaEduka.id")
-	cfg, err = Load()
-	if err != nil || cfg.BaseDomain != "tarunaeduka.id" {
-		t.Errorf("production: BaseDomain = %q, err = %v; want tarunaeduka.id, nil", cfg.BaseDomain, err)
+	t.Setenv("TENANT_SLUG", "Taruna")
+	cfg, err := Load()
+	if err != nil || cfg.TenantSlug != "taruna" {
+		t.Errorf("TenantSlug = %q, err = %v; want taruna, nil", cfg.TenantSlug, err)
 	}
 }
 
@@ -206,7 +202,8 @@ func validSealKey() string {
 func TestConfigRequiresSealKey(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
 	t.Setenv("REDIS_URL", "redis://x:6379/0")
-	t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+	t.Setenv("TENANT_SLUG", "taruna")
+	t.Setenv("APP_URL", "https://app.tarunaeduka.id")
 	t.Setenv("JWT_SECRET", validJWTSecret())
 	t.Setenv("NOTIFICATION_SEAL_KEY", "")
 	for _, env := range []string{"development", "staging", "production"} {
@@ -218,40 +215,42 @@ func TestConfigRequiresSealKey(t *testing.T) {
 }
 
 // Email links are built from configuration, and only development may send a cleartext one.
-func TestPublicWebLinkConfig(t *testing.T) {
+func TestAppURLConfig(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
 	t.Setenv("REDIS_URL", "redis://x:6379/0")
-	t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+	t.Setenv("TENANT_SLUG", "taruna")
+	t.Setenv("APP_URL", "https://app.tarunaeduka.id")
 	t.Setenv("JWT_SECRET", validJWTSecret())
 	t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
-	t.Setenv("PUBLIC_WEB_SCHEME", "")
-	t.Setenv("PUBLIC_WEB_PORT", "")
+	t.Setenv("APP_URL", "")
 
 	t.Setenv("APP_ENV", "development")
 	cfg, err := Load()
-	if err != nil || cfg.WebScheme != "http" || cfg.WebPort != "3000" {
-		t.Errorf("development defaults = %q, %q, %v; want http, 3000, nil", cfg.WebScheme, cfg.WebPort, err)
+	if err != nil || cfg.AppURL != "http://localhost:3000" {
+		t.Errorf("development default = %q, %v; want http://localhost:3000, nil", cfg.AppURL, err)
 	}
 	t.Setenv("APP_ENV", "production")
+	if _, err := Load(); err == nil {
+		t.Error("production without APP_URL was accepted, want an error")
+	}
+	t.Setenv("APP_URL", "https://app.tarunaeduka.id/")
 	cfg, err = Load()
-	if err != nil || cfg.WebScheme != "https" || cfg.WebPort != "" {
-		t.Errorf("production defaults = %q, %q, %v; want https, no port, nil", cfg.WebScheme, cfg.WebPort, err)
+	if err != nil || cfg.AppURL != "https://app.tarunaeduka.id" {
+		t.Errorf("production = %q, %v; want the URL without its trailing slash, nil", cfg.AppURL, err)
 	}
-	t.Setenv("PUBLIC_WEB_SCHEME", "http")
-	if _, err := Load(); err == nil {
-		t.Error("PUBLIC_WEB_SCHEME=http outside development was accepted, want an error")
-	}
-	t.Setenv("PUBLIC_WEB_SCHEME", "https")
-	t.Setenv("PUBLIC_WEB_PORT", "not-a-port")
-	if _, err := Load(); err == nil {
-		t.Error("an unparsable PUBLIC_WEB_PORT was accepted, want an error")
+	for _, bad := range []string{"http://app.tarunaeduka.id", "https://app.tarunaeduka.id/path", "not a url", "app.tarunaeduka.id"} {
+		t.Setenv("APP_URL", bad)
+		if _, err := Load(); err == nil {
+			t.Errorf("APP_URL=%q in production was accepted, want an error", bad)
+		}
 	}
 }
 
 // Throttles live in Redis, so only development may fall back to the local container.
 func TestConfigRequiresRedisOutsideDevelopment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://x")
-	t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+	t.Setenv("TENANT_SLUG", "taruna")
+	t.Setenv("APP_URL", "https://app.tarunaeduka.id")
 	t.Setenv("JWT_SECRET", validJWTSecret())
 	t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
 	t.Setenv("REDIS_URL", "")
@@ -272,7 +271,8 @@ func TestS3ConfigValidation(t *testing.T) {
 		t.Setenv("APP_ENV", "production")
 		t.Setenv("DATABASE_URL", "postgres://x")
 		t.Setenv("REDIS_URL", "redis://x:6379/0")
-		t.Setenv("BASE_DOMAIN", "tarunaeduka.id")
+		t.Setenv("TENANT_SLUG", "taruna")
+		t.Setenv("APP_URL", "https://app.tarunaeduka.id")
 		t.Setenv("NOTIFICATION_SEAL_KEY", validSealKey())
 		t.Setenv("JWT_SECRET", validJWTSecret())
 		for _, k := range []string{"S3_ENDPOINT", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_BUCKET", "S3_USE_SSL", "S3_REGION"} {

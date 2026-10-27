@@ -66,16 +66,14 @@ is one error rather than tens of thousands of field errors. `PUT` replaces every
 whole `tryout_ids` array.
 
 The public side (`GET /api/v1/catalog/products`, `/api/v1/catalog/products/{id}`,
-`/api/v1/catalog/summary`) is unauthenticated and resolves its tenant from the host exactly like
-`GET /api/v1/tenant`: the platform host and unknown hosts answer the same `404`. Tenant ids come from
+`/api/v1/catalog/summary`) is unauthenticated and resolves its tenant from configuration exactly like
+`GET /api/v1/tenant`: a missing or inactive configured tenant answers the same `404`. Tenant ids come from
 that scope and never from the client, and the body is display data only — title, description, program
 code and name, the price strings, `discount_percent` computed on the server from integer cents, the
 window and per-tryout counts. No answer keys, question content, `created_by`, revision, author or other
 tenant appears in a list, a detail, a summary or an error body.
 
-The catalog answers `Cache-Control: no-store`. A 30-second shared cache would need `Vary: Host`, but a
-deployment that trusts `X-Forwarded-Host` resolves the tenant from that header instead, so two hosts
-can share one `Host` value; per-host caching is not provably safe today, so it was not enabled.
+The catalog answers `Cache-Control: no-store`; a shared cache was not enabled.
 
 There is no new rate limiter: the existing Redis throttle is built for authenticated rules with a
 named identifier, and a per-IP budget needs the trusted-proxy client-IP decision that `docs/auth.md`

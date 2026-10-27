@@ -96,7 +96,7 @@ func newAccountHarness(t *testing.T, opts ...AuthOption) *accountHarness {
 		Throttles:     repository.NewThrottleRepository(testRedis(t)),
 		Notifications: notifications,
 		Auth:          h.auth,
-		Links:         WebLinks{Scheme: "https", BaseDomain: "tarunaeduka.test", Port: "3000"},
+		Links:         WebLinks{BaseURL: "https://app.tarunaeduka.test"},
 		Secret:        []byte(authSecretText),
 		Logger:        logger,
 	}, WithAccountClock(h.clock.Now), WithAccountPasswordCost(bcrypt.MinCost))
@@ -369,18 +369,6 @@ func TestConcurrentRegisterCreatesOneAccount(t *testing.T) {
 	}
 }
 
-// Platform Admins are provisioned; the platform host offers no signup at all.
-func TestRegistrationIsClosedOnThePlatformHost(t *testing.T) {
-	h := newAccountHarness(t)
-	email := uniqueEmail("platform-signup")
-	if _, err := h.account.Register(context.Background(), h.platformScope(), RegisterInput{Name: "X", Email: email, Password: authPassword}); !errors.Is(err, ErrRegistrationClosed) {
-		t.Errorf("register: err = %v, want ErrRegistrationClosed", err)
-	}
-	if n := h.notificationCount(email); n != 0 {
-		t.Errorf("notifications = %d, want 0", n)
-	}
-}
-
 // Guesses are counted under the row lock, so a burst cannot buy more than maxCodeAttempts tries.
 func TestWrongCodesAreCountedUnderConcurrency(t *testing.T) {
 	h := newAccountHarness(t)
@@ -462,11 +450,7 @@ func TestCodeExpiresAndSendsArePacedAndCapped(t *testing.T) {
 func (h *accountHarness) resetToken(scope HostScope, email string) string {
 	h.t.Helper()
 	secret, n := h.sealed(email, TemplatePasswordReset)
-	label := "admin"
-	if !scope.Platform {
-		label = scope.Tenant.Slug
-	}
-	prefix := "https://" + label + ".tarunaeduka.test:3000/reset-password#token="
+	prefix := "https://app.tarunaeduka.test/reset-password#token="
 	link := secret["reset_url"]
 	if !strings.HasPrefix(link, prefix) {
 		h.t.Fatalf("reset link %q, want it under %q", link, prefix)
@@ -637,24 +621,18 @@ func TestForgotPasswordRevealsNothing(t *testing.T) {
 	}
 }
 
-func TestPlatformPasswordResetStaysOnThePlatformHost(t *testing.T) {
+func TestPlatformAdminGetsNoResetLinkOnTheTenant(t *testing.T) {
 	h := newAccountHarness(t)
 	tenant := h.tenant()
-	ctx := context.Background()
 	admin := h.user(nil, model.RolePlatformAdmin, authPassword)
 	h.track(*admin.Email)
 
-	if err := h.account.ForgotPassword(ctx, h.platformScope(), *admin.Email); err != nil {
+	if err := h.account.ForgotPassword(context.Background(), h.scope(tenant), *admin.Email); err != nil {
 		t.Fatalf("forgot: %v", err)
 	}
-	token := h.resetToken(h.platformScope(), *admin.Email)
-	if err := h.account.ResetPassword(ctx, h.scope(tenant), token, "platform-new-horse"); !errors.Is(err, ErrInvalidResetToken) {
-		t.Errorf("a platform token on a tenant host: err = %v, want ErrInvalidResetToken", err)
+	if n := h.notificationCount(*admin.Email); n != 0 {
+		t.Errorf("notifications for a platform admin on the tenant = %d, want 0", n)
 	}
-	if err := h.account.ResetPassword(ctx, h.platformScope(), token, "platform-new-horse"); err != nil {
-		t.Fatalf("reset on the platform host: %v", err)
-	}
-	h.login(h.platformScope(), *admin.Email, "platform-new-horse")
 }
 
 func TestLoginThrottleCountsEverySpellingAndForgivesSuccess(t *testing.T) {

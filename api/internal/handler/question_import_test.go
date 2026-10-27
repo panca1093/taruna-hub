@@ -71,7 +71,7 @@ func importBody(t *testing.T, fileName string, data []byte, rows string) (*bytes
 	return &buf, writer.FormDataContentType()
 }
 
-func postImport(t *testing.T, e *echo.Echo, host, path, token string, body *bytes.Buffer, contentType string) *httptest.ResponseRecorder {
+func postImport(t *testing.T, e http.Handler, host, path, token string, body *bytes.Buffer, contentType string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, path, body)
 	req.Header.Set(echo.HeaderContentType, contentType)
@@ -82,13 +82,13 @@ func postImport(t *testing.T, e *echo.Echo, host, path, token string, body *byte
 	return serve(e, req)
 }
 
-func previewFile(t *testing.T, e *echo.Echo, host, token, fileName string, data []byte) *httptest.ResponseRecorder {
+func previewFile(t *testing.T, e http.Handler, host, token, fileName string, data []byte) *httptest.ResponseRecorder {
 	t.Helper()
 	body, contentType := importBody(t, fileName, data, "")
 	return postImport(t, e, host, "/api/v1/questions/import/preview", token, body, contentType)
 }
 
-func commitFile(t *testing.T, e *echo.Echo, host, token, fileName string, data []byte, rows string) *httptest.ResponseRecorder {
+func commitFile(t *testing.T, e http.Handler, host, token, fileName string, data []byte, rows string) *httptest.ResponseRecorder {
 	t.Helper()
 	body, contentType := importBody(t, fileName, data, rows)
 	return postImport(t, e, host, "/api/v1/questions/import/commit", token, body, contentType)
@@ -113,7 +113,7 @@ func decodeImportCommit(t *testing.T, rec *httptest.ResponseRecorder) importComm
 }
 
 func TestImportRoles(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -169,7 +169,7 @@ func TestImportRoles(t *testing.T) {
 }
 
 func TestImportResponsesAreNoStore(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -198,7 +198,7 @@ func TestImportResponsesAreNoStore(t *testing.T) {
 }
 
 func TestTemplatesRoundTripThroughTheParser(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)
@@ -242,7 +242,7 @@ func TestTemplatesRoundTripThroughTheParser(t *testing.T) {
 }
 
 func TestImportRejectsBadFileAndRows(t *testing.T) {
-	f := newAuthFixture(t, "localhost", false)
+	f := newAuthFixture(t, false)
 	e := f.echo(t)
 	tenant := f.active[0]
 	host := f.host(tenant.Slug)

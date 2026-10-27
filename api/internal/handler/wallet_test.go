@@ -34,7 +34,7 @@ type walletHTTPFixture struct {
 
 func newWalletHTTPFixture(t *testing.T) walletHTTPFixture {
 	t.Helper()
-	f := walletHTTPFixture{authFixture: newAuthFixture(t, "localhost", false)}
+	f := walletHTTPFixture{authFixture: newAuthFixture(t, false)}
 	f.tenantA, f.tenantB = f.active[0], f.active[1]
 	f.hostA, f.hostB = f.host(f.tenantA.Slug), f.host(f.tenantB.Slug)
 	// Registered after the tenant cleanup, so the ledger rows go before their users are deleted.

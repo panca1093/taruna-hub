@@ -345,16 +345,10 @@ func (s *AuthService) issue(user model.User, sessionID uuid.UUID, refreshToken s
 }
 
 func (s *AuthService) findInScope(ctx context.Context, scope HostScope, identifier string) (model.User, error) {
-	if scope.Platform {
-		return s.users.FindPlatformByIdentifier(ctx, identifier)
-	}
 	return s.users.FindByIdentifier(ctx, scope.Tenant.ID, identifier)
 }
 
 func (s *AuthService) userInScope(ctx context.Context, scope HostScope, userID uuid.UUID) (model.User, error) {
-	if scope.Platform {
-		return s.users.FindPlatformByID(ctx, userID)
-	}
 	return s.users.FindByID(ctx, scope.Tenant.ID, userID)
 }
 
@@ -446,11 +440,8 @@ func principalFor(u model.User, sessionID uuid.UUID) model.Principal {
 	}
 }
 
-// scopeTenant is the host scope as the nullable tenant the database uses: nil means the platform.
+// scopeTenant is the scope as the nullable tenant the database uses; null-tenant (platform) rows never match it.
 func scopeTenant(scope HostScope) *uuid.UUID {
-	if scope.Platform {
-		return nil
-	}
 	id := scope.Tenant.ID
 	return &id
 }

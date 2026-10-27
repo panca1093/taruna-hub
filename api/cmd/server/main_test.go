@@ -67,25 +67,22 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 
 	for _, env := range []string{"development", "staging", "production"} {
 		t.Run(env, func(t *testing.T) {
-			baseDomain := "tarunaeduka.id"
-			if env == "development" {
-				baseDomain = "localhost"
-			}
-			// Outside development CORS is an explicit list, so the browser origins are named here.
+			// Outside development CORS is an explicit list, so the browser origin is named here.
 			origins := []string{"http://localhost:3000"}
 			if env != "development" {
-				origins = []string{
-					originOf(tenants[0].Slug + "." + baseDomain),
-					originOf(tenants[1].Slug + "." + baseDomain),
+				origins = []string{"https://app.tarunaeduka.test"}
+			}
+			cfgFor := func(slug string) config.Config {
+				return config.Config{
+					Env:         env,
+					DatabaseURL: dsn,
+					CORSOrigins: origins,
+					TenantSlug:  slug,
+					JWTSecret:   testJWTSecret,
 				}
 			}
-			e := newEcho(config.Config{
-				Env:         env,
-				DatabaseURL: dsn,
-				CORSOrigins: origins,
-				BaseDomain:  baseDomain,
-				JWTSecret:   testJWTSecret,
-			}, logger, pool, rdb, notifications, nil)
+			e := newEcho(cfgFor(tenants[0].Slug), logger, pool, rdb, notifications, nil)
+			host := "localhost:8081"
 
 			for _, tc := range []struct {
 				path string
@@ -99,46 +96,36 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				}
 			}
 
-			for _, tenant := range tenants[:2] {
-				host := tenant.Slug + "." + baseDomain
-				rec := serveOn(e, "/api/v1/tenant", host)
-				if rec.Code != http.StatusOK {
-					t.Errorf("GET /api/v1/tenant on %s: status = %d body = %s, want %d", host, rec.Code, rec.Body.String(), http.StatusOK)
-					continue
-				}
-				var body struct {
-					Slug string `json:"slug"`
-					Name string `json:"name"`
-				}
-				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-					t.Fatalf("GET /api/v1/tenant on %s: body %s is not JSON: %v", host, rec.Body.String(), err)
-				}
-				if body.Slug != tenant.Slug || body.Name != tenant.Name {
-					t.Errorf("GET /api/v1/tenant on %s: body = %s, want slug %s name %s", host, rec.Body.String(), tenant.Slug, tenant.Name)
-				}
+			rec := serveOn(e, "/api/v1/tenant", host)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET /api/v1/tenant: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusOK)
+			}
+			var tenantBody struct {
+				Slug string `json:"slug"`
+				Name string `json:"name"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &tenantBody); err != nil {
+				t.Fatalf("GET /api/v1/tenant: body %s is not JSON: %v", rec.Body.String(), err)
+			}
+			if tenantBody.Slug != tenants[0].Slug || tenantBody.Name != tenants[0].Name {
+				t.Errorf("GET /api/v1/tenant: body = %s, want slug %s name %s", rec.Body.String(), tenants[0].Slug, tenants[0].Name)
 			}
 
-			for _, host := range []string{
-				tenants[2].Slug + "." + baseDomain,
-				"nope-" + tenants[0].Slug + "." + baseDomain,
-				"admin." + baseDomain,
-				tenants[0].Slug + "." + baseDomain + ".evil.com",
-				baseDomain,
-			} {
-				rec := serveOn(e, "/api/v1/tenant", host)
+			// A deployment configured with an inactive or unknown tenant serves nothing.
+			for name, slug := range map[string]string{"inactive": tenants[2].Slug, "unknown": "nope-" + tenants[0].Slug} {
+				closed := newEcho(cfgFor(slug), logger, pool, rdb, notifications, nil)
+				rec := serveOn(closed, "/api/v1/tenant", host)
 				if rec.Code != http.StatusNotFound {
-					t.Errorf("GET /api/v1/tenant on %s: status = %d body = %s, want %d", host, rec.Code, rec.Body.String(), http.StatusNotFound)
+					t.Errorf("%s tenant: status = %d body = %s, want %d", name, rec.Code, rec.Body.String(), http.StatusNotFound)
 					continue
 				}
 				if code := envelopeOf(t, rec).Error.Code; code != httpx.CodeNotFound {
-					t.Errorf("GET /api/v1/tenant on %s: error code = %q, want %q", host, code, httpx.CodeNotFound)
+					t.Errorf("%s tenant: error code = %q, want %q", name, code, httpx.CodeNotFound)
 				}
 			}
 
-			host := tenants[0].Slug + "." + baseDomain
-
 			// /me is registered but never public, and no auth response may be cached.
-			rec := serveOn(e, "/api/v1/me", host)
+			rec = serveOn(e, "/api/v1/me", host)
 			if rec.Code != http.StatusUnauthorized {
 				t.Fatalf("GET /api/v1/me without a token: status = %d body = %s, want %d", rec.Code, rec.Body.String(), http.StatusUnauthorized)
 			}
@@ -295,7 +282,7 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 				t.Errorf("me body carries a balance, which this slice must not publish: %s", authed.Body.String())
 			}
 
-			logout := postWithCookie(e, host, "/api/v1/auth/logout", cookieNamed(login.Result().Cookies(), "refresh_token"), originOf(host))
+			logout := postWithCookie(e, host, "/api/v1/auth/logout", cookieNamed(login.Result().Cookies(), "refresh_token"), origins[0])
 			if logout.Code != http.StatusNoContent {
 				t.Errorf("POST /api/v1/auth/logout: status = %d body = %s, want %d", logout.Code, logout.Body.String(), http.StatusNoContent)
 			}
@@ -312,7 +299,7 @@ func TestRoutesAcrossEnvironments(t *testing.T) {
 // seedTenants returns two active tenants and one inactive, deleted again when the test ends.
 func seedTenants(t *testing.T, ctx context.Context, pool *pgxpool.Pool) []model.Tenant {
 	t.Helper()
-	tenants := service.NewTenantService(repository.NewTenantRepository(pool), "localhost")
+	tenants := service.NewTenantService(repository.NewTenantRepository(pool))
 
 	var ids []uuid.UUID
 	t.Cleanup(func() {
@@ -431,14 +418,6 @@ func cookieNamed(cookies []*http.Cookie, name string) *http.Cookie {
 		}
 	}
 	return nil
-}
-
-// originOf turns a request host into the page origin a browser would send: same hostname, web port.
-func originOf(host string) string {
-	if i := strings.Index(host, ":"); i >= 0 {
-		host = host[:i]
-	}
-	return "http://" + host + ":3000"
 }
 
 func envelopeOf(t *testing.T, rec *httptest.ResponseRecorder) httpx.Envelope {

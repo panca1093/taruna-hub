@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/google/uuid"
@@ -189,11 +187,11 @@ func (h *Handler) Logout(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// CORS alone still runs the handler for a rejected origin, and a sibling tenant's origin passes CORS, so the host must match too.
+// CORS alone still runs the handler for a rejected origin, so the allowlist is enforced here too.
 func (h *Handler) requireAcceptedOrigin(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		origin := c.Request().Header.Get(echo.HeaderOrigin)
-		if origin == "" || h.allowedOrigin == nil || !h.allowedOrigin(origin) || !sameHostname(origin, c) {
+		if origin == "" || h.allowedOrigin == nil || !h.allowedOrigin(origin) {
 			return httpx.Forbidden(originRejected)
 		}
 		return next(c)
@@ -253,24 +251,4 @@ func (h *Handler) refreshCookieFor(value string, maxAge int) *http.Cookie {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   h.secureCookies,
 	}
-}
-
-// Ports are ignored so web on :3000 can call the API on :8081 in development.
-func sameHostname(origin string, c echo.Context) bool {
-	parsed, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	host, ok := requestHost(c)
-	if !ok {
-		return false
-	}
-	return parsed.Hostname() == hostnameOnly(host)
-}
-
-func hostnameOnly(host string) string {
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		return h
-	}
-	return host
 }

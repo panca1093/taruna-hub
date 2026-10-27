@@ -43,13 +43,13 @@ func run(args []string) error {
 		return err
 	}
 	defer pool.Close()
-	tenants := service.NewTenantService(repository.NewTenantRepository(pool), cfg.BaseDomain)
+	tenants := service.NewTenantService(repository.NewTenantRepository(pool))
 	users := service.NewUserService(repository.NewUserRepository(pool))
 
 	switch args[0] {
 	case "tenant":
 		fs := flag.NewFlagSet("tenant", flag.ContinueOnError)
-		slug := fs.String("slug", "", "subdomain label, immutable once created")
+		slug := fs.String("slug", "", "tenant slug, immutable once created")
 		name := fs.String("name", "", "display name")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err

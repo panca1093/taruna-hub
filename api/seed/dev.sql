@@ -2,7 +2,7 @@
 -- Mirrors the mockup's currentStudent so web/ shows the same person before and after cutover.
 -- Password hash is bcrypt("password", cost 10), verified with golang.org/x/crypto/bcrypt.
 -- Two tenants share naila@example.com on purpose: identifiers are unique per tenant (FR-AUTH-07).
--- Hosts in dev: taruna.localhost, sekolah-b.localhost, admin.localhost (Platform Admin).
+-- Dev serves taruna (TENANT_SLUG=taruna); sekolah-b and the platform admin only exist for scope tests.
 
 INSERT INTO tenants (slug, name) VALUES
     ('taruna', 'Taruna Eduka'),

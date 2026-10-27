@@ -208,10 +208,10 @@ func (h *Handler) DeleteProduct(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// The catalog is anonymous: the tenant comes from the validated host and nothing else.
+// The catalog is anonymous: the tenant comes from configuration and nothing else.
 func (h *Handler) CatalogProducts(c echo.Context) error {
 	scope, ok := hostScope(c)
-	if !ok || scope.Platform {
+	if !ok {
 		return httpx.NotFound(productCatalogMissing)
 	}
 	filter, err := productFilterOf(c)
@@ -231,7 +231,7 @@ func (h *Handler) CatalogProducts(c echo.Context) error {
 
 func (h *Handler) CatalogProduct(c echo.Context) error {
 	scope, ok := hostScope(c)
-	if !ok || scope.Platform {
+	if !ok {
 		return httpx.NotFound(productCatalogMissing)
 	}
 	id, err := uuid.Parse(c.Param("id"))
@@ -247,7 +247,7 @@ func (h *Handler) CatalogProduct(c echo.Context) error {
 
 func (h *Handler) CatalogSummary(c echo.Context) error {
 	scope, ok := hostScope(c)
-	if !ok || scope.Platform {
+	if !ok {
 		return httpx.NotFound(productCatalogMissing)
 	}
 	summary, err := h.products.CatalogSummary(c.Request().Context(), scope)
