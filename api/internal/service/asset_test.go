@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"image"
@@ -65,10 +66,10 @@ func TestDetectImageAcceptsTheThreeFormats(t *testing.T) {
 		"webp lossy":                 {testWebP("VP8 ", 640, 480), "image/webp"},
 		"webp lossless":              {testWebP("VP8L", 640, 480), "image/webp"},
 		"webp extended":              {testWebP("VP8X", 640, 480), "image/webp"},
-		"png at the dimension limit": {testPNG(t, 8000, 1), "image/png"},
+		"png at the dimension limit": {testPNG(t, 4096, 1), "image/png"},
 	}
 	for name, c := range cases {
-		got, err := detectImage(c.data)
+		got, err := detectImage(context.Background(), c.data)
 		if err != nil || got != c.want {
 			t.Errorf("%s: detectImage = %q, %v; want %q", name, got, err, c.want)
 		}
@@ -88,7 +89,7 @@ func TestDetectImageRefusesWhatIsNotAnAllowedImage(t *testing.T) {
 		"png then svg":     append([]byte("<svg/>"), testPNG(t, 2, 2)...),
 	}
 	for name, data := range cases {
-		if _, err := detectImage(data); assetReasonOf(t, err) != ReasonAssetType {
+		if _, err := detectImage(context.Background(), data); assetReasonOf(t, err) != ReasonAssetType {
 			t.Errorf("%s: err = %v, want reason %s", name, err, ReasonAssetType)
 		}
 	}
@@ -107,7 +108,7 @@ func TestDetectImageRefusesCorruptData(t *testing.T) {
 		"webp bad vp8 start":   append(append([]byte(nil), testWebP("VP8 ", 64, 64)[:23]...), 0, 0, 0, 0, 0),
 	}
 	for name, data := range cases {
-		if _, err := detectImage(data); assetReasonOf(t, err) != ReasonAssetCorrupt {
+		if _, err := detectImage(context.Background(), data); assetReasonOf(t, err) != ReasonAssetCorrupt {
 			t.Errorf("%s: err = %v, want reason %s", name, err, ReasonAssetCorrupt)
 		}
 	}
@@ -115,15 +116,15 @@ func TestDetectImageRefusesCorruptData(t *testing.T) {
 
 func TestDetectImageRefusesAbsurdDimensions(t *testing.T) {
 	cases := map[string][]byte{
-		"png wide":      testPNG(t, 8001, 1),
-		"png tall":      testPNG(t, 1, 8001),
-		"jpeg wide":     testJPEG(t, 8001, 1),
-		"webp lossy":    testWebP("VP8 ", 9000, 10),
-		"webp lossless": testWebP("VP8L", 10, 9000),
+		"png wide":      testPNG(t, 4097, 1),
+		"png tall":      testPNG(t, 1, 4097),
+		"jpeg wide":     testJPEG(t, 4097, 1),
+		"webp lossy":    testWebP("VP8 ", 5000, 10),
+		"webp lossless": testWebP("VP8L", 10, 5000),
 		"webp extended": testWebP("VP8X", 20000, 20000),
 	}
 	for name, data := range cases {
-		if _, err := detectImage(data); assetReasonOf(t, err) != ReasonAssetDimensions {
+		if _, err := detectImage(context.Background(), data); assetReasonOf(t, err) != ReasonAssetDimensions {
 			t.Errorf("%s: err = %v, want reason %s", name, err, ReasonAssetDimensions)
 		}
 	}

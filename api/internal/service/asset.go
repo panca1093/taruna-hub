@@ -37,9 +37,13 @@ const (
 
 const (
 	MaxAssetBytes     = 5 << 20
-	maxAssetDimension = 8000
+	maxAssetDimension = 4096
 	assetPurgeBatch   = 500
+	maxParallelDecode = 2
 )
+
+// decodeSlots bounds full decodes: a 4096 x 4096 image is tens of MB of pixels, and uploads run in parallel.
+var decodeSlots = make(chan struct{}, maxParallelDecode)
 
 // ObjectStore is the small slice of S3-compatible storage the asset rules need.
 type ObjectStore interface {
@@ -67,7 +71,7 @@ func NewAssetService(db *pgxpool.Pool, repo *repository.AssetRepository, store O
 	return &AssetService{db: db, repo: repo, store: store, urlTTL: urlTTL}
 }
 
-// Upload validates the bytes, writes the object, then records a staged row; the key is built here.
+// Upload validates the bytes, records a staged row, then writes the object; the key is built here.
 func (s *AssetService) Upload(ctx context.Context, scope HostScope, principal model.Principal, purpose string, data []byte) (model.Asset, error) {
 	if s.store == nil {
 		return model.Asset{}, ErrStorageUnavailable
@@ -86,49 +90,42 @@ func (s *AssetService) Upload(ctx context.Context, scope HostScope, principal mo
 	if len(data) > MaxAssetBytes {
 		return model.Asset{}, ErrAssetTooLarge
 	}
-	contentType, err := detectImage(data)
+	contentType, err := detectImage(ctx, data)
 	if err != nil {
 		return model.Asset{}, err
 	}
 
 	id := uuid.New()
 	key := fmt.Sprintf("%s/%s/%s", tenantID, purpose, id)
-	if err := s.store.Put(ctx, key, data, contentType); err != nil {
-		return model.Asset{}, fmt.Errorf("store asset: %w", err)
-	}
 	uploader := principal.UserID
 	asset, err := s.repo.Insert(ctx, tenantID, model.Asset{
 		ID: id, Purpose: purpose, ObjectKey: key, ContentType: contentType,
 		SizeBytes: int64(len(data)), UploadedBy: &uploader,
 	})
 	if err != nil {
-		_ = s.store.Delete(context.WithoutCancel(ctx), key)
 		return model.Asset{}, err
+	}
+	if err := s.store.Put(ctx, key, data, contentType); err != nil {
+		s.discardStaged(context.WithoutCancel(ctx), tenantID, id)
+		return model.Asset{}, fmt.Errorf("store asset: %w", err)
 	}
 	return asset, nil
 }
 
-// Finalize commits in its own transaction; a slice that owns a bigger transaction calls FinalizeTx.
-func (s *AssetService) Finalize(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) (model.Asset, error) {
-	if s.store == nil {
-		return model.Asset{}, ErrStorageUnavailable
-	}
+// discardStaged is best effort: a row it misses has no object and is purged like any abandoned upload.
+func (s *AssetService) discardStaged(ctx context.Context, tenantID, id uuid.UUID) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return model.Asset{}, fmt.Errorf("begin: %w", err)
+		return
 	}
-	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
-	asset, err := s.FinalizeTx(ctx, tx, scope, principal, id)
-	if err != nil {
-		return model.Asset{}, err
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := s.repo.DeleteStaged(ctx, tx, tenantID, id); err == nil {
+		_ = tx.Commit(ctx)
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return model.Asset{}, fmt.Errorf("commit: %w", err)
-	}
-	return asset, nil
 }
 
-// FinalizeTx runs inside the caller's transaction and is idempotent on an already-final asset.
+// FinalizeTx runs inside the consumer's transaction, so the attachment and the finalize commit together;
+// it is idempotent on an already-final asset.
 func (s *AssetService) FinalizeTx(ctx context.Context, tx pgx.Tx, scope HostScope, principal model.Principal, id uuid.UUID) (model.Asset, error) {
 	tenantID, err := walletTenant(scope, principal)
 	if err != nil {
@@ -258,12 +255,12 @@ var (
 )
 
 // detectImage proves the type from the bytes: only PNG, JPEG and WebP pass, and only if they decode.
-func detectImage(data []byte) (string, error) {
+func detectImage(ctx context.Context, data []byte) (string, error) {
 	switch {
 	case bytes.HasPrefix(data, pngMagic):
-		return "image/png", decodeRaster(data)
+		return "image/png", decodeRaster(ctx, data)
 	case bytes.HasPrefix(data, jpegMagic):
-		return "image/jpeg", decodeRaster(data)
+		return "image/jpeg", decodeRaster(ctx, data)
 	case len(data) >= 12 && string(data[:4]) == "RIFF" && string(data[8:12]) == "WEBP":
 		return "image/webp", checkWebP(data)
 	}
@@ -271,13 +268,19 @@ func detectImage(data []byte) (string, error) {
 }
 
 // decodeRaster reads the size first, so an absurd image is refused before any pixel is allocated.
-func decodeRaster(data []byte) error {
+func decodeRaster(ctx context.Context, data []byte) error {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return assetInvalid(ReasonAssetCorrupt)
 	}
 	if cfg.Width > maxAssetDimension || cfg.Height > maxAssetDimension {
 		return assetInvalid(ReasonAssetDimensions)
+	}
+	select {
+	case decodeSlots <- struct{}{}:
+		defer func() { <-decodeSlots }()
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
 		return assetInvalid(ReasonAssetCorrupt)
