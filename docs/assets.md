@@ -36,11 +36,13 @@ The handler caps the body at 5 MiB plus 64 KiB of multipart framing (`413` in th
 overflows); the service then refuses a file over exactly 5 MiB the same way. The type comes from the bytes:
 
 - PNG and JPEG are recognized by magic number, then decoded in full with the standard library, so a
-  truncated or bit-flipped file is `corrupt`. The size is read first and anything over 8000 x 8000 is
-  refused before a pixel is allocated.
+  truncated or bit-flipped file is `corrupt`. The size is read first and anything over 4096 x 4096 is
+  refused before a pixel is allocated. At most two full decodes run at once; further uploads wait for
+  a slot (or their request context).
 - WebP is recognized by `RIFF…WEBP`; `golang.org/x/image` is not in the module graph, so the container
   and the first chunk (`VP8 `, `VP8L`, `VP8X`) are read by hand for the dimensions and for basic
-  structure. Its pixel data is **not** decoded.
+  structure. Its pixel data is **not** decoded, so a WebP with valid headers and corrupt pixels is
+  accepted: the Go standard library has no WebP decoder.
 - Everything else — SVG, HTML, PDF, GIF, a renamed text file, an empty file — is `422` on `file`.
 
 The stored `content_type` is the detected one. Rejections write nothing: no object and no row.
@@ -50,7 +52,6 @@ The stored `content_type` is the detected one. Rejections write nothing: no obje
 | Route | Who | Answers |
 |---|---|---|
 | `POST /api/v1/assets` | any tenant user; `payment_proof` student/admin/operator, `question_image` admin/operator | `201` `{id, purpose, content_type, size_bytes, status}`, always `staged` |
-| `POST /api/v1/assets/{id}/finalize` | the uploader, or admin/operator of the tenant | `200`, idempotent |
 | `GET /api/v1/assets/{id}/url` | the uploader, or admin/operator of the tenant for a `final` asset | `200` `{url, expires_at}`, `Cache-Control: private, no-store` |
 
 Every route is `no-store` and behind `Authenticate`. A purpose the role may not upload is `403`; an
@@ -61,18 +62,20 @@ unknown purpose is `422` on `purpose`. With `S3_ENDPOINT` unset every route answ
 
 A foreign tenant's id, an unknown id, a malformed id and an asset the caller may not touch all answer
 the **same `404`**, never `403` (the convention from the wallet), so ids cannot be probed. A staged
-asset is readable only by its uploader — an admin can finalize it but cannot download it until then.
-A student therefore reads only their own uploads; no route yet lets a student fetch a staff-uploaded
-`question_image` (the exam runtime will need its own path).
+asset is readable only by its uploader — an admin cannot download it until it is final.
+A student therefore reads only their own uploads; `DownloadURL` allows only the uploader or staff, so
+a student cannot yet read a final `question_image`. That access is deferred to the slice that serves
+questions to students (P16).
 
 Authorization runs on every `url` call, but a link already issued works for anyone who holds it until it
 expires; that is why the TTL is 60 seconds and the response is never cached.
 
 ## Finalize
 
-`AssetService.Finalize` runs in its own transaction. A later slice that attaches an asset to its own row
-calls `FinalizeTx(ctx, tx, scope, principal, id)` inside its transaction, so the attachment and the
-finalize commit or roll back together. Finalizing a `final` asset returns it unchanged and keeps the
+There is no HTTP finalize route: an uploader could otherwise make its own upload permanent and skip the
+purge. A slice that attaches an asset to its own row calls
+`AssetService.FinalizeTx(ctx, tx, scope, principal, id)` inside its transaction, so the attachment and
+the finalize commit or roll back together. Finalizing a `final` asset returns it unchanged and keeps the
 first `finalized_at`.
 
 ## Cleanup
@@ -83,8 +86,8 @@ takes `SELECT … FOR UPDATE SKIP LOCKED` on a row that is still `staged` and ol
 row; a concurrent finalize either wins before the lock (the row is no longer a candidate) or waits and
 finds the row gone. A `final` row is never selected, because frozen content may point at it. The row
 lock is held across one object delete, which is the price of that guarantee. At most 500 rows per tick.
-An upload that crashes between `Put` and the insert leaves an unreferenced object nothing can address;
-no job sweeps those.
+`Upload` inserts the staged row before it writes the object, so a crash between the two leaves a row the
+purge reclaims (deleting a missing object succeeds); a failed `Put` removes the row again.
 
 ## Configuration and startup
 
@@ -98,9 +101,9 @@ set, so the bucket stays private.
 Storage is real MinIO, never a mock; the tests skip when `S3_ENDPOINT` is unset and CI starts MinIO.
 They cover: wrong type with the right extension, SVG, 5 MiB exactly and + 1 byte, a corrupt and a
 truncated PNG, oversize dimensions, no storage write for any rejected file, tenant B uploading with A's
-token, finalizing and downloading A's asset (`404`, state unchanged), client path/purpose/owner fields
+token, finalizing (through `FinalizeTx`) and downloading A's asset (`404`, state unchanged), client path/purpose/owner fields
 ignored, a student uploading `question_image`, another student and a staff member reading a staged
-proof, finalize twice, `FinalizeTx` rolled back and committed, an unsigned GET (`403`), a tampered
+proof, `FinalizeTx` twice, rolled back and committed, and refused for another tenant or student, an unsigned GET (`403`), a tampered
 signature, an expired link (a 1-second TTL through the service constructor), purge keeping final and
 fresh rows and surviving a failing object delete, and `503` with no storage.
 
@@ -110,5 +113,5 @@ No upload or preview controls in the web app, no public branding assets (P04), n
 payment-proof screens beyond the two purposes (P13/P15/P21), no signed-URL CDN, no image resizing or
 re-encoding (bytes after a PNG's `IEND` are stored as sent), no virus scanning, no per-tenant quota, and
 no GCS run: **GCS interoperability and staging credentials are unverified** and the PLAN gate stays open.
-A fully decoded 8000 x 8000 image can take a few hundred MB while it is checked, so a high upload
-concurrency in production should be limited at the proxy.
+A fully decoded 4096 x 4096 image can take tens of MB while it is checked; the two-slot decode limit
+bounds that per process.
