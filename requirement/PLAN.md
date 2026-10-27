@@ -23,6 +23,7 @@
 - All three payment methods, self-service top-ups, item-package expansion, PDF and XLSX/CSV remain required; post-MVP features remain excluded.
 - Current application baseline is `4f2246a`; P00 is partially implemented. Existing build/type/Go checks passed in the 2026-10-08 scan, lint had 16 errors/2 warnings, and browser/database integration was unverified. Those are dated observations, not fresh certification.
 - A slice is complete only after a real browser/API/database demo, meaningful unit/integration cases, tenant/role adversarial checks, and its required provider/file-output verification pass.
+- The PR that delivers a slice, or part of one, updates that slice here in the same PR: the **Status** line says `done`, `done, lean` or `in progress` and names what is deferred; each acceptance box the PR proves with a test or demo is ticked; each box left open gets one indented line saying why. A slice PR without this update is not finished.
 - Every changed API is defined in `api/openapi.yaml`; regenerate client and enforce drift checks. Read installed Next.js documentation before frontend code changes.
 - Go commands use `GOROOT=/opt/homebrew/Cellar/go/1.26.3/libexec` on this workstation and a writable cache. Run Next build and browser checks sequentially to protect `.next` state.
 
@@ -170,10 +171,12 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Register/login with email and phone, including identical identifiers in two tenants; foreign-tenant JWT is rejected.
-- [ ] Password/reset/refresh/OTP expiration and reuse tests include concurrent requests and brute-force limits.
+- [x] Register/login with email and phone, including identical identifiers in two tenants; foreign-tenant JWT is rejected.
+- [x] Password/reset/refresh/OTP expiration and reuse tests include concurrent requests and brute-force limits.
 - [ ] Operator cannot mutate programs/users/settings under the agreed D02 matrix; direct API is tested.
+      Programs are tested under D02 (curriculum role tests); users and settings have no mutation endpoints until P04/P22.
 - [ ] Reload/refresh/logout/idle expiry and active-exam policy behave as specified; secrets are absent from logs.
+      Everything but the active-exam half is done and tested; D13 says an exam keeps its session alive, which P16 implements.
 
 **Decision / verification gate:** D01 OTP and phone-only recovery; D02 privileges; D13 token/idle policy. Auth cannot be signed off with phone signup silently removed.
 
@@ -181,7 +184,7 @@ For every slice, use this verification loop:
 
 ### P04 — Tenant onboarding, branding and support context
 
-**Status:** planned · **Size:** L · **Depends:** P03
+**Status:** planned — not started. P05, P11 and P12 shipped lean without it, on tenants and admins created by the P01 bootstrap command; the platform onboarding UI, branding/settings and support context are all still here · **Size:** L · **Depends:** P03
 
 **Outcome:** Platform Admin onboards a school, provisions its first Admin, and enters a tenant for audited troubleshooting.
 
@@ -217,9 +220,12 @@ For every slice, use this verification loop:
 **Acceptance scenarios:**
 
 - [ ] Master visible in A/B, tenant A content invisible to B; tenant cannot mutate master.
+      Tenant isolation is done and tested; master content is deferred.
 - [ ] Admin copies master hierarchy into own content; later master changes do not change the copy.
-- [ ] Delete referenced program/subject/chapter is rejected clearly; cross-owner hierarchy links are rejected.
+      Deferred with master content.
+- [x] Delete referenced program/subject/chapter is rejected clearly; cross-owner hierarchy links are rejected.
 - [ ] Create chapter and use it in the editor without manual page reload.
+      Not recorded as verified; needs a browser check.
 
 **Decision / verification gate:** Includes FR-ADM-PRG and shared-content semantics; copy is explicit and never live synchronization.
 
@@ -263,9 +269,13 @@ For every slice, use this verification loop:
 **Acceptance scenarios:**
 
 - [ ] All four types gradeable; weighted-option mode only pg; absent points default to 1 and blank response earns no default credit.
+      The four types are stored and validated; grading is proven only when P16 scores an attempt, and per-question weights are deferred.
 - [ ] Tenant copy survives master edit; current assignments retain old question/scoring/explanation revision.
+      Immutable versions are done and tested (P08 assigns frozen versions); the master/copy half is deferred.
 - [ ] Upload malformed and valid rows, see real errors, confirm exact accepted set per D08; retry creates no duplicates.
+      Built and tested on the default commit policy (preview, confirmed subset, idempotent retry); ticks once D08 is confirmed.
 - [ ] LaTeX/images preview correctly; filters/IDs work; HTML and spreadsheet-formula input is handled safely.
+      Filters, IDs, stored-verbatim HTML and formula neutralising are tested; images are deferred.
 
 **Decision / verification gate:** D08 import commit policy; D04 difficulty weights. No hardcoded import preview counts as done.
 
@@ -378,10 +388,10 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Concurrent debits/credits serialize; ledger sum equals projection and every balance-after is consistent.
-- [ ] Adjustment requires a reason; actor kind/identity distinguish student, provider and staff/platform support.
-- [ ] Duplicate source/operation creates one entry; rollback leaves projection/ledger unchanged.
-- [ ] Student and staff lists cannot see another tenant/user wallet; migrated opening balances have explicit entries.
+- [x] Concurrent debits/credits serialize; ledger sum equals projection and every balance-after is consistent.
+- [x] Adjustment requires a reason; actor kind/identity distinguish student, provider and staff/platform support.
+- [x] Duplicate source/operation creates one entry; rollback leaves projection/ledger unchanged.
+- [x] Student and staff lists cannot see another tenant/user wallet; migrated opening balances have explicit entries.
 
 **Decision / verification gate:** D12 precision/rounding/negative balance; no float write path.
 
