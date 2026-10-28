@@ -244,7 +244,12 @@ func (s *KecermatanService) Delete(ctx context.Context, scope HostScope, princip
 		if current.Locked {
 			return ErrKecermatanLocked
 		}
-		return kecermatanError(s.repo.DeleteTx(ctx, tx, tenantID, id))
+		err = s.repo.DeleteTx(ctx, tx, tenantID, id)
+		if errors.Is(err, repository.ErrReferenced) {
+			// A product, order or enrollment already points at the test: it is in use even before an attempt.
+			return ErrKecermatanLocked
+		}
+		return kecermatanError(err)
 	})
 }
 

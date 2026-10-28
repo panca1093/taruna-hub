@@ -49,8 +49,11 @@ type Order struct {
 	ConfirmedAt   *time.Time
 	CancelledAt   *time.Time
 	Items         []OrderItem
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	// A kecermatan order has no items; it snapshots the test and the credits it adds.
+	KecermatanTestID *uuid.UUID
+	IncludedAttempts *int
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // Enrollment is what a student holds in one tryout. The window is the tryout's own (D05a), read live.
@@ -79,6 +82,8 @@ type EnrollmentGrant struct {
 	ActorKind    string
 	ActorID      *uuid.UUID
 	Reason       string
+	// Attempts is the credit a kecermatan grant adds; nil for a tryout grant.
+	Attempts *int
 }
 
 // Contact is where an order's notifications go.

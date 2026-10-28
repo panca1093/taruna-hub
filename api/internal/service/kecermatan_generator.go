@@ -27,20 +27,20 @@ type KecermatanParams struct {
 
 // KecItem is one labelled reference item: item_length distinct elements.
 type KecItem struct {
-	Label    string
-	Elements []model.KecermatanElement
+	Label    string                    `json:"label"`
+	Elements []model.KecermatanElement `json:"elements"`
 }
 
 // KecSoal shows every reference item but one, in a shuffled order; Missing is the answer key.
 type KecSoal struct {
-	Shown   []string
-	Missing string
+	Shown   []string `json:"shown"`
+	Missing string   `json:"missing"`
 }
 
 // KecColumn is one generated column: its reference set (fixed for all its soal) and its ordered soal.
 type KecColumn struct {
-	Reference []KecItem
-	Soal      []KecSoal
+	Reference []KecItem `json:"reference"`
+	Soal      []KecSoal `json:"soal"`
 }
 
 // KecGeneration holds only the N/2 generated columns; kolom k and k+N/2 are the same content (FR-KEC-16/17).

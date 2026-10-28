@@ -6,11 +6,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// Two product types ship now; kecermatan has no test entity yet, so it is simply not offered.
 const (
 	ProductIndividual = "individual"
 	ProductBundle     = "bundle"
+	ProductKecermatan = "kecermatan"
 )
+
+// PublicKecermatan is what the catalog shows of a kecermatan test; never a seed, key or content.
+type PublicKecermatan struct {
+	TestID               uuid.UUID
+	ItemType             string
+	OptionsPerSoal       int
+	KolomCount           int
+	SoalPerKolom         int
+	KolomDurationSeconds int
+}
 
 // ProductTryout is a package member as staff read it: identity and counts, never content.
 type ProductTryout struct {
@@ -45,24 +55,30 @@ type Product struct {
 	ActiveUntil   *time.Time
 	CreatedBy     uuid.UUID
 	Tryouts       []ProductTryout
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	// Kecermatan products sell included_attempts credits for one test and attach no tryouts.
+	KecermatanTestID    *uuid.UUID
+	KecermatanTestTitle string
+	IncludedAttempts    *int
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 // PublicProduct is the anonymous read model: display data only, no author and no revision.
 type PublicProduct struct {
-	ID              uuid.UUID
-	Type            string
-	Title           string
-	Description     string
-	ProgramID       uuid.UUID
-	ProgramCode     string
-	ProgramName     string
-	Price           string
-	OriginalPrice   *string
-	DiscountPercent *int
-	ActiveUntil     *time.Time
-	Tryouts         []PublicProductTryout
+	ID               uuid.UUID
+	Type             string
+	Title            string
+	Description      string
+	ProgramID        uuid.UUID
+	ProgramCode      string
+	ProgramName      string
+	Price            string
+	OriginalPrice    *string
+	DiscountPercent  *int
+	ActiveUntil      *time.Time
+	Tryouts          []PublicProductTryout
+	IncludedAttempts *int
+	Kecermatan       *PublicKecermatan
 }
 
 type CatalogSummary struct {

@@ -37,17 +37,23 @@ func NewProductRepository(db *pgxpool.Pool) *ProductRepository {
 }
 
 const productColumns = `p.id, p.tenant_id, p.type, p.title, p.description, p.program_id,
-	p.price::text, p.original_price::text, p.is_active, p.active_from, p.active_until, p.created_by, p.created_at, p.updated_at`
+	p.price::text, p.original_price::text, p.is_active, p.active_from, p.active_until, p.created_by, p.created_at, p.updated_at,
+	p.kecermatan_test_id, COALESCE((SELECT kt.title FROM kecermatan_tests kt
+	  WHERE kt.id = p.kecermatan_test_id AND kt.tenant_id = p.tenant_id), ''), p.included_attempts`
 
-// A product is public only while it is on sale and every attached tryout is playable ($2 is now).
+// A product is public only while it is on sale and every attached tryout is playable ($2 is now). A kecermatan
+// product has no tryouts; it is sold while its test exists.
 const publicVisible = `p.is_active
 	AND (p.active_from IS NULL OR p.active_from <= $2)
 	AND (p.active_until IS NULL OR p.active_until > $2)
-	AND EXISTS (SELECT 1 FROM product_tryouts hp WHERE hp.product_id = p.id)
-	AND NOT EXISTS (
-		SELECT 1 FROM product_tryouts vp
-		  JOIN tryouts vt ON vt.id = vp.tryout_id AND vt.tenant_id = vp.tenant_id
-		 WHERE vp.product_id = p.id AND (vt.status <> 'published' OR vt.active_until <= $2))`
+	AND ((p.type <> 'kecermatan'
+	      AND EXISTS (SELECT 1 FROM product_tryouts hp WHERE hp.product_id = p.id)
+	      AND NOT EXISTS (
+	        SELECT 1 FROM product_tryouts vp
+	          JOIN tryouts vt ON vt.id = vp.tryout_id AND vt.tenant_id = vp.tenant_id
+	         WHERE vp.product_id = p.id AND (vt.status <> 'published' OR vt.active_until <= $2)))
+	  OR (p.type = 'kecermatan'
+	      AND EXISTS (SELECT 1 FROM kecermatan_tests pk WHERE pk.id = p.kecermatan_test_id AND pk.tenant_id = p.tenant_id)))`
 
 func (r *ProductRepository) List(ctx context.Context, tenantID uuid.UUID, filter ProductFilter) ([]model.Product, int, error) {
 	if tenantID == uuid.Nil {
@@ -148,11 +154,12 @@ func (r *ProductRepository) CreateTx(ctx context.Context, tx pgx.Tx, tenantID, c
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `
 		INSERT INTO products (tenant_id, type, title, description, program_id, price,
-		        original_price, is_active, active_from, active_until, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		        original_price, is_active, active_from, active_until, created_by, kecermatan_test_id, included_attempts)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id`,
 		tenantID, product.Type, product.Title, product.Description, product.ProgramID,
-		product.Price, product.OriginalPrice, product.IsActive, product.ActiveFrom, product.ActiveUntil, createdBy).Scan(&id)
+		product.Price, product.OriginalPrice, product.IsActive, product.ActiveFrom, product.ActiveUntil, createdBy,
+		product.KecermatanTestID, product.IncludedAttempts).Scan(&id)
 	if err != nil {
 		return model.Product{}, mapProductError("create product", err)
 	}
@@ -169,10 +176,12 @@ func (r *ProductRepository) UpdateHeadTx(ctx context.Context, tx pgx.Tx, tenantI
 	tag, err := tx.Exec(ctx, `
 		UPDATE products
 		   SET type = $3, title = $4, description = $5, program_id = $6, price = $7,
-		       original_price = $8, is_active = $9, active_from = $10, active_until = $11, updated_at = now()
+		       original_price = $8, is_active = $9, active_from = $10, active_until = $11,
+		       kecermatan_test_id = $12, included_attempts = $13, updated_at = now()
 		 WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id, product.Type, product.Title, product.Description, product.ProgramID,
-		product.Price, product.OriginalPrice, product.IsActive, product.ActiveFrom, product.ActiveUntil)
+		product.Price, product.OriginalPrice, product.IsActive, product.ActiveFrom, product.ActiveUntil,
+		product.KecermatanTestID, product.IncludedAttempts)
 	if err != nil {
 		return mapProductError("update product", err)
 	}
@@ -259,6 +268,23 @@ func (r *ProductRepository) TryoutsForAttach(ctx context.Context, q queryer, ten
 		return nil, fmt.Errorf("read product tryouts: %w", err)
 	}
 	return out, nil
+}
+
+// KecermatanTestProgram answers the program of a tenant's kecermatan test; a foreign or missing id is absent.
+func (r *ProductRepository) KecermatanTestProgram(ctx context.Context, q queryer, tenantID, testID uuid.UUID) (uuid.UUID, bool, error) {
+	if tenantID == uuid.Nil {
+		return uuid.Nil, false, ErrScopeRequired
+	}
+	var program uuid.UUID
+	err := q.QueryRow(ctx, `SELECT program_id FROM kecermatan_tests WHERE tenant_id = $1 AND id = $2`,
+		tenantID, testID).Scan(&program)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, nil
+	}
+	if err != nil {
+		return uuid.Nil, false, fmt.Errorf("read product kecermatan test: %w", err)
+	}
+	return program, true, nil
 }
 
 // UnpublishedAttached is the activation re-check, read after the links are written.
@@ -386,7 +412,7 @@ func (r *ProductRepository) PublicSummary(ctx context.Context, tenantID uuid.UUI
 }
 
 const publicColumns = `p.id, p.type, p.title, p.description, p.program_id, pr.code, pr.name,
-	p.price::text, p.original_price::text, p.active_until`
+	p.price::text, p.original_price::text, p.active_until, p.included_attempts, p.kecermatan_test_id`
 
 func (r *ProductRepository) find(ctx context.Context, q queryer, tenantID, id uuid.UUID, forUpdate bool) (model.Product, error) {
 	sql := `SELECT ` + productColumns + ` FROM products p WHERE p.tenant_id = $1 AND p.id = $2`
@@ -450,6 +476,18 @@ func (r *ProductRepository) attachPublicTryouts(ctx context.Context, tenantID uu
 	if len(products) == 0 {
 		return nil
 	}
+	for i := range products {
+		k := products[i].Kecermatan
+		if k == nil {
+			continue
+		}
+		if err := r.db.QueryRow(ctx, `
+			SELECT item_type, options_per_soal, kolom_count, soal_per_kolom, kolom_duration_seconds
+			  FROM kecermatan_tests WHERE tenant_id = $1 AND id = $2`, tenantID, k.TestID).Scan(
+			&k.ItemType, &k.OptionsPerSoal, &k.KolomCount, &k.SoalPerKolom, &k.KolomDurationSeconds); err != nil {
+			return fmt.Errorf("read catalog kecermatan test: %w", err)
+		}
+	}
 	ids := make([]uuid.UUID, 0, len(products))
 	index := make(map[uuid.UUID]int, len(products))
 	for i, product := range products {
@@ -507,7 +545,8 @@ func scanProductHead(row pgx.Row) (model.Product, error) {
 	var original *string
 	var activeFrom, activeUntil *time.Time
 	err := row.Scan(&out.ID, &out.TenantID, &out.Type, &out.Title, &out.Description, &out.ProgramID,
-		&out.Price, &original, &out.IsActive, &activeFrom, &activeUntil, &out.CreatedBy, &out.CreatedAt, &out.UpdatedAt)
+		&out.Price, &original, &out.IsActive, &activeFrom, &activeUntil, &out.CreatedBy, &out.CreatedAt, &out.UpdatedAt,
+		&out.KecermatanTestID, &out.KecermatanTestTitle, &out.IncludedAttempts)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.Product{}, ErrNotFound
@@ -522,8 +561,9 @@ func scanPublicProduct(row pgx.Row) (model.PublicProduct, error) {
 	var out model.PublicProduct
 	var original *string
 	var activeUntil *time.Time
+	var testID *uuid.UUID
 	err := row.Scan(&out.ID, &out.Type, &out.Title, &out.Description, &out.ProgramID,
-		&out.ProgramCode, &out.ProgramName, &out.Price, &original, &activeUntil)
+		&out.ProgramCode, &out.ProgramName, &out.Price, &original, &activeUntil, &out.IncludedAttempts, &testID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.PublicProduct{}, ErrNotFound
@@ -532,6 +572,9 @@ func scanPublicProduct(row pgx.Row) (model.PublicProduct, error) {
 	}
 	out.OriginalPrice, out.ActiveUntil = original, activeUntil
 	out.Tryouts = []model.PublicProductTryout{}
+	if testID != nil {
+		out.Kecermatan = &model.PublicKecermatan{TestID: *testID}
+	}
 	return out, nil
 }
 

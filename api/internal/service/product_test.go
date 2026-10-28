@@ -171,7 +171,7 @@ func TestProductValidation(t *testing.T) {
 		{"empty title", func(in *ProductInput) { in.Title = "   " }, "title"},
 		{"title too long", func(in *ProductInput) { in.Title = strings.Repeat("a", 201) }, "title"},
 		{"description too long", func(in *ProductInput) { in.Description = strings.Repeat("a", 4001) }, "description"},
-		{"unknown type", func(in *ProductInput) { in.Type = "kecermatan" }, "type"},
+		{"unknown type", func(in *ProductInput) { in.Type = "voucher" }, "type"},
 		{"missing program", func(in *ProductInput) { in.ProgramID = uuid.New() }, "program_id"},
 		{"price exponent", func(in *ProductInput) { in.Price = "1e3" }, "price"},
 		{"price NaN", func(in *ProductInput) { in.Price = "NaN" }, "price"},
@@ -524,7 +524,7 @@ func TestProductFilters(t *testing.T) {
 		t.Errorf("offset page = %v, want the other two products", titles(rest))
 	}
 
-	if _, _, err := h.svc.List(ctx, h.scope(tenant), h.admin(tenant), ProductFilter{Type: "kecermatan"}); err == nil {
+	if _, _, err := h.svc.List(ctx, h.scope(tenant), h.admin(tenant), ProductFilter{Type: "voucher"}); err == nil {
 		t.Error("unknown type filter: err = nil, want a 422")
 	}
 }
