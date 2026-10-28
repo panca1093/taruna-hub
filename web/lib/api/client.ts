@@ -72,6 +72,14 @@ export type ItemElementPreview = components["schemas"]["ItemElementPreview"];
 export type ItemElementCommit = components["schemas"]["ItemElementCommit"];
 export type ItemCatalog = components["schemas"]["ItemCatalog"];
 export type SampleColumn = components["schemas"]["SampleColumn"];
+export type KecermatanTest = components["schemas"]["KecermatanTest"];
+export type KecermatanTestSummary = components["schemas"]["KecermatanTestSummary"];
+export type KecermatanTestList = components["schemas"]["KecermatanTestList"];
+export type KecermatanItemType = components["schemas"]["KecermatanItemType"];
+export type KecermatanPreview = components["schemas"]["KecermatanPreview"];
+type KecermatanTestBody = components["schemas"]["KecermatanTestRequest"];
+type UpdateKecermatanTestBody = components["schemas"]["UpdateKecermatanTestRequest"];
+type KecermatanPreviewBody = components["schemas"]["KecermatanPreviewRequest"];
 type CreateItemPackageBody = components["schemas"]["CreateItemPackageRequest"];
 type SampleColumnBody = components["schemas"]["SampleColumnRequest"];
 /** The parts of an element upload; which of them count depends on the package type. */
@@ -272,6 +280,7 @@ function uploadElements<T>(path: keyof paths, input: ElementUpload): Promise<T> 
   return authed<T>(path, { method: "POST", body });
 }
 
+const kecermatanPath = (id: string) => `/api/v1/kecermatan-tests/${id}` as keyof paths;
 const itemPackagePath = (id: string) => `/api/v1/item-packages/${id}` as keyof paths;
 
 /** Multipart upload of one image with its purpose, the way POST /api/v1/assets reads it. */
@@ -500,6 +509,19 @@ export const api = {
       mutate<ItemPackage>("DELETE", `${itemPackagePath(id)}/elements/${elementId}` as keyof paths),
     sample: (id: string, body: SampleColumnBody) =>
       mutate<SampleColumn>("POST", `${itemPackagePath(id)}/sample-column` as keyof paths, body),
+  },
+
+  /** Kecermatan test builder (Admin and Operator): the frozen generation configuration, never the seed. */
+  kecermatan: {
+    list: (filters: { program_id?: string; q?: string; limit?: number; offset?: number } = {}) =>
+      authed<KecermatanTestList>(`/api/v1/kecermatan-tests${queryOf(filters)}` as keyof paths),
+    get: (id: string) => authed<KecermatanTest>(kecermatanPath(id)),
+    create: (body: KecermatanTestBody) => mutate<KecermatanTest>("POST", "/api/v1/kecermatan-tests", body),
+    update: (id: string, body: UpdateKecermatanTestBody) => mutate<KecermatanTest>("PUT", kecermatanPath(id), body),
+    remove: (id: string) => mutate<void>("DELETE", kecermatanPath(id)),
+    /** Stores nothing; the response carries the answer key, so it is staff-only. */
+    preview: (id: string, body: KecermatanPreviewBody = {}) =>
+      mutate<KecermatanPreview>("POST", `${kecermatanPath(id)}/preview` as keyof paths, body),
   },
 
   assets: {

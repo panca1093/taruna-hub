@@ -322,7 +322,7 @@ For every slice, use this verification loop:
 
 ### P09 — Kecermatan item packages
 
-**Status:** in progress — API and admin page are built: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit under request-wide D09 budgets, full WebP decode, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, an ephemeral sample column, and `web/app/admin/item-packages` (list, detail, add dialog, sample dialog). The page is browser-unverified: it passed `tsc`, lint and `next build` only. Deferred: master packages and copy (D17); the kecermatan builder's package picker (P10) · **Size:** L · **Depends:** P05, P06
+**Status:** in progress — API and admin page are built: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit under request-wide D09 budgets, full WebP decode, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, an ephemeral sample column, and `web/app/admin/item-packages` (list, detail, add dialog, sample dialog). The page is browser-unverified: it passed `tsc`, lint and `next build` only. Deferred: master packages and copy (D17) · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff manage authorized symbol/image/emoji/shape sources with real preview and safe imports.
 
@@ -349,7 +349,7 @@ For every slice, use this verification loop:
 
 ### P10 — Kecermatan builder and deterministic generator
 
-**Status:** planned · **Size:** L · **Depends:** P09
+**Status:** done, lean — standalone `kecermatan_tests` (frozen configuration + stored seed) with CRUD, package pinning under the package row lock, first-attempt lock guard, a bounded deterministic generator with N/2 replay, a staff column preview API, and the builder wired to the API with a package picker and a "Lihat contoh" sample-column modal (owner-approved 2026-10-28). Deferred: publish/unpublish (P11 decides), student exposure and per-attempt snapshots (P18), and multi-source `mix` selection UI (not in the mockup; existing mix sources are preserved on save); the browser demo was not run · **Size:** L · **Depends:** P09
 
 **Outcome:** Staff build valid tests and preview the repeated-column mechanism before publication.
 
@@ -361,10 +361,14 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Reject odd or fewer than 10 columns, fewer than 50 questions, item length outside 1–5, nonpositive duration and insufficient pool.
-- [ ] Across each column reference set no element repeats within/across items or mix sources.
-- [ ] Columns k and k+N/2 have identical references/questions/subset ordering, with separate answer keys per column identity.
+- [x] Reject odd or fewer than 10 columns, fewer than 50 questions, item length outside 1–5, nonpositive duration and insufficient pool.
+      Table tests (service), HTTP cases and CHECK constraints; also 50 kolom and 100 soal ceilings.
+- [x] Across each column reference set no element repeats within/across items or mix sources.
+      Property test over 300 seeds per pool, including an exact-fit pool and a char+number+symbol mix with a symbol equal to a letter.
+- [x] Columns k and k+N/2 have identical references/questions/subset ordering, with separate answer keys per column identity.
+      Generator replay test and HTTP preview (kolom 6 equals kolom 1 for one seed); keys are one row per kolom. Nothing is persisted per attempt until P18.
 - [ ] Reject edit/delete after a session exists; supported char/number/symbol/image/emoji/shape/mix sources render.
+      Edit/delete refusal is proven with a fixture stamp of `first_attempt_at`; no session exists until P18 writes it. Every source type generates through the API, but nothing renders in a browser (demo not run).
 
 **Decision / verification gate:** D09 resolved 2026-10-28 (at most 50 kolom × 100 soal); generation policy is fixed by content snapshots, not a client RNG.
 

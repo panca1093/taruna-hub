@@ -34,11 +34,12 @@ type Handler struct {
 	results       *service.ResultService
 	monitoring    *service.MonitoringService
 	itemPackages  *service.ItemPackageService
+	kecermatan    *service.KecermatanService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
 
-func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, orders *service.OrderService, runtime *service.RuntimeService, results *service.ResultService, monitoring *service.MonitoringService, itemPackages *service.ItemPackageService, opts AuthOptions) *Handler {
+func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, orders *service.OrderService, runtime *service.RuntimeService, results *service.ResultService, monitoring *service.MonitoringService, itemPackages *service.ItemPackageService, kecermatan *service.KecermatanService, opts AuthOptions) *Handler {
 	return &Handler{
 		logger:        logger,
 		health:        health,
@@ -55,6 +56,7 @@ func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, 
 		results:       results,
 		monitoring:    monitoring,
 		itemPackages:  itemPackages,
+		kecermatan:    kecermatan,
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
@@ -176,6 +178,14 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/item-packages/:id/elements/commit", h.CommitItemElements, httpx.NoStore(), Authenticate(h.auth), staff)
 	v1.DELETE("/item-packages/:id/elements/:elementId", h.RemoveItemElement, httpx.NoStore(), Authenticate(h.auth), staff)
 	v1.POST("/item-packages/:id/sample-column", h.SampleItemColumn, httpx.NoStore(), Authenticate(h.auth), staff)
+
+	// Kecermatan tests are tenant content like tryouts, so an Operator writes them too (D02).
+	v1.GET("/kecermatan-tests", h.ListKecermatanTests, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.POST("/kecermatan-tests", h.CreateKecermatanTest, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.GET("/kecermatan-tests/:id", h.GetKecermatanTest, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.PUT("/kecermatan-tests/:id", h.UpdateKecermatanTest, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.DELETE("/kecermatan-tests/:id", h.DeleteKecermatanTest, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.POST("/kecermatan-tests/:id/preview", h.PreviewKecermatanTest, httpx.NoStore(), Authenticate(h.auth), staff)
 
 	// Any tenant user may upload; the purpose narrows who, and every read is re-authorized in the service.
 	v1.POST("/assets", h.UploadAsset, httpx.NoStore(), Authenticate(h.auth))

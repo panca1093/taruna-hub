@@ -49,6 +49,10 @@ func newItemPackageService(f tenantFixture, assets *service.AssetService) *servi
 	return service.NewItemPackageService(f.pool, repository.NewItemPackageRepository(f.pool), assets)
 }
 
+func newKecermatanService(f tenantFixture) *service.KecermatanService {
+	return service.NewKecermatanService(f.pool, repository.NewKecermatanRepository(f.pool), repository.NewItemPackageRepository(f.pool))
+}
+
 func newProductService(f tenantFixture) *service.ProductService {
 	return service.NewProductService(f.pool, repository.NewProductRepository(f.pool))
 }

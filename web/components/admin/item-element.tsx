@@ -59,22 +59,27 @@ function useAssetUrl(assetId: string | undefined) {
   return state && state.id === assetId ? state : null;
 }
 
-function ImageElement({ element, className }: { element: ItemElement; className?: string }) {
+/** What a view needs; package elements and generated kecermatan elements both fit. */
+export type ViewElement = Pick<ItemElement, "value" | "asset_id"> & { kind: string; label?: string };
+
+function ImageElement({ element, className }: { element: ViewElement; className?: string }) {
   const link = useAssetUrl(element.asset_id);
   if (!link?.url) {
     return <span className={cn("block size-10 rounded-md bg-surface-secondary", !link?.failed && "animate-pulse", className)} />;
   }
   // eslint-disable-next-line @next/next/no-img-element -- a short-lived presigned URL cannot go through the optimizer
-  return <img src={link.url} alt={element.label} className={cn("size-10 rounded-md object-contain", className)} />;
+  return <img src={link.url} alt={element.label ?? ""} className={cn("size-10 rounded-md object-contain", className)} />;
 }
 
 /** One element of a package revision, drawn the way a student will see it. */
-export function ItemElementView({ element, className }: { element: ItemElement; className?: string }) {
+export function ItemElementView({ element, className }: { element: ViewElement; className?: string }) {
   switch (element.kind) {
+    case "char":
+    case "number":
     case "symbol":
       return <span className={cn("text-2xl leading-none text-foreground", className)}>{element.value}</span>;
     case "emoji":
-      return <EmojiImage id={element.value} label={element.label} className={className} />;
+      return <EmojiImage id={element.value} label={element.label ?? ""} className={className} />;
     case "shape":
       return <ShapeIcon shape={element.value} className={cn("text-foreground", className)} />;
     default:
