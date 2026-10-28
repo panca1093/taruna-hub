@@ -17,3 +17,4 @@ decisions behind them stay in `requirement/` (PRD, ARCHITECTURE, PLAN), and the 
 | Assets: private image uploads and short-lived downloads | P06 | [assets.md](assets.md) |
 | Orders, checkout and enrollments | P13 | [orders.md](orders.md) |
 | Tryout runtime: sessions, deadlines, scoring and the result | P16 | [tryout-runtime.md](tryout-runtime.md) |
+| Kecermatan item packages: symbol, image, emoji and shape pools in frozen revisions | P09 | [item-packages.md](item-packages.md) |

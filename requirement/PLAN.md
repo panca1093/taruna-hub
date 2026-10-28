@@ -322,7 +322,7 @@ For every slice, use this verification loop:
 
 ### P09 — Kecermatan item packages
 
-**Status:** planned · **Size:** L · **Depends:** P05, P06
+**Status:** in progress — the API half is built and tested: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit, D09 limits, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, and an ephemeral sample column. Deferred: the `web/app/admin/item-packages` page and shared file controls, because the web mockup has no Paket Item screen and new screens need the owner's mockup first; master packages and copy (D17) · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff manage authorized symbol/image/emoji/shape sources with real preview and safe imports.
 
@@ -334,10 +334,14 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] ZIP traversal/symlink/nested archive/oversize/corrupt/duplicate files produce per-element reasons; preview changes no live package.
+- [x] ZIP traversal/symlink/nested archive/oversize/corrupt/duplicate files produce per-element reasons; preview changes no live package.
+      Service tests build each adversarial archive; the HTTP test proves a preview leaves rows and storage untouched. The extraction-size check also counts inflated bytes, but only the declared-size path has a fixture.
 - [ ] Confirmation inserts accepted elements only; master mutation by tenant and foreign-tenant package use are rejected.
-- [ ] Used package delete/shrink below any referencing test threshold fails; existing frozen assets remain renderable.
+      Accepted-only commit and foreign-tenant `404` on every route are proven; there is no master package to mutate (D17), and "use by a foreign tenant's test" waits for P10.
+- [x] Used package delete/shrink below any referencing test threshold fails; existing frozen assets remain renderable.
+      Proven with a fixture row in `kecermatan_test_packages` (HTTP and raw foreign-key deletes); P10 writes the real rows.
 - [ ] Emoji is catalog-only and consistent across devices; pasted emoji in symbols fails with guidance; preview does not consume quota.
+      Catalog-only, bundled Twemoji files and the emoji-in-symbol rejection are proven, and the sample column writes nothing; nothing renders the emoji in a browser yet (no page), and quota metering does not exist until P10/P11.
 
 **Decision / verification gate:** D02 (resolved: the Operator may mutate packages); D09 resolved 2026-10-28 (ZIP ≤200 files and ≤50MB extracted; Twemoji CC-BY 4.0 catalog with attribution). Master packages and copy are deferred (D17).
 
