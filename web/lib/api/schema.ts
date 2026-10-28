@@ -4398,6 +4398,286 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kecermatan-tests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's kecermatan tests
+         * @description Admin and Operator (D02). Newest first, at most 100 per page, `total` counts every match. Rows carry
+         *     the structure only; the pinned packages are on `GET /api/v1/kecermatan-tests/{id}`. `q` is a
+         *     case-insensitive substring of the title.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    program_id?: string;
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of this tenant's tests */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KecermatanTestList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        /**
+         * Create a kecermatan test
+         * @description Saves the frozen generation configuration (FR-ADM-KEC-01/06/07/10/13/23). Everything is validated on
+         *     save and a failing save stores nothing, so a stored test is always playable:
+         *
+         *     - `kolom_count` is even, 10 to 50; `soal_per_kolom` 50 to 100 (D09); `item_length` 1 to 5;
+         *       `options_per_soal` 3 to 8; `kolom_duration_seconds` 1 to 3600.
+         *     - Sources by `item_type`: `char` and `number` are built in and take no `package_ids`; `symbol`, `emoji`
+         *       and `image` take exactly one package of the same type; `shape` takes none (all seven built-in
+         *       shapes) or one shape package; `mix` takes `builtin_sources` (any of `char`, `number`, `shape`)
+         *       and/or `package_ids` of any type, at least one source in all.
+         *     - The pool, deduplicated over all sources (a symbol `A` and the letter `A` are one element), must hold at
+         *       least `options_per_soal` x `item_length` elements, or `fields.pool` answers `422`.
+         *
+         *     Each package is locked `FOR UPDATE` and pinned at its CURRENT revision, in the same transaction as the
+         *     insert, so a concurrent package edit or delete queues behind the pin. A package of another tenant
+         *     answers `422` on `package_ids[i]` exactly as an unknown one. A 128-bit generation seed is drawn once
+         *     here and never changes or leaves the server.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["KecermatanTestRequest"];
+                };
+            };
+            responses: {
+                /** @description The test as stored */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KecermatanTest"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kecermatan-tests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One kecermatan test with its pinned packages
+         * @description An id of another tenant answers `404`, never `403`. The response never carries the generation seed.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["KecermatanTestId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The test as stored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KecermatanTest"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        /**
+         * Replace a kecermatan test's definition
+         * @description REPLACE semantics in one transaction with the test row locked `FOR UPDATE`, under the same rules as
+         *     create; the packages are re-pinned at their current revisions. A `base_revision` that is no longer
+         *     current answers `409` and writes nothing. A test whose `first_attempt_at` is set (stamped by P18's
+         *     admission transaction under the same row lock) is `locked`, and every edit answers `409`. The seed is
+         *     never rewritten.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["KecermatanTestId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateKecermatanTestRequest"];
+                };
+            };
+            responses: {
+                /** @description The test as replaced, with a revision one higher */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KecermatanTest"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description Stale `base_revision`, or the test is locked after a first attempt */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        /**
+         * Delete a kecermatan test
+         * @description Unpins its packages and deletes the test in one transaction; the packages become deletable again. A
+         *     locked test answers `409` and nothing is deleted.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["KecermatanTestId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The test is gone */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description The test is locked after a first attempt */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kecermatan-tests/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview one generated column of a saved test
+         * @description FR-ADM-KEC-21, staff only. Runs the real generator on the test's pinned package revisions and stores
+         *     nothing, so it works on a locked test too. `kolom` (default 1) may be any of the test's `kolom_count`
+         *     kolom; one in the second half returns the content of the first half's column
+         *     (`source_kolom` = `(kolom - 1) mod (kolom_count / 2) + 1`), which is how staff see the repetition of
+         *     FR-KEC-16. The response includes `missing`, the answer key: it is for staff and no student endpoint
+         *     returns it.
+         *
+         *     Without `seed` a fresh one is drawn, so the preview never reveals the test's stored seed. The response
+         *     returns the `seed` used; sending it back with another `kolom` reproduces the same content.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["KecermatanTestId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["KecermatanPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description The generated column */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KecermatanPreview"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5774,6 +6054,114 @@ export interface components {
         SampleColumn: {
             soal: components["schemas"]["SampleSoal"][];
         };
+        /** @enum {string} */
+        KecermatanItemType: "char" | "number" | "symbol" | "emoji" | "image" | "shape" | "mix";
+        /** @enum {string} */
+        KecermatanBuiltinSource: "char" | "number" | "shape";
+        KecermatanTestRequest: {
+            /** Format: uuid */
+            program_id: string;
+            title: string;
+            description?: string;
+            item_type: components["schemas"]["KecermatanItemType"];
+            item_length: number;
+            /** @description The size of the reference set (labels A, B, ...); a soal shows all of them but one. */
+            options_per_soal: number;
+            soal_per_kolom: number;
+            /** @description Even. Only half of the kolom are generated; kolom k is replayed at k + kolom_count / 2. */
+            kolom_count: number;
+            kolom_duration_seconds: number;
+            /** @description Only for `mix`; every other type derives its built-in source from `item_type`. */
+            builtin_sources?: components["schemas"]["KecermatanBuiltinSource"][];
+            package_ids?: string[];
+            cover_from: string;
+            cover_to: string;
+        };
+        UpdateKecermatanTestRequest: components["schemas"]["KecermatanTestRequest"] & {
+            base_revision: number;
+        };
+        KecermatanTestSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            program_id: string;
+            title: string;
+            description: string;
+            item_type: components["schemas"]["KecermatanItemType"];
+            item_length: number;
+            options_per_soal: number;
+            soal_per_kolom: number;
+            kolom_count: number;
+            kolom_duration_seconds: number;
+            /** @description The built-in sources the pool starts from, as the server derived them. */
+            builtin_sources: components["schemas"]["KecermatanBuiltinSource"][];
+            cover_from: string;
+            cover_to: string;
+            revision: number;
+            /** @description True once a student has started an attempt; the test can no longer be edited or deleted. */
+            locked: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        KecermatanPinnedPackage: {
+            /** Format: uuid */
+            package_id: string;
+            name: string;
+            type: components["schemas"]["ItemPackageType"];
+            /** @description The frozen package revision this test renders. */
+            revision: number;
+            /** @description Elements in the pinned revision. */
+            element_count: number;
+        };
+        KecermatanTest: components["schemas"]["KecermatanTestSummary"] & {
+            packages: components["schemas"]["KecermatanPinnedPackage"][];
+        };
+        KecermatanTestList: {
+            tests: components["schemas"]["KecermatanTestSummary"][];
+            total: number;
+        };
+        KecermatanPreviewRequest: {
+            /** @description 1-based kolom to show; defaults to 1. */
+            kolom?: number;
+            /** @description A seed returned by an earlier preview; absent draws a fresh one. */
+            seed?: string;
+        };
+        KecermatanElement: {
+            kind: components["schemas"]["KecermatanItemType"];
+            /**
+             * @description The character for `char`, `number` and `symbol`; the hex codepoint for `emoji` (drawn from
+             *     `/emoji/{value}.svg`); the shape id for `shape`; empty for `image`.
+             */
+            value: string;
+            /**
+             * Format: uuid
+             * @description Image elements only. Fetch a download link with `GET /api/v1/assets/{id}/url`.
+             */
+            asset_id?: string;
+        };
+        KecermatanReferenceItem: {
+            /** @description A, B, C, ... */
+            label: string;
+            /** @description Exactly `item_length` elements; no element appears twice in the whole reference set. */
+            elements: components["schemas"]["KecermatanElement"][];
+        };
+        KecermatanPreviewSoal: {
+            /** @description The labels of the reference items this soal shows, in display order. */
+            shown: string[];
+            /** @description The answer key. Staff preview only. */
+            missing: string;
+        };
+        KecermatanPreview: {
+            /** @description The seed used; send it back to reproduce this content. */
+            seed: string;
+            kolom: number;
+            /** @description The generated column this kolom shows; equal for k and k + kolom_count / 2. */
+            source_kolom: number;
+            reference: components["schemas"]["KecermatanReferenceItem"][];
+            soal: components["schemas"]["KecermatanPreviewSoal"][];
+        };
     };
     responses: {
         /** @description No usable identity on the request */
@@ -5861,6 +6249,7 @@ export interface components {
         };
     };
     parameters: {
+        KecermatanTestId: string;
         ItemPackageId: string;
         SessionId: string;
         SubtestId: string;
