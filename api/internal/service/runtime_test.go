@@ -32,6 +32,7 @@ func newRuntimeHarness(t *testing.T) runtimeHarness {
 		for _, sql := range []string{
 			`DELETE FROM tryout_score_totals WHERE tenant_id = ANY($1)`,
 			`DELETE FROM tryout_results WHERE tenant_id = ANY($1)`,
+			`DELETE FROM tryout_session_violations WHERE tenant_id = ANY($1)`,
 			`DELETE FROM tryout_session_extensions WHERE tenant_id = ANY($1)`,
 			`DELETE FROM tryout_session_answers WHERE tenant_id = ANY($1)`,
 			`DELETE FROM tryout_session_questions WHERE tenant_id = ANY($1)`,

@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Button, Chip, toast } from "@heroui/react";
-import { BarChart3, CloudOff, Trophy, TriangleAlert } from "lucide-react";
+import { AlertTriangle, BarChart3, CloudOff, Trophy, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput } from "@/components/ui/form";
-import { api, errorText, type Leaderboard, type StaffResult, type TryoutSummary } from "@/lib/api/client";
+import { api, errorText, type Leaderboard, type StaffResult, type TryoutSummary, type ViolationTimeline } from "@/lib/api/client";
 import { useResultsT } from "@/lib/i18n/dict/results";
 
 const PAGE_SIZE = 50;
@@ -31,6 +31,30 @@ export default function ResultsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [detail, setDetail] = useState<StaffResult | null>(null);
+  const [violations, setViolations] = useState<ViolationTimeline | null>(null);
+  const [violationsFailed, setViolationsFailed] = useState(false);
+
+  const openDetail = (row: StaffResult) => {
+    setViolations(null);
+    setViolationsFailed(false);
+    setDetail(row);
+  };
+
+  useEffect(() => {
+    if (!detail) return;
+    let cancelled = false;
+    api.monitoring
+      .violations(detail.session_id)
+      .then((loaded) => {
+        if (!cancelled) setViolations(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setViolationsFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detail]);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,7 +217,7 @@ export default function ResultsPage() {
         <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
       ) : (
         <>
-          <DataTable columns={columns} rows={rows} rowKey={(r) => r.session_id} onRowClick={setDetail} />
+          <DataTable columns={columns} rows={rows} rowKey={(r) => r.session_id} onRowClick={openDetail} />
           {rows.length < total && (
             <div className="mt-4 flex justify-center">
               <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
@@ -266,6 +290,32 @@ export default function ResultsPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+            <div>
+              {violationsFailed ? (
+                <p className="text-sm text-danger">{t.violationsError}</p>
+              ) : violations === null ? (
+                <p className="text-sm text-muted">{t.loading}</p>
+              ) : (
+                <>
+                  <p className="mb-2 text-[13px] font-medium text-foreground">{t.violationHistoryTitle(violations.total)}</p>
+                  {violations.violations.length === 0 ? (
+                    <p className="text-sm text-muted">{t.noViolations}</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {violations.violations.map((v) => (
+                        <li key={v.id} className="flex items-center gap-2.5 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-sm">
+                          <AlertTriangle className="size-3.5 shrink-0 text-danger" />
+                          <span className="text-danger-soft-foreground">
+                            {v.type === "screenshot_attempt" ? t.violationScreenshot : t.violationFullscreenExit}
+                          </span>
+                          <span className="ml-auto text-xs text-muted">{formatDateTime(v.occurred_at)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
             </div>
           </>
         )}

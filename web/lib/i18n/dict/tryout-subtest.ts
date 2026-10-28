@@ -24,6 +24,8 @@ const id = {
   fullscreenWarningTitle: "Kamu keluar dari mode layar penuh",
   fullscreenWarningBody:
     "Pelanggaran ini tercatat. Timer tetap berjalan — kembali ke mode layar penuh untuk melanjutkan.",
+  fullscreenRequestTitle: "Gunakan mode layar penuh",
+  fullscreenRequestBody: "Tryout ini berjalan dalam mode layar penuh. Timer tetap berjalan — aktifkan layar penuh untuk melanjutkan.",
   backToFullscreen: "Kembali ke Layar Penuh",
   confirmSubmitTitle: "Submit subtes ini?",
   confirmSubmitBody: (answered: number, total: number) =>
@@ -53,6 +55,8 @@ const en: typeof id = {
   fullscreenWarningTitle: "You exited fullscreen mode",
   fullscreenWarningBody:
     "This violation has been logged. The timer keeps running — return to fullscreen to continue.",
+  fullscreenRequestTitle: "Use fullscreen mode",
+  fullscreenRequestBody: "This tryout runs in fullscreen. The timer keeps running — turn on fullscreen to continue.",
   backToFullscreen: "Return to Fullscreen",
   confirmSubmitTitle: "Submit this subtest?",
   confirmSubmitBody: (answered: number, total: number) =>

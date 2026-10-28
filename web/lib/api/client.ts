@@ -54,6 +54,14 @@ export type AttemptList = components["schemas"]["AttemptList"];
 export type AnswerAck = components["schemas"]["AnswerAck"];
 export type AnswerBody = components["schemas"]["AnswerRequest"];
 export type Settings = components["schemas"]["Settings"];
+export type Violation = components["schemas"]["Violation"];
+export type ViolationType = components["schemas"]["ViolationType"];
+export type ViolationBody = components["schemas"]["ViolationRequest"];
+export type ActiveSession = components["schemas"]["ActiveSession"];
+export type ActiveSessionList = components["schemas"]["ActiveSessionList"];
+export type ExtensionBody = components["schemas"]["ExtensionRequest"];
+export type Extension = components["schemas"]["Extension"];
+export type ViolationTimeline = components["schemas"]["ViolationTimeline"];
 type GraceBody = components["schemas"]["GraceRequest"];
 type LoginBody = components["schemas"]["LoginRequest"];
 type RegisterBody = components["schemas"]["RegisterRequest"];
@@ -476,6 +484,20 @@ export const api = {
       mutate<TryoutSession>("POST", `${sessionPath(id)}/subtests/${subtestId}/submit` as keyof paths),
     saveAnswer: (id: string, questionId: string, body: AnswerBody) =>
       mutate<AnswerAck>("PUT", `${sessionPath(id)}/answers/${questionId}` as keyof paths, body),
+    /** Best-effort evidence; the server stamps the time. A resend with the same `event_id` adds nothing. */
+    reportViolation: (id: string, body: ViolationBody) =>
+      mutate<Violation>("POST", `${sessionPath(id)}/violations` as keyof paths, body),
+  },
+
+  /** Staff monitoring: tryout sessions in progress, and any session's violation timeline (also after it ended). */
+  monitoring: {
+    active: (filters: { limit?: number; offset?: number } = {}) =>
+      authed<ActiveSessionList>(`/api/v1/admin/monitoring/sessions${queryOf(filters)}` as keyof paths),
+    /** Admin and Operator: adds seconds to the subtest running in this session (D10). */
+    extend: (sessionId: string, body: ExtensionBody) =>
+      mutate<Extension>("POST", `/api/v1/admin/tryout-sessions/${sessionId}/extensions` as keyof paths, body),
+    violations: (sessionId: string) =>
+      authed<ViolationTimeline>(`/api/v1/admin/tryout-sessions/${sessionId}/violations` as keyof paths),
   },
 
   /** Staff results: completed attempts with each student's current rank, and the per-tryout leaderboard. */

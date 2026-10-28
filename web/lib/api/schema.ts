@@ -3489,8 +3489,8 @@ export interface paths {
          *     lands, never another subtest or another student's; later subtests keep their normal timing. The grant is
          *     appended to an audit table with the actor, the subtest and the reason. With no subtest running the call
          *     answers `409` `subtest_not_running`; a completed session, or a part whose deadline already passed, is not
-         *     reopened, and a session settled by this call answers `409` `session_completed`. The UI for this call lands
-         *     with P19 monitoring.
+         *     reopened, and a session settled by this call answers `409` `session_completed`. The monitoring page's session
+         *     detail calls it.
          */
         post: {
             parameters: {
@@ -3531,6 +3531,188 @@ export interface paths {
                 422: components["responses"]["ValidationFailed"];
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryout-sessions/{id}/violations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a violation on the student's own running tryout session
+         * @description Student only, own session only (another student's or an unknown id is `404`). Tryout only; Kecermatan has
+         *     no violations. The server stamps `occurred_at`; the browser's clock is never stored. A violation is
+         *     evidence for staff and changes nothing about the attempt: the timer keeps running and nothing is
+         *     submitted or penalized.
+         *
+         *     Accepted only while the session is in progress and one of its subtests is running: a completed session
+         *     answers `409` `session_completed`, and no running subtest answers `409` `subtest_not_running`.
+         *     `event_id` is the retry identity: a resend of an event already stored answers `200` with the stored row
+         *     and adds nothing; a new event answers `201`. Each session keeps at most 100 violations; the next new
+         *     event answers `429` `too_many_requests` so a flood cannot grow the table.
+         *
+         *     Browser support is best-effort: a device without the Fullscreen API (for example iPhone Safari) may still
+         *     take the tryout and simply reports no `exit_fullscreen`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ViolationRequest"];
+                };
+            };
+            responses: {
+                /** @description The event was already stored; the stored violation */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Violation"];
+                    };
+                };
+                /** @description The violation was recorded */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Violation"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `session_completed` or `subtest_not_running` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+                /** @description `too_many_requests`: the session already holds 100 violations */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/monitoring/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tryout sessions in progress right now
+         * @description Admin and Operator (D02: a role guard). Every in-progress session of the tenant, newest start first, read
+         *     from PostgreSQL on each call; the page polls every 30 seconds. `subtest` is the running subtest and is null
+         *     between subtests. `violation_count` counts the stored violations of that session. Defaults to 100 per page,
+         *     at most 200.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of active sessions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ActiveSessionList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tryout-sessions/{id}/violations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One session's violation timeline
+         * @description Admin and Operator. Works for in-progress and completed sessions, so the history stays reachable after the
+         *     attempt ends. Oldest first; a session holds at most 100 violations, so the list is not paged. An unknown id
+         *     is `404`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The session and its timeline */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ViolationTimeline"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4708,6 +4890,89 @@ export interface components {
             score: number;
             correct_count: number;
             question_count: number;
+        };
+        /** @enum {string} */
+        ViolationType: "exit_fullscreen" | "screenshot_attempt";
+        ViolationRequest: {
+            /**
+             * Format: uuid
+             * @description Chosen by the browser per event and reused on every retry of it.
+             */
+            event_id: string;
+            type: components["schemas"]["ViolationType"];
+            /**
+             * Format: uuid
+             * @description The subtest the browser was in, so a late retry keeps its original attribution. Used only when it is a
+             *     subtest of this session; otherwise the running subtest is recorded.
+             */
+            subtest_id?: string | null;
+        };
+        Violation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            session_id: string;
+            /**
+             * Format: uuid
+             * @description The subtest that was running when it happened.
+             */
+            subtest_id: string;
+            subtest_name: string;
+            type: components["schemas"]["ViolationType"];
+            /**
+             * Format: date-time
+             * @description The server's clock.
+             */
+            occurred_at: string;
+        };
+        ActiveSubtest: {
+            /** Format: uuid */
+            subtest_id: string;
+            name: string;
+            position: number;
+            /** Format: date-time */
+            started_at: string;
+        };
+        ActiveSession: {
+            /** Format: uuid */
+            session_id: string;
+            /** Format: uuid */
+            user_id: string;
+            student_name: string;
+            /** Format: uuid */
+            tryout_id: string;
+            tryout_title: string;
+            attempt_number: number;
+            /** Format: date-time */
+            started_at: string;
+            subtest: components["schemas"]["ActiveSubtest"] | null;
+            violation_count: number;
+        };
+        ActiveSessionList: {
+            sessions: components["schemas"]["ActiveSession"][];
+            /** @description Every in-progress session of the tenant, not only this page. */
+            total: number;
+            /** Format: date-time */
+            server_time: string;
+        };
+        ViolationTimeline: {
+            /** Format: uuid */
+            session_id: string;
+            /** Format: uuid */
+            user_id: string;
+            student_name: string;
+            /** Format: uuid */
+            tryout_id: string;
+            tryout_title: string;
+            attempt_number: number;
+            /** @enum {string} */
+            status: "in_progress" | "completed";
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
+            total: number;
+            violations: components["schemas"]["Violation"][];
         };
         StaffResult: {
             /** Format: uuid */

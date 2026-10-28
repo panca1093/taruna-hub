@@ -11,7 +11,7 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { api, ApiError, type RuntimeSubtest } from "@/lib/api/client";
 import { useCommonT } from "@/lib/i18n/dict/common";
 import { useTryoutSubtestT } from "@/lib/i18n/dict/tryout-subtest";
-import { useAnswerSync, useServerClock, type InitialAnswer } from "@/lib/tryout-session";
+import { useAnswerSync, useServerClock, useViolationReporter, type InitialAnswer } from "@/lib/tryout-session";
 import { cn } from "@/lib/cn";
 
 const RESYNC_MS = 120_000;
@@ -35,7 +35,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
   const [reloadKey, setReloadKey] = useState(0);
   const [index, setIndex] = useState(0);
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [fullscreenWarning, setFullscreenWarning] = useState(false);
+  const [fullscreenWarning, setFullscreenWarning] = useState<"left" | "refused" | null>(null);
   const [screenshotWarning, setScreenshotWarning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
@@ -103,6 +103,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
     },
     [sessionId, subtestId],
   );
+  const reportViolation = useViolationReporter(sessionId, subtestId);
   const { answers, states, setAnswer, pendingCount, waitIdle } = useAnswerSync(
     sessionId,
     loaded?.initial ?? null,
@@ -196,31 +197,46 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
     };
   }, [sessionId, subtestId, clock, handleClosed]);
 
-  // Fullscreen: request on entry and warn on exit. Persisting violations is P19.
+  // Fullscreen is best-effort: a device without the API (e.g. iPhone Safari) takes the tryout with no enforcement and
+  // no violation. Leaving fullscreen after having entered it is recorded; the timer keeps running either way.
   useEffect(() => {
-    if (!loaded) return;
-    containerRef.current?.requestFullscreen?.().catch(() => {});
+    if (!loaded || !containerRef.current?.requestFullscreen) return;
+    let entered = false;
+    containerRef.current.requestFullscreen().catch(() => {
+      // Refused without a user gesture: offer the button, but nothing was left yet, so nothing is recorded.
+      if (!submittedRef.current) setFullscreenWarning("refused");
+    });
     const handleChange = () => {
-      setFullscreenWarning(!document.fullscreenElement && !submittedRef.current);
+      if (document.fullscreenElement) {
+        entered = true;
+        setFullscreenWarning(null);
+        return;
+      }
+      if (!entered || submittedRef.current) return;
+      setFullscreenWarning("left");
+      reportViolation("exit_fullscreen");
     };
     document.addEventListener("fullscreenchange", handleChange);
     return () => document.removeEventListener("fullscreenchange", handleChange);
-  }, [loaded]);
+  }, [loaded, reportViolation]);
 
   // Screenshot shortcuts: best-effort deterrent only — OS-level capture can't be reliably blocked from the browser.
   useEffect(() => {
-    if (!loaded) return;
+    // Without the Fullscreen API (e.g. iPhone Safari) the tryout runs unenforced and records nothing.
+    if (!loaded || typeof containerRef.current?.requestFullscreen !== "function") return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       const isPrintScreen = e.key === "PrintScreen";
       const isMacCapture = e.metaKey && e.shiftKey && ["3", "4", "5"].includes(e.key);
       const isWinSnip = e.metaKey && e.shiftKey && e.key.toLowerCase() === "s";
       if (!isPrintScreen && !isMacCapture && !isWinSnip) return;
       e.preventDefault();
       setScreenshotWarning(true);
+      reportViolation("screenshot_attempt");
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [loaded]);
+  }, [loaded, reportViolation]);
 
   if (failed) {
     return (
@@ -435,13 +451,13 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
             <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-danger-soft text-danger-soft-foreground">
               <AlertTriangle className="size-5" />
             </span>
-            <p className="mt-3 text-sm font-semibold text-foreground">{t.fullscreenWarningTitle}</p>
-            <p className="mt-1.5 text-xs text-muted">{t.fullscreenWarningBody}</p>
+            <p className="mt-3 text-sm font-semibold text-foreground">{fullscreenWarning === "left" ? t.fullscreenWarningTitle : t.fullscreenRequestTitle}</p>
+            <p className="mt-1.5 text-xs text-muted">{fullscreenWarning === "left" ? t.fullscreenWarningBody : t.fullscreenRequestBody}</p>
             <Button
               variant="primary"
               size="sm"
               className="mt-4 w-full"
-              onPress={() => containerRef.current?.requestFullscreen?.().catch(() => setFullscreenWarning(false))}
+              onPress={() => containerRef.current?.requestFullscreen?.().catch(() => setFullscreenWarning(null))}
             >
               <Maximize className="size-3.5" /> {t.backToFullscreen}
             </Button>

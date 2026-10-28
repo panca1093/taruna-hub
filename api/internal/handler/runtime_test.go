@@ -54,6 +54,7 @@ func newRuntimeHTTPFixture(t *testing.T) runtimeHTTPFixture {
 		for _, sql := range []string{
 			`DELETE FROM tryout_score_totals WHERE tenant_id = ANY($1)`,
 			`DELETE FROM tryout_results WHERE tenant_id = ANY($1)`,
+			`DELETE FROM tryout_session_violations WHERE tenant_id = ANY($1)`,
 			`DELETE FROM tryout_session_extensions WHERE tenant_id = ANY($1)`,
 			`DELETE FROM tryout_session_answers WHERE tenant_id = ANY($1)`,
 			`DELETE FROM tryout_session_questions WHERE tenant_id = ANY($1)`,
@@ -107,7 +108,7 @@ func (f runtimeHTTPFixture) runtimeServer(t *testing.T, rt *service.RuntimeServi
 		e.Use(httpx.CORS(devOrigins, true))
 		New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture),
 			newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets,
-			newOrderService(f.tenantFixture, assets), rt, newResultService(f.tenantFixture, rt), AuthOptions{AllowedOrigin: httpx.OriginPolicy(devOrigins, true)}).
+			newOrderService(f.tenantFixture, assets), rt, newResultService(f.tenantFixture, rt), newMonitoringService(f.tenantFixture, rt), AuthOptions{AllowedOrigin: httpx.OriginPolicy(devOrigins, true)}).
 			Register(e, ResolveHostScope(f.tenants, slug))
 		return e
 	})

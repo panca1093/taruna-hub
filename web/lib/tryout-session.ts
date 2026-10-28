@@ -218,3 +218,37 @@ export function useAnswerSync(
 
   return { answers, states, setAnswer, pendingCount, waitIdle };
 }
+
+const VIOLATION_RETRY_MS = 3000;
+const VIOLATION_ATTEMPTS = 4;
+
+function newEventId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0"));
+  return `${h.slice(0, 4).join("")}-${h.slice(4, 6).join("")}-${h.slice(6, 8).join("")}-${h.slice(8, 10).join("")}-${h.slice(10).join("")}`;
+}
+
+/**
+ * Reports violations as evidence for staff. It is fire-and-forget: the exam never waits on it and a failure never
+ * blocks the student. One event keeps one id across its retries, so a resend after a lost response adds no second
+ * row. A 4xx is final (the subtest ended, or the server's cap was reached); only network and 5xx failures retry.
+ */
+export function useViolationReporter(sessionId: string | null, subtestId: string) {
+  return useCallback(
+    (type: "exit_fullscreen" | "screenshot_attempt") => {
+      if (!sessionId) return;
+      const eventId = newEventId();
+      const send = (attempt: number) => {
+        api.runtime.reportViolation(sessionId, { event_id: eventId, type, subtest_id: subtestId }).catch((err: unknown) => {
+          const final = err instanceof ApiError && err.status < 500;
+          if (!final && attempt < VIOLATION_ATTEMPTS) setTimeout(() => send(attempt + 1), VIOLATION_RETRY_MS);
+        });
+      };
+      send(1);
+    },
+    [sessionId, subtestId],
+  );
+}
