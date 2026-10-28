@@ -33,6 +33,10 @@ func newTryoutService(f tenantFixture) *service.TryoutService {
 	return service.NewTryoutService(f.pool, repository.NewTryoutRepository(f.pool))
 }
 
+func newRuntimeService(f tenantFixture) *service.RuntimeService {
+	return service.NewRuntimeService(f.pool, repository.NewRuntimeRepository(f.pool))
+}
+
 func newProductService(f tenantFixture) *service.ProductService {
 	return service.NewProductService(f.pool, repository.NewProductRepository(f.pool))
 }

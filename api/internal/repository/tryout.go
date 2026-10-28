@@ -34,11 +34,11 @@ func NewTryoutRepository(db *pgxpool.Pool) *TryoutRepository {
 
 const tryoutHeadColumns = `id, tenant_id, program_id, title, description, scoring_mode, status,
 	active_from, active_until, explanation_release_at, randomize_questions, randomize_options,
-	revision, (first_attempt_at IS NOT NULL), created_at, updated_at`
+	grace_seconds, revision, (first_attempt_at IS NOT NULL), created_at, updated_at`
 
 const tryoutListColumns = `t.id, t.tenant_id, t.program_id, t.title, t.description, t.scoring_mode, t.status,
 	t.active_from, t.active_until, t.explanation_release_at, t.randomize_questions, t.randomize_options,
-	t.revision, (t.first_attempt_at IS NOT NULL), t.created_at, t.updated_at`
+	t.grace_seconds, t.revision, (t.first_attempt_at IS NOT NULL), t.created_at, t.updated_at`
 
 func (r *TryoutRepository) List(ctx context.Context, tenantID uuid.UUID, filter TryoutFilter) ([]model.Tryout, int, error) {
 	if tenantID == uuid.Nil {
@@ -180,6 +180,23 @@ func (r *TryoutRepository) SetStatusTx(ctx context.Context, tx pgx.Tx, tenantID,
 	return nil
 }
 
+// SetGraceSeconds is the one write a locked tryout still accepts: D10 lets Admin change it mid-exam.
+func (r *TryoutRepository) SetGraceSeconds(ctx context.Context, tenantID, id uuid.UUID, seconds int) error {
+	if tenantID == uuid.Nil {
+		return ErrScopeRequired
+	}
+	tag, err := r.db.Exec(ctx,
+		`UPDATE tryouts SET grace_seconds = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
+		tenantID, id, seconds)
+	if err != nil {
+		return fmt.Errorf("set tryout grace: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ProgramExists reports whether the program is this tenant's; the tryout's program FK needs it too.
 func (r *TryoutRepository) ProgramExists(ctx context.Context, tenantID, programID uuid.UUID) (bool, error) {
 	if tenantID == uuid.Nil {
@@ -253,12 +270,12 @@ func (r *TryoutRepository) insertHeadTx(ctx context.Context, tx pgx.Tx, tenantID
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `
 		INSERT INTO tryouts (tenant_id, program_id, title, description, scoring_mode, active_from,
-		        active_until, explanation_release_at, randomize_questions, randomize_options, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		        active_until, explanation_release_at, randomize_questions, randomize_options, grace_seconds, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id`,
 		tenantID, tryout.ProgramID, tryout.Title, tryout.Description, tryout.ScoringMode,
 		tryout.ActiveFrom, tryout.ActiveUntil, tryout.ExplanationReleaseAt,
-		tryout.RandomizeQuestions, tryout.RandomizeOptions, createdBy).Scan(&id)
+		tryout.RandomizeQuestions, tryout.RandomizeOptions, tryout.GraceSeconds, createdBy).Scan(&id)
 	return id, mapTryoutError("create tryout", err)
 }
 
@@ -267,11 +284,11 @@ func (r *TryoutRepository) updateHeadTx(ctx context.Context, tx pgx.Tx, tenantID
 		UPDATE tryouts
 		   SET program_id = $3, title = $4, description = $5, scoring_mode = $6, active_from = $7,
 		       active_until = $8, explanation_release_at = $9, randomize_questions = $10,
-		       randomize_options = $11, revision = revision + 1, updated_at = now()
+		       randomize_options = $11, grace_seconds = $12, revision = revision + 1, updated_at = now()
 		 WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id, tryout.ProgramID, tryout.Title, tryout.Description, tryout.ScoringMode,
 		tryout.ActiveFrom, tryout.ActiveUntil, tryout.ExplanationReleaseAt,
-		tryout.RandomizeQuestions, tryout.RandomizeOptions)
+		tryout.RandomizeQuestions, tryout.RandomizeOptions, tryout.GraceSeconds)
 	if err != nil {
 		return mapTryoutError("update tryout", err)
 	}
@@ -397,7 +414,7 @@ func scanTryoutHead(row pgx.Row, withCounts bool) (model.Tryout, error) {
 	var activeFrom, releaseAt *time.Time
 	targets := []any{&out.ID, &out.TenantID, &out.ProgramID, &out.Title, &out.Description,
 		&out.ScoringMode, &out.Status, &activeFrom, &out.ActiveUntil, &releaseAt,
-		&out.RandomizeQuestions, &out.RandomizeOptions, &out.Revision, &out.Locked,
+		&out.RandomizeQuestions, &out.RandomizeOptions, &out.GraceSeconds, &out.Revision, &out.Locked,
 		&out.CreatedAt, &out.UpdatedAt}
 	if withCounts {
 		targets = append(targets, &out.SubtestCount, &out.QuestionCount)

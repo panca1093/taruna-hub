@@ -2883,6 +2883,668 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tryouts/{id}/grace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change a tryout's late-answer grace, even while it is being attempted
+         * @description Admin only (D10). The grace is the number of seconds after a subtest's deadline during which an answer is
+         *     still admitted. It is the one tryout field that stays editable after the first attempt, and the runtime
+         *     reads it live on every answer, so a change applies to every answer admitted after it commits.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GraceRequest"];
+                };
+            };
+            responses: {
+                /** @description The tryout with the new grace */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Tryout"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryouts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The student's overview of one tryout they hold
+         * @description Student only. A tryout the student does not hold, or that is not published, answers `404`. `current` is the
+         *     session in progress (deadlines already settled), `attempts` is every attempt newest first. Questions are
+         *     never part of this response.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The overview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StudentTryout"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryouts/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start or resume an attempt
+         * @description Student only, no body. Under the enrollment row lock this returns the student's session in progress, or
+         *     admits a new attempt: the tryout must be published and inside `active_from`/`active_until`, the next attempt
+         *     number is allocated and the question versions, the scoring weights (D04) and one stable permutation are
+         *     frozen into the session. Concurrent starts end with one session. A session still in progress after the
+         *     window closed is settled first and returned as completed. Not holding the tryout answers `404`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The session in progress, or the settled one */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TryoutSession"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `tryout_not_open` (draft or before `active_from`) or `tryout_closed` (past `active_until`) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryout-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every attempt of the signed-in student */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Attempts newest first, with the score once completed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AttemptList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryout-sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One session of the signed-in student
+         * @description Another student's session, a staff caller or a malformed id never reveals existence. Any deadline that has
+         *     passed is settled before the answer, so a reload after expiry shows the truth. `server_time` is the clock
+         *     the countdown must use; `subtests[].deadline_at` already includes any staff extension. Subtest scores and
+         *     `result` appear only once the session is completed.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The session */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TryoutSession"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryout-sessions/{id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The immediate basic result of a completed session
+         * @description `score` is (earned points / maximum points) x 100 rounded to 2 decimals (D04). A session still in progress
+         *     answers `409` `result_not_ready`. Ranking and explanations are P17.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TryoutResult"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `result_not_ready` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryout-sessions/{id}/subtests/{subtestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The running subtest's questions and the student's saved answers
+         * @description Only a running subtest is readable: a pending, submitted or expired one answers `409` `subtest_not_running`,
+         *     so a submitted subtest cannot be reopened by URL. Questions come in this session's frozen order with options
+         *     in this session's order. They never carry the answer key, option points, the explanation or a version id.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                    subtestId: components["parameters"]["SubtestId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The running subtest */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RuntimeSubtest"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `subtest_not_running` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryout-sessions/{id}/subtests/{subtestId}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the next subtest
+         * @description The student's explicit action. Sets the part's start and absolute deadline once, as the earlier of start +
+         *     duration and the tryout's `active_until` (D10). Every earlier subtest must be submitted and none may be
+         *     running (`409` `subtest_order`). Starting a running subtest returns it unchanged, so a retry never moves
+         *     the deadline; a submitted one answers `409` `subtest_not_running`; a completed session answers `409`
+         *     `session_completed`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                    subtestId: components["parameters"]["SubtestId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The session with the part running */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TryoutSession"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `subtest_order`, `subtest_not_running` or `session_completed` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryout-sessions/{id}/subtests/{subtestId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit the running subtest
+         * @description Idempotent: a subtest already settled, by an earlier submit or by its deadline, answers `200` with the
+         *     settled state. Submitting the last subtest finalizes the session and persists its one result before this
+         *     response is written, so `result` is present on the completion response. An unstarted subtest answers `409`
+         *     `subtest_not_running`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                    subtestId: components["parameters"]["SubtestId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The session after the submit */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TryoutSession"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `subtest_not_running` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryout-sessions/{id}/answers/{questionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save one answer
+         * @description Admitted by server time against the subtest's effective deadline plus the tryout's grace (read live) plus any
+         *     staff extension of this session (D10); no other grace exists. `seq` is the client's own per-question counter
+         *     and the retry identity: a resend of the stored `seq` with the same answer is acknowledged unchanged, an
+         *     older `seq` (or the same `seq` with another answer) answers `409` `stale_answer` and never overwrites, a
+         *     newer one replaces. `revision` is server-assigned, monotonic per answer and moves only when the stored
+         *     answer changes. An empty `answer` clears the question. A deadline noticed here settles the part for good and
+         *     answers `409` `deadline_passed`; a pending or submitted part answers `409` `subtest_not_running`.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                    questionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AnswerRequest"];
+                };
+            };
+            responses: {
+                /** @description The accepted write */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AnswerAck"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `stale_answer`, `deadline_passed` or `subtest_not_running` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tryout-sessions/{id}/extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant one student's session extra time
+         * @description Admin and Operator (D10). Adds `seconds` to every subtest deadline of this one session, never another
+         *     student's. The grant is appended to an audit table with the actor and the reason. A completed session, or a
+         *     part whose deadline already passed, is not reopened: a session settled by this call answers `409`
+         *     `session_completed`. The UI for this call lands with P19 monitoring.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExtensionRequest"];
+                };
+            };
+            responses: {
+                /** @description The grant and the session's total extension */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Extension"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `session_completed` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's scoring weights
+         * @description Admin only. Defaults to 1 / 2 / 3 until Admin saves one (D04).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The current weights */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        /**
+         * Save the scoring weights
+         * @description Admin only. Each weight is greater than 0, at most 1000, with at most two decimals. A session freezes the
+         *     weights when its attempt starts, so saving never changes a session already started or a stored result.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            responses: {
+                /** @description The saved weights */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Settings"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3240,6 +3902,11 @@ export interface components {
             explanation_release_at: string | null;
             randomize_questions: boolean;
             randomize_options: boolean;
+            /**
+             * @description D10: seconds after a subtest's deadline during which an answer is still admitted. Default 0. Read live
+             *     by the runtime, so Admin may change it mid-exam through `PUT /tryouts/{id}/grace`.
+             */
+            grace_seconds: number;
             /** @description Bumped by every save; `base_revision` is what a concurrent save fails on. */
             revision: number;
             /** @description True once `first_attempt_at` is set — every edit, delete, publish and unpublish then answers `409`. */
@@ -3301,6 +3968,7 @@ export interface components {
             explanation_release_at: string | null;
             randomize_questions: boolean;
             randomize_options: boolean;
+            grace_seconds: number;
             revision: number;
             locked: boolean;
             subtest_count: number;
@@ -3348,6 +4016,8 @@ export interface components {
             explanation_release_at?: string | null;
             randomize_questions?: boolean;
             randomize_options?: boolean;
+            /** @description Omitted means 0. Editable only while the tryout is unlocked; `PUT /tryouts/{id}/grace` works after the first attempt. */
+            grace_seconds?: number;
             subtests?: components["schemas"]["TryoutSubtestRequest"][];
         };
         UpdateTryoutRequest: {
@@ -3367,6 +4037,8 @@ export interface components {
             explanation_release_at?: string | null;
             randomize_questions?: boolean;
             randomize_options?: boolean;
+            /** @description Omitted means 0. Editable only while the tryout is unlocked; `PUT /tryouts/{id}/grace` works after the first attempt. */
+            grace_seconds?: number;
             /** @description The complete definition; subtests and assignments missing here are deleted. */
             subtests?: components["schemas"]["TryoutSubtestRequest"][];
         };
@@ -3606,7 +4278,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -3711,6 +4383,202 @@ export interface components {
             account_number: string;
             account_holder: string;
         };
+        GraceRequest: {
+            grace_seconds: number;
+        };
+        Settings: {
+            scoring_weights: {
+                /** @description Points of a correctly answered easy question. */
+                easy: number;
+                medium: number;
+                hard: number;
+            };
+        };
+        RuntimeSubtestState: {
+            /** Format: uuid */
+            subtest_id: string;
+            name: string;
+            position: number;
+            duration_seconds: number;
+            question_count: number;
+            /** @enum {string} */
+            status: "pending" | "running" | "submitted";
+            /** Format: date-time */
+            started_at: string | null;
+            /**
+             * Format: date-time
+             * @description When the countdown ends: the earlier of start + duration and `active_until`, plus this session's staff
+             *     extension. Null until the subtest starts. Compare it with `server_time`, never with the device clock.
+             */
+            deadline_at: string | null;
+            /** Format: date-time */
+            submitted_at: string | null;
+            /** @description 0-100; only once the session is completed. */
+            score: number | null;
+            /** @description Only once the session is completed. */
+            correct_count: number | null;
+        };
+        TryoutResultSubtest: {
+            /** Format: uuid */
+            subtest_id: string;
+            name: string;
+            position: number;
+            /** @description (earned / maximum) x 100 of this subtest, 2 decimals. A subtest never started scores 0. */
+            score: number;
+            correct_count: number;
+            question_count: number;
+        };
+        TryoutResult: {
+            /** Format: uuid */
+            session_id: string;
+            /** Format: uuid */
+            tryout_id: string;
+            attempt_number: number;
+            /** @description (earned points / maximum points) x 100 rounded to 2 decimals (D04), out of 100. */
+            score: number;
+            /**
+             * @description IRT keeps weighted scoring; no model is fitted.
+             * @enum {string}
+             */
+            scoring_mode: "weighted" | "irt";
+            /** @description Stored with the result so a later policy never rewrites it. */
+            scoring_version: number;
+            /** Format: date-time */
+            completed_at: string;
+            subtests: components["schemas"]["TryoutResultSubtest"][];
+        };
+        TryoutSession: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tryout_id: string;
+            tryout_title: string;
+            attempt_number: number;
+            /** @enum {string} */
+            status: "in_progress" | "completed";
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
+            /** Format: date-time */
+            active_until: string;
+            /**
+             * Format: date-time
+             * @description The server clock at this response; the browser adds monotonic elapsed time to it.
+             */
+            server_time: string;
+            subtests: components["schemas"]["RuntimeSubtestState"][];
+            /** @description Present once completed, including on the response that completed it. */
+            result: components["schemas"]["TryoutResult"] | null;
+        };
+        AttemptSummary: {
+            /** Format: uuid */
+            session_id: string;
+            /** Format: uuid */
+            tryout_id: string;
+            attempt_number: number;
+            /** @enum {string} */
+            status: "in_progress" | "completed";
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            completed_at: string | null;
+            score: number | null;
+        };
+        AttemptList: {
+            attempts: components["schemas"]["AttemptSummary"][];
+        };
+        StudentTryoutSubtest: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            duration_seconds: number;
+            position: number;
+            question_count: number;
+        };
+        StudentTryout: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            description: string;
+            /** @enum {string} */
+            scoring_mode: "weighted" | "irt";
+            program_code: string;
+            program_name: string;
+            /** Format: date-time */
+            active_from: string | null;
+            /** Format: date-time */
+            active_until: string;
+            subtests: components["schemas"]["StudentTryoutSubtest"][];
+            current: components["schemas"]["TryoutSession"] | null;
+            attempts: components["schemas"]["AttemptSummary"][];
+        };
+        RuntimeOption: {
+            /** @description Stable across shuffles and attempts; answers refer to it. */
+            id: string;
+            label: string;
+        };
+        /** @description A question as a student may see it: no key, no option points, no explanation, no version id. */
+        RuntimeQuestion: {
+            /** Format: uuid */
+            id: string;
+            /** @description 1-based position in this session's order. */
+            position: number;
+            /** @enum {string} */
+            type: "pg" | "pg_multi" | "isian" | "benar_salah";
+            content: string;
+            /** @description In this session's order; empty for `isian`. */
+            options: components["schemas"]["RuntimeOption"][];
+            /** @description The accepted answer, as option ids or the typed text for `isian`. Empty when none. */
+            answer: string[];
+            /** @description Server revision of the accepted answer; 0 when none was saved. */
+            revision: number;
+            /**
+             * Format: int64
+             * @description The client sequence of the accepted answer; 0 when none was saved. The next write uses a larger one.
+             */
+            seq: number;
+        };
+        RuntimeSubtest: {
+            /** Format: uuid */
+            session_id: string;
+            subtest: components["schemas"]["RuntimeSubtestState"];
+            /** Format: date-time */
+            server_time: string;
+            questions: components["schemas"]["RuntimeQuestion"][];
+        };
+        AnswerRequest: {
+            /**
+             * Format: int64
+             * @description The client's per-question counter; it only grows and a retry resends the same value.
+             */
+            seq: number;
+            /**
+             * @description `pg` and `benar_salah`: at most one option id. `pg_multi`: distinct option ids. `isian`: at most one
+             *     text of 500 characters. Empty clears the question.
+             */
+            answer: string[];
+        };
+        AnswerAck: {
+            /** Format: uuid */
+            question_id: string;
+            revision: number;
+            /** Format: int64 */
+            seq: number;
+            /** Format: date-time */
+            server_time: string;
+        };
+        ExtensionRequest: {
+            seconds: number;
+            reason: string;
+        };
+        Extension: {
+            /** Format: uuid */
+            session_id: string;
+            seconds: number;
+            /** @description Every grant of this session summed; capped at 28800. */
+            total_seconds: number;
+        };
     };
     responses: {
         /** @description No usable identity on the request */
@@ -3797,7 +4665,10 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        SessionId: string;
+        SubtestId: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;

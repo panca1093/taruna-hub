@@ -41,6 +41,10 @@ tags:
     description: Private image uploads, finalization and short-lived download links
   - name: orders
     description: Wallet and manual-transfer checkout, order review by staff, and the access an order opens
+  - name: runtime
+    description: The student's tryout attempt - start, subtests, answers, deadlines and the immediate basic result
+  - name: settings
+    description: Tenant settings an Admin changes, today the scoring weights
 
 paths:
   /healthz:
@@ -2166,6 +2170,430 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /api/v1/tryouts/{id}/grace:
+    put:
+      tags: [tryouts]
+      summary: Change a tryout's late-answer grace, even while it is being attempted
+      description: |
+        Admin only (D10). The grace is the number of seconds after a subtest's deadline during which an answer is
+        still admitted. It is the one tryout field that stays editable after the first attempt, and the runtime
+        reads it live on every answer, so a change applies to every answer admitted after it commits.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GraceRequest"
+      responses:
+        "200":
+          description: The tryout with the new grace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tryout"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/my/tryouts/{id}:
+    get:
+      tags: [runtime]
+      summary: The student's overview of one tryout they hold
+      description: |
+        Student only. A tryout the student does not hold, or that is not published, answers `404`. `current` is the
+        session in progress (deadlines already settled), `attempts` is every attempt newest first. Questions are
+        never part of this response.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentTryout"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/my/tryouts/{id}/sessions:
+    post:
+      tags: [runtime]
+      summary: Start or resume an attempt
+      description: |
+        Student only, no body. Under the enrollment row lock this returns the student's session in progress, or
+        admits a new attempt: the tryout must be published and inside `active_from`/`active_until`, the next attempt
+        number is allocated and the question versions, the scoring weights (D04) and one stable permutation are
+        frozen into the session. Concurrent starts end with one session. A session still in progress after the
+        window closed is settled first and returned as completed. Not holding the tryout answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The session in progress, or the settled one
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryoutSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`tryout_not_open` (draft or before `active_from`) or `tryout_closed` (past `active_until`)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/my/tryout-sessions:
+    get:
+      tags: [runtime]
+      summary: Every attempt of the signed-in student
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Attempts newest first, with the score once completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttemptList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/my/tryout-sessions/{id}:
+    get:
+      tags: [runtime]
+      summary: One session of the signed-in student
+      description: |
+        Another student's session, a staff caller or a malformed id never reveals existence. Any deadline that has
+        passed is settled before the answer, so a reload after expiry shows the truth. `server_time` is the clock
+        the countdown must use; `subtests[].deadline_at` already includes any staff extension. Subtest scores and
+        `result` appear only once the session is completed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: The session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryoutSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/my/tryout-sessions/{id}/result:
+    get:
+      tags: [runtime]
+      summary: The immediate basic result of a completed session
+      description: |
+        `score` is (earned points / maximum points) x 100 rounded to 2 decimals (D04). A session still in progress
+        answers `409` `result_not_ready`. Ranking and explanations are P17.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryoutResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`result_not_ready`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/my/tryout-sessions/{id}/subtests/{subtestId}:
+    get:
+      tags: [runtime]
+      summary: The running subtest's questions and the student's saved answers
+      description: |
+        Only a running subtest is readable: a pending, submitted or expired one answers `409` `subtest_not_running`,
+        so a submitted subtest cannot be reopened by URL. Questions come in this session's frozen order with options
+        in this session's order. They never carry the answer key, option points, the explanation or a version id.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/SubtestId"
+      responses:
+        "200":
+          description: The running subtest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeSubtest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`subtest_not_running`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/my/tryout-sessions/{id}/subtests/{subtestId}/start:
+    post:
+      tags: [runtime]
+      summary: Start the next subtest
+      description: |
+        The student's explicit action. Sets the part's start and absolute deadline once, as the earlier of start +
+        duration and the tryout's `active_until` (D10). Every earlier subtest must be submitted and none may be
+        running (`409` `subtest_order`). Starting a running subtest returns it unchanged, so a retry never moves
+        the deadline; a submitted one answers `409` `subtest_not_running`; a completed session answers `409`
+        `session_completed`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/SubtestId"
+      responses:
+        "200":
+          description: The session with the part running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryoutSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`subtest_order`, `subtest_not_running` or `session_completed`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/my/tryout-sessions/{id}/subtests/{subtestId}/submit:
+    post:
+      tags: [runtime]
+      summary: Submit the running subtest
+      description: |
+        Idempotent: a subtest already settled, by an earlier submit or by its deadline, answers `200` with the
+        settled state. Submitting the last subtest finalizes the session and persists its one result before this
+        response is written, so `result` is present on the completion response. An unstarted subtest answers `409`
+        `subtest_not_running`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/SubtestId"
+      responses:
+        "200":
+          description: The session after the submit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryoutSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`subtest_not_running`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/my/tryout-sessions/{id}/answers/{questionId}:
+    put:
+      tags: [runtime]
+      summary: Save one answer
+      description: |
+        Admitted by server time against the subtest's effective deadline plus the tryout's grace (read live) plus any
+        staff extension of this session (D10); no other grace exists. `seq` is the client's own per-question counter
+        and the retry identity: a resend of the stored `seq` with the same answer is acknowledged unchanged, an
+        older `seq` (or the same `seq` with another answer) answers `409` `stale_answer` and never overwrites, a
+        newer one replaces. `revision` is server-assigned, monotonic per answer and moves only when the stored
+        answer changes. An empty `answer` clears the question. A deadline noticed here settles the part for good and
+        answers `409` `deadline_passed`; a pending or submitted part answers `409` `subtest_not_running`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - name: questionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswerRequest"
+      responses:
+        "200":
+          description: The accepted write
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnswerAck"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`stale_answer`, `deadline_passed` or `subtest_not_running`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/tryout-sessions/{id}/extensions:
+    post:
+      tags: [runtime]
+      summary: Grant one student's session extra time
+      description: |
+        Admin and Operator (D10). Adds `seconds` to every subtest deadline of this one session, never another
+        student's. The grant is appended to an audit table with the actor and the reason. A completed session, or a
+        part whose deadline already passed, is not reopened: a session settled by this call answers `409`
+        `session_completed`. The UI for this call lands with P19 monitoring.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExtensionRequest"
+      responses:
+        "200":
+          description: The grant and the session's total extension
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Extension"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`session_completed`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/settings:
+    get:
+      tags: [settings]
+      summary: The tenant's scoring weights
+      description: Admin only. Defaults to 1 / 2 / 3 until Admin saves one (D04).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The current weights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [settings]
+      summary: Save the scoring weights
+      description: |
+        Admin only. Each weight is greater than 0, at most 1000, with at most two decimals. A session freezes the
+        weights when its attempt starts, so saving never changes a session already started or a stored result.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Settings"
+      responses:
+        "200":
+          description: The saved weights
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2774,7 +3202,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, program_id, title, description, scoring_mode, status, active_from, active_until,
-                 explanation_release_at, randomize_questions, randomize_options, revision, locked,
+                 explanation_release_at, randomize_questions, randomize_options, grace_seconds, revision, locked,
                  subtest_count, question_count, created_at, updated_at]
       properties:
         id:
@@ -2809,6 +3237,13 @@ components:
           type: boolean
         randomize_options:
           type: boolean
+        grace_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+          description: |
+            D10: seconds after a subtest's deadline during which an answer is still admitted. Default 0. Read live
+            by the runtime, so Admin may change it mid-exam through `PUT /tryouts/{id}/grace`.
         revision:
           type: integer
           description: Bumped by every save; `base_revision` is what a concurrent save fails on.
@@ -2882,7 +3317,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, program_id, title, description, scoring_mode, status, active_from, active_until,
-                 explanation_release_at, randomize_questions, randomize_options, revision, locked,
+                 explanation_release_at, randomize_questions, randomize_options, grace_seconds, revision, locked,
                  subtest_count, question_count, created_at, updated_at, subtests]
       properties:
         id:
@@ -2916,6 +3351,10 @@ components:
           type: boolean
         randomize_options:
           type: boolean
+        grace_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
         revision:
           type: integer
         locked:
@@ -3015,6 +3454,11 @@ components:
           type: boolean
         randomize_options:
           type: boolean
+        grace_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+          description: Omitted means 0. Editable only while the tryout is unlocked; `PUT /tryouts/{id}/grace` works after the first attempt.
         subtests:
           type: array
           maxItems: 30
@@ -3056,6 +3500,11 @@ components:
           type: boolean
         randomize_options:
           type: boolean
+        grace_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+          description: Omitted means 0. Editable only while the tryout is unlocked; `PUT /tryouts/{id}/grace` works after the first attempt.
         subtests:
           type: array
           maxItems: 30
@@ -3480,6 +3929,14 @@ components:
                 - insufficient_balance
                 - price_changed
                 - order_pending
+                - tryout_not_open
+                - tryout_closed
+                - session_completed
+                - subtest_not_running
+                - deadline_passed
+                - stale_answer
+                - subtest_order
+                - result_not_ready
             message:
               type: string
               description: Human-readable, Indonesian, safe to show to end users.
@@ -3663,6 +4120,409 @@ components:
           type: string
         account_holder:
           type: string
+
+    GraceRequest:
+      type: object
+      additionalProperties: false
+      required: [grace_seconds]
+      properties:
+        grace_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+
+    Settings:
+      type: object
+      additionalProperties: false
+      required: [scoring_weights]
+      properties:
+        scoring_weights:
+          type: object
+          additionalProperties: false
+          required: [easy, medium, hard]
+          properties:
+            easy:
+              type: number
+              description: Points of a correctly answered easy question.
+            medium:
+              type: number
+            hard:
+              type: number
+
+    RuntimeSubtestState:
+      type: object
+      additionalProperties: false
+      required: [subtest_id, name, position, duration_seconds, question_count, status, started_at,
+                 deadline_at, submitted_at, score, correct_count]
+      properties:
+        subtest_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        position:
+          type: integer
+        duration_seconds:
+          type: integer
+        question_count:
+          type: integer
+        status:
+          type: string
+          enum: [pending, running, submitted]
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        deadline_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When the countdown ends: the earlier of start + duration and `active_until`, plus this session's staff
+            extension. Null until the subtest starts. Compare it with `server_time`, never with the device clock.
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+        score:
+          type: number
+          nullable: true
+          description: 0-100; only once the session is completed.
+        correct_count:
+          type: integer
+          nullable: true
+          description: Only once the session is completed.
+
+    TryoutResultSubtest:
+      type: object
+      additionalProperties: false
+      required: [subtest_id, name, position, score, correct_count, question_count]
+      properties:
+        subtest_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        position:
+          type: integer
+        score:
+          type: number
+          description: (earned / maximum) x 100 of this subtest, 2 decimals. A subtest never started scores 0.
+        correct_count:
+          type: integer
+        question_count:
+          type: integer
+
+    TryoutResult:
+      type: object
+      additionalProperties: false
+      required: [session_id, tryout_id, attempt_number, score, scoring_mode, scoring_version, completed_at, subtests]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        tryout_id:
+          type: string
+          format: uuid
+        attempt_number:
+          type: integer
+        score:
+          type: number
+          description: (earned points / maximum points) x 100 rounded to 2 decimals (D04), out of 100.
+        scoring_mode:
+          type: string
+          enum: [weighted, irt]
+          description: IRT keeps weighted scoring; no model is fitted.
+        scoring_version:
+          type: integer
+          description: Stored with the result so a later policy never rewrites it.
+        completed_at:
+          type: string
+          format: date-time
+        subtests:
+          type: array
+          items:
+            $ref: "#/components/schemas/TryoutResultSubtest"
+
+    TryoutSession:
+      type: object
+      additionalProperties: false
+      required: [id, tryout_id, tryout_title, attempt_number, status, started_at, completed_at, active_until,
+                 server_time, subtests, result]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tryout_id:
+          type: string
+          format: uuid
+        tryout_title:
+          type: string
+        attempt_number:
+          type: integer
+        status:
+          type: string
+          enum: [in_progress, completed]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        active_until:
+          type: string
+          format: date-time
+        server_time:
+          type: string
+          format: date-time
+          description: The server clock at this response; the browser adds monotonic elapsed time to it.
+        subtests:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuntimeSubtestState"
+        result:
+          allOf:
+            - $ref: "#/components/schemas/TryoutResult"
+          nullable: true
+          description: Present once completed, including on the response that completed it.
+
+    AttemptSummary:
+      type: object
+      additionalProperties: false
+      required: [session_id, tryout_id, attempt_number, status, started_at, completed_at, score]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        tryout_id:
+          type: string
+          format: uuid
+        attempt_number:
+          type: integer
+        status:
+          type: string
+          enum: [in_progress, completed]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        score:
+          type: number
+          nullable: true
+
+    AttemptList:
+      type: object
+      additionalProperties: false
+      required: [attempts]
+      properties:
+        attempts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttemptSummary"
+
+    StudentTryoutSubtest:
+      type: object
+      additionalProperties: false
+      required: [id, name, duration_seconds, position, question_count]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        duration_seconds:
+          type: integer
+        position:
+          type: integer
+        question_count:
+          type: integer
+
+    StudentTryout:
+      type: object
+      additionalProperties: false
+      required: [id, title, description, scoring_mode, program_code, program_name, active_from, active_until,
+                 subtests, current, attempts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        scoring_mode:
+          type: string
+          enum: [weighted, irt]
+        program_code:
+          type: string
+        program_name:
+          type: string
+        active_from:
+          type: string
+          format: date-time
+          nullable: true
+        active_until:
+          type: string
+          format: date-time
+        subtests:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentTryoutSubtest"
+        current:
+          allOf:
+            - $ref: "#/components/schemas/TryoutSession"
+          nullable: true
+        attempts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttemptSummary"
+
+    RuntimeOption:
+      type: object
+      additionalProperties: false
+      required: [id, label]
+      properties:
+        id:
+          type: string
+          description: Stable across shuffles and attempts; answers refer to it.
+        label:
+          type: string
+
+    RuntimeQuestion:
+      type: object
+      additionalProperties: false
+      required: [id, position, type, content, options, answer, revision, seq]
+      description: |
+        A question as a student may see it: no key, no option points, no explanation, no version id.
+      properties:
+        id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+          description: 1-based position in this session's order.
+        type:
+          type: string
+          enum: [pg, pg_multi, isian, benar_salah]
+        content:
+          type: string
+        options:
+          type: array
+          description: In this session's order; empty for `isian`.
+          items:
+            $ref: "#/components/schemas/RuntimeOption"
+        answer:
+          type: array
+          description: The accepted answer, as option ids or the typed text for `isian`. Empty when none.
+          items:
+            type: string
+        revision:
+          type: integer
+          description: Server revision of the accepted answer; 0 when none was saved.
+        seq:
+          type: integer
+          format: int64
+          description: The client sequence of the accepted answer; 0 when none was saved. The next write uses a larger one.
+
+    RuntimeSubtest:
+      type: object
+      additionalProperties: false
+      required: [session_id, subtest, server_time, questions]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        subtest:
+          $ref: "#/components/schemas/RuntimeSubtestState"
+        server_time:
+          type: string
+          format: date-time
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RuntimeQuestion"
+
+    AnswerRequest:
+      type: object
+      additionalProperties: false
+      required: [seq, answer]
+      properties:
+        seq:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The client's per-question counter; it only grows and a retry resends the same value.
+        answer:
+          type: array
+          description: |
+            `pg` and `benar_salah`: at most one option id. `pg_multi`: distinct option ids. `isian`: at most one
+            text of 500 characters. Empty clears the question.
+          items:
+            type: string
+
+    AnswerAck:
+      type: object
+      additionalProperties: false
+      required: [question_id, revision, seq, server_time]
+      properties:
+        question_id:
+          type: string
+          format: uuid
+        revision:
+          type: integer
+        seq:
+          type: integer
+          format: int64
+        server_time:
+          type: string
+          format: date-time
+
+    ExtensionRequest:
+      type: object
+      additionalProperties: false
+      required: [seconds, reason]
+      properties:
+        seconds:
+          type: integer
+          minimum: 1
+          maximum: 14400
+        reason:
+          type: string
+          maxLength: 500
+
+    Extension:
+      type: object
+      additionalProperties: false
+      required: [session_id, seconds, total_seconds]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        seconds:
+          type: integer
+        total_seconds:
+          type: integer
+          description: Every grant of this session summed; capped at 28800.
+
+  parameters:
+    SessionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SubtestId:
+      name: subtestId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
 
   responses:
     Unauthorized:
