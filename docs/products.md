@@ -5,7 +5,7 @@ A product is what a school sells: one tryout (`individual`) or a package of two 
 catalog is served from its own host, anonymously.
 
     products          id, tenant_id, type, title, description, program_id, price, original_price,
-                      is_active, active_until, created_by, created_at, updated_at
+                      is_active, active_from, active_until, created_by, created_at, updated_at
                         UNIQUE (id, tenant_id)
                         UNIQUE (tenant_id, lower(title))          -- as an index
     product_tryouts   product_id, tryout_id, tenant_id, position
@@ -33,7 +33,8 @@ no sign, whitespace or exponent: `1e3`, `NaN`, `-1`, `1.234`, `" 5"` and `""` ar
 A product is listed and readable publicly only when all of these hold at request time:
 
 1. `is_active` is true;
-2. its own `active_until` is null or still in the future;
+2. its own sale window is open: `active_from` is null or past, and `active_until` is null or still in the future
+   (`active_from` is before `active_until` when both are set, P13/D05a);
 3. every attached tryout is `published`;
 4. every attached tryout's own `active_until` is still in the future.
 
@@ -86,8 +87,8 @@ server field errors, toasts, and a tryout picker fed by `GET /api/v1/tryouts?sta
 The type choice offers only `individual` and `bundle`, because there is no kecermatan test entity yet.
 
 `app/catalog` and `app/catalog/[id]` read the public API only: program, type and title filters, loading,
-empty and error states, and prices formatted from the string. The "Beli" button is still a link into
-checkout, which stays P13; it says so instead of pretending a purchase happened.
+empty and error states, and prices formatted from the string. The "Beli" button links into
+checkout (P13).
 
 `app/page.tsx` takes its featured products (first four by newest) and its two numeric stats from the
 public catalog. The unverifiable "1.000+ siswa" claim is gone: the third figure is now the tenant's real
@@ -95,7 +96,7 @@ number of visible tryouts. That is a copy change on the landing for Panca to rev
 
 ## What this slice deliberately does not do
 
-No kecermatan products (P09/P10 own the test entity), no checkout, orders, payments or wallet spending
-(P13/P14), no cover images (P06 deferred, so the prototype's gradient swatch is a token now), no
+No kecermatan products (P09/P10 own the test entity), no gateway payments (P14; checkout, orders and wallet
+spending are in [orders.md](orders.md)), no cover images (P06 deferred, so the prototype's gradient swatch is a token now), no
 master/copy, no platform (root) landing or featured ownership (D06), no recommendation or ranking
 engine, and no search beyond a case-insensitive title substring with `%` and `_` matching themselves.

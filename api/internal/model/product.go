@@ -41,6 +41,7 @@ type Product struct {
 	Price         string
 	OriginalPrice *string
 	IsActive      bool
+	ActiveFrom    *time.Time
 	ActiveUntil   *time.Time
 	CreatedBy     uuid.UUID
 	Tryouts       []ProductTryout

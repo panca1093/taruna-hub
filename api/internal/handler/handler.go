@@ -29,11 +29,12 @@ type Handler struct {
 	products      *service.ProductService
 	wallets       *service.WalletService
 	assets        *service.AssetService
+	orders        *service.OrderService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
 
-func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, opts AuthOptions) *Handler {
+func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, orders *service.OrderService, opts AuthOptions) *Handler {
 	return &Handler{
 		logger:        logger,
 		health:        health,
@@ -45,6 +46,7 @@ func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, 
 		products:      products,
 		wallets:       wallets,
 		assets:        assets,
+		orders:        orders,
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
@@ -115,6 +117,17 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.GET("/students/:id/wallet", h.StudentWallet, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/students/:id/wallet/entries", h.StudentWalletEntries, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/students/:id/wallet/adjustments", h.AdjustStudentWallet, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+
+	// Checkout belongs to the student who pays; reviewing is staff work (D02: role-only, Operator included).
+	v1.POST("/orders", h.Checkout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/orders", h.MyOrders, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/orders/:id", h.MyOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/enrollments", h.MyEnrollments, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/payments/bank-transfer", h.BankTransfer, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/admin/orders", h.StaffOrders, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.GET("/admin/orders/:id", h.StaffOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/admin/orders/:id/confirm", h.ConfirmOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/admin/orders/:id/cancel", h.CancelOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 
 	// Any tenant user may upload; the purpose narrows who, and every read is re-authorized in the service.
 	v1.POST("/assets", h.UploadAsset, httpx.NoStore(), Authenticate(h.auth))

@@ -37,10 +37,11 @@ func NewProductRepository(db *pgxpool.Pool) *ProductRepository {
 }
 
 const productColumns = `p.id, p.tenant_id, p.type, p.title, p.description, p.program_id,
-	p.price::text, p.original_price::text, p.is_active, p.active_until, p.created_by, p.created_at, p.updated_at`
+	p.price::text, p.original_price::text, p.is_active, p.active_from, p.active_until, p.created_by, p.created_at, p.updated_at`
 
 // A product is public only while it is on sale and every attached tryout is playable ($2 is now).
 const publicVisible = `p.is_active
+	AND (p.active_from IS NULL OR p.active_from <= $2)
 	AND (p.active_until IS NULL OR p.active_until > $2)
 	AND EXISTS (SELECT 1 FROM product_tryouts hp WHERE hp.product_id = p.id)
 	AND NOT EXISTS (
@@ -147,11 +148,11 @@ func (r *ProductRepository) CreateTx(ctx context.Context, tx pgx.Tx, tenantID, c
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `
 		INSERT INTO products (tenant_id, type, title, description, program_id, price,
-		        original_price, is_active, active_until, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		        original_price, is_active, active_from, active_until, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id`,
 		tenantID, product.Type, product.Title, product.Description, product.ProgramID,
-		product.Price, product.OriginalPrice, product.IsActive, product.ActiveUntil, createdBy).Scan(&id)
+		product.Price, product.OriginalPrice, product.IsActive, product.ActiveFrom, product.ActiveUntil, createdBy).Scan(&id)
 	if err != nil {
 		return model.Product{}, mapProductError("create product", err)
 	}
@@ -168,10 +169,10 @@ func (r *ProductRepository) UpdateHeadTx(ctx context.Context, tx pgx.Tx, tenantI
 	tag, err := tx.Exec(ctx, `
 		UPDATE products
 		   SET type = $3, title = $4, description = $5, program_id = $6, price = $7,
-		       original_price = $8, is_active = $9, active_until = $10, updated_at = now()
+		       original_price = $8, is_active = $9, active_from = $10, active_until = $11, updated_at = now()
 		 WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id, product.Type, product.Title, product.Description, product.ProgramID,
-		product.Price, product.OriginalPrice, product.IsActive, product.ActiveUntil)
+		product.Price, product.OriginalPrice, product.IsActive, product.ActiveFrom, product.ActiveUntil)
 	if err != nil {
 		return mapProductError("update product", err)
 	}
@@ -348,6 +349,25 @@ func (r *ProductRepository) PublicFind(ctx context.Context, tenantID uuid.UUID, 
 	return products[0], nil
 }
 
+// SellableTx reads a product only while the public catalog would list it, so checkout and the catalog
+// can never disagree about what may be bought.
+func (r *ProductRepository) SellableTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, now time.Time) (model.Product, error) {
+	if tenantID == uuid.Nil {
+		return model.Product{}, ErrScopeRequired
+	}
+	out, err := scanProductHead(tx.QueryRow(ctx,
+		`SELECT `+productColumns+` FROM products p WHERE p.tenant_id = $1 AND `+publicVisible+` AND p.id = $3`,
+		tenantID, now, id))
+	if err != nil {
+		return model.Product{}, err
+	}
+	products := []model.Product{out}
+	if err := r.attachTryouts(ctx, tx, tenantID, products); err != nil {
+		return model.Product{}, err
+	}
+	return products[0], nil
+}
+
 func (r *ProductRepository) PublicSummary(ctx context.Context, tenantID uuid.UUID, now time.Time) (model.CatalogSummary, error) {
 	if tenantID == uuid.Nil {
 		return model.CatalogSummary{}, ErrScopeRequired
@@ -485,16 +505,16 @@ func (r *ProductRepository) replaceTryoutsTx(ctx context.Context, tx pgx.Tx, ten
 func scanProductHead(row pgx.Row) (model.Product, error) {
 	var out model.Product
 	var original *string
-	var activeUntil *time.Time
+	var activeFrom, activeUntil *time.Time
 	err := row.Scan(&out.ID, &out.TenantID, &out.Type, &out.Title, &out.Description, &out.ProgramID,
-		&out.Price, &original, &out.IsActive, &activeUntil, &out.CreatedBy, &out.CreatedAt, &out.UpdatedAt)
+		&out.Price, &original, &out.IsActive, &activeFrom, &activeUntil, &out.CreatedBy, &out.CreatedAt, &out.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.Product{}, ErrNotFound
 		}
 		return model.Product{}, fmt.Errorf("scan product: %w", err)
 	}
-	out.OriginalPrice, out.ActiveUntil = original, activeUntil
+	out.OriginalPrice, out.ActiveFrom, out.ActiveUntil = original, activeFrom, activeUntil
 	return out, nil
 }
 

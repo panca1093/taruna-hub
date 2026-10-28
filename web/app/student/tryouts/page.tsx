@@ -1,7 +1,8 @@
 "use client";
 
-import { Card, Chip } from "@heroui/react";
-import { Clock, ListChecks, PackageOpen, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button, Card, Chip } from "@heroui/react";
+import { Clock, CloudOff, ListChecks, PackageOpen, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
@@ -10,15 +11,12 @@ import { useUser } from "@/lib/session-context";
 import { loadSession } from "@/lib/tryout-session";
 import { remainingAttempts } from "@/lib/kecermatan-session";
 import { useTryoutsListT } from "@/lib/i18n/dict/tryouts-list";
+import { api, type Enrollment } from "@/lib/api/client";
 import {
-  formatDate,
-  getEnrollmentsForUser,
   getKecermatanAttemptsPurchased,
   getKecermatanEnrollmentsForUser,
   getKecermatanTest,
   getProgram,
-  getSubtestsForTryout,
-  getTryout,
 } from "@/lib/mock-data";
 import { useHydrated } from "@/lib/use-hydrated";
 
@@ -29,15 +27,35 @@ export default function StudentTryoutsPage() {
   const user = useUser();
   const hydrated = useHydrated();
 
-  const enrollments = getEnrollmentsForUser(user.id);
+  const [enrollments, setEnrollments] = useState<Enrollment[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.orders
+      .enrollments()
+      .then((list) => {
+        if (!cancelled) setEnrollments(list.enrollments);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const held = enrollments ?? [];
+  // Kecermatan purchases arrive with P18; until then this still reads the mock layer.
   const kecTestIds = [...new Set(getKecermatanEnrollmentsForUser(user.id).map((e) => e.kecermatanTestId))];
 
   const statuses: Record<string, TryoutState> = {};
   const kecRemaining: Record<string, number> = {};
   if (hydrated) {
-    for (const e of enrollments) {
-      const session = loadSession(e.tryoutId, user.id);
-      statuses[e.tryoutId] = !session ? "not_started" : session.status === "completed" ? "completed" : "in_progress";
+    for (const e of held) {
+      const session = loadSession(e.tryout_id, user.id);
+      statuses[e.tryout_id] = !session ? "not_started" : session.status === "completed" ? "completed" : "in_progress";
     }
     for (const testId of kecTestIds) {
       const purchased = getKecermatanAttemptsPurchased(user.id, testId);
@@ -45,7 +63,35 @@ export default function StudentTryoutsPage() {
     }
   }
 
-  if (enrollments.length === 0 && kecTestIds.length === 0) {
+  if (loadFailed || enrollments === null) {
+    return (
+      <AppShell title={t.pageTitle} description={t.pageDescription} maxWidth="max-w-6xl">
+        {loadFailed ? (
+          <EmptyState
+            icon={CloudOff}
+            title={t.loadErrorTitle}
+            description={t.loadErrorDescription}
+            action={
+              <Button
+                variant="primary"
+                size="sm"
+                onPress={() => {
+                  setLoadFailed(false);
+                  setReloadKey((key) => key + 1);
+                }}
+              >
+                {t.retry}
+              </Button>
+            }
+          />
+        ) : (
+          <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        )}
+      </AppShell>
+    );
+  }
+
+  if (held.length === 0 && kecTestIds.length === 0) {
     return (
       <AppShell title={t.pageTitle} description={t.pageDescription} maxWidth="max-w-6xl">
         <EmptyState
@@ -64,32 +110,25 @@ export default function StudentTryoutsPage() {
 
   return (
     <AppShell title={t.pageTitle} description={t.pageDescription} maxWidth="max-w-6xl">
-      {enrollments.length > 0 && (
+      {held.length > 0 && (
         <div>
           <p className="mb-3 text-sm font-semibold text-foreground">{t.tryoutSectionTitle}</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {enrollments.map((e) => {
-              const tryout = getTryout(e.tryoutId);
-              if (!tryout) return null;
-              const program = getProgram(tryout.programId);
-              const subtests = getSubtestsForTryout(tryout.id);
-              const state = statuses[tryout.id] ?? "not_started";
+            {held.map((e) => {
+              const state = statuses[e.tryout_id] ?? "not_started";
               const cta =
                 state === "completed"
-                  ? { label: t.ctaViewResult, href: `/student/tryout/${tryout.id}/result` }
+                  ? { label: t.ctaViewResult, href: `/student/tryout/${e.tryout_id}/result` }
                   : state === "in_progress"
-                    ? { label: t.ctaContinue, href: `/student/tryout/${tryout.id}` }
-                    : { label: t.ctaStart, href: `/student/tryout/${tryout.id}` };
+                    ? { label: t.ctaContinue, href: `/student/tryout/${e.tryout_id}` }
+                    : { label: t.ctaStart, href: `/student/tryout/${e.tryout_id}` };
 
               return (
                 <Card key={e.id} className="gap-0 overflow-hidden p-0">
-                  <div
-                    className="h-20 w-full"
-                    style={{ background: `linear-gradient(135deg, ${tryout.coverFrom}, ${tryout.coverTo})` }}
-                  />
+                  <div className="h-20 w-full bg-gradient-ring" />
                   <div className="space-y-3 p-4">
                     <div className="flex items-center justify-between gap-2">
-                      {program && <ProgramBadge code={program.code} />}
+                      <ProgramBadge code={e.program_code} />
                       <Chip
                         size="sm"
                         className={`font-medium ${
@@ -103,13 +142,13 @@ export default function StudentTryoutsPage() {
                         {state === "completed" ? t.stateCompleted : state === "in_progress" ? t.stateInProgress : t.stateNotStarted}
                       </Chip>
                     </div>
-                    <p className="line-clamp-1 text-sm font-semibold text-foreground">{tryout.title}</p>
+                    <p className="line-clamp-1 text-sm font-semibold text-foreground">{e.tryout_title}</p>
                     <div className="flex gap-3 text-xs text-muted">
                       <span className="inline-flex items-center gap-1">
-                        <ListChecks className="size-3.5" /> {t.subtestCount(subtests.length)}
+                        <ListChecks className="size-3.5" /> {t.subtestCount(e.subtest_count)}
                       </span>
                       <span className="inline-flex items-center gap-1">
-                        <Clock className="size-3.5" /> {t.activeUntil(formatDate(e.activeUntil))}
+                        <Clock className="size-3.5" /> {t.activeUntil(new Date(e.active_until).toLocaleDateString())}
                       </span>
                     </div>
                     <LinkButton href={cta.href} variant={state === "completed" ? "secondary" : "primary"} size="sm" className="w-full">
@@ -124,7 +163,7 @@ export default function StudentTryoutsPage() {
       )}
 
       {kecTestIds.length > 0 && (
-        <div className={enrollments.length > 0 ? "mt-8" : undefined}>
+        <div className={held.length > 0 ? "mt-8" : undefined}>
           <p className="mb-3 text-sm font-semibold text-foreground">{t.kecermatanSectionTitle}</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {kecTestIds.map((testId) => {

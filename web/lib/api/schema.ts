@@ -2309,6 +2309,458 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in student's own orders
+         * @description Student only. Newest first, at most 100 per page, only the caller's own orders.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of the student's orders */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OrderList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        /**
+         * Check out a product
+         * @description Student only. The server checks that the product is active, inside its own sale window (`active_from` to
+         *     `active_until`) and that every tryout is still published, then stores a snapshot of its title, price and
+         *     tryouts on the order. The client sends `expected_price`, the price its page showed, and the server price must
+         *     equal it.
+         *
+         *     `payment_method` is `wallet` or `manual` (the gateway arrives with P14). A `wallet` order is debited,
+         *     confirmed, granted and queued for notification in one transaction: if the balance is too low it answers
+         *     `422` with code `insufficient_balance` and nothing is written. A `manual` order needs `proof_asset_id`, an
+         *     unused `payment_proof` asset the caller uploaded through `POST /api/v1/assets`; it is finalized with the
+         *     order and the order waits as `pending` for staff. Anyone else's, a missing, a wrongly typed or an already
+         *     used proof answers the same `422` on `proof_asset_id`. `503` when no bank account is configured.
+         *
+         *     `idempotency_key` (8–64 characters, `[A-Za-z0-9_-]`) identifies the purchase. The first call answers `201`;
+         *     the same key for the same product, method and proof answers `200` with the original order and moves
+         *     nothing; the same key for anything else answers `409`.
+         *
+         *     An `individual` product whose tryout the student already holds with active access answers `409` with code
+         *     `already_owned`. A `bundle` can still be bought: only the tryouts not yet held are granted.
+         *
+         *     A student with a `pending` order for the product cannot create another (any method): `409` `order_pending`.
+         *     A price that differs from `expected_price` answers `409` `price_changed` and writes nothing; a replay of an
+         *     existing key returns its original order before either check.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CheckoutRequest"];
+                };
+            };
+            responses: {
+                /** @description The original order for this idempotency key, nothing written */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Order"];
+                    };
+                };
+                /** @description The new order */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Order"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /**
+                 * @description `already_owned` (an individual product's tryout is already held), `price_changed` (the price differs
+                 *     from `expected_price`), `order_pending` (a pending order for this product exists) or `conflict` (the
+                 *     idempotency key belongs to a different order).
+                 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description `validation_failed` with `fields`, or `insufficient_balance` when the wallet cannot pay the price. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One of the student's own orders
+         * @description Student only. Another student's order answers the same `404` as a missing one.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The order */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Order"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tryouts the signed-in student holds ("Paket Belajar Saya")
+         * @description Student only. The access window is the tryout's own `active_from` and `active_until`, read live; a
+         *     purchase does not carry a window of its own (D05a).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Every tryout the student holds, newest grant first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EnrollmentList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/bank-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where a manual transfer is sent
+         * @description Student only. The single tenant's account, from server configuration. `503` when it is not configured,
+         *     which also makes manual checkout unavailable.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The bank account */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BankTransfer"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every order of the tenant, for review
+         * @description Admin and Operator (D02: a role guard). Newest first, at most 100 per page. `status` narrows to one
+         *     state. `q` is a case-insensitive substring of the order code, the student's name or the product title;
+         *     `%` and `_` are literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "pending" | "confirmed" | "cancelled";
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of orders */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OrderList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One order for review
+         * @description Admin and Operator only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The order */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Order"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/orders/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a pending order's payment
+         * @description Admin and Operator. Moves a `pending` order to `confirmed`, opens the tryouts it bought that the student
+         *     does not hold yet and queues the email and WhatsApp notifications, all in one transaction. Repeating the
+         *     call on a confirmed order answers `200` and changes nothing. A `cancelled` order answers `409`; a
+         *     confirmed order never goes back to pending.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The order as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Order"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/orders/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refuse a pending order
+         * @description Admin and Operator. Moves a `pending` order to `cancelled` with a required `reason` (1–500 characters),
+         *     opens no access and queues the cancellation notifications. Repeating the call on a cancelled order
+         *     answers `200` and keeps the first reason. A `confirmed` order answers `409`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CancelOrderRequest"];
+                };
+            };
+            responses: {
+                /** @description The order as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Order"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets": {
         parameters: {
             query?: never;
@@ -2947,6 +3399,11 @@ export interface components {
              */
             original_price: string | null;
             is_active: boolean;
+            /**
+             * Format: date-time
+             * @description First moment the product can be bought; `null` means no start. Never changes tryout access (D05a).
+             */
+            active_from: string | null;
             /** Format: date-time */
             active_until: string | null;
             tryouts: components["schemas"]["ProductTryout"][];
@@ -2974,6 +3431,13 @@ export interface components {
             /** @description Same grammar as `price` and never below it; `null` means no discount. */
             original_price: string | null;
             is_active: boolean;
+            /**
+             * Format: date-time
+             * @description Optional. First moment the product can be bought. Must be before `active_until` when both are set,
+             *     otherwise `422` on `active_from`. It bounds the catalog and checkout only; a tryout's own window
+             *     decides when it can be taken.
+             */
+            active_from?: string | null;
             /** Format: date-time */
             active_until?: string | null;
             /** @description The complete package, in order. One id for `individual`, two to twenty for `bundle`. */
@@ -3142,7 +3606,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -3152,6 +3616,100 @@ export interface components {
                 /** @description Correlates with the server log line for this request. */
                 request_id?: string;
             };
+        };
+        CheckoutRequest: {
+            /** Format: uuid */
+            product_id: string;
+            /** @description The price the page showed, as the same decimal string `Product.price` uses. */
+            expected_price: string;
+            /** @enum {string} */
+            payment_method: "manual" | "wallet";
+            idempotency_key: string;
+            /**
+             * Format: uuid
+             * @description Required for `manual` and refused for `wallet`. An unused `payment_proof` asset the caller uploaded.
+             */
+            proof_asset_id?: string | null;
+        };
+        CancelOrderRequest: {
+            reason: string;
+        };
+        OrderItem: {
+            /** Format: uuid */
+            tryout_id: string;
+            /** @description The tryout's title when the order was placed. */
+            title: string;
+        };
+        /** @description The checkout snapshot. Editing or deleting the product later changes nothing here. */
+        Order: {
+            /** Format: uuid */
+            id: string;
+            /** @example ORD-000042 */
+            code: string;
+            /** @enum {string} */
+            status: "pending" | "confirmed" | "cancelled";
+            /** @enum {string} */
+            payment_method: "manual" | "wallet";
+            /** Format: uuid */
+            student_id: string;
+            student_name: string;
+            /** Format: uuid */
+            product_id: string;
+            /** @enum {string} */
+            product_type: "individual" | "bundle";
+            product_title: string;
+            /**
+             * @description Canonical decimal string with two fraction digits, exactly what was charged or to be transferred.
+             * @example 150000.00
+             */
+            price: string;
+            items: components["schemas"]["OrderItem"][];
+            /**
+             * Format: uuid
+             * @description The transfer proof of a `manual` order; read it with `GET /api/v1/assets/{id}/url`.
+             */
+            proof_asset_id: string | null;
+            cancel_reason: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            confirmed_at: string | null;
+            /** Format: date-time */
+            cancelled_at: string | null;
+        };
+        OrderList: {
+            orders: components["schemas"]["Order"][];
+            total: number;
+        };
+        Enrollment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tryout_id: string;
+            tryout_title: string;
+            program_code: string;
+            program_name: string;
+            subtest_count: number;
+            /**
+             * Format: date-time
+             * @description The tryout's own start; access has not begun before it.
+             */
+            active_from: string | null;
+            /**
+             * Format: date-time
+             * @description The tryout's own end (D05a).
+             */
+            active_until: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        EnrollmentList: {
+            enrollments: components["schemas"]["Enrollment"][];
+        };
+        BankTransfer: {
+            bank_name: string;
+            account_number: string;
+            account_holder: string;
         };
     };
     responses: {
