@@ -339,7 +339,7 @@ For every slice, use this verification loop:
 - [ ] Used package delete/shrink below any referencing test threshold fails; existing frozen assets remain renderable.
 - [ ] Emoji is catalog-only and consistent across devices; pasted emoji in symbols fails with guidance; preview does not consume quota.
 
-**Decision / verification gate:** D02 (resolved: the Operator may mutate packages); D09 bounded extraction/session size and emoji licenses.
+**Decision / verification gate:** D02 (resolved: the Operator may mutate packages); D09 resolved 2026-10-28 (ZIP ≤200 files and ≤50MB extracted; Twemoji CC-BY 4.0 catalog with attribution). Master packages and copy are deferred (D17).
 
 <a id="p10"></a>
 
@@ -362,7 +362,7 @@ For every slice, use this verification loop:
 - [ ] Columns k and k+N/2 have identical references/questions/subset ordering, with separate answer keys per column identity.
 - [ ] Reject edit/delete after a session exists; supported char/number/symbol/image/emoji/shape/mix sources render.
 
-**Decision / verification gate:** D09 generator limits; generation policy is fixed by content snapshots, not a client RNG.
+**Decision / verification gate:** D09 resolved 2026-10-28 (at most 50 kolom × 100 soal); generation policy is fixed by content snapshots, not a client RNG.
 
 <a id="p11"></a>
 
