@@ -432,7 +432,7 @@ For every slice, use this verification loop:
 - [ ] Proof belongs to requesting student/tenant; staff sees/reviews only own tenant orders.
 - [ ] Bundle grants every purchased test; repeat kecermatan purchase preserves history on same enrollment; correct email/WA events enqueue atomically.
 
-**Decision / verification gate:** D05 expiry/credit aggregation and D12 money policy; external delivery success is verified through P02.
+**Decision / verification gate:** D05 resolved (access over the tryout window, product sale window, reject repurchase of held tryouts, kecermatan credit added to one enrollment); D12 money policy; external delivery success is verified through P02.
 
 <a id="p14"></a>
 
@@ -547,7 +547,7 @@ For every slice, use this verification loop:
 - [ ] Expiry records unanswered as kosong; closed-tab/resume and transition tests cannot reset timers.
 - [ ] Client-approved N=10 and N>10 fixtures, zero-attempt/zero-first-half/overflow cases and rounding validate all four scores; detailed review reproduces the exact attempt.
 
-**Decision / verification gate:** D03 scoring is a full-scope completion gate; D05 abandoned quota; D10 transitions. A provisional UI label alone is insufficient.
+**Decision / verification gate:** D03 scoring is a full-scope completion gate; D05 resolved (credit consumed on completion only); D10 transitions. A provisional UI label alone is insufficient.
 
 <a id="p19"></a>
 
