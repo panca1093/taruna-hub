@@ -563,7 +563,7 @@ For every slice, use this verification loop:
 
 ### P19 — Monitoring and violation timelines
 
-**Status:** planned · **Size:** M · **Depends:** P16, P17
+**Status:** in progress, lean (API, recording rules, staff monitoring page, violation timelines and student runtime reporting built and tested; browser demo, monitoring-page time-extension control and cross-tenant test deferred) · **Size:** M · **Depends:** P16, P17
 
 **Outcome:** Staff see active tryouts and retained violation history through 30-second polling.
 
@@ -575,12 +575,21 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Starting/completing session appears/disappears within a 30-second refresh; history remains after completion.
+- [x] Starting/completing session appears/disappears within a 30-second refresh; history remains after completion.
+  - Service and HTTP tests prove the list is read from PostgreSQL, a session drops out on completion and its timeline stays reachable. The 30-second interval is in the page code, not browser-tested.
 - [ ] Fullscreen exit/detectable screenshot shows warning and records timestamp while timer keeps running.
+  - Open: server side is tested (server timestamp, session and subtest untouched, only while a subtest runs). The overlay and browser events were not exercised in a browser; no dev server was run.
 - [ ] Tenant A cannot list B active/finished sessions or timeline by guessed ID.
-- [ ] Polling 50 active sessions meets ≤500ms p95 in the documented fixture; kecermatan has no violations or fullscreen enforcement.
+  - Open: every query is tenant-scoped, and a guessed id answers 404 and students answer 403 (tested), but per D17 no cross-tenant test was written.
+- [x] Polling 50 active sessions meets ≤500ms p95 in the documented fixture; kecermatan has no violations or fullscreen enforcement.
+  - Measured p95 of about 1-3ms over 200 polls of 50 sessions (service plus query, not HTTP), see docs/monitoring-violations.md. Kecermatan has no violation route or code.
 
 **Decision / verification gate:** Fullscreen availability is browser-dependent; test supported desktop/mobile paths and explicitly describe best-effort behavior. Resolved 2026-10-28 (owner): a device without the Fullscreen API (e.g. iPhone Safari) may still take the tryout and records no violation. Includes the D10 per-student time extension control on the monitoring page.
+
+- [ ] Per-student time extension control on the monitoring page.
+  - Open: the monitoring mockup has no place for it, so no new UI was added; the P16 endpoint is unchanged.
+- [ ] Browser demo of student fullscreen/screenshot warnings, monitoring page and results detail.
+  - Open: web checked by tsc, lint and build only.
 
 <a id="p20"></a>
 
