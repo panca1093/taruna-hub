@@ -8,11 +8,11 @@ decisions D04, D10, D13; the wire contract is `api/openapi.yaml` (tag `runtime`)
 
 | Table | Holds |
 |---|---|
-| `tryout_sessions` | One attempt: number, status, frozen scoring weights, scoring version, permutation seed, summed staff extension |
-| `tryout_session_parts` | One row per subtest: status (`pending`/`running`/`submitted`), start, absolute deadline, why it ended, raw earned/max points |
+| `tryout_sessions` | One attempt: number, status, frozen scoring weights, scoring version, permutation seed |
+| `tryout_session_parts` | One row per subtest: status (`pending`/`running`/`submitted`), start, absolute deadline, staff extension `extra_seconds`, why it ended, raw earned/max points |
 | `tryout_session_questions` | The snapshot: question version, display position, option order. Content comes from the immutable version |
 | `tryout_session_answers` | Accepted answer, server `revision`, client `client_seq` |
-| `tryout_session_extensions` | Append-only audit of staff extensions (actor, reason, seconds) |
+| `tryout_session_extensions` | Append-only audit of staff extensions (actor, subtest, reason, seconds) |
 | `tryout_results` | Exactly one row per session (primary key `session_id`) |
 | `tryout_score_totals` | Per student and tryout `score_sum` and `result_count`, for P17's average |
 | `tenant_settings` | D04 weights; no row means 1/2/3 |
@@ -23,7 +23,8 @@ and tryout; a partial index on running part deadlines feeds the worker scan.
 ## Start and snapshot
 
 `POST /my/tryouts/{id}/sessions` locks the student's enrollment row, so concurrent starts serialize: the first
-creates the session, the rest find it. Without an in-progress session it takes the tryout row lock (exclusive only
+creates the session, the rest find it; an existing in-progress session is read `FOR UPDATE`, so the lock order is
+enrollment, then session, like every other path. Without an in-progress session it takes the tryout row lock (exclusive only
 for the very first attempt, which stamps `first_attempt_at`; shared afterwards), checks published and the window
 (`active_from <= now < active_until`) and writes the snapshot: question versions the tryout froze, the weights
 current at that moment, and a permutation from a random seed. Questions shuffle within their subtest when
@@ -33,17 +34,19 @@ change, so points follow the option. Each attempt draws its own seed.
 ## Deadlines (D10)
 
 A part's stored deadline is `min(start + duration, tryout.active_until)`, set once when the student presses start.
-Three live values are added on top:
+Two live values are added on top, and the sum (`visibleDeadline`) is both the student's countdown and the cutoff:
 
-- the session's staff extension `extra_seconds`; the student's countdown shows `deadline + extra`;
-- the tryout's `grace_seconds`; hidden from the countdown.
+- the part's staff `extra_seconds`, granted by Admin or Operator only while that subtest is running. Later subtests keep
+  normal timing; with no running subtest the grant answers `409 subtest_not_running`. It never reopens a settled part;
+- the tryout's `grace_seconds`, read live. The countdown shows it too, so a grace changed mid-exam reaches the
+  browser on its next re-sync (focus, or every 2 minutes).
 
-An answer is admitted while `now < deadline + extra + grace`, using server time. The extension applies to every
-subtest of that session (a literal reading of "per-session"); it never reopens a part that already settled.
+An answer is admitted while `now < deadline + extra + grace`, using server time. Auto-submit, the worker scan and
+admission all use that same instant, and an expired part's `submitted_at` is it.
 
 `settleLocked` is the one routine that applies passed deadlines. It runs under the session row lock from every
 mutating call, from reads that find something due, and from the worker. It expires running parts past their
-cutoff (`submit_reason = expired`, `submitted_at` = the deadline), then finalizes the session when every part is
+cutoff (`submit_reason = expired`, `submitted_at` = that cutoff), then finalizes the session when every part is
 submitted, or when `active_until` has passed and no part is still inside its grace. Parts never started then score
 0 over their full maximum (`unstarted`). Between subtests nothing runs: the next part starts only on the student's
 press, and a session waiting there is finalized at `active_until`.
@@ -56,12 +59,13 @@ settles first.
 
 ## Answers
 
-`PUT /my/tryout-sessions/{id}/answers/{questionId}` with `{seq, answer}`. `seq` is the browser's per-question
+`PUT /my/tryout-sessions/{id}/answers/{questionId}` with `{seq, answer}`. The upsert also guards in SQL
+(`client_seq < EXCLUDED.client_seq`), so a reordered write cannot lower a stored sequence. `seq` is the browser's per-question
 counter. Equal `seq` and equal answer is an idempotent retry; lower `seq`, or equal `seq` with another answer, is
 `409 stale_answer` and never writes; higher wins. `revision` moves only when the stored answer changes. The
 browser (`lib/tryout-session.ts`) keeps one request in flight per question and resends the latest, shows
 saved versus pending per question, keeps unsent answers in localStorage only to resend them, and never shows a
-local answer as saved before the server acknowledged it.
+local answer as saved before the server acknowledged it. On `stale_answer` it re-reads the stored answer and adopts it.
 
 ## Scoring (D04)
 
@@ -79,10 +83,13 @@ completion response always carries the score and the totals move once.
 ## Web
 
 The countdown is server time at the last sync plus monotonic elapsed time, re-synced on focus and every 2 minutes.
+At zero the browser does not submit: it waits briefly (4 s) for pending answers, re-reads the session, and follows
+the server, which has already settled or will at the cutoff; a deadline that moved keeps the countdown going.
 The re-sync is an authenticated request, and so is every answer, so an exam keeps its login session alive (D13);
 the server deadline still decides everything. Fullscreen and screenshot warnings stay local; persisting them is P19.
 The scoring weights are edited on `/admin/settings`; the grace field is in the tryout builder and, once a tryout is
-locked, saves through `PUT /tryouts/{id}/grace`.
+locked, saves through `PUT /tryouts/{id}/grace`. Only Admin changes weights and grace: a grace sent through
+`POST`/`PUT /tryouts` by anyone else is ignored, and an omitted field keeps the stored value.
 
 ## Not here
 
