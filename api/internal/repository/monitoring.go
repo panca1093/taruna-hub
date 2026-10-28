@@ -150,7 +150,7 @@ func (r *MonitoringRepository) Violations(ctx context.Context, q dbtx, tenantID,
 	}
 	rows, err := q.Query(ctx, `SELECT `+violationColumns+violationFrom+`
 		 WHERE v.tenant_id = $1 AND v.session_id = $2
-		 ORDER BY v.occurred_at, v.id`, tenantID, sessionID)
+		 ORDER BY v.occurred_at, v.seq`, tenantID, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("list violations: %w", err)
 	}

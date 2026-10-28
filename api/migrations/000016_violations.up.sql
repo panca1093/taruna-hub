@@ -2,6 +2,8 @@
 -- shortcut); the server stamps the time. Evidence only: nothing here submits, penalizes or scores.
 CREATE TABLE tryout_session_violations (
     id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Breaks ties between events the clock cannot tell apart, so a timeline order is stable.
+    seq         bigint      GENERATED ALWAYS AS IDENTITY,
     tenant_id   uuid        NOT NULL,
     session_id  uuid        NOT NULL,
     subtest_id  uuid        NOT NULL,
@@ -17,7 +19,7 @@ CREATE TABLE tryout_session_violations (
 );
 
 -- The per-session timeline and the per-row count in the polling query.
-CREATE INDEX tryout_session_violations_timeline_idx ON tryout_session_violations (tenant_id, session_id, occurred_at, id);
+CREATE INDEX tryout_session_violations_timeline_idx ON tryout_session_violations (tenant_id, session_id, occurred_at, seq);
 
 -- The monitoring poll: in-progress sessions of one tenant, newest first.
 CREATE INDEX tryout_sessions_monitor_idx ON tryout_sessions (tenant_id, started_at DESC, id) WHERE status = 'in_progress';
