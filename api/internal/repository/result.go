@@ -209,7 +209,7 @@ func (r *ResultRepository) StaffResults(ctx context.Context, q dbtx, tenantID uu
 	rows, err := q.Query(ctx, cte+`
 		SELECT r.session_id, r.tryout_id, t.title, p.code, r.scoring_mode, r.user_id, u.name, r.attempt_number,
 		       r.score::float8, st.average::float8, st.rnk, st.participants, r.completed_at`+from+`
-		 ORDER BY st.rnk, r.completed_at DESC, r.session_id
+		 ORDER BY CASE WHEN $2::uuid IS NULL THEN 0 ELSE st.rnk END, r.completed_at DESC, r.session_id
 		 LIMIT $4 OFFSET $5`, tenantID, f.TryoutID, search, f.Limit, f.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list staff results: %w", err)
@@ -263,17 +263,21 @@ func (r *ResultRepository) IRTUnderThreshold(ctx context.Context, q dbtx, tenant
 		return nil, ErrScopeRequired
 	}
 	rows, err := q.Query(ctx, `
-		SELECT sq.session_id, bool_or(c.n < $3)
-		  FROM tryout_session_questions sq
-		  CROSS JOIN LATERAL (
-		        SELECT count(DISTINCT s.user_id) AS n
-		          FROM tryout_session_questions q2
-		          JOIN tryout_sessions s ON s.id = q2.session_id AND s.tenant_id = q2.tenant_id AND s.status = 'completed'
-		          JOIN tryout_session_answers a ON a.session_id = q2.session_id AND a.question_id = q2.question_id
-		         WHERE q2.tenant_id = $1 AND q2.question_version_id = sq.question_version_id
-		           AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(a.answer) e WHERE btrim(e) <> '')) c
-		 WHERE sq.tenant_id = $1 AND sq.session_id = ANY($2)
-		 GROUP BY sq.session_id`, tenantID, sessionIDs, threshold)
+		WITH page AS (
+		    SELECT session_id, question_version_id
+		      FROM tryout_session_questions
+		     WHERE tenant_id = $1 AND session_id = ANY($2)),
+		counts AS (
+		    SELECT q2.question_version_id, count(DISTINCT s.user_id) AS n
+		      FROM tryout_session_questions q2
+		      JOIN tryout_sessions s ON s.id = q2.session_id AND s.tenant_id = q2.tenant_id AND s.status = 'completed'
+		      JOIN tryout_session_answers a ON a.session_id = q2.session_id AND a.question_id = q2.question_id
+		     WHERE q2.tenant_id = $1 AND q2.question_version_id IN (SELECT question_version_id FROM page)
+		       AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(a.answer) e WHERE btrim(e) <> '')
+		     GROUP BY q2.question_version_id)
+		SELECT page.session_id, bool_or(coalesce(counts.n, 0) < $3)
+		  FROM page LEFT JOIN counts ON counts.question_version_id = page.question_version_id
+		 GROUP BY page.session_id`, tenantID, sessionIDs, threshold)
 	if err != nil {
 		return nil, fmt.Errorf("count irt respondents: %w", err)
 	}
