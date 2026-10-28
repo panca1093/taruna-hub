@@ -5,11 +5,11 @@ import { useLocale } from "@/lib/i18n/locale-context";
 const id = {
   pageTitle: "Hasil Tryout",
   loadingResult: "Memuat hasil…",
-  irtWarning:
-    "Tryout ini menggunakan mode IRT. Beberapa soal masih direspons kurang dari 30 siswa, sehingga skor tetap dihitung dengan bobot kesulitan biasa sampai data cukup untuk kalibrasi IRT.",
   yourTotalScore: "Skor total kamu",
   rankPending: "Peringkat belum tersedia",
   explanationsPending: "Pembahasan soal belum tersedia. Untuk saat ini hanya skor yang ditampilkan.",
+  loadingReview: "Memuat pembahasan…",
+  reviewErrorTitle: "Pembahasan tidak dapat dimuat",
   loadErrorTitle: "Hasil tidak dapat dimuat",
   loadErrorDescription: "Periksa koneksi kamu lalu coba lagi.",
   retry: "Coba Lagi",
@@ -30,11 +30,11 @@ const id = {
 const en: typeof id = {
   pageTitle: "Tryout Result",
   loadingResult: "Loading result…",
-  irtWarning:
-    "This tryout uses IRT mode. Some questions have been answered by fewer than 30 students, so scores are still calculated using standard difficulty weighting until there's enough data for IRT calibration.",
   yourTotalScore: "Your total score",
   rankPending: "Rank not available yet",
   explanationsPending: "Explanations are not available yet. For now, only the score is shown.",
+  loadingReview: "Loading explanations…",
+  reviewErrorTitle: "The explanations could not be loaded",
   loadErrorTitle: "The result could not be loaded",
   loadErrorDescription: "Check your connection and try again.",
   retry: "Retry",

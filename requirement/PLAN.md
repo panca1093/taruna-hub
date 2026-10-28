@@ -512,7 +512,7 @@ For every slice, use this verification loop:
 
 ### P17 — Tryout history, ranking and controlled review
 
-**Status:** planned · **Size:** L · **Depends:** P16
+**Status:** in progress, lean (API, student result/review and admin results wired and tested; Redis cache, browser demo and student history page changes deferred) · **Size:** L · **Depends:** P16
 
 **Outcome:** Students review all attempts and tenant-local average-based rankings without premature explanation access.
 
@@ -524,10 +524,15 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Scores 60/80/100 rank with average 80; no foreign-tenant participant enters ranking.
+- [x] Scores 60/80/100 rank with average 80; no foreign-tenant participant enters ranking.
+  - Average and rank are tested; every query is tenant-scoped, and per D17 no cross-tenant test was written.
 - [ ] Missing/stale Redis or lost cache event returns/rebuilds correct PostgreSQL average; tied scores follow D04.
-- [ ] Before explanation release inspect raw API and asset links: no hidden key/explanation leaks; after release own completed attempt review succeeds.
-- [ ] IRT threshold fixtures count approved distinct students/question revisions correctly; weighted scoring remains unchanged.
+  - Open: no Redis cache was built. Rank and average are read from PostgreSQL on every call, so nothing can be stale, but no test exercises a Redis fallback. Ties (1, 2, 2, 4) are tested.
+- [x] Before explanation release inspect raw API and asset links: no hidden key/explanation leaks; after release own completed attempt review succeeds.
+- [x] IRT threshold fixtures count approved distinct students/question revisions correctly; weighted scoring remains unchanged.
+
+- [ ] Browser demo of result, review and admin results pages.
+  - Open: no dev server or browser run in this slice; web checked by tsc, lint and build only.
 
 **Decision / verification gate:** D04 resolved 2026-10-28 (ties share a rank and skip: 1, 2, 2, 4; IRT counts distinct students per question version); current rank is distinguished from any historical result rank.
 

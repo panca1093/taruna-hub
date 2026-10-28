@@ -3132,7 +3132,11 @@ export interface paths {
         /**
          * The immediate basic result of a completed session
          * @description `score` is (earned points / maximum points) x 100 rounded to 2 decimals (D04). A session still in progress
-         *     answers `409` `result_not_ready`. Ranking and explanations are P17.
+         *     answers `409` `result_not_ready`. `ranking` is the student's current place among the tenant's participants of
+         *     this tryout, computed on every call (D04): the mean of the student's completed-attempt scores, 2 decimals,
+         *     ranked best first; equal averages share a rank and the next rank skips (1, 2, 2, 4). Every attempt of the
+         *     same student therefore shows the same rank. `explanations_released` and `explanation_release_at` tell the
+         *     page whether `GET .../review` will answer. The IRT warning is never part of a student response.
          */
         get: {
             parameters: {
@@ -3145,19 +3149,76 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description The result */
+                /** @description The result with the current rank */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["TryoutResult"];
+                        "application/json": components["schemas"]["TryoutResultDetail"];
                     };
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
                 404: components["responses"]["NotFound"];
                 /** @description `result_not_ready` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/my/tryout-sessions/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Questions, own answers, keys and explanations of one completed attempt
+         * @description Only the owner's completed attempt, and only once the tryout's `explanation_release_at` is null or in the
+         *     past. Before that the answer is `409` `explanations_not_released` and carries no key, no explanation and no
+         *     question content. A session still in progress answers `409` `result_not_ready`. Another student's session,
+         *     a staff caller and a malformed id never reveal existence. `correct` is the key as option ids (accepted
+         *     texts for `isian`; empty for an option-weighted question, whose options carry `points` instead).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["SessionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The review */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TryoutReview"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `result_not_ready` or `explanations_not_released` */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -3470,6 +3531,108 @@ export interface paths {
                 422: components["responses"]["ValidationFailed"];
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Completed attempts of the tenant with each student's current rank
+         * @description Admin and Operator (D02: a role guard). Best current rank first, then newest, at most 100 per page.
+         *     `tryout_id` narrows to one tryout. `q` is a case-insensitive substring of the student's name; `%` and `_`
+         *     are literal. `rank` and `participant_count` are the student's current standing on that tryout (the same for
+         *     every attempt of that student). `irt_warning` is true only for an IRT-mode attempt that holds a question
+         *     version answered (non-blank, in a completed session) by fewer than 30 distinct students; retakes count
+         *     once and a new question version starts at 0.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    tryout_id?: string;
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of results */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StaffResultList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tryouts/{id}/leaderboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's ranking of one tryout
+         * @description Admin and Operator. Best first by the average of each student's completed attempts (2 decimals); ties share
+         *     a rank and the next rank skips (1, 2, 2, 4). Computed from PostgreSQL on every call. At most 100 per page.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of standings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Leaderboard"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4287,7 +4450,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -4455,6 +4618,125 @@ export interface components {
             /** Format: date-time */
             completed_at: string;
             subtests: components["schemas"]["TryoutResultSubtest"][];
+        };
+        /** @description The student's current place on the tryout; never stored, so never stale. */
+        TryoutRanking: {
+            /** @description 1-based competition rank; equal averages share it and the next rank skips. */
+            rank: number;
+            participant_count: number;
+            /** @description Mean of the student's completed-attempt scores, 2 decimals. */
+            average_score: number;
+            attempts_counted: number;
+        };
+        /** @description A `TryoutResult` plus the current rank and the explanation release. */
+        TryoutResultDetail: {
+            /** Format: uuid */
+            session_id: string;
+            /** Format: uuid */
+            tryout_id: string;
+            attempt_number: number;
+            score: number;
+            /** @enum {string} */
+            scoring_mode: "weighted" | "irt";
+            scoring_version: number;
+            /** Format: date-time */
+            completed_at: string;
+            subtests: components["schemas"]["TryoutResultSubtest"][];
+            ranking: components["schemas"]["TryoutRanking"];
+            explanations_released: boolean;
+            /** Format: date-time */
+            explanation_release_at: string | null;
+        };
+        ReviewOption: {
+            id: string;
+            label: string;
+            /** @description Only on an option-weighted question. */
+            points: number | null;
+        };
+        ReviewQuestion: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            /** @enum {string} */
+            type: "pg" | "pg_multi" | "isian" | "benar_salah";
+            content: string;
+            /** @description In the order this student saw them. */
+            options: components["schemas"]["ReviewOption"][];
+            option_weighted: boolean;
+            /** @description The student's saved answer; empty when the question was left blank. */
+            answer: string[];
+            /** @description The key. Empty for an option-weighted question. */
+            correct: string[];
+            is_correct: boolean;
+            explanation: string;
+        };
+        ReviewSubtest: {
+            /** Format: uuid */
+            subtest_id: string;
+            name: string;
+            position: number;
+            score: number;
+            correct_count: number;
+            question_count: number;
+            questions: components["schemas"]["ReviewQuestion"][];
+        };
+        TryoutReview: {
+            /** Format: uuid */
+            session_id: string;
+            /** Format: uuid */
+            tryout_id: string;
+            subtests: components["schemas"]["ReviewSubtest"][];
+        };
+        LeaderboardEntry: {
+            rank: number;
+            /** Format: uuid */
+            user_id: string;
+            student_name: string;
+            average_score: number;
+            attempts_counted: number;
+        };
+        Leaderboard: {
+            entries: components["schemas"]["LeaderboardEntry"][];
+            /** @description Participants of the tryout. */
+            total: number;
+        };
+        StaffResultSubtest: {
+            /** Format: uuid */
+            subtest_id: string;
+            name: string;
+            position: number;
+            score: number;
+            correct_count: number;
+            question_count: number;
+        };
+        StaffResult: {
+            /** Format: uuid */
+            session_id: string;
+            /** Format: uuid */
+            tryout_id: string;
+            tryout_title: string;
+            program_code: string;
+            /** @enum {string} */
+            scoring_mode: "weighted" | "irt";
+            /** Format: uuid */
+            user_id: string;
+            student_name: string;
+            attempt_number: number;
+            /** @description This attempt's score out of 100. */
+            score: number;
+            /** @description The student's average over completed attempts of this tryout, which ranks them. */
+            average_score: number;
+            /** @description The student's current rank, not a rank frozen at completion. */
+            rank: number;
+            participant_count: number;
+            irt_warning: boolean;
+            /** Format: date-time */
+            completed_at: string;
+            subtests: components["schemas"]["StaffResultSubtest"][];
+        };
+        StaffResultList: {
+            results: components["schemas"]["StaffResult"][];
+            total: number;
         };
         TryoutSession: {
             /** Format: uuid */
