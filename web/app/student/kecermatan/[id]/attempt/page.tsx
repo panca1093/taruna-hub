@@ -1,159 +1,198 @@
 "use client";
 
-import { use, useCallback, useEffect, useState } from "react";
-import { notFound, useRouter } from "next/navigation";
+import { use, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
-import { CheckCircle2, ChevronRight, SkipForward } from "lucide-react";
+import { CheckCircle2, ChevronRight, CloudOff, SkipForward } from "lucide-react";
 import { CountdownRing } from "@/components/countdown-ring";
-import { useUser } from "@/lib/session-context";
-import {
-  answerSoal,
-  completeKolom,
-  initSession,
-  startKolom,
-  type KecermatanSessionState,
-} from "@/lib/kecermatan-session";
-import { getKecermatanTest } from "@/lib/mock-data";
+import { KecermatanItem } from "@/components/kecermatan-item";
+import { ApiError, api, type KecermatanOverview, type KecermatanSession } from "@/lib/api/client";
+import { isNoCredit, purchaseHref, useSecondsLeft } from "@/lib/kecermatan-session";
+import { useServerClock } from "@/lib/tryout-session";
 import { cn } from "@/lib/cn";
 import { useKecermatanAttemptT } from "@/lib/i18n/dict/kecermatan-attempt";
-import { useHydrated } from "@/lib/use-hydrated";
 
-type Phase = "instructions" | "kolom" | "jeda";
+type Answers = { kolom: number; byNumber: Record<number, string | null> };
+
+const SEND_RETRIES = 3;
+const RETRY_MS = 1000;
+const REFETCH_MS = 700;
 
 export default function KecermatanAttemptPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+  const { id: testId } = use(params);
   const router = useRouter();
-  const user = useUser();
-  const test = getKecermatanTest(id);
   const t = useKecermatanAttemptT();
+  const clock = useServerClock();
 
-  const [session, setSession] = useState<KecermatanSessionState | null>(null);
-  const [phase, setPhase] = useState<Phase>("instructions");
-  const [soalIndex, setSoalIndex] = useState(0);
-  const [remaining, setRemaining] = useState<number | null>(null);
-  const [jedaLeft, setJedaLeft] = useState(5);
-  const [nextKolomNumber, setNextKolomNumber] = useState<number | null>(null);
+  const [overview, setOverview] = useState<KecermatanOverview | null>(null);
+  const [session, setSession] = useState<KecermatanSession | null>(null);
+  const [answers, setAnswers] = useState<Answers>({ kolom: 0, byNumber: {} });
+  const [failed, setFailed] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const refetching = useRef(false);
 
-  // Init: resume mid-attempt if a kolom already started, otherwise show instructions first.
-  const hydrated = useHydrated();
-  const seedKey = `${id}:${user.id}`;
-  const [seededKey, setSeededKey] = useState<string | null>(null);
-  const [alreadyCompleted, setAlreadyCompleted] = useState(false);
-
-  if (hydrated && test && seededKey !== seedKey) {
-    setSeededKey(seedKey);
-    const s = initSession(test.id, user.id);
-    if (s.status === "completed") {
-      setAlreadyCompleted(true);
-    } else if (Object.keys(s.kolomStartedAt).length > 0) {
-      const started = startKolom(test.id, user.id, s.currentKolom);
-      setSession(started);
-      const soal = started.soalByKolom[s.currentKolom] ?? [];
-      const firstPending = soal.findIndex((q) => q.selectedLabel === null);
-      setSoalIndex(firstPending === -1 ? soal.length : firstPending);
-      setPhase("kolom");
-    } else {
-      setSession(s);
-    }
-  }
-
-  useEffect(() => {
-    if (alreadyCompleted) router.replace(`/student/kecermatan/${id}/result`);
-  }, [alreadyCompleted, router, id]);
-
-  const hasTest = !!test;
-
-  const beginKolom = useCallback(
-    (kolomNumber: number) => {
-      if (!hasTest) return;
-      const s = startKolom(id, user.id, kolomNumber);
-      setSession(s);
-      setSoalIndex(0);
-      setPhase("kolom");
-    },
-    [hasTest, id, user.id, setSession, setSoalIndex, setPhase],
-  );
-
-  const finishKolom = useCallback(
-    (kolomNumber: number) => {
-      if (!hasTest) return;
-      const s = completeKolom(id, user.id, kolomNumber);
-      setSession(s);
-      if (s.status === "completed") {
-        router.replace(`/student/kecermatan/${id}/result`);
+  // The server's state is the only truth: every phase change below comes from a response, never from a local timer.
+  const apply = useCallback(
+    (next: KecermatanSession) => {
+      clock.sync(next.server_time);
+      setSession(next);
+      if (next.phase === "completed") {
+        router.replace(`/student/kecermatan/${testId}/result?attempt=${next.id}`);
         return;
       }
-      setNextKolomNumber(kolomNumber + 1);
-      setJedaLeft(5);
-      setPhase("jeda");
+      if (next.kolom) {
+        const stored: Record<number, string | null> = {};
+        for (const item of next.kolom.answers) stored[item.soal] = item.answer;
+        const number = next.kolom.number;
+        setAnswers((current) => (current.kolom === number ? { kolom: number, byNumber: { ...stored, ...current.byNumber } } : { kolom: number, byNumber: stored }));
+      }
     },
-    [hasTest, id, user.id, router, setSession, setNextKolomNumber, setJedaLeft, setPhase],
+    [clock, router, testId],
   );
 
-  // Countdown timer for the active kolom, resilient to reload via persisted kolomStartedAt.
   useEffect(() => {
-    if (!test || !session || phase !== "kolom") return;
-    const kolomNumber = session.currentKolom;
-    const startedAt = session.kolomStartedAt[kolomNumber] ?? Date.now();
-    const tick = () => {
-      const elapsed = (Date.now() - startedAt) / 1000;
-      const left = Math.max(0, Math.round(test.kolomDurationSeconds - elapsed));
-      setRemaining(left);
-      if (left <= 0) finishKolom(kolomNumber);
+    let cancelled = false;
+    api.kecermatanRuntime
+      .overview(testId)
+      .then((data) => {
+        if (cancelled) return;
+        setOverview(data);
+        if (data.current) {
+          apply(data.current);
+          return;
+        }
+        if (data.test.attempts_remaining < 1) router.replace(purchaseHref(data.product_id));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 404) {
+          router.replace(`/student/kecermatan/${testId}`);
+          return;
+        }
+        setFailed(true);
+      });
+    return () => {
+      cancelled = true;
     };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [test, session?.currentKolom, phase]);
+  }, [testId, apply, router, reloadKey]);
 
-  // Jeda auto-advance countdown.
+  const sessionId = session?.id ?? null;
+  const refetch = useCallback(async () => {
+    if (!sessionId || refetching.current) return;
+    refetching.current = true;
+    try {
+      apply(await api.kecermatanRuntime.session(sessionId));
+    } catch {
+      // The next tick or focus tries again; a failed read never changes what the server decided.
+    } finally {
+      refetching.current = false;
+    }
+  }, [sessionId, apply]);
+
+  const phase = session?.phase ?? null;
+  const kolom = session?.kolom ?? null;
+  const kolomLeft = useSecondsLeft(clock.now, phase === "kolom" ? kolom?.deadline_at : null);
+  const pauseLeft = useSecondsLeft(clock.now, phase === "pause" ? session?.next_starts_at : null);
+
+  // At zero the server has already moved on (or does within a moment): read its state instead of deciding here.
   useEffect(() => {
-    if (phase !== "jeda" || nextKolomNumber === null) return;
-    const t = setTimeout(() => (jedaLeft <= 1 ? beginKolom(nextKolomNumber) : setJedaLeft((v) => v - 1)), 1000);
-    return () => clearTimeout(t);
-  }, [phase, jedaLeft, nextKolomNumber, beginKolom]);
+    if (kolomLeft !== 0 && pauseLeft !== 0) return;
+    const first = setTimeout(() => void refetch(), 0);
+    const interval = setInterval(() => void refetch(), REFETCH_MS);
+    return () => {
+      clearTimeout(first);
+      clearInterval(interval);
+    };
+  }, [kolomLeft, pauseLeft, refetch]);
 
-  if (!test) notFound();
+  useEffect(() => {
+    if (!sessionId) return;
+    const onFocus = () => void refetch();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [sessionId, refetch]);
 
-  const kolomNumber = session?.currentKolom ?? 1;
-  const soalList = session?.soalByKolom[kolomNumber] ?? [];
-  const soal = soalList[soalIndex];
-
-  // Answering the last soal doesn't jump to the next kolom early — the kolom only
-  // advances when its timer runs out, so students can't skip ahead of the clock.
-  const answer = (label: string | null) => {
-    if (!session || !soal) return;
-    const s = answerSoal(test.id, user.id, kolomNumber, soal.soalNumber, label);
-    setSession(s);
-    setSoalIndex((i) => i + 1);
+  const start = async () => {
+    setStarting(true);
+    try {
+      apply(await api.kecermatanRuntime.start(testId));
+    } catch (err) {
+      if (isNoCredit(err)) {
+        router.replace(purchaseHref(overview?.product_id));
+        return;
+      }
+      setFailed(true);
+    } finally {
+      setStarting(false);
+    }
   };
 
-  const minutes = remaining !== null ? Math.floor(remaining / 60) : 0;
-  const seconds = remaining !== null ? remaining % 60 : 0;
-  const urgent = remaining !== null && remaining <= 15;
-  const percentLeft = remaining !== null ? (remaining / test.kolomDurationSeconds) * 100 : 100;
+  const goNext = async () => {
+    if (!sessionId) return;
+    try {
+      apply(await api.kecermatanRuntime.next(sessionId));
+    } catch {
+      void refetch();
+    }
+  };
 
-  if (phase === "instructions") {
+  const send = (number: number, soalNumber: number, label: string | null, attempt = 0) => {
+    if (!sessionId) return;
+    api.kecermatanRuntime.answer(sessionId, number, soalNumber, label).catch((err: unknown) => {
+      if (err instanceof ApiError && err.status === 409) {
+        if (err.code !== "kecermatan_answer_locked") void refetch();
+        return;
+      }
+      if (attempt < SEND_RETRIES) setTimeout(() => send(number, soalNumber, label, attempt + 1), RETRY_MS);
+    });
+  };
+
+  if (failed) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background p-6 text-center">
+        <CloudOff className="size-8 text-muted" />
+        <p className="text-sm font-medium text-foreground">{t.loadErrorTitle}</p>
+        <p className="text-xs text-muted">{t.loadErrorDescription}</p>
+        <Button
+          variant="primary"
+          size="sm"
+          onPress={() => {
+            setFailed(false);
+            setReloadKey((key) => key + 1);
+          }}
+        >
+          {t.retry}
+        </Button>
+      </div>
+    );
+  }
+
+  if (!overview) {
+    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-background text-sm text-muted">{t.loadingSoal}</div>;
+  }
+
+  const test = overview.test;
+
+  if (!session) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-5">
         <div className="w-full max-w-md text-center">
           <p className="text-xs font-medium tracking-wide text-muted uppercase">{t.eyebrow}</p>
           <h1 className="font-display mt-1 text-xl font-semibold text-foreground">{test.title}</h1>
           <p className="mt-3 text-sm leading-relaxed text-muted">
-            {t.instructionsPart1(test.optionsPerSoal, String.fromCharCode(64 + test.optionsPerSoal))}{" "}
-            {t.instructionsPart2(test.soalPerKolom)}{" "}
-            <strong className="text-foreground">{t.instructionsBold}</strong>{" "}
+            {t.instructionsPart1(test.options_per_soal, String.fromCharCode(64 + test.options_per_soal))}{" "}
+            {t.instructionsPart2(test.soal_per_kolom)} <strong className="text-foreground">{t.instructionsBold}</strong>{" "}
             {t.instructionsPart3}
           </p>
           <div className="mt-5 rounded-xl border border-border bg-surface-secondary p-4 text-left text-xs text-muted">
             <p>
-              <strong className="text-foreground">{t.kolomTimerBold(test.kolomCount)}</strong>{" "}
-              {t.kolomTimerRest(Math.round(test.kolomDurationSeconds / 60))}
+              <strong className="text-foreground">{t.kolomTimerBold(test.kolom_count)}</strong>{" "}
+              {t.kolomTimerRest(Math.round(test.kolom_duration_seconds / 60))}
             </p>
             <p className="mt-1.5">{t.blankNotWrong}</p>
           </div>
-          <Button variant="primary" size="lg" className="mt-6 w-full" onPress={() => beginKolom(1)}>
+          <Button variant="primary" size="lg" className="mt-6 w-full" isDisabled={starting} onPress={() => void start()}>
             {t.startKolom1} <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -161,22 +200,14 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
     );
   }
 
-  if (phase === "jeda") {
-    const justFinished = nextKolomNumber !== null ? nextKolomNumber - 1 : kolomNumber;
+  if (session.phase === "pause" && session.next_kolom !== null) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-5">
         <div className="w-full max-w-sm text-center">
-          <p className="text-sm font-medium text-muted">{t.kolomFinished(justFinished)}</p>
-          <p className="font-display mt-1 text-3xl font-semibold text-foreground">
-            {nextKolomNumber !== null && t.continueToKolom(nextKolomNumber)}
-          </p>
-          <p className="mt-4 font-mono text-2xl font-semibold text-accent">{jedaLeft}</p>
-          <Button
-            variant="primary"
-            size="lg"
-            className="mt-5 w-full"
-            onPress={() => nextKolomNumber !== null && beginKolom(nextKolomNumber)}
-          >
+          <p className="text-sm font-medium text-muted">{t.kolomFinished(session.finished_kolom ?? session.next_kolom - 1)}</p>
+          <p className="font-display mt-1 text-3xl font-semibold text-foreground">{t.continueToKolom(session.next_kolom)}</p>
+          <p className="mt-4 font-mono text-2xl font-semibold text-accent">{pauseLeft ?? session.pause_seconds}</p>
+          <Button variant="primary" size="lg" className="mt-5 w-full" onPress={() => void goNext()}>
             {t.continueNow} <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -184,13 +215,32 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
     );
   }
 
+  if (!kolom) {
+    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-background text-sm text-muted">{t.loadingSoal}</div>;
+  }
+
+  const remaining = kolomLeft ?? session.kolom_duration_seconds;
+  const minutes = Math.floor(remaining / 60);
+  const seconds = remaining % 60;
+  const urgent = remaining <= 15;
+  const percentLeft = (remaining / session.kolom_duration_seconds) * 100;
+  const byNumber = answers.kolom === kolom.number ? answers.byNumber : {};
+  const soalIndex = kolom.soal.findIndex((item) => !(item.number in byNumber));
+  const soal = soalIndex === -1 ? null : kolom.soal[soalIndex];
+  const labelOf = (label: string) => kolom.reference.find((item) => item.label === label);
+
+  // Answering the last soal doesn't jump to the next kolom early: the kolom only ends at its server deadline.
+  const answer = (label: string | null) => {
+    if (!soal) return;
+    setAnswers({ kolom: kolom.number, byNumber: { ...byNumber, [soal.number]: label } });
+    send(kolom.number, soal.number, label);
+  };
+
   const timerHeader = (
     <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border px-5">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-foreground">{test.title}</p>
-        <p className="truncate text-xs text-muted">
-          {t.kolomProgress(kolomNumber, test.kolomCount)}
-        </p>
+        <p className="truncate text-sm font-semibold text-foreground">{session.test_title}</p>
+        <p className="truncate text-xs text-muted">{t.kolomProgress(kolom.number, session.kolom_count)}</p>
       </div>
       <CountdownRing value={percentLeft} size={40} strokeWidth={4} urgent={urgent} animate={false}>
         <span className={cn("font-mono text-[11px] font-semibold", urgent ? "text-danger" : "text-foreground")}>
@@ -200,9 +250,7 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
     </header>
   );
 
-  // All soal in this kolom answered, but the kolom only advances when its timer
-  // expires — no skipping ahead of the clock.
-  if (session && soalIndex >= soalList.length) {
+  if (!soal) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-background">
         {timerHeader}
@@ -217,10 +265,6 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
     );
   }
 
-  if (!soal) {
-    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-background text-sm text-muted">{t.loadingSoal}</div>;
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {timerHeader}
@@ -229,10 +273,10 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
         <div>
           <p className="mb-2 text-xs font-medium tracking-wide text-muted uppercase">{t.referenceLabel}</p>
           <div className="grid grid-cols-5 gap-2">
-            {soal.referenceSet.map((item) => (
+            {kolom.reference.map((item) => (
               <div key={item.label} className="rounded-lg border border-border bg-surface-secondary py-2.5 text-center">
                 <p className="text-[10px] font-medium text-muted">{item.label}</p>
-                <p className="font-mono text-sm font-semibold tracking-tight text-foreground">{item.value}</p>
+                <KecermatanItem elements={item.elements} className="text-sm font-semibold" />
               </div>
             ))}
           </div>
@@ -240,18 +284,16 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
 
         <div className="mt-8">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium text-muted">
-              {t.soalProgress(soalIndex + 1, soalList.length)}
-            </p>
+            <p className="text-xs font-medium text-muted">{t.soalProgress(soalIndex + 1, kolom.soal.length)}</p>
             <button type="button" onClick={() => answer(null)} className="flex items-center gap-1 text-xs font-medium text-muted hover:text-foreground">
               <SkipForward className="size-3.5" /> {t.skip}
             </button>
           </div>
           <p className="text-sm text-foreground">{t.soalPrompt}</p>
           <div className="mt-3 grid grid-cols-4 gap-2">
-            {soal.displayed.map((item) => (
-              <div key={item.value} className="rounded-lg border border-dashed border-border py-3.5 text-center">
-                <p className="font-mono text-base font-semibold tracking-tight text-foreground">{item.value}</p>
+            {soal.shown.map((label) => (
+              <div key={label} className="rounded-lg border border-dashed border-border py-3.5 text-center">
+                <KecermatanItem elements={labelOf(label)?.elements ?? []} className="text-base font-semibold" />
               </div>
             ))}
           </div>
@@ -260,7 +302,7 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
         <div className="mt-8">
           <p className="mb-2 text-xs font-medium text-muted">{t.chooseMissingLabel}</p>
           <div className="grid grid-cols-5 gap-2">
-            {soal.referenceSet.map((item) => (
+            {kolom.reference.map((item) => (
               <button
                 key={item.label}
                 onClick={() => answer(item.label)}

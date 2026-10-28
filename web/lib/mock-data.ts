@@ -2,10 +2,6 @@ import type {
   AppUser,
   Enrollment,
   TryoutResult,
-  KecermatanEnrollment,
-  KecermatanKolomResult,
-  KecermatanResult,
-  KecermatanTest,
   Order,
   Product,
   Program,
@@ -22,7 +18,6 @@ import type {
 import {
   runtimeBalanceDelta,
   runtimeEnrollments,
-  runtimeKecermatanEnrollments,
   runtimeOrders,
   runtimeWalletTransactions,
 } from "./demo-store";
@@ -480,91 +475,6 @@ export const getQuestionsForSubtest = (subtestId: string) => {
 };
 
 /* ---------------------------------------------------------------------- */
-/* Tes Kecermatan                                                         */
-/* ---------------------------------------------------------------------- */
-
-export const kecermatanTests: KecermatanTest[] = [
-  {
-    id: "kec-casn-1",
-    programId: CASN,
-    title: "Kecermatan Simbol Hilang — TKP CASN",
-    description: "Latihan kecermatan bergaya psikotes: kenali kode referensi lalu temukan yang hilang di tiap soal.",
-    coverFrom: "#f59e0b",
-    coverTo: "#ef4444",
-    itemType: "char",
-    itemLength: 4,
-    optionsPerSoal: 5,
-    soalPerKolom: 8,
-    kolomCount: 3,
-    kolomDurationSeconds: 90,
-    participantCount: 27,
-  },
-  {
-    id: "kec-sma-1",
-    programId: SMA,
-    title: "Kecermatan Simbol Hilang — Persiapan UTBK",
-    description: "Format latihan ketelitian dan kecepatan, terpisah dari tryout — kode angka acak per kolom.",
-    coverFrom: "#0ea5e9",
-    coverTo: "#4f46e5",
-    itemType: "number",
-    itemLength: 3,
-    optionsPerSoal: 5,
-    soalPerKolom: 10,
-    kolomCount: 4,
-    kolomDurationSeconds: 75,
-    participantCount: 14,
-  },
-  {
-    id: "kec-bumn-1",
-    programId: BUMN,
-    title: "Kecermatan Simbol Hilang — Rekrutmen BUMN",
-    description: "Latihan mengenali simbol referensi dan menemukan simbol yang dihilangkan pada tiap soal.",
-    coverFrom: "#10b981",
-    coverTo: "#0ea5e9",
-    itemType: "symbol",
-    itemLength: 2,
-    optionsPerSoal: 4,
-    soalPerKolom: 8,
-    kolomCount: 3,
-    kolomDurationSeconds: 100,
-    participantCount: 9,
-  },
-];
-
-export const getKecermatanTest = (id: string) => kecermatanTests.find((t) => t.id === id);
-
-/**
- * Composite scoring per PRD §10 Open Question #1 — client-supplied baseline formula,
- * explicitly flagged provisional/not-yet-validated. "Ketahanan" in the PRD compares the
- * last 5 kolom to the first 5; adapted here to last-half vs first-half since real tests
- * run 3-5 kolom, not 10+.
- */
-export function computeKecermatanScores(kolomResults: KecermatanKolomResult[], totalSoal: number) {
-  const dikerjakan = kolomResults.reduce((s, k) => s + k.benar + k.salah, 0);
-  const benarTotal = kolomResults.reduce((s, k) => s + k.benar, 0);
-  const kecepatan = totalSoal === 0 ? 0 : Math.max(0, Math.min(100, (dikerjakan / totalSoal - 0.05) * 100));
-  const ketelitian = dikerjakan === 0 ? 0 : Math.max(0, Math.min(100, (benarTotal / dikerjakan) * 100));
-
-  const half = Math.max(1, Math.floor(kolomResults.length / 2));
-  const accuracy = (rows: KecermatanKolomResult[]) => {
-    const total = rows.reduce((s, k) => s + k.benar + k.salah + k.kosong, 0);
-    const benar = rows.reduce((s, k) => s + k.benar, 0);
-    return total === 0 ? 0 : benar / total;
-  };
-  const firstAcc = accuracy(kolomResults.slice(0, half));
-  const lastAcc = accuracy(kolomResults.slice(-half));
-  const ketahanan = firstAcc === 0 ? 0 : Math.max(0, Math.min(100, (lastAcc / firstAcc - 0.05) * 100));
-
-  const nilaiAkhir = Math.round(0.3 * kecepatan + 0.45 * ketelitian + 0.25 * ketahanan);
-  return {
-    kecepatanScore: Math.round(kecepatan),
-    ketahananScore: Math.round(ketahanan),
-    ketelitianScore: Math.round(ketelitian),
-    nilaiAkhirScore: nilaiAkhir,
-  };
-}
-
-/* ---------------------------------------------------------------------- */
 /* Products                                                               */
 /* ---------------------------------------------------------------------- */
 
@@ -921,38 +831,6 @@ export const getEnrollmentsForUser = (userId: string) => [
 export const hasEnrollment = (userId: string, tryoutId: string) =>
   getEnrollmentsForUser(userId).some((e) => e.tryoutId === tryoutId);
 
-let kecEnrollSeq = 0;
-export const kecermatanEnrollments: KecermatanEnrollment[] = orders
-  .filter((o) => o.status === "confirmed")
-  .flatMap((o) => {
-    const product = products.find((p) => p.id === o.productId);
-    if (!product || product.type !== "kecermatan" || !product.kecermatanTestId) return [];
-    kecEnrollSeq += 1;
-    return [
-      {
-        id: `kec-enroll-${kecEnrollSeq}`,
-        userId: o.userId,
-        kecermatanTestId: product.kecermatanTestId,
-        orderId: o.id,
-        attemptsPurchased: product.includedAttempts ?? 1,
-        attemptsUsed: 0,
-        createdAt: o.confirmedAt ?? o.createdAt,
-      } satisfies KecermatanEnrollment,
-    ];
-  });
-
-export const getKecermatanEnrollmentsForUser = (userId: string) => [
-  ...kecermatanEnrollments.filter((e) => e.userId === userId),
-  ...runtimeKecermatanEnrollments(userId),
-];
-export const hasKecermatanAccess = (userId: string, testId: string) =>
-  getKecermatanEnrollmentsForUser(userId).some((e) => e.kecermatanTestId === testId);
-/** Total attempts purchased for this test — actual "remaining" also subtracts attempts already taken (see kecermatan-session.ts, tracked client-side like tryout attempts). */
-export const getKecermatanAttemptsPurchased = (userId: string, testId: string) =>
-  getKecermatanEnrollmentsForUser(userId)
-    .filter((e) => e.kecermatanTestId === testId)
-    .reduce((sum, e) => sum + e.attemptsPurchased, 0);
-
 /* ---------------------------------------------------------------------- */
 /* Wallet ledger                                                          */
 /* ---------------------------------------------------------------------- */
@@ -1118,46 +996,6 @@ export const getLeaderboardForTryout = (tryoutId: string) => {
     .sort((a, b) => b.avgScore - a.avgScore)
     .map((row, i) => ({ ...row, rank: i + 1 }));
 };
-
-let kecResultSeq = 0;
-const mkKecermatanResult = (
-  userId: string,
-  test: KecermatanTest,
-  /** Fraction correct per kolom (kosong assumed 0 for seed data). */
-  kolomAccuracies: number[],
-  completedAt: string,
-  attemptNumber = 1,
-): KecermatanResult => {
-  kecResultSeq += 1;
-  const kolomResults: KecermatanKolomResult[] = kolomAccuracies.map((acc, i) => {
-    const benar = Math.round(test.soalPerKolom * acc);
-    return { kolomNumber: i + 1, benar, salah: test.soalPerKolom - benar, kosong: 0 };
-  });
-  return {
-    id: `kec-result-${kecResultSeq}`,
-    userId,
-    kecermatanTestId: test.id,
-    attemptNumber,
-    kolomResults,
-    benarTotal: kolomResults.reduce((s, k) => s + k.benar, 0),
-    salahTotal: kolomResults.reduce((s, k) => s + k.salah, 0),
-    kosongTotal: 0,
-    completedAt,
-    ...computeKecermatanScores(kolomResults, test.kolomCount * test.soalPerKolom),
-  };
-};
-
-export const kecermatanResults: KecermatanResult[] = [
-  mkKecermatanResult(students[7].id, kecermatanTests[0], [0.875, 0.75, 0.625], "2026-07-02T10:20:00"),
-  mkKecermatanResult(students[8].id, kecermatanTests[0], [0.75, 0.875, 0.75], "2026-07-03T09:15:00"),
-  mkKecermatanResult(currentStudent.id, kecermatanTests[1], [0.9, 0.8, 0.7, 0.8], "2026-07-06T14:00:00"),
-  mkKecermatanResult(students[10].id, kecermatanTests[2], [0.625, 0.75, 0.5], "2026-07-04T13:10:00"),
-];
-
-export const getKecermatanResultsForTest = (testId: string) =>
-  kecermatanResults.filter((r) => r.kecermatanTestId === testId);
-export const getKecermatanResultsForUser = (userId: string) => kecermatanResults.filter((r) => r.userId === userId);
-export const getProductForKecermatanTest = (testId: string) => products.find((p) => p.kecermatanTestId === testId);
 
 /* ---------------------------------------------------------------------- */
 /* Formatting helpers                                                     */

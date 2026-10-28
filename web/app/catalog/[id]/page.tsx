@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button, Card, Chip } from "@heroui/react";
-import { CalendarClock, CheckCircle2, ChevronRight, CloudOff, Clock, ListChecks, Timer } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronRight, CloudOff, Clock, Gauge, ListChecks, RotateCcw, Timer } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PublicNav } from "@/components/public-nav";
 import { EmptyState } from "@/components/empty-state";
@@ -102,6 +102,24 @@ export default function ProductDetailPage({ params }: { params: Promise<{ id: st
 
 function ProductDetail({ product }: { product: PublicProduct }) {
   const t = useCatalogDetailT();
+  const { role } = useSession();
+  const kecermatan = product.kecermatan;
+  // Remaining attempts of the signed-in student; null when they hold none yet (a 404) or are not a student.
+  const [kecRemaining, setKecRemaining] = useState<number | null>(null);
+  const testId = kecermatan?.test_id;
+  useEffect(() => {
+    if (role !== "student" || !testId) return;
+    let cancelled = false;
+    api.kecermatanRuntime
+      .overview(testId)
+      .then((overview) => {
+        if (!cancelled) setKecRemaining(overview.test.attempts_remaining);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [role, testId]);
   const totalSeconds = product.tryouts.reduce((sum, tryout) => sum + tryout.duration_seconds_total, 0);
   const totalMinutes = Math.round(totalSeconds / 60);
 
@@ -121,7 +139,11 @@ function ProductDetail({ product }: { product: PublicProduct }) {
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <ProgramBadge code={product.program_code} />
             <Chip size="sm" variant="secondary" className="border border-border font-medium">
-              {product.type === "bundle" ? t.chipBundle(product.tryouts.length) : t.chipIndividual}
+              {kecermatan
+                ? t.chipKecermatan
+                : product.type === "bundle"
+                  ? t.chipBundle(product.tryouts.length)
+                  : t.chipIndividual}
             </Chip>
           </div>
           <h1 className="font-display mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
@@ -129,6 +151,26 @@ function ProductDetail({ product }: { product: PublicProduct }) {
           </h1>
           <p className="mt-3 leading-relaxed text-muted">{product.description}</p>
 
+          {kecermatan ? (
+            <div className="mt-8 space-y-4">
+              <p className="text-sm font-semibold text-foreground">{t.howItWorksTitle}</p>
+              <Card className="gap-3 p-4">
+                <p className="text-sm text-muted">{t.kecermatanMechanic(kecermatan.options_per_soal)}</p>
+                <div className="flex flex-wrap gap-4 border-t border-border pt-3 text-xs text-muted">
+                  <span className="inline-flex items-center gap-1.5">
+                    <ListChecks className="size-3.5" /> {t.kolomSoalStat(kecermatan.kolom_count, kecermatan.soal_per_kolom)}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Timer className="size-3.5" /> {t.perMinuteStat(Math.round(kecermatan.kolom_duration_seconds / 60))}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Gauge className="size-3.5" /> {t.itemType[kecermatan.item_type] ?? kecermatan.item_type}
+                  </span>
+                </div>
+              </Card>
+              <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted">{t.noProctor}</p>
+            </div>
+          ) : (
           <div className="mt-8 space-y-4">
             <p className="text-sm font-semibold text-foreground">
               {product.tryouts.length > 1 ? t.packageMultiHeading(product.tryouts.length) : t.packageSingleHeading}
@@ -147,6 +189,7 @@ function ProductDetail({ product }: { product: PublicProduct }) {
               </Card>
             ))}
           </div>
+          )}
         </div>
 
         <div className="lg:sticky lg:top-20 lg:h-fit">
@@ -161,26 +204,57 @@ function ProductDetail({ product }: { product: PublicProduct }) {
               <p className="text-xs text-muted">{t.discountLabel(product.discount_percent)}</p>
             )}
 
-            <LinkButton href={`/checkout/${product.id}`} variant="primary" size="lg" className="w-full">
-              {t.ctaBuyNow}
-            </LinkButton>
+            {kecermatan && kecRemaining !== null && kecRemaining > 0 ? (
+              <LinkButton href={`/student/kecermatan/${kecermatan.test_id}`} variant="primary" size="lg" className="w-full">
+                {t.ctaKecermatanRemaining(kecRemaining)}
+              </LinkButton>
+            ) : kecermatan && kecRemaining !== null ? (
+              <LinkButton href={`/checkout/${product.id}`} variant="primary" size="lg" className="w-full">
+                <RotateCcw className="size-4" /> {t.ctaKecermatanExhausted}
+              </LinkButton>
+            ) : (
+              <LinkButton href={`/checkout/${product.id}`} variant="primary" size="lg" className="w-full">
+                {t.ctaBuyNow}
+              </LinkButton>
+            )}
             <p className="text-xs text-muted">{t.checkoutNote}</p>
 
             <div className="space-y-2.5 border-t border-border pt-4 text-xs text-muted">
-              {product.active_until && (
-                <div className="flex items-center gap-2">
-                  <CalendarClock className="size-3.5" />
-                  {t.workableUntil(new Date(product.active_until).toLocaleDateString())}
-                </div>
+              {kecermatan ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <RotateCcw className="size-3.5" />
+                    {t.attemptsPerPurchase(product.included_attempts ?? 0)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="size-3.5" />
+                    {t.kolomDurationStat(kecermatan.kolom_count, Math.round(kecermatan.kolom_duration_seconds / 60))}
+                  </div>
+                  {product.active_until && (
+                    <div className="flex items-center gap-2">
+                      <CalendarClock className="size-3.5" />
+                      {t.validUntil(new Date(product.active_until).toLocaleDateString())}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {product.active_until && (
+                    <div className="flex items-center gap-2">
+                      <CalendarClock className="size-3.5" />
+                      {t.workableUntil(new Date(product.active_until).toLocaleDateString())}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Clock className="size-3.5" />
+                    {t.totalDuration(totalMinutes)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="size-3.5 text-success" />
+                    {t.repeatable}
+                  </div>
+                </>
               )}
-              <div className="flex items-center gap-2">
-                <Clock className="size-3.5" />
-                {t.totalDuration(totalMinutes)}
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="size-3.5 text-success" />
-                {t.repeatable}
-              </div>
             </div>
           </Card>
         </div>

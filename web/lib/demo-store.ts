@@ -2,7 +2,6 @@
 
 import type {
   Enrollment,
-  KecermatanEnrollment,
   Order,
   PaymentMode,
   Product,
@@ -20,11 +19,10 @@ const STORAGE_KEY = "tryout-demo-store";
 interface DemoState {
   orders: Order[];
   enrollments: Enrollment[];
-  kecermatanEnrollments: KecermatanEnrollment[];
   walletTransactions: WalletTransaction[];
 }
 
-const empty: DemoState = { orders: [], enrollments: [], kecermatanEnrollments: [], walletTransactions: [] };
+const empty: DemoState = { orders: [], enrollments: [], walletTransactions: [] };
 
 function read(): DemoState {
   if (typeof window === "undefined") return empty;
@@ -47,8 +45,6 @@ export const STORE_EVENT = "tryout-demo-store-change";
 
 export const runtimeOrders = (userId: string) => read().orders.filter((o) => o.userId === userId);
 export const runtimeEnrollments = (userId: string) => read().enrollments.filter((e) => e.userId === userId);
-export const runtimeKecermatanEnrollments = (userId: string) =>
-  read().kecermatanEnrollments.filter((e) => e.userId === userId);
 export const runtimeWalletTransactions = (userId: string) =>
   read().walletTransactions.filter((w) => w.userId === userId);
 
@@ -127,22 +123,6 @@ export function confirmOrder(orderId: string, product: Product): void {
 }
 
 function grantAccess(state: DemoState, order: Order, product: Product, now: string) {
-  if (product.type === "kecermatan" && product.kecermatanTestId) {
-    state.kecermatanEnrollments = [
-      ...state.kecermatanEnrollments,
-      {
-        id: `kec-enroll-rt-${Date.now()}`,
-        userId: order.userId,
-        kecermatanTestId: product.kecermatanTestId,
-        orderId: order.id,
-        attemptsPurchased: product.includedAttempts ?? 1,
-        attemptsUsed: 0,
-        createdAt: now,
-      },
-    ];
-    return;
-  }
-
   state.enrollments = [
     ...state.enrollments,
     ...product.tryoutIds.map((tryoutId, i) => ({

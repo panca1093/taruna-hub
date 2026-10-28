@@ -5,6 +5,9 @@ import { useLocale } from "@/lib/i18n/locale-context";
 const id = {
   pageTitle: "Hasil Tes Kecermatan",
   loadingResult: "Memuat hasil…",
+  loadErrorTitle: "Hasil gagal dimuat",
+  loadErrorDescription: "Periksa koneksi lalu coba lagi.",
+  retry: "Coba lagi",
   outOf100: "/ 100",
   nilaiAkhirLabel: (n: number) => `Nilai Akhir — Attempt ${n}`,
   scoreSummary: (benar: number, salah: number, kosong: number) => `${benar} benar · ${salah} salah · ${kosong} kosong`,
@@ -25,6 +28,9 @@ const id = {
 const en: typeof id = {
   pageTitle: "Kecermatan Test Result",
   loadingResult: "Loading result…",
+  loadErrorTitle: "The result could not be loaded",
+  loadErrorDescription: "Check the connection and try again.",
+  retry: "Try again",
   outOf100: "/ 100",
   nilaiAkhirLabel: (n: number) => `Final Score — Attempt ${n}`,
   scoreSummary: (benar: number, salah: number, kosong: number) => `${benar} correct · ${salah} wrong · ${kosong} blank`,

@@ -77,6 +77,20 @@ export type KecermatanTestSummary = components["schemas"]["KecermatanTestSummary
 export type KecermatanTestList = components["schemas"]["KecermatanTestList"];
 export type KecermatanItemType = components["schemas"]["KecermatanItemType"];
 export type KecermatanPreview = components["schemas"]["KecermatanPreview"];
+export type KecermatanStudentTest = components["schemas"]["KecermatanStudentTest"];
+export type KecermatanStudentTestList = components["schemas"]["KecermatanStudentTestList"];
+export type KecermatanOverview = components["schemas"]["KecermatanOverview"];
+export type KecermatanAttempt = components["schemas"]["KecermatanAttempt"];
+export type KecermatanSession = components["schemas"]["KecermatanSession"];
+export type KecermatanKolom = components["schemas"]["KecermatanKolom"];
+export type KecermatanReference = components["schemas"]["KecermatanReference"];
+export type KecermatanRuntimeElement = components["schemas"]["KecermatanRuntimeElement"];
+export type KecermatanResult = components["schemas"]["KecermatanResult"];
+export type KecermatanReview = components["schemas"]["KecermatanReview"];
+export type KecermatanAnswerAck = components["schemas"]["KecermatanAnswerAck"];
+export type KecermatanStaffResult = components["schemas"]["KecermatanStaffResult"];
+export type KecermatanStaffResultList = components["schemas"]["KecermatanStaffResultList"];
+export type KecermatanStaffResultDetail = components["schemas"]["KecermatanStaffResultDetail"];
 type KecermatanTestBody = components["schemas"]["KecermatanTestRequest"];
 type UpdateKecermatanTestBody = components["schemas"]["UpdateKecermatanTestRequest"];
 type KecermatanPreviewBody = components["schemas"]["KecermatanPreviewRequest"];
@@ -564,6 +578,29 @@ export const api = {
       mutate<Violation>("POST", `${sessionPath(id)}/violations` as keyof paths, body),
   },
 
+  /**
+   * The signed-in student's kecermatan attempts. Timers, credits and scoring are the server's; a 409
+   * `kecermatan_no_credit` on `start` is what sends the student to the purchase.
+   */
+  kecermatanRuntime: {
+    tests: () => authed<KecermatanStudentTestList>("/api/v1/my/kecermatan-tests"),
+    overview: (testId: string) => authed<KecermatanOverview>(`/api/v1/my/kecermatan-tests/${testId}` as keyof paths),
+    start: (testId: string) =>
+      mutate<KecermatanSession>("POST", `/api/v1/my/kecermatan-tests/${testId}/sessions` as keyof paths),
+    session: (id: string) => authed<KecermatanSession>(`/api/v1/my/kecermatan-sessions/${id}` as keyof paths),
+    next: (id: string) =>
+      mutate<KecermatanSession>("POST", `/api/v1/my/kecermatan-sessions/${id}/continue` as keyof paths),
+    /** `null` skips the soal. Write-once: a different answer for the same soal is 409. */
+    answer: (id: string, kolom: number, soal: number, answer: string | null) =>
+      mutate<KecermatanAnswerAck>(
+        "PUT",
+        `/api/v1/my/kecermatan-sessions/${id}/kolom/${kolom}/soal/${soal}` as keyof paths,
+        { answer },
+      ),
+    result: (id: string) => authed<KecermatanResult>(`/api/v1/my/kecermatan-sessions/${id}/result` as keyof paths),
+    review: (id: string) => authed<KecermatanReview>(`/api/v1/my/kecermatan-sessions/${id}/review` as keyof paths),
+  },
+
   /** Staff monitoring: tryout sessions in progress, and any session's violation timeline (also after it ended). */
   monitoring: {
     active: (filters: { limit?: number; offset?: number } = {}) =>
@@ -583,6 +620,14 @@ export const api = {
       authed<Leaderboard>(
         `/api/v1/admin/tryouts/${tryoutId}/leaderboard${queryOf({ limit })}` as keyof paths,
       ),
+  },
+
+  /** Completed kecermatan attempts of the tenant. */
+  kecermatanResults: {
+    list: (filters: { test_id?: string; program_id?: string; limit?: number; offset?: number } = {}) =>
+      authed<KecermatanStaffResultList>(`/api/v1/admin/kecermatan-results${queryOf(filters)}` as keyof paths),
+    get: (id: string) =>
+      authed<KecermatanStaffResultDetail>(`/api/v1/admin/kecermatan-results/${id}` as keyof paths),
   },
 
   /** D04: the scoring weights new attempts freeze. Admin only. */

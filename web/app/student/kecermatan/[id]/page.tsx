@@ -1,73 +1,93 @@
 "use client";
 
-import { use } from "react";
-import { notFound, useRouter } from "next/navigation";
+import { use, useEffect, useState } from "react";
+import Link from "next/link";
 import { Button, Card } from "@heroui/react";
-import { Gauge, PlayCircle, ShoppingBag, Sparkles } from "lucide-react";
+import { CloudOff, Gauge, PlayCircle, ShoppingBag, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
-import { useUser } from "@/lib/session-context";
-import {
-  computeResult,
-  getAttempts,
-  initSession,
-  loadSession,
-  remainingAttempts,
-  startNewAttempt,
-  type KecermatanSessionState,
-} from "@/lib/kecermatan-session";
-import {
-  formatDateTime,
-  getKecermatanAttemptsPurchased,
-  getKecermatanTest,
-  getProductForKecermatanTest,
-  getProgram,
-  hasKecermatanAccess,
-} from "@/lib/mock-data";
+import { ApiError, api, type KecermatanOverview } from "@/lib/api/client";
+import { purchaseHref } from "@/lib/kecermatan-session";
 import { useKecermatanOverviewT } from "@/lib/i18n/dict/kecermatan-overview";
-import { useHydrated } from "@/lib/use-hydrated";
+
+type LoadState = "loading" | "ready" | "missing" | "failed";
 
 export default function KecermatanOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
-  const user = useUser();
   const t = useKecermatanOverviewT();
-  const test = getKecermatanTest(id);
-  const hydrated = useHydrated();
-  const ready = hydrated && !!test;
-  const session: KecermatanSessionState | null = ready ? loadSession(test.id, user.id) : null;
-  const left = ready ? remainingAttempts(test.id, user.id, getKecermatanAttemptsPurchased(user.id, test.id)) : 0;
-  const attempts: KecermatanSessionState[] = ready ? getAttempts(test.id, user.id) : [];
+  const [overview, setOverview] = useState<KecermatanOverview | null>(null);
+  const [state, setState] = useState<LoadState>("loading");
+  const [reloadKey, setReloadKey] = useState(0);
 
-  if (!test) notFound();
-  if (!hasKecermatanAccess(user.id, test.id)) {
+  useEffect(() => {
+    let cancelled = false;
+    api.kecermatanRuntime
+      .overview(id)
+      .then((data) => {
+        if (cancelled) return;
+        setOverview(data);
+        setState("ready");
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setState(err instanceof ApiError && err.status === 404 ? "missing" : "failed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, reloadKey]);
+
+  if (state === "missing") {
     return (
-      <AppShell title={test.title}>
+      <AppShell title={t.pageTitle}>
         <p className="text-sm text-muted">{t.noAccess}</p>
       </AppShell>
     );
   }
 
-  const program = getProgram(test.programId);
-  const product = getProductForKecermatanTest(test.id);
-  const inProgress = session?.status === "in_progress" && Object.keys(session.kolomStartedAt).length > 0;
+  if (state === "failed") {
+    return (
+      <AppShell title={t.pageTitle}>
+        <EmptyState
+          icon={CloudOff}
+          title={t.loadErrorTitle}
+          description={t.loadErrorDescription}
+          action={
+            <Button
+              variant="primary"
+              size="sm"
+              onPress={() => {
+                setState("loading");
+                setReloadKey((key) => key + 1);
+              }}
+            >
+              {t.retry}
+            </Button>
+          }
+        />
+      </AppShell>
+    );
+  }
 
-  const handleStart = () => {
-    startNewAttempt(test.id, user.id);
-    router.push(`/student/kecermatan/${test.id}/attempt`);
-  };
+  if (state === "loading" || !overview) {
+    return (
+      <AppShell title={t.pageTitle}>
+        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+      </AppShell>
+    );
+  }
 
-  const handleContinue = () => {
-    initSession(test.id, user.id);
-    router.push(`/student/kecermatan/${test.id}/attempt`);
-  };
+  const { test, attempts } = overview;
+  const left = test.attempts_remaining;
+  const completed = attempts.filter((attempt) => attempt.status === "completed");
 
   return (
     <AppShell title={t.pageTitle}>
       <div className="mx-auto max-w-2xl">
         <div className="flex items-center gap-2">
-          {program && <ProgramBadge code={program.code} />}
+          <ProgramBadge code={test.program_code} />
           <span className="rounded-md bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-soft-foreground">
             {t.chipKecermatan}
           </span>
@@ -81,46 +101,46 @@ export default function KecermatanOverviewPage({ params }: { params: Promise<{ i
             <div>
               <p className="text-sm font-medium text-foreground">{t.attemptsRemaining(left)}</p>
               <p className="text-xs text-muted">
-                {t.kolomStat(test.kolomCount, test.soalPerKolom, Math.round(test.kolomDurationSeconds / 60))}
+                {t.kolomStat(test.kolom_count, test.soal_per_kolom, Math.round(test.kolom_duration_seconds / 60))}
               </p>
             </div>
           </div>
-          {inProgress ? (
-            <Button variant="primary" size="sm" onPress={handleContinue}>
+          {overview.current ? (
+            <LinkButton href={`/student/kecermatan/${test.test_id}/attempt`} variant="primary" size="sm">
               <PlayCircle className="size-3.5" /> {t.ctaContinue}
-            </Button>
+            </LinkButton>
           ) : left > 0 ? (
-            <Button variant="primary" size="sm" onPress={handleStart}>
+            <LinkButton href={`/student/kecermatan/${test.test_id}/attempt`} variant="primary" size="sm">
               <PlayCircle className="size-3.5" /> {t.ctaStartNew}
-            </Button>
-          ) : product ? (
-            <LinkButton href={`/catalog/${product.id}`} variant="secondary" size="sm">
+            </LinkButton>
+          ) : (
+            <LinkButton href={purchaseHref(overview.product_id)} variant="secondary" size="sm">
               <ShoppingBag className="size-3.5" /> {t.ctaBuyMore}
             </LinkButton>
-          ) : null}
+          )}
         </Card>
 
-        {attempts.length > 0 && (
+        {completed.length > 0 && (
           <div className="mt-6">
             <p className="mb-2 text-sm font-semibold text-foreground">{t.historyTitle}</p>
             <div className="space-y-2">
-              {attempts.map((attempt) => {
-                const result = computeResult(test, attempt);
-                return (
-                  <Card key={attempt.attemptNumber} className="flex-row items-center justify-between gap-3 p-3.5">
-                    <span className="text-sm font-medium text-foreground">{t.attemptLabel(attempt.attemptNumber)}</span>
+              {completed.map((attempt) => (
+                <Link key={attempt.session_id} href={`/student/kecermatan/${test.test_id}/result?attempt=${attempt.session_id}`}>
+                  <Card className="flex-row items-center justify-between gap-3 p-3.5 transition-colors hover:bg-surface-secondary">
+                    <span className="text-sm font-medium text-foreground">{t.attemptLabel(attempt.attempt_number)}</span>
                     <span className="flex items-center gap-3 text-xs text-muted">
-                      {t.nilaiAkhir} <span className="font-mono font-semibold text-foreground">{result.nilaiAkhirScore}</span>
-                      {attempt.completedAt && formatDateTime(attempt.completedAt)}
+                      {t.nilaiAkhir}{" "}
+                      <span className="font-mono font-semibold text-foreground">{attempt.nilai_akhir}</span>
+                      {attempt.completed_at && new Date(attempt.completed_at).toLocaleString()}
                     </span>
                   </Card>
-                );
-              })}
+                </Link>
+              ))}
             </div>
           </div>
         )}
 
-        {attempts.length === 0 && (
+        {completed.length === 0 && (
           <div className="mt-6 flex items-start gap-3 rounded-xl border border-dashed border-border p-4 text-sm text-muted">
             <Gauge className="mt-0.5 size-4 shrink-0" />
             <p>{t.noHistoryInfo}</p>
