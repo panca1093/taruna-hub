@@ -322,7 +322,7 @@ For every slice, use this verification loop:
 
 ### P09 — Kecermatan item packages
 
-**Status:** in progress — the API half is built and tested: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit, D09 limits, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, and an ephemeral sample column. Deferred: the `web/app/admin/item-packages` page and shared file controls, because the web mockup has no Paket Item screen and new screens need the owner's mockup first; master packages and copy (D17) · **Size:** L · **Depends:** P05, P06
+**Status:** in progress — API and admin page are built: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit under request-wide D09 budgets, full WebP decode, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, an ephemeral sample column, and `web/app/admin/item-packages` (list, detail, add dialog, sample dialog). The page is browser-unverified: it passed `tsc`, lint and `next build` only. Deferred: master packages and copy (D17); the kecermatan builder's package picker (P10) · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff manage authorized symbol/image/emoji/shape sources with real preview and safe imports.
 
@@ -341,7 +341,7 @@ For every slice, use this verification loop:
 - [x] Used package delete/shrink below any referencing test threshold fails; existing frozen assets remain renderable.
       Proven with a fixture row in `kecermatan_test_packages` (HTTP and raw foreign-key deletes); P10 writes the real rows.
 - [ ] Emoji is catalog-only and consistent across devices; pasted emoji in symbols fails with guidance; preview does not consume quota.
-      Catalog-only, bundled Twemoji files and the emoji-in-symbol rejection are proven, and the sample column writes nothing; nothing renders the emoji in a browser yet (no page), and quota metering does not exist until P10/P11.
+      Catalog-only, bundled Twemoji files and the emoji-in-symbol rejection are proven, and the sample column writes nothing; the page that renders emoji is built but not checked in a browser, and quota metering does not exist until P10/P11.
 
 **Decision / verification gate:** D02 (resolved: the Operator may mutate packages); D09 resolved 2026-10-28 (ZIP ≤200 files and ≤50MB extracted; Twemoji CC-BY 4.0 catalog with attribution). Master packages and copy are deferred (D17).
 
