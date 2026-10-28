@@ -173,6 +173,7 @@ type extensionRequest struct {
 
 type extensionResponse struct {
 	SessionID    uuid.UUID `json:"session_id"`
+	SubtestID    uuid.UUID `json:"subtest_id"`
 	Seconds      int       `json:"seconds"`
 	TotalSeconds int       `json:"total_seconds"`
 }
@@ -397,7 +398,7 @@ func (h *Handler) ExtendSession(c echo.Context) error {
 	if err != nil {
 		return runtimeError(err)
 	}
-	return c.JSON(http.StatusOK, extensionResponse{SessionID: ext.SessionID, Seconds: ext.Seconds, TotalSeconds: ext.TotalExtra})
+	return c.JSON(http.StatusOK, extensionResponse{SessionID: ext.SessionID, SubtestID: ext.SubtestID, Seconds: ext.Seconds, TotalSeconds: ext.TotalExtra})
 }
 
 func attemptSummariesOf(list []model.AttemptSummary) []attemptSummaryResponse {

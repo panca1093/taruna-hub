@@ -38,13 +38,13 @@ func (r *RuntimeRepository) DB() *pgxpool.Pool { return r.db }
 
 const attemptColumns = `s.id, s.tenant_id, s.user_id, s.tryout_id, s.attempt_number, s.status, s.scoring_mode,
 	s.scoring_version, s.weight_easy::float8, s.weight_medium::float8, s.weight_hard::float8, s.seed,
-	s.extra_seconds, s.started_at, s.completed_at, t.title, t.active_until, t.grace_seconds`
+	s.started_at, s.completed_at, t.title, t.active_until, t.grace_seconds`
 
 func scanAttempt(row pgx.Row) (model.Attempt, error) {
 	var a model.Attempt
 	err := row.Scan(&a.ID, &a.TenantID, &a.UserID, &a.TryoutID, &a.AttemptNumber, &a.Status, &a.ScoringMode,
 		&a.ScoringVersion, &a.Weights.Easy, &a.Weights.Medium, &a.Weights.Hard, &a.Seed,
-		&a.ExtraSeconds, &a.StartedAt, &a.CompletedAt, &a.TryoutTitle, &a.ActiveUntil, &a.GraceSeconds)
+		&a.StartedAt, &a.CompletedAt, &a.TryoutTitle, &a.ActiveUntil, &a.GraceSeconds)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Attempt{}, ErrNotFound
 	}
@@ -200,17 +200,20 @@ func (r *RuntimeRepository) SourceSubtests(ctx context.Context, q dbtx, tenantID
 	return out, nil
 }
 
-// ActiveAttempt is the student's in-progress session on this tryout, if any.
-func (r *RuntimeRepository) ActiveAttempt(ctx context.Context, q dbtx, tenantID, userID, tryoutID uuid.UUID) (model.Attempt, error) {
+// ActiveAttempt is the student's in-progress session on this tryout, if any. A writer passes forUpdate to hold the
+// session row before settling it, so the lock order stays enrollment, then session.
+func (r *RuntimeRepository) ActiveAttempt(ctx context.Context, q dbtx, tenantID, userID, tryoutID uuid.UUID, forUpdate bool) (model.Attempt, error) {
 	if tenantID == uuid.Nil {
 		return model.Attempt{}, ErrScopeRequired
 	}
-	return scanAttempt(q.QueryRow(ctx, `
-		SELECT `+attemptColumns+`
+	sql := `SELECT ` + attemptColumns + `
 		  FROM tryout_sessions s
 		  JOIN tryouts t ON t.id = s.tryout_id AND t.tenant_id = s.tenant_id
-		 WHERE s.tenant_id = $1 AND s.user_id = $2 AND s.tryout_id = $3 AND s.status = 'in_progress'`,
-		tenantID, userID, tryoutID))
+		 WHERE s.tenant_id = $1 AND s.user_id = $2 AND s.tryout_id = $3 AND s.status = 'in_progress'`
+	if forUpdate {
+		sql += ` FOR UPDATE OF s`
+	}
+	return scanAttempt(q.QueryRow(ctx, sql, tenantID, userID, tryoutID))
 }
 
 // NextAttemptNumber is only safe under LockEnrollment, which serializes the student's starts.
@@ -328,7 +331,7 @@ func (r *RuntimeRepository) Parts(ctx context.Context, q dbtx, tenantID, session
 	}
 	rows, err := q.Query(ctx, `
 		SELECT session_id, subtest_id, position, name, duration_seconds, status, started_at, deadline_at,
-		       submitted_at, coalesce(submit_reason, ''), question_count,
+		       extra_seconds, submitted_at, coalesce(submit_reason, ''), question_count,
 		       earned_points::float8, max_points::float8, correct_count
 		  FROM tryout_session_parts
 		 WHERE tenant_id = $1 AND session_id = $2 ORDER BY position`, tenantID, sessionID)
@@ -340,7 +343,7 @@ func (r *RuntimeRepository) Parts(ctx context.Context, q dbtx, tenantID, session
 	for rows.Next() {
 		var p model.AttemptPart
 		if err := rows.Scan(&p.SessionID, &p.SubtestID, &p.Position, &p.Name, &p.DurationSeconds, &p.Status,
-			&p.StartedAt, &p.DeadlineAt, &p.SubmittedAt, &p.SubmitReason, &p.QuestionCount,
+			&p.StartedAt, &p.DeadlineAt, &p.ExtraSeconds, &p.SubmittedAt, &p.SubmitReason, &p.QuestionCount,
 			&p.EarnedPoints, &p.MaxPoints, &p.CorrectCount); err != nil {
 			return nil, fmt.Errorf("scan session part: %w", err)
 		}
@@ -495,7 +498,11 @@ func (r *RuntimeRepository) Answer(ctx context.Context, q dbtx, tenantID, sessio
 	return a, nil
 }
 
-// PutAnswer inserts or replaces one answer; the service has already decided it is fresh.
+// ErrStaleWrite reports that a stored answer already carries an equal or newer client sequence.
+var ErrStaleWrite = errors.New("stale answer write")
+
+// PutAnswer inserts or replaces one answer. The service has already judged it fresh, and the WHERE repeats that
+// as a DB guard, so a reordered write can never lower the stored sequence.
 func (r *RuntimeRepository) PutAnswer(ctx context.Context, q dbtx, tenantID, sessionID uuid.UUID, a model.AttemptAnswer) error {
 	if tenantID == uuid.Nil {
 		return ErrScopeRequired
@@ -504,15 +511,19 @@ func (r *RuntimeRepository) PutAnswer(ctx context.Context, q dbtx, tenantID, ses
 	if err != nil {
 		return fmt.Errorf("encode answer: %w", err)
 	}
-	_, err = q.Exec(ctx, `
+	tag, err := q.Exec(ctx, `
 		INSERT INTO tryout_session_answers (session_id, tenant_id, question_id, answer, revision, client_seq, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (session_id, question_id)
 		DO UPDATE SET answer = EXCLUDED.answer, revision = EXCLUDED.revision,
-		              client_seq = EXCLUDED.client_seq, updated_at = EXCLUDED.updated_at`,
+		              client_seq = EXCLUDED.client_seq, updated_at = EXCLUDED.updated_at
+		   WHERE tryout_session_answers.client_seq < EXCLUDED.client_seq`,
 		sessionID, tenantID, a.QuestionID, raw, a.Revision, a.Seq, a.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("put answer: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrStaleWrite
 	}
 	return nil
 }
@@ -666,23 +677,30 @@ func (r *RuntimeRepository) Attempts(ctx context.Context, q dbtx, tenantID, user
 	return out, rows.Err()
 }
 
-// AddExtra records one audited grant and moves the session's total in the same statement pair.
-func (r *RuntimeRepository) AddExtra(ctx context.Context, q dbtx, tenantID, sessionID, grantedBy uuid.UUID, seconds int, reason string) (int, error) {
+// AddExtra records one audited grant and adds it to the subtest that is running. It reports ErrNotFound when
+// nothing is running, so a grant never lands on a part that cannot use it.
+func (r *RuntimeRepository) AddExtra(ctx context.Context, q dbtx, tenantID, sessionID, grantedBy uuid.UUID, seconds int, reason string) (uuid.UUID, int, error) {
 	if tenantID == uuid.Nil {
-		return 0, ErrScopeRequired
+		return uuid.Nil, 0, ErrScopeRequired
+	}
+	var subtestID uuid.UUID
+	var total int
+	err := q.QueryRow(ctx, `
+		UPDATE tryout_session_parts SET extra_seconds = extra_seconds + $3
+		 WHERE tenant_id = $1 AND session_id = $2 AND status = 'running'
+		RETURNING subtest_id, extra_seconds`, tenantID, sessionID, seconds).Scan(&subtestID, &total)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, 0, ErrNotFound
+	}
+	if err != nil {
+		return uuid.Nil, 0, fmt.Errorf("add extra seconds: %w", err)
 	}
 	if _, err := q.Exec(ctx, `
-		INSERT INTO tryout_session_extensions (tenant_id, session_id, seconds, reason, granted_by)
-		VALUES ($1, $2, $3, $4, $5)`, tenantID, sessionID, seconds, reason, grantedBy); err != nil {
-		return 0, fmt.Errorf("record extension: %w", err)
+		INSERT INTO tryout_session_extensions (tenant_id, session_id, subtest_id, seconds, reason, granted_by)
+		VALUES ($1, $2, $3, $4, $5, $6)`, tenantID, sessionID, subtestID, seconds, reason, grantedBy); err != nil {
+		return uuid.Nil, 0, fmt.Errorf("record extension: %w", err)
 	}
-	var total int
-	if err := q.QueryRow(ctx, `
-		UPDATE tryout_sessions SET extra_seconds = extra_seconds + $3
-		 WHERE tenant_id = $1 AND id = $2 RETURNING extra_seconds`, tenantID, sessionID, seconds).Scan(&total); err != nil {
-		return 0, fmt.Errorf("add extra seconds: %w", err)
-	}
-	return total, nil
+	return subtestID, total, nil
 }
 
 // DueSession names a session the worker should settle.
@@ -691,26 +709,27 @@ type DueSession struct {
 	TenantID uuid.UUID
 }
 
-// DueSessions is the deadline worker's scan. A running part is due once its deadline plus the session extension
-// and the tryout's live grace has passed; a session with no running part is due at the tryout's active_until.
-// The first branch walks the partial index on running deadlines, so the cost follows the exams actually running.
+// DueSessions is the deadline worker's scan, most overdue first so a session that keeps failing cannot starve the
+// rest. A running part is due once its deadline plus its own extension and the tryout's live grace has passed; a
+// session with no running part is due at the tryout's active_until. The plain deadline_at bound is implied by the
+// sum but lets the first branch use the partial index on running deadlines.
 func (r *RuntimeRepository) DueSessions(ctx context.Context, q dbtx, now time.Time, limit int) ([]DueSession, error) {
 	rows, err := q.Query(ctx, `
 		SELECT id, tenant_id FROM (
-		    SELECT s.id, s.tenant_id
+		    SELECT s.id, s.tenant_id, p.deadline_at + make_interval(secs => p.extra_seconds + t.grace_seconds) AS due_at
 		      FROM tryout_session_parts p
 		      JOIN tryout_sessions s ON s.id = p.session_id AND s.tenant_id = p.tenant_id
 		      JOIN tryouts t ON t.id = s.tryout_id AND t.tenant_id = s.tenant_id
 		     WHERE p.status = 'running' AND p.deadline_at <= $1
-		       AND p.deadline_at + make_interval(secs => s.extra_seconds + t.grace_seconds) <= $1
+		       AND p.deadline_at + make_interval(secs => p.extra_seconds + t.grace_seconds) <= $1
 		    UNION
-		    SELECT s.id, s.tenant_id
+		    SELECT s.id, s.tenant_id, t.active_until AS due_at
 		      FROM tryout_sessions s
 		      JOIN tryouts t ON t.id = s.tryout_id AND t.tenant_id = s.tenant_id
 		     WHERE s.status = 'in_progress' AND t.active_until <= $1
 		       AND NOT EXISTS (SELECT 1 FROM tryout_session_parts p
 		                        WHERE p.session_id = s.id AND p.tenant_id = s.tenant_id AND p.status = 'running')
-		) due LIMIT $2`, now, limit)
+		) due ORDER BY due_at, id LIMIT $2`, now, limit)
 	if err != nil {
 		return nil, fmt.Errorf("scan due sessions: %w", err)
 	}

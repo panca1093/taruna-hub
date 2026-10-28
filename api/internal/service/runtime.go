@@ -86,8 +86,8 @@ func cryptoSeed() int64 {
 	return int64(binary.LittleEndian.Uint64(b[:]) >> 1)
 }
 
-// PartView is a part as the student sees it. Deadline already includes the session's staff extension; the
-// grace stays hidden, so the countdown never promises time the policy treats as leniency.
+// PartView is a part as the student sees it. Deadline is the instant answers stop being admitted: the part
+// deadline plus its staff extension plus the tryout's live grace (D10), so the countdown never lies about it.
 type PartView struct {
 	model.AttemptPart
 	Deadline *time.Time
@@ -208,7 +208,7 @@ func (s *RuntimeService) Overview(ctx context.Context, scope HostScope, principa
 	}
 	overview := StudentTryout{Tryout: out.Tryout, ProgramCode: out.ProgramCode, ProgramName: out.ProgramName}
 	overview.Subtests = out.Subtests
-	if active, err := s.repo.ActiveAttempt(ctx, s.db, tenantID, principal.UserID, tryoutID); err == nil {
+	if active, err := s.repo.ActiveAttempt(ctx, s.db, tenantID, principal.UserID, tryoutID, false); err == nil {
 		view, err := s.view(ctx, tenantID, principal.UserID, active.ID)
 		if err != nil {
 			return StudentTryout{}, err
@@ -252,7 +252,7 @@ func (s *RuntimeService) Start(ctx context.Context, scope HostScope, principal m
 			return runtimeError(err)
 		}
 		now := s.now()
-		active, err := s.repo.ActiveAttempt(ctx, tx, tenantID, principal.UserID, tryoutID)
+		active, err := s.repo.ActiveAttempt(ctx, tx, tenantID, principal.UserID, tryoutID, true)
 		if err == nil {
 			if _, err := s.settleLocked(ctx, tx, active, now); err != nil {
 				return err
@@ -374,14 +374,10 @@ func permutation(seed int64, key string, n int) []int {
 	return out
 }
 
-// visibleDeadline is the moment the student's countdown ends: the part deadline plus the session's staff extension.
+// visibleDeadline is the last instant an answer is admitted and where the student's countdown ends: D10's part
+// deadline plus the extension granted to this part plus the tryout's grace, which is read live.
 func visibleDeadline(a model.Attempt, p model.AttemptPart) time.Time {
-	return p.DeadlineAt.Add(time.Duration(a.ExtraSeconds) * time.Second)
-}
-
-// cutoff is the last instant an answer is admitted: D10's grace, read live from the tryout, after the visible deadline.
-func cutoff(a model.Attempt, p model.AttemptPart) time.Time {
-	return visibleDeadline(a, p).Add(time.Duration(a.GraceSeconds) * time.Second)
+	return p.DeadlineAt.Add(time.Duration(p.ExtraSeconds+a.GraceSeconds) * time.Second)
 }
 
 // settleLocked applies every deadline that has passed. It expects the session row locked, and it is idempotent:
@@ -396,7 +392,7 @@ func (s *RuntimeService) settleLocked(ctx context.Context, tx pgx.Tx, a model.At
 	}
 	changed := false
 	for i, p := range parts {
-		if p.Status != model.PartRunning || now.Before(cutoff(a, p)) {
+		if p.Status != model.PartRunning || now.Before(visibleDeadline(a, p)) {
 			continue
 		}
 		if err := s.settlePart(ctx, tx, a, p, model.SubmitExpired, visibleDeadline(a, p)); err != nil {
@@ -511,7 +507,7 @@ func needsSettling(a model.Attempt, parts []model.AttemptPart, now time.Time) bo
 	for _, p := range parts {
 		if p.Status == model.PartRunning {
 			running = true
-			if !now.Before(cutoff(a, p)) {
+			if !now.Before(visibleDeadline(a, p)) {
 				return true
 			}
 		}
@@ -845,6 +841,9 @@ func (s *RuntimeService) SaveAnswer(ctx context.Context, scope HostScope, princi
 		if err := s.repo.PutAnswer(ctx, tx, tenantID, sessionID, model.AttemptAnswer{
 			QuestionID: questionID, Answer: clean, Revision: revision, Seq: in.Seq, UpdatedAt: now,
 		}); err != nil {
+			if errors.Is(err, repository.ErrStaleWrite) {
+				return ErrStaleAnswer
+			}
 			return runtimeError(err)
 		}
 		ack = AnswerAck{QuestionID: questionID, Revision: revision, Seq: in.Seq, ServerTime: now}
@@ -912,8 +911,9 @@ func sameAnswer(a, b []string) bool {
 	return true
 }
 
-// Extend is D10's per-session allowance: staff add seconds to one student's session and the grant is audited. It
-// applies to every subtest of that session and never reopens a part that has already settled.
+// Extend is D10's staff allowance: seconds added to the subtest that is running in one student's session, audited
+// with its subtest. Later subtests keep their normal timing and a settled part is never reopened; with no part
+// running there is nothing to extend.
 func (s *RuntimeService) Extend(ctx context.Context, scope HostScope, principal model.Principal, sessionID uuid.UUID, in ExtensionInput) (model.Extension, error) {
 	tenantID, err := questionTenant(scope, principal)
 	if err != nil {
@@ -948,14 +948,27 @@ func (s *RuntimeService) Extend(ctx context.Context, scope HostScope, principal 
 		if a.Status != model.SessionInProgress {
 			return keep{ErrSessionClosed}
 		}
-		if a.ExtraSeconds+in.Seconds > maxExtraTotal {
-			return &InputError{Fields: map[string]string{"seconds": ReasonExtraTotal}}
-		}
-		total, err := s.repo.AddExtra(ctx, tx, tenantID, sessionID, principal.UserID, in.Seconds, in.Reason)
+		parts, err := s.repo.Parts(ctx, tx, tenantID, sessionID)
 		if err != nil {
 			return runtimeError(err)
 		}
-		out = model.Extension{SessionID: sessionID, Seconds: in.Seconds, Reason: in.Reason, GrantedBy: principal.UserID, TotalExtra: total}
+		running := -1
+		for i, p := range parts {
+			if p.Status == model.PartRunning {
+				running = i
+			}
+		}
+		if running < 0 {
+			return keep{ErrPartNotRunning}
+		}
+		if parts[running].ExtraSeconds+in.Seconds > maxExtraTotal {
+			return &InputError{Fields: map[string]string{"seconds": ReasonExtraTotal}}
+		}
+		subtestID, total, err := s.repo.AddExtra(ctx, tx, tenantID, sessionID, principal.UserID, in.Seconds, in.Reason)
+		if err != nil {
+			return runtimeError(err)
+		}
+		out = model.Extension{SessionID: sessionID, SubtestID: subtestID, Seconds: in.Seconds, Reason: in.Reason, GrantedBy: principal.UserID, TotalExtra: total}
 		return nil
 	})
 	return out, err

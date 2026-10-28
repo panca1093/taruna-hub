@@ -29,8 +29,6 @@ CREATE TABLE tryout_sessions (
     weight_hard     numeric(8,2) NOT NULL,
     -- The permutation of questions and options derives from this, so a resume rebuilds nothing.
     seed            bigint       NOT NULL,
-    -- D10: the sum of staff extensions granted to this one session; every grant is also a row below.
-    extra_seconds   int          NOT NULL DEFAULT 0 CHECK (extra_seconds BETWEEN 0 AND 28800),
     started_at      timestamptz  NOT NULL,
     completed_at    timestamptz  NULL,
     CONSTRAINT tryout_sessions_id_tenant_key UNIQUE (id, tenant_id),
@@ -57,8 +55,10 @@ CREATE TABLE tryout_session_parts (
     duration_seconds int           NOT NULL CHECK (duration_seconds > 0),
     status           text          NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'submitted')),
     started_at       timestamptz   NULL,
-    -- min(started_at + duration, tryout active_until); the staff extension and grace are added live.
+    -- min(started_at + duration, tryout active_until); the extension and the tryout's grace are added live.
     deadline_at      timestamptz   NULL,
+    -- D10: staff extension of this subtest only, granted while it runs; every grant is also an audit row below.
+    extra_seconds    int           NOT NULL DEFAULT 0 CHECK (extra_seconds BETWEEN 0 AND 28800),
     submitted_at     timestamptz   NULL,
     submit_reason    text          NULL CHECK (submit_reason IN ('student', 'expired', 'unstarted')),
     question_count   int           NOT NULL CHECK (question_count >= 0),
@@ -114,17 +114,20 @@ CREATE TABLE tryout_session_answers (
         REFERENCES tryout_session_questions (session_id, question_id) ON DELETE RESTRICT
 );
 
--- The audit trail of D10's per-session allowance: append-only, one row per grant.
+-- The audit trail of D10's extension of the running subtest: append-only, one row per grant.
 CREATE TABLE tryout_session_extensions (
     id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id  uuid        NOT NULL,
     session_id uuid        NOT NULL,
+    subtest_id uuid        NOT NULL,
     seconds    int         NOT NULL CHECK (seconds BETWEEN 1 AND 14400),
     reason     text        NOT NULL CHECK (btrim(reason) <> ''),
     granted_by uuid        NOT NULL REFERENCES users (id) ON DELETE RESTRICT,
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT tryout_session_extensions_session_fkey FOREIGN KEY (session_id, tenant_id)
-        REFERENCES tryout_sessions (id, tenant_id) ON DELETE RESTRICT
+        REFERENCES tryout_sessions (id, tenant_id) ON DELETE RESTRICT,
+    CONSTRAINT tryout_session_extensions_part_fkey FOREIGN KEY (session_id, subtest_id)
+        REFERENCES tryout_session_parts (session_id, subtest_id) ON DELETE RESTRICT
 );
 
 CREATE INDEX tryout_session_extensions_session_idx ON tryout_session_extensions (session_id, created_at);

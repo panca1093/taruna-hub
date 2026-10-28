@@ -59,7 +59,6 @@ type Attempt struct {
 	ScoringVersion int
 	Weights        Weights
 	Seed           int64
-	ExtraSeconds   int
 	StartedAt      time.Time
 	CompletedAt    *time.Time
 
@@ -78,6 +77,7 @@ type AttemptPart struct {
 	Status          string
 	StartedAt       *time.Time
 	DeadlineAt      *time.Time
+	ExtraSeconds    int
 	SubmittedAt     *time.Time
 	SubmitReason    string
 	QuestionCount   int
@@ -177,9 +177,10 @@ type Result struct {
 	Parts          []PartResult
 }
 
-// Extension is one audited staff grant of extra time to one session.
+// Extension is one audited staff grant of extra time to the subtest that was running in one session.
 type Extension struct {
 	SessionID  uuid.UUID
+	SubtestID  uuid.UUID
 	Seconds    int
 	Reason     string
 	GrantedBy  uuid.UUID

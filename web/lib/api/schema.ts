@@ -3086,7 +3086,7 @@ export interface paths {
          * One session of the signed-in student
          * @description Another student's session, a staff caller or a malformed id never reveals existence. Any deadline that has
          *     passed is settled before the answer, so a reload after expiry shows the truth. `server_time` is the clock
-         *     the countdown must use; `subtests[].deadline_at` already includes any staff extension. Subtest scores and
+         *     the countdown must use; `subtests[].deadline_at` already includes the tryout's grace and the subtest's staff extension. Subtest scores and
          *     `result` appear only once the session is completed.
          */
         get: {
@@ -3358,7 +3358,8 @@ export interface paths {
         /**
          * Save one answer
          * @description Admitted by server time against the subtest's effective deadline plus the tryout's grace (read live) plus any
-         *     staff extension of this session (D10); no other grace exists. `seq` is the client's own per-question counter
+         *     staff extension of this subtest (D10); no other grace exists. The `deadline_at` the student sees is already
+         *     that sum. `seq` is the client's own per-question counter
          *     and the retry identity: a resend of the stored `seq` with the same answer is acknowledged unchanged, an
          *     older `seq` (or the same `seq` with another answer) answers `409` `stale_answer` and never overwrites, a
          *     newer one replaces. `revision` is server-assigned, monotonic per answer and moves only when the stored
@@ -3423,10 +3424,12 @@ export interface paths {
         put?: never;
         /**
          * Grant one student's session extra time
-         * @description Admin and Operator (D10). Adds `seconds` to every subtest deadline of this one session, never another
-         *     student's. The grant is appended to an audit table with the actor and the reason. A completed session, or a
-         *     part whose deadline already passed, is not reopened: a session settled by this call answers `409`
-         *     `session_completed`. The UI for this call lands with P19 monitoring.
+         * @description Admin and Operator (D10). Adds `seconds` to the one subtest that is running in this session when the call
+         *     lands, never another subtest or another student's; later subtests keep their normal timing. The grant is
+         *     appended to an audit table with the actor, the subtest and the reason. With no subtest running the call
+         *     answers `409` `subtest_not_running`; a completed session, or a part whose deadline already passed, is not
+         *     reopened, and a session settled by this call answers `409` `session_completed`. The UI for this call lands
+         *     with P19 monitoring.
          */
         post: {
             parameters: {
@@ -3443,7 +3446,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description The grant and the session's total extension */
+                /** @description The grant and the running subtest's total extension */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -3455,7 +3458,7 @@ export interface paths {
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
                 404: components["responses"]["NotFound"];
-                /** @description `session_completed` */
+                /** @description `session_completed` or `subtest_not_running` */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -4016,7 +4019,10 @@ export interface components {
             explanation_release_at?: string | null;
             randomize_questions?: boolean;
             randomize_options?: boolean;
-            /** @description Omitted means 0. Editable only while the tryout is unlocked; `PUT /tryouts/{id}/grace` works after the first attempt. */
+            /**
+             * @description Admin only: any other role's value is ignored. Omitted keeps the stored value (0 on create). Editable only
+             *     while the tryout is unlocked; `PUT /tryouts/{id}/grace` works after the first attempt.
+             */
             grace_seconds?: number;
             subtests?: components["schemas"]["TryoutSubtestRequest"][];
         };
@@ -4037,7 +4043,10 @@ export interface components {
             explanation_release_at?: string | null;
             randomize_questions?: boolean;
             randomize_options?: boolean;
-            /** @description Omitted means 0. Editable only while the tryout is unlocked; `PUT /tryouts/{id}/grace` works after the first attempt. */
+            /**
+             * @description Admin only: any other role's value is ignored. Omitted keeps the stored value (0 on create). Editable only
+             *     while the tryout is unlocked; `PUT /tryouts/{id}/grace` works after the first attempt.
+             */
             grace_seconds?: number;
             /** @description The complete definition; subtests and assignments missing here are deleted. */
             subtests?: components["schemas"]["TryoutSubtestRequest"][];
@@ -4407,8 +4416,8 @@ export interface components {
             started_at: string | null;
             /**
              * Format: date-time
-             * @description When the countdown ends: the earlier of start + duration and `active_until`, plus this session's staff
-             *     extension. Null until the subtest starts. Compare it with `server_time`, never with the device clock.
+             * @description When the countdown ends: the earlier of start + duration and `active_until`, plus the tryout's grace
+             *     (read live, so it can move between syncs) and this subtest's staff extension. Null until the subtest starts. Compare it with `server_time`, never with the device clock.
              */
             deadline_at: string | null;
             /** Format: date-time */
@@ -4575,8 +4584,13 @@ export interface components {
         Extension: {
             /** Format: uuid */
             session_id: string;
+            /**
+             * Format: uuid
+             * @description The subtest that was running and received the grant.
+             */
+            subtest_id: string;
             seconds: number;
-            /** @description Every grant of this session summed; capped at 28800. */
+            /** @description Every grant of that subtest summed; capped at 28800. */
             total_seconds: number;
         };
     };

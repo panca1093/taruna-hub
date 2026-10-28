@@ -520,9 +520,21 @@ func TestRuntimeGraceChangedMidExamTakesEffect(t *testing.T) {
 	if _, err := h.svc.SetGrace(ctx, h.scopeA(), admin, f.tryout.ID, 3601); !errors.As(err, &input) {
 		t.Errorf("grace of 3601: %v, want an InputError", err)
 	}
+	visible := func(want time.Time, why string) {
+		t.Helper()
+		view, err := h.rt.Session(ctx, h.scopeA(), p, sid)
+		if err != nil || !view.Parts[0].Deadline.Equal(want) {
+			t.Fatalf("countdown deadline %s = %v (err %v), want %v", why, view.Parts[0].Deadline, err, want)
+		}
+	}
+	if got, err := h.svc.SetGrace(ctx, h.scopeA(), admin, f.tryout.ID, 120); err != nil || got.GraceSeconds != 120 {
+		t.Fatalf("setting the grace on a locked tryout = %+v (err %v), want 120", got, err)
+	}
+	visible(started.Add(32*time.Minute), "with a 120 second grace")
 	if got, err := h.svc.SetGrace(ctx, h.scopeA(), admin, f.tryout.ID, 60); err != nil || got.GraceSeconds != 60 || !got.Locked {
 		t.Fatalf("setting the grace on a locked tryout = %+v (err %v), want 60 and still locked", got, err)
 	}
+	visible(started.Add(31*time.Minute), "after the grace dropped to 60 mid-exam")
 
 	h.clock.Advance(30*time.Minute + 30*time.Second)
 	h.mustAnswer(t, p, sid, f.pg.ID, 1, optID(t, f.pg, "4"))
@@ -539,8 +551,8 @@ func TestRuntimeGraceChangedMidExamTakesEffect(t *testing.T) {
 	if settled.Status != model.PartSubmitted || settled.SubmitReason != model.SubmitExpired {
 		t.Fatalf("part = %+v, want submitted by expiry", settled)
 	}
-	if !settled.SubmittedAt.Equal(*part.Deadline) {
-		t.Errorf("submitted at %v, want the deadline %v", settled.SubmittedAt, part.Deadline)
+	if want := started.Add(31 * time.Minute); !settled.SubmittedAt.Equal(want) {
+		t.Errorf("submitted at %v, want the deadline plus grace %v", settled.SubmittedAt, want)
 	}
 	if got := deref(settled.EarnedPoints); got != 1 {
 		t.Errorf("earned %v, want 1: the answer inside the grace counts, the late one does not", got)
@@ -588,12 +600,12 @@ func TestRuntimeStaffExtensionExtendsOnlyThatSession(t *testing.T) {
 	}
 
 	var reason string
-	var grantedBy uuid.UUID
+	var grantedBy, subtestID uuid.UUID
 	var seconds int
-	err = h.pool.QueryRow(ctx, `SELECT seconds, reason, granted_by FROM tryout_session_extensions WHERE session_id = $1`, sa).
-		Scan(&seconds, &reason, &grantedBy)
-	if err != nil || seconds != 120 || reason != "Listrik padam di lokasi" || grantedBy != operator.UserID {
-		t.Errorf("audit row = %d %q by %s (err %v), want the grant with its reason and actor", seconds, reason, grantedBy, err)
+	err = h.pool.QueryRow(ctx, `SELECT seconds, reason, granted_by, subtest_id FROM tryout_session_extensions WHERE session_id = $1`, sa).
+		Scan(&seconds, &reason, &grantedBy, &subtestID)
+	if err != nil || seconds != 120 || reason != "Listrik padam di lokasi" || grantedBy != operator.UserID || subtestID != f.sub1() {
+		t.Errorf("audit row = %d %q by %s on %s (err %v), want the grant with its reason, actor and subtest", seconds, reason, grantedBy, subtestID, err)
 	}
 	if n := h.count(t, `SELECT count(*) FROM tryout_session_extensions WHERE session_id = $1`, sb); n != 0 {
 		t.Errorf("student B has %d extension rows, want 0", n)
@@ -873,5 +885,130 @@ func TestRuntimeAdmissionWindow(t *testing.T) {
 	view, err := h.rt.Start(ctx, h.scopeA(), p, f.tryout.ID)
 	if err != nil || view.Attempt.Status != model.SessionCompleted || view.Result == nil || view.Result.Score != 0 {
 		t.Errorf("resuming after the window = %+v (err %v), want the settled session with a zero result", view.Attempt, err)
+	}
+}
+
+func TestRuntimeExtensionAppliesOnlyToTheRunningSubtest(t *testing.T) {
+	h := newRuntimeHarness(t)
+	f := h.fixture(t, nil)
+	_, p := h.enrolledStudent(t, f)
+	ctx, operator := context.Background(), h.staff(model.RoleOperator)
+	sid := h.begin(t, p, f).Attempt.ID
+
+	if _, err := h.rt.Extend(ctx, h.scopeA(), operator, sid, ExtensionInput{Seconds: 60, Reason: "belum mulai"}); !errors.Is(err, ErrPartNotRunning) {
+		t.Fatalf("extending before any subtest runs: %v, want ErrPartNotRunning", err)
+	}
+	first := h.startPart(t, p, sid, f.sub1()).Parts[0]
+	ext, err := h.rt.Extend(ctx, h.scopeA(), operator, sid, ExtensionInput{Seconds: 120, Reason: "Listrik padam"})
+	if err != nil || ext.SubtestID != f.sub1() || ext.TotalExtra != 120 {
+		t.Fatalf("extend = %+v (err %v), want 120 seconds on subtest 1", ext, err)
+	}
+	h.submitPart(t, p, sid, f.sub1())
+
+	if _, err := h.rt.Extend(ctx, h.scopeA(), operator, sid, ExtensionInput{Seconds: 60, Reason: "antar subtes"}); !errors.Is(err, ErrPartNotRunning) {
+		t.Fatalf("extending between subtests: %v, want ErrPartNotRunning", err)
+	}
+	if n := h.count(t, `SELECT count(*) FROM tryout_session_extensions WHERE session_id = $1`, sid); n != 1 {
+		t.Errorf("%d audit rows, want only the one grant that landed", n)
+	}
+
+	secondStart := h.clock.Now()
+	view := h.startPart(t, p, sid, f.sub2())
+	if want := secondStart.Add(15 * time.Minute); !view.Parts[1].Deadline.Equal(want) {
+		t.Errorf("subtest 2 deadline = %v, want normal timing %v", view.Parts[1].Deadline, want)
+	}
+	if view.Parts[0].Deadline == nil || !view.Parts[0].Deadline.Equal(first.Deadline.Add(2*time.Minute)) {
+		t.Errorf("subtest 1 deadline = %v, want its own extension kept", view.Parts[0].Deadline)
+	}
+	h.clock.Advance(15*time.Minute + time.Second)
+	if _, err := h.answer(p, sid, f.tf.ID, 1, "salah"); !errors.Is(err, ErrDeadlinePassed) {
+		t.Errorf("answer past subtest 2's normal deadline: %v, want ErrDeadlinePassed (no carried extension)", err)
+	}
+}
+
+func TestRuntimeStartOnAnOverdueSessionSettlesItOnce(t *testing.T) {
+	h := newRuntimeHarness(t)
+	f := h.fixture(t, nil)
+	_, p := h.enrolledStudent(t, f)
+	ctx := context.Background()
+	sid := h.begin(t, p, f).Attempt.ID
+	h.startPart(t, p, sid, f.sub1())
+	h.mustAnswer(t, p, sid, f.pg.ID, 1, optID(t, f.pg, "4"))
+
+	h.clock.Advance(31 * time.Minute)
+	first, err := h.rt.Start(ctx, h.scopeA(), p, f.tryout.ID)
+	if err != nil || first.Attempt.ID != sid {
+		t.Fatalf("start on an overdue session = %v (err %v), want the same session", first.Attempt.ID, err)
+	}
+	part := first.Parts[0]
+	if part.Status != model.PartSubmitted || part.SubmitReason != model.SubmitExpired || deref(part.EarnedPoints) != 1 {
+		t.Fatalf("part = %+v, want settled by expiry holding the saved answer", part)
+	}
+	second, err := h.rt.Start(ctx, h.scopeA(), p, f.tryout.ID)
+	if err != nil || !second.Parts[0].SubmittedAt.Equal(*part.SubmittedAt) {
+		t.Errorf("a second start changed the settled part: %+v (err %v)", second.Parts[0], err)
+	}
+	if n, err := h.rt.FinalizeDue(ctx); err != nil || n != 0 {
+		t.Errorf("worker after start settled %d (err %v), want 0: start already did it", n, err)
+	}
+}
+
+func TestRuntimeStartRacingTheWorkerYieldsOneResult(t *testing.T) {
+	h := newRuntimeHarness(t)
+	until := h.clock.Now().Add(time.Hour)
+	f := h.fixture(t, func(in *TryoutInput) { in.ActiveUntil = &until })
+	_, p := h.enrolledStudent(t, f)
+	ctx := context.Background()
+	sid := h.begin(t, p, f).Attempt.ID
+	h.startPart(t, p, sid, f.sub1())
+
+	h.clock.Advance(2 * time.Hour)
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if _, err := h.rt.Start(ctx, h.scopeA(), p, f.tryout.ID); err != nil && !errors.Is(err, ErrTryoutClosed) {
+				t.Errorf("start: %v", err)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			if _, err := h.rt.FinalizeDue(ctx); err != nil {
+				t.Errorf("finalize: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := h.count(t, `SELECT count(*) FROM tryout_results WHERE session_id = $1`, sid); n != 1 {
+		t.Errorf("%d results, want exactly 1", n)
+	}
+}
+
+func TestRuntimePutAnswerDBGuardRefusesAnEqualOrOlderSequence(t *testing.T) {
+	h := newRuntimeHarness(t)
+	f := h.fixture(t, nil)
+	_, p := h.enrolledStudent(t, f)
+	ctx := context.Background()
+	sid := h.begin(t, p, f).Attempt.ID
+	h.startPart(t, p, sid, f.sub1())
+	four, three := optID(t, f.pg, "4"), optID(t, f.pg, "3")
+	h.mustAnswer(t, p, sid, f.pg.ID, 3, four)
+
+	put := func(seq int64, answer string) error {
+		return h.repo.PutAnswer(ctx, h.pool, h.tenant().ID, sid, model.AttemptAnswer{
+			QuestionID: f.pg.ID, Answer: []string{answer}, Revision: 9, Seq: seq, UpdatedAt: h.clock.Now(),
+		})
+	}
+	for _, seq := range []int64{2, 3} {
+		if err := put(seq, three); !errors.Is(err, repository.ErrStaleWrite) {
+			t.Errorf("seq %d against a stored 3: %v, want ErrStaleWrite", seq, err)
+		}
+	}
+	if saved, err := h.repo.Answer(ctx, h.pool, h.tenant().ID, sid, f.pg.ID); err != nil || saved.Seq != 3 || saved.Answer[0] != four || saved.Revision != 1 {
+		t.Fatalf("stored = %+v (err %v), want the untouched seq 3 answer", saved, err)
+	}
+	if err := put(4, three); err != nil {
+		t.Errorf("seq 4: %v, want it applied", err)
 	}
 }
