@@ -47,6 +47,8 @@ tags:
     description: Staff view of completed attempts, ranking and IRT calibration warnings
   - name: settings
     description: Tenant settings an Admin changes, today the scoring weights
+  - name: monitoring
+    description: Tryout violation evidence the student's browser reports, and the staff view of active sessions and timelines
 
 paths:
   /healthz:
@@ -2591,6 +2593,131 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /api/v1/my/tryout-sessions/{id}/violations:
+    post:
+      tags: [monitoring]
+      summary: Report a violation on the student's own running tryout session
+      description: |
+        Student only, own session only (another student's or an unknown id is `404`). Tryout only; Kecermatan has
+        no violations. The server stamps `occurred_at`; the browser's clock is never stored. A violation is
+        evidence for staff and changes nothing about the attempt: the timer keeps running and nothing is
+        submitted or penalized.
+
+        Accepted only while the session is in progress and one of its subtests is running: a completed session
+        answers `409` `session_completed`, and no running subtest answers `409` `subtest_not_running`.
+        `event_id` is the retry identity: a resend of an event already stored answers `200` with the stored row
+        and adds nothing; a new event answers `201`. Each session keeps at most 100 violations; the next new
+        event answers `429` `too_many_requests` so a flood cannot grow the table.
+
+        Browser support is best-effort: a device without the Fullscreen API (for example iPhone Safari) may still
+        take the tryout and simply reports no `exit_fullscreen`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViolationRequest"
+      responses:
+        "200":
+          description: The event was already stored; the stored violation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Violation"
+        "201":
+          description: The violation was recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Violation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`session_completed` or `subtest_not_running`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          description: "`too_many_requests`: the session already holds 100 violations"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/admin/monitoring/sessions:
+    get:
+      tags: [monitoring]
+      summary: Tryout sessions in progress right now
+      description: |
+        Admin and Operator (D02: a role guard). Every in-progress session of the tenant, newest start first, read
+        from PostgreSQL on each call; the page polls every 30 seconds. `subtest` is the running subtest and is null
+        between subtests. `violation_count` counts the stored violations of that session. Defaults to 100 per page,
+        at most 200.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of active sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActiveSessionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/tryout-sessions/{id}/violations:
+    get:
+      tags: [monitoring]
+      summary: One session's violation timeline
+      description: |
+        Admin and Operator. Works for in-progress and completed sessions, so the history stays reachable after the
+        attempt ends. Oldest first; a session holds at most 100 violations, so the list is not paged. An unknown id
+        is `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: The session and its timeline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViolationTimeline"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/admin/results:
     get:
       tags: [results]
@@ -4577,6 +4704,147 @@ components:
           type: integer
         question_count:
           type: integer
+
+    ViolationType:
+      type: string
+      enum: [exit_fullscreen, screenshot_attempt]
+
+    ViolationRequest:
+      type: object
+      additionalProperties: false
+      required: [event_id, type]
+      properties:
+        event_id:
+          type: string
+          format: uuid
+          description: Chosen by the browser per event and reused on every retry of it.
+        type:
+          $ref: "#/components/schemas/ViolationType"
+
+    Violation:
+      type: object
+      additionalProperties: false
+      required: [id, session_id, subtest_id, subtest_name, type, occurred_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        subtest_id:
+          type: string
+          format: uuid
+          description: The subtest that was running when it happened.
+        subtest_name:
+          type: string
+        type:
+          $ref: "#/components/schemas/ViolationType"
+        occurred_at:
+          type: string
+          format: date-time
+          description: The server's clock.
+
+    ActiveSubtest:
+      type: object
+      additionalProperties: false
+      required: [subtest_id, name, position, started_at]
+      properties:
+        subtest_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        position:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+
+    ActiveSession:
+      type: object
+      additionalProperties: false
+      required: [session_id, user_id, student_name, tryout_id, tryout_title, attempt_number, started_at, subtest,
+                 violation_count]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        tryout_id:
+          type: string
+          format: uuid
+        tryout_title:
+          type: string
+        attempt_number:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        subtest:
+          allOf:
+            - $ref: "#/components/schemas/ActiveSubtest"
+          nullable: true
+        violation_count:
+          type: integer
+
+    ActiveSessionList:
+      type: object
+      additionalProperties: false
+      required: [sessions, total, server_time]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActiveSession"
+        total:
+          type: integer
+          description: Every in-progress session of the tenant, not only this page.
+        server_time:
+          type: string
+          format: date-time
+
+    ViolationTimeline:
+      type: object
+      additionalProperties: false
+      required: [session_id, user_id, student_name, tryout_id, tryout_title, attempt_number, status, started_at,
+                 completed_at, total, violations]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        tryout_id:
+          type: string
+          format: uuid
+        tryout_title:
+          type: string
+        attempt_number:
+          type: integer
+        status:
+          type: string
+          enum: [in_progress, completed]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        total:
+          type: integer
+        violations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Violation"
 
     StaffResult:
       type: object

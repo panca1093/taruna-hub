@@ -32,11 +32,12 @@ type Handler struct {
 	orders        *service.OrderService
 	runtime       *service.RuntimeService
 	results       *service.ResultService
+	monitoring    *service.MonitoringService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
 
-func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, orders *service.OrderService, runtime *service.RuntimeService, results *service.ResultService, opts AuthOptions) *Handler {
+func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, orders *service.OrderService, runtime *service.RuntimeService, results *service.ResultService, monitoring *service.MonitoringService, opts AuthOptions) *Handler {
 	return &Handler{
 		logger:        logger,
 		health:        health,
@@ -51,6 +52,7 @@ func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, 
 		orders:        orders,
 		runtime:       runtime,
 		results:       results,
+		monitoring:    monitoring,
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
@@ -147,6 +149,9 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.PUT("/my/tryout-sessions/:id/answers/:questionId", h.SaveAnswer, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 
 	// Staff extend one student's session (D10); the grace is an Admin setting that also works on a locked tryout.
+	v1.POST("/my/tryout-sessions/:id/violations", h.ReportViolation, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/admin/monitoring/sessions", h.ActiveSessions, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.GET("/admin/tryout-sessions/:id/violations", h.SessionViolations, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/admin/tryout-sessions/:id/extensions", h.ExtendSession, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.PUT("/tryouts/:id/grace", h.SetTryoutGrace, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.GET("/admin/results", h.StaffResults, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
