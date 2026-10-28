@@ -25,6 +25,12 @@ const id = {
   noViolations: "Tidak ada pelanggaran tercatat.",
   violationScreenshot: "Percobaan screenshot",
   violationFullscreenExit: "Keluar dari mode layar penuh",
+  loading: "Memuat…",
+  loadErrorTitle: "Sesi aktif tidak dapat dimuat",
+  loadErrorDescription: "Periksa koneksi kamu lalu coba lagi.",
+  retry: "Coba Lagi",
+  refreshFailed: "Pembaruan terakhir gagal — menampilkan data sebelumnya.",
+  timelineError: "Riwayat pelanggaran tidak dapat dimuat.",
 };
 
 const en: typeof id = {
@@ -50,6 +56,12 @@ const en: typeof id = {
   noViolations: "No violations recorded.",
   violationScreenshot: "Screenshot attempt",
   violationFullscreenExit: "Exited fullscreen mode",
+  loading: "Loading…",
+  loadErrorTitle: "Active sessions could not be loaded",
+  loadErrorDescription: "Check your connection and try again.",
+  retry: "Retry",
+  refreshFailed: "The last refresh failed — showing the previous data.",
+  timelineError: "The violation history could not be loaded.",
 };
 
 export function useMonitoringT() {

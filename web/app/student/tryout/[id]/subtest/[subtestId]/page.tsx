@@ -11,7 +11,7 @@ import { LanguageToggle } from "@/components/language-toggle";
 import { api, ApiError, type RuntimeSubtest } from "@/lib/api/client";
 import { useCommonT } from "@/lib/i18n/dict/common";
 import { useTryoutSubtestT } from "@/lib/i18n/dict/tryout-subtest";
-import { useAnswerSync, useServerClock, type InitialAnswer } from "@/lib/tryout-session";
+import { useAnswerSync, useServerClock, useViolationReporter, type InitialAnswer } from "@/lib/tryout-session";
 import { cn } from "@/lib/cn";
 
 const RESYNC_MS = 120_000;
@@ -103,6 +103,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
     },
     [sessionId, subtestId],
   );
+  const reportViolation = useViolationReporter(sessionId);
   const { answers, states, setAnswer, pendingCount, waitIdle } = useAnswerSync(
     sessionId,
     loaded?.initial ?? null,
@@ -196,16 +197,28 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
     };
   }, [sessionId, subtestId, clock, handleClosed]);
 
-  // Fullscreen: request on entry and warn on exit. Persisting violations is P19.
+  // Fullscreen is best-effort: a device without the API (e.g. iPhone Safari) takes the tryout with no enforcement and
+  // no violation. Leaving fullscreen after having entered it is recorded; the timer keeps running either way.
   useEffect(() => {
-    if (!loaded) return;
-    containerRef.current?.requestFullscreen?.().catch(() => {});
+    if (!loaded || !containerRef.current?.requestFullscreen) return;
+    let entered = false;
+    containerRef.current.requestFullscreen().catch(() => {
+      // Refused without a user gesture: offer the button, but nothing was left yet, so nothing is recorded.
+      if (!submittedRef.current) setFullscreenWarning(true);
+    });
     const handleChange = () => {
-      setFullscreenWarning(!document.fullscreenElement && !submittedRef.current);
+      if (document.fullscreenElement) {
+        entered = true;
+        setFullscreenWarning(false);
+        return;
+      }
+      if (!entered || submittedRef.current) return;
+      setFullscreenWarning(true);
+      reportViolation("exit_fullscreen");
     };
     document.addEventListener("fullscreenchange", handleChange);
     return () => document.removeEventListener("fullscreenchange", handleChange);
-  }, [loaded]);
+  }, [loaded, reportViolation]);
 
   // Screenshot shortcuts: best-effort deterrent only — OS-level capture can't be reliably blocked from the browser.
   useEffect(() => {
@@ -217,10 +230,11 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
       if (!isPrintScreen && !isMacCapture && !isWinSnip) return;
       e.preventDefault();
       setScreenshotWarning(true);
+      reportViolation("screenshot_attempt");
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [loaded]);
+  }, [loaded, reportViolation]);
 
   if (failed) {
     return (

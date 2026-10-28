@@ -34,6 +34,11 @@ const id = {
   irtWarningBadge: "IRT Warning",
   subtestBreakdownTitle: "Rincian per subtes",
   correctOf: (correct: number, total: number) => `${correct}/${total} benar`,
+  violationHistoryTitle: (n: number) => `Riwayat pelanggaran (${n})`,
+  noViolations: "Tidak ada pelanggaran tercatat.",
+  violationScreenshot: "Percobaan screenshot",
+  violationFullscreenExit: "Keluar dari mode layar penuh",
+  violationsError: "Riwayat pelanggaran tidak dapat dimuat.",
 };
 
 const en: typeof id = {
@@ -68,6 +73,11 @@ const en: typeof id = {
   irtWarningBadge: "IRT Warning",
   subtestBreakdownTitle: "Breakdown by subtest",
   correctOf: (correct: number, total: number) => `${correct}/${total} correct`,
+  violationHistoryTitle: (n: number) => `Violation history (${n})`,
+  noViolations: "No violations recorded.",
+  violationScreenshot: "Screenshot attempt",
+  violationFullscreenExit: "Exited fullscreen mode",
+  violationsError: "The violation history could not be loaded.",
 };
 
 export function useResultsT() {
