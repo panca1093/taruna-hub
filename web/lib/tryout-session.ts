@@ -61,17 +61,25 @@ export interface InitialAnswer {
 /**
  * Sends every answer the moment it changes and tracks which ones the server has accepted. An answer written to
  * localStorage while offline is re-sent after a reload but is shown as pending until the server acknowledges it.
- * `onClosed` fires when the server says the subtest is no longer accepting answers.
+ * `onClosed` fires when the server says the subtest is no longer accepting answers. `loadAnswer` reads the stored
+ * answer of one question, which is what a `stale_answer` rejection adopts instead of claiming the local value saved.
  */
-export function useAnswerSync(sessionId: string | null, initial: InitialAnswer[] | null, onClosed: () => void) {
+export function useAnswerSync(
+  sessionId: string | null,
+  initial: InitialAnswer[] | null,
+  onClosed: () => void,
+  loadAnswer: (questionId: string) => Promise<InitialAnswer | null>,
+) {
   const entries = useRef<Map<string, Entry>>(new Map());
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const onClosedRef = useRef(onClosed);
+  const loadAnswerRef = useRef(loadAnswer);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [states, setStates] = useState<Record<string, AnswerState>>({});
 
   useEffect(() => {
     onClosedRef.current = onClosed;
+    loadAnswerRef.current = loadAnswer;
   });
 
   const setState = useCallback((id: string, state: AnswerState) => {
@@ -106,11 +114,31 @@ export function useAnswerSync(sessionId: string | null, initial: InitialAnswer[]
           entry.inFlight = false;
           if (err instanceof ApiError && err.status === 409) {
             if (err.code === "stale_answer") {
-              // A newer write of this question is already stored, so ours can never apply.
-              entry.acked = Math.max(entry.acked, seq);
-              if (entry.seq > entry.acked) send(id);
-              else setState(id, "saved");
-              persist();
+              const retryLater = () =>
+                timers.current.set(
+                  id,
+                  setTimeout(() => {
+                    timers.current.delete(id);
+                    send(id);
+                  }, RETRY_MS),
+                );
+              loadAnswerRef
+                .current(id)
+                .then((stored) => {
+                  if (!stored) return retryLater();
+                  if (entry.seq > seq && entry.seq > stored.seq) {
+                    entry.acked = stored.seq;
+                    send(id);
+                    return;
+                  }
+                  entry.value = stored.answer;
+                  entry.seq = stored.seq;
+                  entry.acked = stored.seq;
+                  setAnswers((current) => ({ ...current, [id]: stored.answer }));
+                  setState(id, "saved");
+                  persist();
+                })
+                .catch(retryLater);
               return;
             }
             entry.closed = true;
@@ -180,7 +208,13 @@ export function useAnswerSync(sessionId: string | null, initial: InitialAnswer[]
     [flush, persist, setState],
   );
 
+  const waitIdle = useCallback(async (timeoutMs: number) => {
+    const until = Date.now() + timeoutMs;
+    const busy = () => [...entries.current.values()].some((e) => !e.closed && e.seq > e.acked);
+    while (busy() && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 150));
+  }, []);
+
   const pendingCount = Object.values(states).filter((s) => s === "pending").length;
 
-  return { answers, states, setAnswer, pendingCount };
+  return { answers, states, setAnswer, pendingCount, waitIdle };
 }

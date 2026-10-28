@@ -15,6 +15,7 @@ import { useAnswerSync, useServerClock, type InitialAnswer } from "@/lib/tryout-
 import { cn } from "@/lib/cn";
 
 const RESYNC_MS = 120_000;
+const FLUSH_WAIT_MS = 4_000;
 
 interface Loaded {
   title: string;
@@ -41,6 +42,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
   const [deadline, setDeadline] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const submittedRef = useRef(false);
+  const expiringRef = useRef(false);
   const clock = useServerClock();
 
   const leave = useCallback(
@@ -92,7 +94,21 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
 
   const sessionId = loaded?.sessionId ?? null;
   const questions = useMemo(() => loaded?.data.questions ?? [], [loaded]);
-  const { answers, states, setAnswer, pendingCount } = useAnswerSync(sessionId, loaded?.initial ?? null, handleClosed);
+  const loadAnswer = useCallback(
+    async (questionId: string) => {
+      if (!sessionId) return null;
+      const data = await api.runtime.subtest(sessionId, subtestId);
+      const q = data.questions.find((item) => item.id === questionId);
+      return q ? { id: q.id, answer: q.answer, seq: q.seq } : null;
+    },
+    [sessionId, subtestId],
+  );
+  const { answers, states, setAnswer, pendingCount, waitIdle } = useAnswerSync(
+    sessionId,
+    loaded?.initial ?? null,
+    handleClosed,
+    loadAnswer,
+  );
 
   const doSubmit = useCallback(async () => {
     if (!sessionId || submittedRef.current) return;
@@ -110,6 +126,31 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
     }
   }, [sessionId, subtestId, leave]);
 
+  // At zero the server decides: it settles on its own at the cutoff, so flush what is pending, then read the result.
+  const settleExpired = useCallback(async () => {
+    if (!sessionId || expiringRef.current || submittedRef.current) return;
+    expiringRef.current = true;
+    try {
+      await waitIdle(FLUSH_WAIT_MS);
+      const session = await api.runtime.session(sessionId);
+      clock.sync(session.server_time);
+      const part = session.subtests.find((p) => p.subtest_id === subtestId);
+      if (!part || part.status !== "running") {
+        submittedRef.current = true;
+        leave(session.status === "completed");
+        return;
+      }
+      if (part.deadline_at) setDeadline(new Date(part.deadline_at).getTime());
+    } catch (err) {
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 401 && err.status !== 429) {
+        submittedRef.current = true;
+        leave(false);
+      }
+    } finally {
+      expiringRef.current = false;
+    }
+  }, [sessionId, subtestId, clock, leave, waitIdle]);
+
   // Countdown: server time at the last sync plus monotonic elapsed time. It runs on server deadlines only.
   useEffect(() => {
     if (deadline === null) return;
@@ -118,12 +159,12 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
       if (now === null) return;
       const left = Math.max(0, Math.ceil((deadline - now) / 1000));
       setRemaining(left);
-      if (left <= 0) void doSubmit();
+      if (left <= 0) void settleExpired();
     };
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [deadline, clock, doSubmit]);
+  }, [deadline, clock, settleExpired]);
 
   // Re-sync with the server clock and deadline on focus, and now and then as a keep-alive for long subtests.
   useEffect(() => {
