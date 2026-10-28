@@ -35,7 +35,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
   const [reloadKey, setReloadKey] = useState(0);
   const [index, setIndex] = useState(0);
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [fullscreenWarning, setFullscreenWarning] = useState(false);
+  const [fullscreenWarning, setFullscreenWarning] = useState<"left" | "refused" | null>(null);
   const [screenshotWarning, setScreenshotWarning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
@@ -103,7 +103,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
     },
     [sessionId, subtestId],
   );
-  const reportViolation = useViolationReporter(sessionId);
+  const reportViolation = useViolationReporter(sessionId, subtestId);
   const { answers, states, setAnswer, pendingCount, waitIdle } = useAnswerSync(
     sessionId,
     loaded?.initial ?? null,
@@ -204,16 +204,16 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
     let entered = false;
     containerRef.current.requestFullscreen().catch(() => {
       // Refused without a user gesture: offer the button, but nothing was left yet, so nothing is recorded.
-      if (!submittedRef.current) setFullscreenWarning(true);
+      if (!submittedRef.current) setFullscreenWarning("refused");
     });
     const handleChange = () => {
       if (document.fullscreenElement) {
         entered = true;
-        setFullscreenWarning(false);
+        setFullscreenWarning(null);
         return;
       }
       if (!entered || submittedRef.current) return;
-      setFullscreenWarning(true);
+      setFullscreenWarning("left");
       reportViolation("exit_fullscreen");
     };
     document.addEventListener("fullscreenchange", handleChange);
@@ -222,8 +222,10 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
 
   // Screenshot shortcuts: best-effort deterrent only — OS-level capture can't be reliably blocked from the browser.
   useEffect(() => {
-    if (!loaded) return;
+    // Without the Fullscreen API (e.g. iPhone Safari) the tryout runs unenforced and records nothing.
+    if (!loaded || typeof containerRef.current?.requestFullscreen !== "function") return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       const isPrintScreen = e.key === "PrintScreen";
       const isMacCapture = e.metaKey && e.shiftKey && ["3", "4", "5"].includes(e.key);
       const isWinSnip = e.metaKey && e.shiftKey && e.key.toLowerCase() === "s";
@@ -449,13 +451,13 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
             <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-danger-soft text-danger-soft-foreground">
               <AlertTriangle className="size-5" />
             </span>
-            <p className="mt-3 text-sm font-semibold text-foreground">{t.fullscreenWarningTitle}</p>
-            <p className="mt-1.5 text-xs text-muted">{t.fullscreenWarningBody}</p>
+            <p className="mt-3 text-sm font-semibold text-foreground">{fullscreenWarning === "left" ? t.fullscreenWarningTitle : t.fullscreenRequestTitle}</p>
+            <p className="mt-1.5 text-xs text-muted">{fullscreenWarning === "left" ? t.fullscreenWarningBody : t.fullscreenRequestBody}</p>
             <Button
               variant="primary"
               size="sm"
               className="mt-4 w-full"
-              onPress={() => containerRef.current?.requestFullscreen?.().catch(() => setFullscreenWarning(false))}
+              onPress={() => containerRef.current?.requestFullscreen?.().catch(() => setFullscreenWarning(null))}
             >
               <Maximize className="size-3.5" /> {t.backToFullscreen}
             </Button>

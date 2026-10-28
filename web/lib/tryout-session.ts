@@ -236,19 +236,19 @@ function newEventId(): string {
  * blocks the student. One event keeps one id across its retries, so a resend after a lost response adds no second
  * row. A 4xx is final (the subtest ended, or the server's cap was reached); only network and 5xx failures retry.
  */
-export function useViolationReporter(sessionId: string | null) {
+export function useViolationReporter(sessionId: string | null, subtestId: string) {
   return useCallback(
     (type: "exit_fullscreen" | "screenshot_attempt") => {
       if (!sessionId) return;
       const eventId = newEventId();
       const send = (attempt: number) => {
-        api.runtime.reportViolation(sessionId, { event_id: eventId, type }).catch((err: unknown) => {
+        api.runtime.reportViolation(sessionId, { event_id: eventId, type, subtest_id: subtestId }).catch((err: unknown) => {
           const final = err instanceof ApiError && err.status < 500;
           if (!final && attempt < VIOLATION_ATTEMPTS) setTimeout(() => send(attempt + 1), VIOLATION_RETRY_MS);
         });
       };
       send(1);
     },
-    [sessionId],
+    [sessionId, subtestId],
   );
 }

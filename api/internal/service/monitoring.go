@@ -39,6 +39,9 @@ func NewMonitoringService(rt *RuntimeService, repo *repository.MonitoringReposit
 type ViolationInput struct {
 	EventID uuid.UUID
 	Type    string
+	// SubtestID is the subtest the browser saw when it happened, so a late retry keeps its original subtest. An id
+	// that is not a subtest of this session is ignored and the running subtest is used.
+	SubtestID *uuid.UUID
 }
 
 // RecordViolation stores one violation of the student's own session, stamped with the server clock. It is accepted
@@ -105,8 +108,16 @@ func (s *MonitoringService) RecordViolation(ctx context.Context, scope HostScope
 		if n >= MaxViolationsPerSession {
 			return ErrViolationLimit
 		}
+		subtestID := running.SubtestID
+		if in.SubtestID != nil {
+			for _, p := range parts {
+				if p.SubtestID == *in.SubtestID {
+					subtestID = p.SubtestID
+				}
+			}
+		}
 		out, err = s.repo.InsertViolation(ctx, tx, tenantID, model.Violation{
-			SessionID: sessionID, SubtestID: running.SubtestID, Type: in.Type, EventID: in.EventID,
+			SessionID: sessionID, SubtestID: subtestID, Type: in.Type, EventID: in.EventID,
 		}, now)
 		if err != nil {
 			return runtimeError(err)

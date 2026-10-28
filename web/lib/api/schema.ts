@@ -3489,8 +3489,8 @@ export interface paths {
          *     lands, never another subtest or another student's; later subtests keep their normal timing. The grant is
          *     appended to an audit table with the actor, the subtest and the reason. With no subtest running the call
          *     answers `409` `subtest_not_running`; a completed session, or a part whose deadline already passed, is not
-         *     reopened, and a session settled by this call answers `409` `session_completed`. The UI for this call lands
-         *     with P19 monitoring.
+         *     reopened, and a session settled by this call answers `409` `session_completed`. The monitoring page's session
+         *     detail calls it.
          */
         post: {
             parameters: {
@@ -4900,6 +4900,12 @@ export interface components {
              */
             event_id: string;
             type: components["schemas"]["ViolationType"];
+            /**
+             * Format: uuid
+             * @description The subtest the browser was in, so a late retry keeps its original attribution. Used only when it is a
+             *     subtest of this session; otherwise the running subtest is recorded.
+             */
+            subtest_id?: string | null;
         };
         Violation: {
             /** Format: uuid */

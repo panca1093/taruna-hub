@@ -335,6 +335,27 @@ func TestMonitoringIsStaffOnly(t *testing.T) {
 	}
 }
 
+func TestViolationKeepsTheSubtestTheBrowserObserved(t *testing.T) {
+	h := newMonitoringHarness(t)
+	f := h.fixture(t, nil)
+	_, p := h.enrolledStudent(t, f)
+	sid := h.begin(t, p, f).Attempt.ID
+	h.startPart(t, p, sid, f.sub1())
+	h.submitPart(t, p, sid, f.sub1())
+	h.startPart(t, p, sid, f.sub2())
+	ctx := context.Background()
+
+	sub1, stranger := f.sub1(), uuid.New()
+	late, _, err := h.ms.RecordViolation(ctx, h.scopeA(), p, sid, ViolationInput{EventID: uuid.New(), Type: model.ViolationExitFullscreen, SubtestID: &sub1})
+	if err != nil || late.SubtestID != f.sub1() {
+		t.Errorf("late retry from subtest 1 = %+v (err %v), want it attributed to subtest 1", late, err)
+	}
+	other, _, err := h.ms.RecordViolation(ctx, h.scopeA(), p, sid, ViolationInput{EventID: uuid.New(), Type: model.ViolationExitFullscreen, SubtestID: &stranger})
+	if err != nil || other.SubtestID != f.sub2() {
+		t.Errorf("foreign subtest id = %+v (err %v), want the running subtest 2", other, err)
+	}
+}
+
 // TestMonitoringPollingFiftyActiveSessions is P19's documented polling fixture: 50 in-progress sessions with
 // violations on every one, polled repeatedly the way the monitoring page does. The p95 must stay within 500ms.
 func TestMonitoringPollingFiftyActiveSessions(t *testing.T) {

@@ -148,10 +148,11 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/my/tryout-sessions/:id/subtests/:subtestId/submit", h.SubmitSubtest, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.PUT("/my/tryout-sessions/:id/answers/:questionId", h.SaveAnswer, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 
-	// Staff extend one student's session (D10); the grace is an Admin setting that also works on a locked tryout.
+	// Violations are the student's own evidence; staff read them through the monitoring routes.
 	v1.POST("/my/tryout-sessions/:id/violations", h.ReportViolation, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/admin/monitoring/sessions", h.ActiveSessions, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/tryout-sessions/:id/violations", h.SessionViolations, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	// Staff extend one student's session (D10); the grace is an Admin setting that also works on a locked tryout.
 	v1.POST("/admin/tryout-sessions/:id/extensions", h.ExtendSession, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.PUT("/tryouts/:id/grace", h.SetTryoutGrace, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.GET("/admin/results", h.StaffResults, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))

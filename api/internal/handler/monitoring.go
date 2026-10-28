@@ -23,8 +23,9 @@ const (
 const maxViolationBody = 1 << 10
 
 type violationRequest struct {
-	EventID uuid.UUID `json:"event_id"`
-	Type    string    `json:"type"`
+	EventID   uuid.UUID  `json:"event_id"`
+	Type      string     `json:"type"`
+	SubtestID *uuid.UUID `json:"subtest_id"`
 }
 
 type violationResponse struct {
@@ -94,7 +95,7 @@ func (h *Handler) ReportViolation(c echo.Context) error {
 		return err
 	}
 	v, created, err := h.monitoring.RecordViolation(c.Request().Context(), scope, principal, id,
-		service.ViolationInput{EventID: req.EventID, Type: req.Type})
+		service.ViolationInput{EventID: req.EventID, Type: req.Type, SubtestID: req.SubtestID})
 	if err != nil {
 		return monitoringError(err)
 	}
