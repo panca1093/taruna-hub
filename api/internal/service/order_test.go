@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -150,7 +152,7 @@ func (h orderHarness) proof(t *testing.T, tenant model.Tenant, p model.Principal
 func (h orderHarness) wallet(t *testing.T, tenant model.Tenant, p model.Principal, product model.Product) (model.Order, bool, error) {
 	t.Helper()
 	return h.svc.Checkout(context.Background(), h.scope(tenant), p, CheckoutInput{
-		ProductID: product.ID, Method: model.PaymentWallet, Key: "key-" + uuid.NewString()[:12],
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentWallet, Key: "key-" + uuid.NewString()[:12],
 	})
 }
 
@@ -158,7 +160,7 @@ func (h orderHarness) manual(t *testing.T, tenant model.Tenant, p model.Principa
 	t.Helper()
 	proof := h.proof(t, tenant, p)
 	order, _, err := h.svc.Checkout(context.Background(), h.scope(tenant), p, CheckoutInput{
-		ProductID: product.ID, Method: model.PaymentManual, Key: "key-" + uuid.NewString()[:12], ProofAssetID: &proof,
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "key-" + uuid.NewString()[:12], ProofAssetID: &proof,
 	})
 	if err != nil {
 		t.Fatalf("manual checkout: %v", err)
@@ -294,7 +296,7 @@ func TestRepeatedWalletCheckoutIsOneDebitOrderAndGrant(t *testing.T) {
 	tenant := h.t.q.a
 	user, p := h.student(t, tenant, "500000")
 	product := h.product(t, tenant, "100000", h.tryout(t, tenant, model.TryoutPublished))
-	in := CheckoutInput{ProductID: product.ID, Method: model.PaymentWallet, Key: "retry-key-0001"}
+	in := CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentWallet, Key: "retry-key-0001"}
 
 	first, replayed, err := h.svc.Checkout(context.Background(), h.scope(tenant), p, in)
 	if err != nil || replayed {
@@ -313,7 +315,7 @@ func TestRepeatedWalletCheckoutIsOneDebitOrderAndGrant(t *testing.T) {
 
 	other := h.product(t, tenant, "100000", h.tryout(t, tenant, model.TryoutPublished))
 	_, _, err = h.svc.Checkout(context.Background(), h.scope(tenant), p, CheckoutInput{
-		ProductID: other.ID, Method: model.PaymentWallet, Key: in.Key,
+		ProductID: other.ID, ExpectedPrice: other.Price, Method: model.PaymentWallet, Key: in.Key,
 	})
 	if !errors.Is(err, ErrOrderKeyConflict) {
 		t.Errorf("same key for another product: err = %v, want ErrOrderKeyConflict", err)
@@ -325,7 +327,7 @@ func TestConcurrentWalletCheckoutsWithOneKeyDebitOnce(t *testing.T) {
 	tenant := h.t.q.a
 	user, p := h.student(t, tenant, "500000")
 	product := h.product(t, tenant, "100000", h.tryout(t, tenant, model.TryoutPublished))
-	in := CheckoutInput{ProductID: product.ID, Method: model.PaymentWallet, Key: "burst-key-0001"}
+	in := CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentWallet, Key: "burst-key-0001"}
 
 	var wg sync.WaitGroup
 	var failures atomic.Int32
@@ -460,7 +462,7 @@ func TestIndividualProductCannotBeBoughtTwice(t *testing.T) {
 		}
 	}
 	if _, _, err := h.svc.Checkout(context.Background(), h.scope(tenant), p, CheckoutInput{
-		ProductID: product.ID, Method: model.PaymentManual, Key: "manual-key-001", ProofAssetID: refOf(h.proof(t, tenant, p)),
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "manual-key-001", ProofAssetID: refOf(h.proof(t, tenant, p)),
 	}); !errors.Is(err, ErrAlreadyOwned) {
 		t.Errorf("manual repurchase: err = %v, want ErrAlreadyOwned", err)
 	}
@@ -576,7 +578,7 @@ func TestInactiveProductCannotBeBought(t *testing.T) {
 	if _, _, err := h.wallet(t, tenant, p, product); !errors.Is(err, ErrProductUnavailable) {
 		t.Errorf("err = %v, want ErrProductUnavailable", err)
 	}
-	if _, _, err := h.wallet(t, tenant, p, model.Product{ID: uuid.New()}); !errors.Is(err, ErrProductUnavailable) {
+	if _, _, err := h.wallet(t, tenant, p, model.Product{ID: uuid.New(), Price: "100000.00"}); !errors.Is(err, ErrProductUnavailable) {
 		t.Errorf("unknown product: err = %v, want ErrProductUnavailable", err)
 	}
 }
@@ -590,11 +592,11 @@ func TestProofMustBeTheStudentsOwnUnusedUpload(t *testing.T) {
 
 	foreign := h.proof(t, tenant, pOther)
 	_, _, err := h.svc.Checkout(context.Background(), h.scope(tenant), pMine, CheckoutInput{
-		ProductID: product.ID, Method: model.PaymentManual, Key: "foreign-proof-1", ProofAssetID: &foreign,
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "foreign-proof-1", ProofAssetID: &foreign,
 	})
 	wantInputField(t, err, "proof_asset_id")
 	_, _, err = h.svc.Checkout(context.Background(), h.scope(tenant), pMine, CheckoutInput{
-		ProductID: product.ID, Method: model.PaymentManual, Key: "missing-proof-1", ProofAssetID: refOf(uuid.New()),
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "missing-proof-1", ProofAssetID: refOf(uuid.New()),
 	})
 	wantInputField(t, err, "proof_asset_id")
 	if h.ordersOf(t, mine.ID) != 0 {
@@ -606,7 +608,7 @@ func TestProofMustBeTheStudentsOwnUnusedUpload(t *testing.T) {
 
 	order := h.manual(t, tenant, pMine, product)
 	_, _, err = h.svc.Checkout(context.Background(), h.scope(tenant), pMine, CheckoutInput{
-		ProductID: product.ID, Method: model.PaymentManual, Key: "reuse-proof-001", ProofAssetID: order.ProofAssetID,
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "reuse-proof-001", ProofAssetID: order.ProofAssetID,
 	})
 	wantInputField(t, err, "proof_asset_id")
 }
@@ -706,10 +708,10 @@ func TestCheckoutRejectsWhatItCannotPay(t *testing.T) {
 		in    CheckoutInput
 		field string
 	}{
-		{"gateway is not available yet", CheckoutInput{ProductID: product.ID, Method: "gateway", Key: "valid-key-0001"}, "payment_method"},
-		{"manual without a proof", CheckoutInput{ProductID: product.ID, Method: model.PaymentManual, Key: "valid-key-0002"}, "proof_asset_id"},
-		{"wallet with a proof", CheckoutInput{ProductID: product.ID, Method: model.PaymentWallet, Key: "valid-key-0003", ProofAssetID: &proof}, "proof_asset_id"},
-		{"short key", CheckoutInput{ProductID: product.ID, Method: model.PaymentWallet, Key: "short"}, "idempotency_key"},
+		{"gateway is not available yet", CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: "gateway", Key: "valid-key-0001"}, "payment_method"},
+		{"manual without a proof", CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "valid-key-0002"}, "proof_asset_id"},
+		{"wallet with a proof", CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentWallet, Key: "valid-key-0003", ProofAssetID: &proof}, "proof_asset_id"},
+		{"short key", CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentWallet, Key: "short"}, "idempotency_key"},
 		{"no product", CheckoutInput{Method: model.PaymentWallet, Key: "valid-key-0004"}, "product_id"},
 	}
 	for _, tc := range cases {
@@ -719,7 +721,7 @@ func TestCheckoutRejectsWhatItCannotPay(t *testing.T) {
 		})
 	}
 	if _, _, err := h.svc.Checkout(ctx, scope, h.staff(tenant, model.RoleAdmin), CheckoutInput{
-		ProductID: product.ID, Method: model.PaymentWallet, Key: "valid-key-0005",
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentWallet, Key: "valid-key-0005",
 	}); !errors.Is(err, ErrOrderForbidden) {
 		t.Errorf("staff checkout: err = %v, want ErrOrderForbidden", err)
 	}
@@ -732,7 +734,7 @@ func TestManualCheckoutNeedsABankAccount(t *testing.T) {
 	product := h.product(t, tenant, "100000", h.tryout(t, tenant, model.TryoutPublished))
 	proof := h.proof(t, tenant, p)
 	_, _, err := h.svc.Checkout(context.Background(), h.scope(tenant), p, CheckoutInput{
-		ProductID: product.ID, Method: model.PaymentManual, Key: "no-bank-key-01", ProofAssetID: &proof,
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "no-bank-key-01", ProofAssetID: &proof,
 	})
 	if !errors.Is(err, ErrBankTransferUnavailable) {
 		t.Errorf("err = %v, want ErrBankTransferUnavailable", err)
@@ -791,3 +793,158 @@ func TestOrderCodeIsStable(t *testing.T) {
 }
 
 func refOf[T any](v T) *T { return &v }
+
+func TestCheckoutRejectsAPriceThatChanged(t *testing.T) {
+	h := newOrderHarness(t, noJobs{}, testBank)
+	tenant := h.t.q.a
+	user, p := h.student(t, tenant, "500000")
+	tryout := h.tryout(t, tenant, model.TryoutPublished)
+	product := h.product(t, tenant, "100000", tryout)
+	ctx, scope := context.Background(), h.scope(tenant)
+
+	edit := h.input(tenant, tryout)
+	edit.Title, edit.Price = product.Title, "120000"
+	h.update(t, tenant, product.ID, edit)
+
+	_, _, err := h.svc.Checkout(ctx, scope, p, CheckoutInput{
+		ProductID: product.ID, Method: model.PaymentWallet, Key: "stale-price-01", ExpectedPrice: "100000.00",
+	})
+	if !errors.Is(err, ErrPriceChanged) {
+		t.Fatalf("stale price: err = %v, want ErrPriceChanged", err)
+	}
+	if h.ordersOf(t, user.ID) != 0 || h.ledger(t, user.ID) != 1 || h.balance(t, user.ID) != "500000.00" || h.enrollments(t, user.ID) != 0 {
+		t.Error("a rejected price still created or debited something")
+	}
+
+	order, _, err := h.svc.Checkout(ctx, scope, p, CheckoutInput{
+		ProductID: product.ID, Method: model.PaymentWallet, Key: "fresh-price-01", ExpectedPrice: "120000",
+	})
+	if err != nil || order.Price != "120000.00" {
+		t.Fatalf("matching price = %+v, %v; want the order at 120000.00", order, err)
+	}
+
+	edit.Price = "130000"
+	h.update(t, tenant, product.ID, edit)
+	replay, replayed, err := h.svc.Checkout(ctx, scope, p, CheckoutInput{
+		ProductID: product.ID, Method: model.PaymentWallet, Key: "fresh-price-01", ExpectedPrice: "120000",
+	})
+	if err != nil || !replayed || replay.ID != order.ID {
+		t.Errorf("replay after a price change = %v, replayed %v; want the original order", err, replayed)
+	}
+
+	for _, bad := range []string{"", "abc", "10.999", "-5"} {
+		_, _, err := h.svc.Checkout(ctx, scope, p, CheckoutInput{
+			ProductID: product.ID, Method: model.PaymentWallet, Key: "bad-price-001", ExpectedPrice: bad,
+		})
+		wantInputField(t, err, "expected_price")
+	}
+}
+
+func TestOnlyOnePendingOrderPerProduct(t *testing.T) {
+	h := newOrderHarness(t, noJobs{}, testBank)
+	tenant := h.t.q.a
+	user, p := h.student(t, tenant, "500000")
+	_, other := h.student(t, tenant, "")
+	product := h.product(t, tenant, "100000", h.tryout(t, tenant, model.TryoutPublished), h.tryout(t, tenant, model.TryoutPublished))
+	ctx, scope, admin := context.Background(), h.scope(tenant), h.staff(tenant, model.RoleAdmin)
+
+	first := h.manual(t, tenant, p, product)
+	if first.Status != model.OrderPending {
+		t.Fatalf("first order status = %s, want pending", first.Status)
+	}
+	proof := h.proof(t, tenant, p)
+	_, _, err := h.svc.Checkout(ctx, scope, p, CheckoutInput{
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "second-manual-1", ProofAssetID: &proof,
+	})
+	if !errors.Is(err, ErrOrderPending) {
+		t.Errorf("second manual order: err = %v, want ErrOrderPending", err)
+	}
+	if _, _, err := h.wallet(t, tenant, p, product); !errors.Is(err, ErrOrderPending) {
+		t.Errorf("wallet order beside a pending one: err = %v, want ErrOrderPending", err)
+	}
+	if h.ordersOf(t, user.ID) != 1 || h.balance(t, user.ID) != "500000.00" {
+		t.Error("a rejected second order left a row or a debit")
+	}
+	if got := h.count(t, `SELECT count(*) FROM assets WHERE id = $1 AND status = 'staged'`, proof); got != 1 {
+		t.Error("the rejected order consumed its proof")
+	}
+	if replay, replayed, err := h.svc.Checkout(ctx, scope, p, CheckoutInput{
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: keyOf(t, h, first.ID), ProofAssetID: first.ProofAssetID,
+	}); err != nil || !replayed || replay.ID != first.ID {
+		t.Errorf("replay beside the pending order = %v, replayed %v; want the original", err, replayed)
+	}
+	if o := h.manual(t, tenant, other, product); o.Status != model.OrderPending {
+		t.Errorf("another student's order = %s, want pending (the rule is per student)", o.Status)
+	}
+
+	if _, err := h.svc.Cancel(ctx, scope, admin, first.ID, "Bukti tidak sesuai"); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	second := h.manual(t, tenant, p, product)
+	if _, err := h.svc.Confirm(ctx, scope, admin, second.ID); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	if _, _, err := h.wallet(t, tenant, p, product); err != nil {
+		t.Errorf("after confirm: err = %v, want a bundle to be buyable again (no longer pending)", err)
+	}
+}
+
+func TestConcurrentManualOrdersLeaveOnePending(t *testing.T) {
+	h := newOrderHarness(t, noJobs{}, testBank)
+	tenant := h.t.q.a
+	user, p := h.student(t, tenant, "")
+	product := h.product(t, tenant, "100000", h.tryout(t, tenant, model.TryoutPublished))
+	proofs := make([]uuid.UUID, 4)
+	for i := range proofs {
+		proofs[i] = h.proof(t, tenant, p)
+	}
+
+	var wg sync.WaitGroup
+	var created, pending atomic.Int32
+	for i := range proofs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, err := h.svc.Checkout(context.Background(), h.scope(tenant), p, CheckoutInput{
+				ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual,
+				Key: fmt.Sprintf("race-key-%04d", i), ProofAssetID: &proofs[i],
+			})
+			switch {
+			case err == nil:
+				created.Add(1)
+			case errors.Is(err, ErrOrderPending):
+				pending.Add(1)
+			default:
+				t.Errorf("checkout %d: %v", i, err)
+			}
+		}()
+	}
+	wg.Wait()
+	if created.Load() != 1 || pending.Load() != 3 || h.ordersOf(t, user.ID) != 1 {
+		t.Errorf("created %d, order_pending %d, rows %d; want 1, 3, 1", created.Load(), pending.Load(), h.ordersOf(t, user.ID))
+	}
+}
+
+func TestPendingIndexRejectsASecondPendingRow(t *testing.T) {
+	h := newOrderHarness(t, noJobs{}, testBank)
+	tenant := h.t.q.a
+	user, p := h.student(t, tenant, "")
+	product := h.product(t, tenant, "100000", h.tryout(t, tenant, model.TryoutPublished))
+	h.manual(t, tenant, p, product)
+
+	_, err := h.pool.Exec(context.Background(), `
+		INSERT INTO orders (tenant_id, user_id, product_id, product_type, product_title, price, payment_method, status, idempotency_key)
+		VALUES ($1, $2, $3, 'individual', 'x', 1, 'wallet', 'pending', 'raw-insert-001')`, tenant.ID, user.ID, product.ID)
+	if err == nil || !strings.Contains(err.Error(), "orders_pending_product_key") {
+		t.Errorf("raw second pending insert: err = %v, want orders_pending_product_key", err)
+	}
+}
+
+func keyOf(t *testing.T, h orderHarness, orderID uuid.UUID) string {
+	t.Helper()
+	var key string
+	if err := h.pool.QueryRow(context.Background(), `SELECT idempotency_key FROM orders WHERE id = $1`, orderID).Scan(&key); err != nil {
+		t.Fatalf("read key: %v", err)
+	}
+	return key
+}

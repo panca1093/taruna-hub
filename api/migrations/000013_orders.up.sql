@@ -42,6 +42,8 @@ CREATE TABLE orders (
 
 -- One upload backs one order, so a proof cannot be replayed on a second purchase.
 CREATE UNIQUE INDEX orders_proof_key ON orders (proof_asset_id) WHERE proof_asset_id IS NOT NULL;
+-- One pending order per student and product, whatever the method; a wallet order is confirmed in its own transaction, so it never sits here.
+CREATE UNIQUE INDEX orders_pending_product_key ON orders (tenant_id, user_id, product_id) WHERE status = 'pending';
 CREATE INDEX orders_tenant_status_idx ON orders (tenant_id, status, created_at DESC, id DESC);
 CREATE INDEX orders_user_idx ON orders (tenant_id, user_id, created_at DESC, id DESC);
 

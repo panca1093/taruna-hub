@@ -59,7 +59,7 @@ func decodeEnrollments(t *testing.T, rec *httptest.ResponseRecorder) enrollments
 
 func checkoutBody(productID, method string, extra map[string]any) map[string]any {
 	body := map[string]any{
-		"product_id": productID, "payment_method": method, "idempotency_key": "key-" + uuid.NewString()[:12],
+		"product_id": productID, "payment_method": method, "idempotency_key": "key-" + uuid.NewString()[:12], "expected_price": "100000.00",
 	}
 	for key, value := range extra {
 		body[key] = value
@@ -335,5 +335,39 @@ func TestProductSaleWindowOverHTTP(t *testing.T) {
 	rec := f.post("/api/v1/orders", checkoutBody(future.ID.String(), "wallet", nil), f.tokenA)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("checkout before the window: status = %d body = %s, want 404", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCheckoutPriceChangedAndPendingOrderCodes(t *testing.T) {
+	f := newOrderHTTPFixture(t)
+	f.fund(t, f.studentA, "250000.00")
+	productID := f.product.ID.String()
+
+	stale := f.post("/api/v1/orders", checkoutBody(productID, "wallet", map[string]any{"expected_price": "90000.00"}), f.tokenA)
+	if stale.Code != http.StatusConflict || errorBody(t, stale).Code != httpx.CodePriceChanged {
+		t.Errorf("stale price: status = %d body = %s, want 409 price_changed", stale.Code, stale.Body.String())
+	}
+	missing := checkoutBody(productID, "wallet", nil)
+	delete(missing, "expected_price")
+	if rec := f.post("/api/v1/orders", missing, f.tokenA); rec.Code != http.StatusUnprocessableEntity || errorBody(t, rec).Fields["expected_price"] == "" {
+		t.Errorf("no expected_price: status = %d body = %s, want 422 on expected_price", rec.Code, rec.Body.String())
+	}
+	if wallet := decodeWallet(t, f.get("/api/v1/wallet", f.tokenA)); wallet.Balance != "250000.00" {
+		t.Errorf("balance = %s, want nothing debited", wallet.Balance)
+	}
+
+	first := f.uploadPNG(t, f.e, f.hostA, f.tokenA, "payment_proof")
+	if rec := f.post("/api/v1/orders", checkoutBody(productID, "manual", map[string]any{"proof_asset_id": first.ID.String()}), f.tokenA); rec.Code != http.StatusCreated {
+		t.Fatalf("manual checkout: status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	second := f.uploadPNG(t, f.e, f.hostA, f.tokenA, "payment_proof")
+	for _, body := range []map[string]any{
+		checkoutBody(productID, "manual", map[string]any{"proof_asset_id": second.ID.String()}),
+		checkoutBody(productID, "wallet", nil),
+	} {
+		rec := f.post("/api/v1/orders", body, f.tokenA)
+		if rec.Code != http.StatusConflict || errorBody(t, rec).Code != httpx.CodeOrderPending {
+			t.Errorf("%v: status = %d body = %s, want 409 order_pending", body["payment_method"], rec.Code, rec.Body.String())
+		}
 	}
 }

@@ -429,6 +429,7 @@ For every slice, use this verification loop:
 
 - [x] Insufficient wallet balance creates no debit/confirmed order/grant; mid-transaction failure rolls back all.
 - [x] Repeated checkout/review creates one debit/grant per source; manual cancel opens no access.
+- [x] Checkout is rejected with `price_changed` when the price differs from the one the student saw, and with `order_pending` while the student has a pending order for the product (unique index); owner decisions.
 - [x] Proof belongs to requesting student/tenant; staff sees/reviews only own tenant orders.
   - Student, proof and role cases are proven; no cross-tenant test by design (D17).
 - [ ] Bundle grants every purchased test; repeat kecermatan purchase preserves history on same enrollment; correct email/WA events enqueue atomically.

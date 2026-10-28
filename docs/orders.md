@@ -9,6 +9,7 @@ P12 wallet path; access is issued by one shared function.
                   confirmed_at, cancelled_at, created_at, updated_at
                     UNIQUE (tenant_id, user_id, idempotency_key)
                     UNIQUE (proof_asset_id) WHERE NOT NULL
+                    UNIQUE (tenant_id, user_id, product_id) WHERE status = 'pending'
                     FOREIGN KEY (user_id, tenant_id) -> users, (tenant_id, proof_asset_id) -> assets
     order_items   order_id, tenant_id, tryout_id, tryout_title, position      PRIMARY KEY (order_id, tryout_id)
     enrollments   id, tenant_id, user_id, tryout_id, active_until, attempts_purchased, attempts_used, created_at
@@ -18,7 +19,7 @@ P12 wallet path; access is issued by one shared function.
 
 `product_id` has no foreign key on purpose: the title, price and tryouts on the order are what was bought, so
 editing or deleting the product later changes nothing. `price` is `numeric(14,2)` and travels as a canonical
-decimal string like every other amount (D12); the client never sends a price. The order code is
+decimal string like every other amount (D12); the client sends only `expected_price`, the price its page showed. The order code is
 `ORD-` plus the identity number padded to six digits.
 
 ## Checkout (`POST /api/v1/orders`)
@@ -31,12 +32,16 @@ Student only. In one PostgreSQL transaction the server:
 3. reads the product through `ProductRepository.SellableTx`, which reuses the catalog's visibility predicate, so
    checkout and catalog cannot disagree: active, inside `active_from`..`active_until`, every tryout published
    and still open. Anything else is `404`;
-4. for an `individual` product, refuses with `409 already_owned` if the student holds that tryout with its
+4. if `expected_price` differs from the product's price, `409 price_changed` and nothing is written (a replay in
+   step 2 is answered before this check);
+5. for an `individual` product, refuses with `409 already_owned` if the student holds that tryout with its
    window still open (D05b). A `bundle` is always allowed;
-5. for `manual`, finalizes the proof with `AssetService.FinalizeTx`. A missing, foreign, wrongly typed or reused
+6. for `manual`, finalizes the proof with `AssetService.FinalizeTx`. A missing, foreign, wrongly typed or reused
    proof is one `422` on `proof_asset_id`; the unique index on `proof_asset_id` makes a proof back one order;
-6. inserts the pending order and its items;
-7. for `wallet`, calls `WalletService.Apply` (`spend`, `order`/`<order id>`), confirms the order, issues the
+7. inserts the pending order and its items. The partial unique index `orders_pending_product_key` allows one
+   pending order per student and product, any method: the loser gets `409 order_pending`. A wallet order is
+   confirmed in the same transaction, so it never stays pending;
+8. for `wallet`, calls `WalletService.Apply` (`spend`, `order`/`<order id>`), confirms the order, issues the
    enrollments and enqueues the notifications. Too little balance is `422 insufficient_balance` and the whole
    transaction rolls back, as does any later failure, including the job insert.
 

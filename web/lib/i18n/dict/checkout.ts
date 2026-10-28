@@ -52,6 +52,8 @@ const id = {
   submitting: "Memproses…",
   submitFailed: "Pesanan gagal dibuat. Coba lagi.",
   alreadyOwned: "Kamu sudah memiliki tryout ini dan aksesnya masih aktif.",
+  priceChanged: "Harga paket ini baru saja berubah. Periksa harga terbaru di ringkasan pesanan, lalu coba lagi.",
+  orderPending: "Kamu masih punya pesanan untuk paket ini yang menunggu konfirmasi admin.",
 };
 
 const en: typeof id = {
@@ -104,6 +106,8 @@ const en: typeof id = {
   submitting: "Processing…",
   submitFailed: "The order could not be created. Please try again.",
   alreadyOwned: "You already own this tryout and its access is still active.",
+  priceChanged: "This package's price just changed. Check the new price in the order summary, then try again.",
+  orderPending: "You already have an order for this package awaiting admin confirmation.",
 };
 
 export function useCheckoutT() {

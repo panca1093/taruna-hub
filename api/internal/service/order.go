@@ -23,6 +23,8 @@ var (
 	ErrOrderKeyConflict         = errors.New("idempotency key belongs to a different order")
 	ErrProductUnavailable       = errors.New("product is not for sale")
 	ErrAlreadyOwned             = errors.New("tryout already held")
+	ErrPriceChanged             = errors.New("product price differs from the price shown")
+	ErrOrderPending             = errors.New("a pending order for this product already exists")
 	ErrBankTransferUnavailable  = errors.New("bank transfer account is not configured")
 	ErrEnrollmentSourceRequired = errors.New("enrollment grant needs a source")
 )
@@ -33,6 +35,7 @@ const (
 	ReasonOrderMethod  = "order_method"
 	ReasonOrderKey     = "order_key"
 	ReasonOrderProof   = "order_proof"
+	ReasonOrderPrice   = "order_price"
 	ReasonOrderReason  = "order_reason"
 	ReasonOrderQuery   = "order_query"
 )
@@ -60,6 +63,8 @@ type CheckoutInput struct {
 	Method       string
 	Key          string
 	ProofAssetID *uuid.UUID
+	// ExpectedPrice is the price the student saw; the server price must still equal it.
+	ExpectedPrice string
 }
 
 type OrderFilter struct {
@@ -153,6 +158,9 @@ func (s *OrderService) Checkout(ctx context.Context, scope HostScope, principal 
 				return ErrProductUnavailable
 			}
 			return orderError(err)
+		}
+		if expected, _ := parseMoney(in.ExpectedPrice); expected != product.Price {
+			return ErrPriceChanged
 		}
 		items := make([]model.OrderItem, 0, len(product.Tryouts))
 		tryoutIDs := make([]uuid.UUID, 0, len(product.Tryouts))
@@ -477,6 +485,9 @@ func checkedCheckout(in CheckoutInput) error {
 	if !idempotencyKey.MatchString(in.Key) {
 		fields["idempotency_key"] = ReasonOrderKey
 	}
+	if _, ok := parseMoney(in.ExpectedPrice); !ok {
+		fields["expected_price"] = ReasonOrderPrice
+	}
 	if len(fields) > 0 {
 		return &InputError{Fields: fields}
 	}
@@ -520,6 +531,8 @@ func orderError(err error) error {
 		return ErrOrderNotFound
 	case errors.Is(err, repository.ErrProofTaken):
 		return proofInvalid()
+	case errors.Is(err, repository.ErrPendingExists):
+		return ErrOrderPending
 	case errors.Is(err, repository.ErrScopeRequired):
 		return ErrTenantNotFound
 	}

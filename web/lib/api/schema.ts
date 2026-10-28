@@ -2352,7 +2352,8 @@ export interface paths {
          * Check out a product
          * @description Student only. The server checks that the product is active, inside its own sale window (`active_from` to
          *     `active_until`) and that every tryout is still published, then stores a snapshot of its title, price and
-         *     tryouts on the order; the client never sends a price.
+         *     tryouts on the order. The client sends `expected_price`, the price its page showed, and the server price must
+         *     equal it.
          *
          *     `payment_method` is `wallet` or `manual` (the gateway arrives with P14). A `wallet` order is debited,
          *     confirmed, granted and queued for notification in one transaction: if the balance is too low it answers
@@ -2367,6 +2368,10 @@ export interface paths {
          *
          *     An `individual` product whose tryout the student already holds with active access answers `409` with code
          *     `already_owned`. A `bundle` can still be bought: only the tryouts not yet held are granted.
+         *
+         *     A student with a `pending` order for the product cannot create another (any method): `409` `order_pending`.
+         *     A price that differs from `expected_price` answers `409` `price_changed` and writes nothing; a replay of an
+         *     existing key returns its original order before either check.
          */
         post: {
             parameters: {
@@ -2403,8 +2408,9 @@ export interface paths {
                 403: components["responses"]["Forbidden"];
                 404: components["responses"]["NotFound"];
                 /**
-                 * @description `already_owned` (an individual product's tryout is already held) or `conflict` (the idempotency key
-                 *     belongs to a different order).
+                 * @description `already_owned` (an individual product's tryout is already held), `price_changed` (the price differs
+                 *     from `expected_price`), `order_pending` (a pending order for this product exists) or `conflict` (the
+                 *     idempotency key belongs to a different order).
                  */
                 409: {
                     headers: {
@@ -3600,7 +3606,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -3614,6 +3620,8 @@ export interface components {
         CheckoutRequest: {
             /** Format: uuid */
             product_id: string;
+            /** @description The price the page showed, as the same decimal string `Product.price` uses. */
+            expected_price: string;
             /** @enum {string} */
             payment_method: "manual" | "wallet";
             idempotency_key: string;

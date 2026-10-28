@@ -212,6 +212,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
         product_id: product.id,
         payment_method: method,
         idempotency_key: keyRef.current,
+        expected_price: product.price,
         ...(proofAssetId ? { proof_asset_id: proofAssetId } : {}),
       });
       if (created.payment_method === "wallet") {
@@ -220,10 +221,17 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
       setOrder(created);
     } catch (err) {
       if (err instanceof ApiError && err.fields?.proof_asset_id) proofRef.current = null;
+      if (err instanceof ApiError && err.code === "price_changed") {
+        await api.catalog.product(id).then(setProduct).catch(() => {});
+      }
       setSubmitError(
         err instanceof ApiError && err.code === "already_owned"
           ? t.alreadyOwned
-          : err instanceof ApiError && err.code === "insufficient_balance"
+          : err instanceof ApiError && err.code === "price_changed"
+            ? t.priceChanged
+            : err instanceof ApiError && err.code === "order_pending"
+              ? t.orderPending
+              : err instanceof ApiError && err.code === "insufficient_balance"
             ? t.insufficientBalance
             : errorText(err, t.submitFailed),
       );

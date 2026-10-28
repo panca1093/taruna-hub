@@ -1750,7 +1750,8 @@ paths:
       description: |
         Student only. The server checks that the product is active, inside its own sale window (`active_from` to
         `active_until`) and that every tryout is still published, then stores a snapshot of its title, price and
-        tryouts on the order; the client never sends a price.
+        tryouts on the order. The client sends `expected_price`, the price its page showed, and the server price must
+        equal it.
 
         `payment_method` is `wallet` or `manual` (the gateway arrives with P14). A `wallet` order is debited,
         confirmed, granted and queued for notification in one transaction: if the balance is too low it answers
@@ -1765,6 +1766,10 @@ paths:
 
         An `individual` product whose tryout the student already holds with active access answers `409` with code
         `already_owned`. A `bundle` can still be bought: only the tryouts not yet held are granted.
+
+        A student with a `pending` order for the product cannot create another (any method): `409` `order_pending`.
+        A price that differs from `expected_price` answers `409` `price_changed` and writes nothing; a replay of an
+        existing key returns its original order before either check.
       security:
         - bearerAuth: []
       requestBody:
@@ -1794,8 +1799,9 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: |
-            `already_owned` (an individual product's tryout is already held) or `conflict` (the idempotency key
-            belongs to a different order).
+            `already_owned` (an individual product's tryout is already held), `price_changed` (the price differs
+            from `expected_price`), `order_pending` (a pending order for this product exists) or `conflict` (the
+            idempotency key belongs to a different order).
           content:
             application/json:
               schema:
@@ -3472,6 +3478,8 @@ components:
                 - service_unavailable
                 - already_owned
                 - insufficient_balance
+                - price_changed
+                - order_pending
             message:
               type: string
               description: Human-readable, Indonesian, safe to show to end users.
@@ -3487,11 +3495,15 @@ components:
     CheckoutRequest:
       type: object
       additionalProperties: false
-      required: [product_id, payment_method, idempotency_key]
+      required: [product_id, payment_method, idempotency_key, expected_price]
       properties:
         product_id:
           type: string
           format: uuid
+        expected_price:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]{1,2})?$'
+          description: The price the page showed, as the same decimal string `Product.price` uses.
         payment_method:
           type: string
           enum: [manual, wallet]

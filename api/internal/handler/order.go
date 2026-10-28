@@ -20,6 +20,9 @@ const (
 	orderProductGone  = "Produk tidak tersedia untuk dibeli."
 	orderAlreadyOwned = "Kamu sudah memiliki tryout ini dan aksesnya masih aktif."
 	orderInsufficient = "Saldo tidak mencukupi untuk paket ini."
+	orderPriceChanged = "Harga paket berubah. Periksa harga terbaru lalu coba lagi."
+	orderPending      = "Kamu masih punya pesanan untuk paket ini yang menunggu konfirmasi."
+	orderPriceRule    = "Harga yang ditampilkan wajib diisi sebagai angka desimal, maksimal dua digit di belakang koma."
 	orderStateRule    = "Pesanan sudah diproses dan tidak bisa diubah."
 	orderKeyConflict  = "Kunci idempotensi sudah dipakai untuk pesanan lain."
 	orderBankMissing  = "Transfer manual belum tersedia."
@@ -67,6 +70,7 @@ type checkoutRequest struct {
 	PaymentMethod  string  `json:"payment_method"`
 	IdempotencyKey string  `json:"idempotency_key"`
 	ProofAssetID   *string `json:"proof_asset_id"`
+	ExpectedPrice  string  `json:"expected_price"`
 }
 
 type cancelRequest struct {
@@ -279,7 +283,7 @@ func orderPageOf(c echo.Context) (int, int, error) {
 
 func checkoutInputOf(req checkoutRequest) (service.CheckoutInput, error) {
 	fields := map[string]string{}
-	input := service.CheckoutInput{Method: req.PaymentMethod, Key: req.IdempotencyKey}
+	input := service.CheckoutInput{Method: req.PaymentMethod, Key: req.IdempotencyKey, ExpectedPrice: req.ExpectedPrice}
 	if id, err := uuid.Parse(req.ProductID); err != nil {
 		fields["product_id"] = invalidFormat
 	} else {
@@ -341,6 +345,10 @@ func orderError(err error) error {
 		return httpx.NotFound(orderProductGone)
 	case errors.Is(err, service.ErrAlreadyOwned):
 		return httpx.New(http.StatusConflict, httpx.CodeAlreadyOwned, orderAlreadyOwned)
+	case errors.Is(err, service.ErrPriceChanged):
+		return httpx.New(http.StatusConflict, httpx.CodePriceChanged, orderPriceChanged)
+	case errors.Is(err, service.ErrOrderPending):
+		return httpx.New(http.StatusConflict, httpx.CodeOrderPending, orderPending)
 	case errors.Is(err, service.ErrInsufficientBalance):
 		return httpx.New(http.StatusUnprocessableEntity, httpx.CodeInsufficientBalance, orderInsufficient)
 	case errors.Is(err, service.ErrOrderState):
@@ -363,6 +371,8 @@ func orderReason(reason string) string {
 		return orderKeyRule
 	case service.ReasonOrderProof:
 		return orderProofRule
+	case service.ReasonOrderPrice:
+		return orderPriceRule
 	case service.ReasonOrderReason:
 		return orderCancelRule
 	case service.ReasonOrderQuery:

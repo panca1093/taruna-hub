@@ -18,6 +18,9 @@ import (
 // ErrProofTaken is the unique index that lets one upload back one order.
 var ErrProofTaken = errors.New("payment proof already used")
 
+// ErrPendingExists is the partial unique index that allows one pending order per student and product.
+var ErrPendingExists = errors.New("pending order already exists for this product")
+
 // OrderFilter is already validated by the service; the repository only turns it into SQL.
 type OrderFilter struct {
 	Status string
@@ -350,8 +353,13 @@ func scanOrder(row pgx.Row) (model.Order, error) {
 
 func mapOrderError(what string, err error) error {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation && pgErr.ConstraintName == "orders_proof_key" {
-		return ErrProofTaken
+	if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+		switch pgErr.ConstraintName {
+		case "orders_proof_key":
+			return ErrProofTaken
+		case "orders_pending_product_key":
+			return ErrPendingExists
+		}
 	}
 	return fmt.Errorf("%s: %w", what, err)
 }
