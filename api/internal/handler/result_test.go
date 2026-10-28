@@ -111,6 +111,13 @@ func TestResultRawResponsesHideTheKeyUntilRelease(t *testing.T) {
 			t.Errorf("subtest payload contains %s: %s", leaked, live)
 		}
 	}
+	right := ""
+	for _, o := range f.q1.Options {
+		if o.Label == "4" {
+			right = o.ID
+		}
+	}
+	f.call(http.MethodPut, sessionPath(session.ID, "/answers/"+f.q1.ID.String()), map[string]any{"seq": 1, "answer": []string{right}}, f.tokenA)
 	f.call(http.MethodPost, sessionPath(session.ID, "/subtests/"+f.sub(0)+"/submit"), nil, f.tokenA)
 	f.call(http.MethodPost, sessionPath(session.ID, "/subtests/"+f.sub(1)+"/start"), nil, f.tokenA)
 	f.call(http.MethodPost, sessionPath(session.ID, "/subtests/"+f.sub(1)+"/submit"), nil, f.tokenA)
