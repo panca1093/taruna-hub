@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, toast } from "@heroui/react";
 import { AppShell } from "@/components/app-shell";
+import { KecermatanPreviewModal } from "@/components/admin/kecermatan-preview-modal";
 import { SelectInput, TextInput, TextareaInput } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
 import {
@@ -22,12 +23,13 @@ interface KecermatanDraft {
   programId: string;
   description: string;
   itemType: KecermatanItemType;
-  packageId: string;
-  itemLength: number;
-  optionsPerSoal: number;
-  soalPerKolom: number;
-  kolomCount: number;
-  kolomDurationMinutes: number;
+  builtinSources: KecermatanTest["builtin_sources"];
+  packageIds: string[];
+  itemLength: string;
+  optionsPerSoal: string;
+  soalPerKolom: string;
+  kolomCount: string;
+  kolomDurationMinutes: string;
   coverFrom: string;
   coverTo: string;
 }
@@ -51,15 +53,27 @@ const blankDraft: KecermatanDraft = {
   programId: "",
   description: "",
   itemType: "char",
-  packageId: NO_PACKAGE,
-  itemLength: 4,
-  optionsPerSoal: 5,
-  soalPerKolom: 50,
-  kolomCount: 10,
-  kolomDurationMinutes: 2,
+  builtinSources: [],
+  packageIds: [],
+  itemLength: "4",
+  optionsPerSoal: "5",
+  soalPerKolom: "50",
+  kolomCount: "10",
+  kolomDurationMinutes: "2",
   coverFrom: covers[0][0],
   coverTo: covers[0][1],
 };
+
+const durationMinutesOf = (test: KecermatanTest) => Math.max(1, Math.round(test.kolom_duration_seconds / 60));
+
+const numberFields = {
+  itemLength: { min: 1, max: 5, path: "item_length" },
+  optionsPerSoal: { min: 3, max: 8, path: "options_per_soal" },
+  soalPerKolom: { min: 50, max: 100, path: "soal_per_kolom" },
+  kolomCount: { min: 10, max: 50, path: "kolom_count" },
+  kolomDurationMinutes: { min: 1, max: 60, path: "kolom_duration_seconds" },
+} as const;
+type NumberKey = keyof typeof numberFields;
 
 function draftOf(test: KecermatanTest): KecermatanDraft {
   return {
@@ -67,12 +81,13 @@ function draftOf(test: KecermatanTest): KecermatanDraft {
     programId: test.program_id,
     description: test.description,
     itemType: test.item_type,
-    packageId: test.packages[0]?.package_id ?? NO_PACKAGE,
-    itemLength: test.item_length,
-    optionsPerSoal: test.options_per_soal,
-    soalPerKolom: test.soal_per_kolom,
-    kolomCount: test.kolom_count,
-    kolomDurationMinutes: Math.max(1, Math.round(test.kolom_duration_seconds / 60)),
+    builtinSources: test.item_type === "mix" ? [...test.builtin_sources] : [],
+    packageIds: test.packages.map((p) => p.package_id),
+    itemLength: String(test.item_length),
+    optionsPerSoal: String(test.options_per_soal),
+    soalPerKolom: String(test.soal_per_kolom),
+    kolomCount: String(test.kolom_count),
+    kolomDurationMinutes: String(durationMinutesOf(test)),
     coverFrom: test.cover_from,
     coverTo: test.cover_to,
   };
@@ -95,6 +110,8 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Set<NumberKey>>(new Set());
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,37 +169,64 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
   const itemTypeOptions = itemTypes.map((type) => ({ id: type, label: t.itemType[type] }));
 
   const candidates = (packages ?? []).filter((p) => (draft.itemType === "mix" ? true : p.type === draft.itemType));
-  const chosen = candidates.find((p) => p.id === draft.packageId);
+  const firstPackageId = draft.packageIds[0] ?? NO_PACKAGE;
+  const keptPackages = Math.max(0, draft.packageIds.length - 1);
   const packageOptions = [
     ...(packageRequired(draft.itemType) ? [] : [{ id: NO_PACKAGE, label: draft.itemType === "shape" ? t.packageNoneShape : t.packageNone }]),
     ...candidates.map((p) => ({ id: p.id, label: t.packageOption(p.name, p.element_count) })),
+    // A pinned package the list no longer offers for this type stays selectable, so it is never silently dropped.
+    ...(firstPackageId !== NO_PACKAGE && !candidates.some((p) => p.id === firstPackageId)
+      ? [{ id: firstPackageId, label: test?.packages.find((p) => p.package_id === firstPackageId)?.name ?? firstPackageId }]
+      : []),
   ];
 
-  const need = draft.itemLength * draft.optionsPerSoal;
+  const numeric = (key: NumberKey) => (/^\d+$/.test(draft[key].trim()) ? Number(draft[key]) : null);
+  const numberError = (key: NumberKey): string | undefined => {
+    const { min, max } = numberFields[key];
+    const value = numeric(key);
+    if (value === null || value < min || value > max) return t.rangeError(min, max);
+    if (key === "kolomCount" && value % 2 !== 0) return t.evenError;
+    return undefined;
+  };
+  const fieldError = (key: NumberKey) => (touched.has(key) ? numberError(key) : undefined) ?? formErrors[numberFields[key].path];
+
+  const need = (numeric("itemLength") ?? 0) * (numeric("optionsPerSoal") ?? 0);
+  const packageCount = (pid: string) =>
+    packages?.find((p) => p.id === pid)?.element_count ?? test?.packages.find((p) => p.package_id === pid)?.element_count ?? 0;
   const builtinPool =
     draft.itemType === "char" || draft.itemType === "number"
       ? BUILTIN_POOL[draft.itemType]
       : draft.itemType === "shape"
-        ? chosen
+        ? draft.packageIds.length > 0
           ? 0
           : BUILTIN_POOL.shape
         : draft.itemType === "mix"
-          ? BUILTIN_POOL.char + BUILTIN_POOL.number + BUILTIN_POOL.shape
+          ? draft.builtinSources.reduce((sum, name) => sum + (BUILTIN_POOL[name as keyof typeof BUILTIN_POOL] ?? 0), 0)
           : 0;
-  const pool = builtinPool + (chosen?.element_count ?? 0);
+  const pool = builtinPool + draft.packageIds.reduce((sum, pid) => sum + packageCount(pid), 0);
+
+  const selectType = (type: KecermatanItemType) =>
+    setDraft((d) => ({ ...d, itemType: type, packageIds: [], builtinSources: type === "mix" ? [...MIX_BUILTINS] : [] }));
+  const selectPackage = (key: string) =>
+    setDraft((d) => ({ ...d, packageIds: key === NO_PACKAGE ? d.packageIds.slice(1) : [key, ...d.packageIds.slice(1)] }));
+
+  const durationSeconds = () =>
+    test && draft.kolomDurationMinutes === String(durationMinutesOf(test))
+      ? test.kolom_duration_seconds
+      : (numeric("kolomDurationMinutes") ?? 0) * 60;
 
   const bodyOf = () => ({
     program_id: selectedProgramId,
     title: draft.title,
     description: draft.description,
     item_type: draft.itemType,
-    item_length: draft.itemLength,
-    options_per_soal: draft.optionsPerSoal,
-    soal_per_kolom: draft.soalPerKolom,
-    kolom_count: draft.kolomCount,
-    kolom_duration_seconds: Math.round(draft.kolomDurationMinutes * 60),
-    builtin_sources: draft.itemType === "mix" ? [...MIX_BUILTINS] : [],
-    package_ids: packageAllowed(draft.itemType) && chosen ? [chosen.id] : [],
+    item_length: numeric("itemLength") ?? 0,
+    options_per_soal: numeric("optionsPerSoal") ?? 0,
+    soal_per_kolom: numeric("soalPerKolom") ?? 0,
+    kolom_count: numeric("kolomCount") ?? 0,
+    kolom_duration_seconds: durationSeconds(),
+    builtin_sources: draft.itemType === "mix" ? draft.builtinSources : [],
+    package_ids: packageAllowed(draft.itemType) ? draft.packageIds : [],
     cover_from: draft.coverFrom,
     cover_to: draft.coverTo,
   });
@@ -192,6 +236,8 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
       toast.danger(t.toastIncompleteTitle, { description: t.toastIncompleteDescription });
       return;
     }
+    setTouched(new Set(Object.keys(numberFields) as NumberKey[]));
+    if ((Object.keys(numberFields) as NumberKey[]).some((key) => numberError(key))) return;
     setSaving(true);
     setFormErrors({});
     try {
@@ -240,25 +286,40 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
     );
   }
 
-  const numberField = (key: "itemLength" | "optionsPerSoal" | "soalPerKolom" | "kolomCount" | "kolomDurationMinutes", fallback: number) => ({
+  const numberField = (key: NumberKey) => ({
     type: "number" as const,
-    value: String(draft[key]),
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft((d) => ({ ...d, [key]: Number(e.target.value) || fallback })),
+    value: draft[key],
+    error: fieldError(key),
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft((d) => ({ ...d, [key]: e.target.value })),
+    onBlur: () => setTouched((prev) => new Set(prev).add(key)),
     disabled: locked,
   });
+  const dirty = test !== null && JSON.stringify(draft) !== JSON.stringify(draftOf(test));
 
   return (
     <AppShell
       title={isEditing ? t.editTitle : t.createTitle}
       description={locked ? t.lockedDescription : undefined}
       actions={
-        <Button variant="primary" size="sm" onPress={handleSave} isDisabled={locked || saving}>
-          {saving ? t.saving : t.saveTest}
-        </Button>
+        <div className="flex gap-2">
+          {test && (
+            <Button variant="secondary" size="sm" isDisabled={dirty || saving} onPress={() => setPreviewOpen(true)}>
+              {t.previewButton}
+            </Button>
+          )}
+          <Button variant="primary" size="sm" onPress={handleSave} isDisabled={locked || saving}>
+            {saving ? t.saving : t.saveTest}
+          </Button>
+        </div>
       }
     >
       <div className="mx-auto max-w-3xl space-y-6">
-        {test && <p className="text-xs text-muted">{t.revisionLabel(test.revision)}</p>}
+        {test && (
+          <p className="text-xs text-muted">
+            {t.revisionLabel(test.revision)}
+            {dirty && ` · ${t.saveBeforePreview}`}
+          </p>
+        )}
 
         <Card className="gap-4 p-5">
           <p className="text-sm font-semibold text-foreground">{t.infoHeading}</p>
@@ -285,7 +346,7 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
               options={itemTypeOptions}
               selectedKey={draft.itemType}
               error={formErrors.item_type}
-              onSelectionChange={(k) => k && setDraft((d) => ({ ...d, itemType: k as KecermatanItemType, packageId: NO_PACKAGE }))}
+              onSelectionChange={(k) => k && selectType(k as KecermatanItemType)}
               isDisabled={locked}
             />
             {packageAllowed(draft.itemType) && (
@@ -293,14 +354,16 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
                 className="sm:col-span-2"
                 label={packageRequired(draft.itemType) ? t.packageLabel : t.packageOptionalLabel}
                 options={packageOptions}
-                selectedKey={draft.packageId}
+                selectedKey={firstPackageId}
                 error={formErrors["package_ids[0]"] ?? formErrors.package_ids}
                 description={
-                  packages !== null && candidates.length === 0 && packageRequired(draft.itemType)
-                    ? t.packageMissing(t.itemType[draft.itemType])
-                    : undefined
+                  keptPackages > 0
+                    ? t.packagesKept(keptPackages)
+                    : packages !== null && candidates.length === 0 && packageRequired(draft.itemType)
+                      ? t.packageMissing(t.itemType[draft.itemType])
+                      : undefined
                 }
-                onSelectionChange={(k) => k && setDraft((d) => ({ ...d, packageId: k }))}
+                onSelectionChange={(k) => k && selectPackage(k)}
                 isDisabled={locked}
               />
             )}
@@ -337,11 +400,11 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
         <Card className="gap-4 p-5">
           <p className="text-sm font-semibold text-foreground">{t.structureHeading}</p>
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextInput label={t.itemLengthLabel} min={1} max={5} error={formErrors.item_length} {...numberField("itemLength", 1)} />
-            <TextInput label={t.optionsPerSoalLabel} min={3} max={8} error={formErrors.options_per_soal} {...numberField("optionsPerSoal", 3)} />
-            <TextInput label={t.soalPerKolomLabel} min={50} max={100} error={formErrors.soal_per_kolom} {...numberField("soalPerKolom", 50)} />
-            <TextInput label={t.kolomCountLabel} min={10} max={50} step={2} error={formErrors.kolom_count} {...numberField("kolomCount", 10)} />
-            <TextInput label={t.kolomDurationLabel} min={1} max={60} error={formErrors.kolom_duration_seconds} {...numberField("kolomDurationMinutes", 1)} />
+            <TextInput label={t.itemLengthLabel} min={1} max={5} {...numberField("itemLength")} />
+            <TextInput label={t.optionsPerSoalLabel} min={3} max={8} {...numberField("optionsPerSoal")} />
+            <TextInput label={t.soalPerKolomLabel} min={50} max={100} {...numberField("soalPerKolom")} />
+            <TextInput label={t.kolomCountLabel} min={10} max={50} step={2} {...numberField("kolomCount")} />
+            <TextInput label={t.kolomDurationLabel} min={1} max={60} {...numberField("kolomDurationMinutes")} />
           </div>
           <p className={cn("text-xs", pool < need || formErrors.pool ? "text-danger" : "text-muted")}>
             {t.poolSummary(pool, need)}
@@ -353,6 +416,7 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
           </p>
         </Card>
       </div>
+      {test && <KecermatanPreviewModal testId={test.id} kolomCount={test.kolom_count} isOpen={previewOpen} onOpenChange={setPreviewOpen} />}
     </AppShell>
   );
 }

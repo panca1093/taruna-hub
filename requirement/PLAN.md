@@ -349,7 +349,7 @@ For every slice, use this verification loop:
 
 ### P10 — Kecermatan builder and deterministic generator
 
-**Status:** done, lean — standalone `kecermatan_tests` (frozen configuration + stored seed) with CRUD, package pinning under the package row lock, first-attempt lock guard, a bounded deterministic generator with N/2 replay, a staff column preview API, and the builder wired to the API with a package picker. Deferred: publish/unpublish (P11 decides), student exposure and per-attempt snapshots (P18), a preview control in the builder and multi-source `mix` selection (not in the mockup); the browser demo was not run · **Size:** L · **Depends:** P09
+**Status:** done, lean — standalone `kecermatan_tests` (frozen configuration + stored seed) with CRUD, package pinning under the package row lock, first-attempt lock guard, a bounded deterministic generator with N/2 replay, a staff column preview API, and the builder wired to the API with a package picker and a "Lihat contoh" sample-column modal (owner-approved 2026-10-28). Deferred: publish/unpublish (P11 decides), student exposure and per-attempt snapshots (P18), and multi-source `mix` selection UI (not in the mockup; existing mix sources are preserved on save); the browser demo was not run · **Size:** L · **Depends:** P09
 
 **Outcome:** Staff build valid tests and preview the repeated-column mechanism before publication.
 
@@ -368,7 +368,7 @@ For every slice, use this verification loop:
 - [x] Columns k and k+N/2 have identical references/questions/subset ordering, with separate answer keys per column identity.
       Generator replay test and HTTP preview (kolom 6 equals kolom 1 for one seed); keys are one row per kolom. Nothing is persisted per attempt until P18.
 - [ ] Reject edit/delete after a session exists; supported char/number/symbol/image/emoji/shape/mix sources render.
-      Edit/delete refusal is proven with a fixture stamp of `first_attempt_at`; no session exists until P18 writes it. Every source type generates through the API, but nothing renders in a browser (no preview control in the mockup, demo not run).
+      Edit/delete refusal is proven with a fixture stamp of `first_attempt_at`; no session exists until P18 writes it. Every source type generates through the API, but nothing renders in a browser (demo not run).
 
 **Decision / verification gate:** D09 resolved 2026-10-28 (at most 50 kolom × 100 soal); generation policy is fixed by content snapshots, not a client RNG.
 
