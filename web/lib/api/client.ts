@@ -85,6 +85,21 @@ export type WalletStudentFilters = Omit<
 
 type AdjustmentBody = components["schemas"]["AdjustmentRequest"];
 
+export type Order = components["schemas"]["Order"];
+export type OrderList = components["schemas"]["OrderList"];
+export type Enrollment = components["schemas"]["Enrollment"];
+export type EnrollmentList = components["schemas"]["EnrollmentList"];
+export type BankTransfer = components["schemas"]["BankTransfer"];
+export type CheckoutBody = components["schemas"]["CheckoutRequest"];
+export type Asset = components["schemas"]["Asset"];
+export type AssetLink = components["schemas"]["AssetURL"];
+
+/** Page of `GET /api/v1/orders` and the staff list; an absent field is not sent at all. */
+export type OrderFilters = Omit<
+  NonNullable<paths["/api/v1/admin/orders"]["get"]["parameters"]["query"]>,
+  "limit" | "offset"
+> & { limit?: number; offset?: number };
+
 // Production sets NEXT_PUBLIC_API_URL to "" (same-origin); unset in dev, call the API on the page's own host.
 function baseUrl(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL;
@@ -172,6 +187,8 @@ const tryoutPath = (id: string) => `/api/v1/tryouts/${id}` as keyof paths;
 
 const productPath = (id: string) => `/api/v1/products/${id}` as keyof paths;
 
+const adminOrderPath = (id: string) => `/api/v1/admin/orders/${id}` as keyof paths;
+
 const catalogProductPath = (id: string) => `/api/v1/catalog/products/${id}` as keyof paths;
 
 /** Query string of a list request; empty values are dropped so the server sees no filter. */
@@ -190,6 +207,14 @@ function uploadForm<T>(path: keyof paths, file: File, rows?: number[]): Promise<
   body.append("file", file);
   if (rows !== undefined) body.append("rows", JSON.stringify(rows));
   return authed<T>(path, { method: "POST", body });
+}
+
+/** Multipart upload of one image with its purpose, the way POST /api/v1/assets reads it. */
+function uploadAsset(file: File, purpose: "payment_proof"): Promise<Asset> {
+  const body = new FormData();
+  body.append("purpose", purpose);
+  body.append("file", file);
+  return authed<Asset>("/api/v1/assets", { method: "POST", body });
 }
 
 // The access token lives in memory only; the refresh cookie is HttpOnly and never readable here.
@@ -370,6 +395,29 @@ export const api = {
       authed<WalletEntryList>(`/api/v1/students/${id}/wallet/entries${queryOf(filters)}` as keyof paths),
     adjust: (id: string, body: AdjustmentBody) =>
       mutate<AdjustmentResult>("POST", `/api/v1/students/${id}/wallet/adjustments` as keyof paths, body),
+  },
+
+  /** Checkout and the signed-in student's own orders and access. */
+  orders: {
+    checkout: (body: CheckoutBody) => mutate<Order>("POST", "/api/v1/orders", body),
+    list: (filters: Pick<OrderFilters, "limit" | "offset"> = {}) =>
+      authed<OrderList>(`/api/v1/orders${queryOf(filters)}` as keyof paths),
+    enrollments: () => authed<EnrollmentList>("/api/v1/enrollments"),
+    bankTransfer: () => authed<BankTransfer>("/api/v1/payments/bank-transfer"),
+  },
+
+  /** Staff review of every order of the tenant. */
+  adminOrders: {
+    list: (filters: OrderFilters = {}) =>
+      authed<OrderList>(`/api/v1/admin/orders${queryOf(filters)}` as keyof paths),
+    confirm: (id: string) => mutate<Order>("POST", `${adminOrderPath(id)}/confirm` as keyof paths),
+    cancel: (id: string, reason: string) =>
+      mutate<Order>("POST", `${adminOrderPath(id)}/cancel` as keyof paths, { reason }),
+  },
+
+  assets: {
+    uploadProof: (file: File) => uploadAsset(file, "payment_proof"),
+    url: (id: string) => authed<AssetLink>(`/api/v1/assets/${id}/url` as keyof paths),
   },
 
   tryouts: {

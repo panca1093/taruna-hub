@@ -35,6 +35,20 @@ const id = {
   detailStatus: "Status",
   proofUploadedBy: "Diunggah oleh siswa saat checkout",
   proofNotUploaded: "Belum ada bukti transfer diunggah.",
+  proofOpen: "Klik untuk membuka bukti transfer",
+  proofOpenFailed: "Bukti transfer gagal dibuka",
+  loading: "Memuat pesanan…",
+  loadErrorTitle: "Pesanan gagal dimuat",
+  loadErrorDescription: "Periksa koneksi lalu coba lagi.",
+  retry: "Coba lagi",
+  loadMore: "Muat lebih banyak",
+  loadingMore: "Memuat…",
+  actionFailed: "Aksi gagal",
+  cancelReasonLabel: "Alasan pembatalan",
+  cancelReasonHint: "Alasan dikirim ke siswa bersama notifikasi pembatalan.",
+  cancelConfirm: "Batalkan Pesanan",
+  back: "Kembali",
+  detailCancelReason: "Alasan pembatalan",
 };
 
 const en: typeof id = {
@@ -70,6 +84,20 @@ const en: typeof id = {
   detailStatus: "Status",
   proofUploadedBy: "Uploaded by the student at checkout",
   proofNotUploaded: "No transfer proof uploaded yet.",
+  proofOpen: "Click to open the transfer proof",
+  proofOpenFailed: "The transfer proof could not be opened",
+  loading: "Loading orders…",
+  loadErrorTitle: "Orders could not be loaded",
+  loadErrorDescription: "Check your connection and try again.",
+  retry: "Try again",
+  loadMore: "Load more",
+  loadingMore: "Loading…",
+  actionFailed: "Action failed",
+  cancelReasonLabel: "Cancellation reason",
+  cancelReasonHint: "The reason is sent to the student with the cancellation notice.",
+  cancelConfirm: "Cancel Order",
+  back: "Back",
+  detailCancelReason: "Cancellation reason",
 };
 
 export function useOrdersT() {

@@ -26,6 +26,7 @@ interface ProductForm {
   tryoutIds: string[];
   price: string;
   originalPrice: string;
+  activeFrom: string;
   activeUntil: string;
   isActive: boolean;
 }
@@ -38,6 +39,7 @@ const blankForm: ProductForm = {
   tryoutIds: [],
   price: "",
   originalPrice: "",
+  activeFrom: "",
   activeUntil: "",
   isActive: false,
 };
@@ -155,6 +157,7 @@ export default function ProductsPage() {
       tryoutIds: product.tryouts.map((tryout) => tryout.id),
       price: product.price,
       originalPrice: product.original_price ?? "",
+      activeFrom: dateInput(product.active_from),
       activeUntil: dateInput(product.active_until),
       isActive: product.is_active,
     });
@@ -171,6 +174,7 @@ export default function ProductsPage() {
     price: source.price,
     original_price: source.originalPrice.trim() === "" ? null : source.originalPrice,
     is_active: source.isActive,
+    active_from: source.activeFrom === "" ? null : new Date(`${source.activeFrom}T00:00:00`).toISOString(),
     active_until: source.activeUntil === "" ? null : new Date(`${source.activeUntil}T00:00:00`).toISOString(),
     tryout_ids: source.tryoutIds,
   });
@@ -214,6 +218,7 @@ export default function ProductsPage() {
         price: product.price,
         original_price: product.original_price,
         is_active: !product.is_active,
+        active_from: product.active_from,
         active_until: product.active_until,
         tryout_ids: product.tryouts.map((tryout) => tryout.id),
       });
@@ -477,13 +482,22 @@ export default function ProductsPage() {
               onChange={(e) => setForm((current) => ({ ...current, originalPrice: e.target.value }))}
             />
           </div>
-          <TextInput
-            label={t.fieldActiveUntil}
-            type="date"
-            value={form.activeUntil}
-            error={formErrors.active_until}
-            onChange={(e) => setForm((current) => ({ ...current, activeUntil: e.target.value }))}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextInput
+              label={t.fieldActiveFrom}
+              type="date"
+              value={form.activeFrom}
+              error={formErrors.active_from}
+              onChange={(e) => setForm((current) => ({ ...current, activeFrom: e.target.value }))}
+            />
+            <TextInput
+              label={t.fieldActiveUntil}
+              type="date"
+              value={form.activeUntil}
+              error={formErrors.active_until}
+              onChange={(e) => setForm((current) => ({ ...current, activeUntil: e.target.value }))}
+            />
+          </div>
           <SwitchInput
             label={t.fieldActive}
             description={t.fieldActiveDescription}
