@@ -10,6 +10,7 @@ import (
 const (
 	PurposeQuestionImage = "question_image"
 	PurposePaymentProof  = "payment_proof"
+	PurposeItemImage     = "item_image"
 )
 
 // A staged asset is an upload nothing references yet; a final one may be referenced by frozen content.
