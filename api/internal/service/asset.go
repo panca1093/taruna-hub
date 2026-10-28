@@ -222,7 +222,7 @@ func purposeAllows(purpose string, role model.Role) (allowed, known bool) {
 	switch purpose {
 	case model.PurposePaymentProof:
 		return role == model.RoleStudent || isStaff(role), true
-	case model.PurposeQuestionImage:
+	case model.PurposeQuestionImage, model.PurposeItemImage:
 		return isStaff(role), true
 	}
 	return false, false
