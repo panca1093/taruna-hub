@@ -78,6 +78,8 @@ CREATE TABLE enrollments (
 );
 
 CREATE INDEX enrollments_user_idx ON enrollments (tenant_id, user_id, created_at DESC);
+CREATE INDEX enrollments_tryout_idx ON enrollments (tryout_id, tenant_id);
+CREATE INDEX order_items_tryout_idx ON order_items (tryout_id, tenant_id);
 
 -- Why an enrollment exists. The unique key is the last guard against a retry granting the same source twice.
 CREATE TABLE enrollment_grants (

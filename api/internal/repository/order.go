@@ -58,23 +58,6 @@ func (r *OrderRepository) LockStudentTx(ctx context.Context, tx pgx.Tx, tenantID
 	return c, nil
 }
 
-// Contact reads where a student's notifications go.
-func (r *OrderRepository) Contact(ctx context.Context, q queryer, tenantID, userID uuid.UUID) (model.Contact, error) {
-	if tenantID == uuid.Nil {
-		return model.Contact{}, ErrScopeRequired
-	}
-	var c model.Contact
-	err := q.QueryRow(ctx, `SELECT name, email, phone FROM users WHERE tenant_id = $1 AND id = $2`,
-		tenantID, userID).Scan(&c.Name, &c.Email, &c.Phone)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return model.Contact{}, ErrNotFound
-	}
-	if err != nil {
-		return model.Contact{}, fmt.Errorf("read contact: %w", err)
-	}
-	return c, nil
-}
-
 func (r *OrderRepository) FindByKeyTx(ctx context.Context, tx pgx.Tx, tenantID, userID uuid.UUID, key string) (model.Order, error) {
 	if tenantID == uuid.Nil {
 		return model.Order{}, ErrScopeRequired

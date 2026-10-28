@@ -266,7 +266,7 @@ func (s *OrderService) review(ctx context.Context, scope HostScope, principal mo
 			out = order
 			return nil
 		}
-		contact, err := s.repo.Contact(ctx, tx, tenantID, order.UserID)
+		contact, err := s.repo.LockStudentTx(ctx, tx, tenantID, order.UserID)
 		if err != nil {
 			return orderError(err)
 		}
