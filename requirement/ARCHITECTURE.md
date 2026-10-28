@@ -113,7 +113,7 @@ Use the PRD unified `tests`, `enrollments`, `test_sessions`, and `product_tests`
 | Shared curriculum | `programs`, `program_subjects`, `subject_chapters` | Master or tenant ownership inherited consistently throughout tree; used parents cannot be deleted |
 | Questions | `questions`, proposed immutable `question_versions` | Four types; answer keys, option IDs/points, difficulty and explanations; copies retain source lineage, never live synchronization |
 | Kecermatan items | `item_packages`, proposed `item_package_versions`, asset references | Include **emoji** as well as symbol/image/shape, fixing PRD §8 omission; master or tenant |
-| Tests | `tests`, `tryout_details`, `subtests`, `subtest_questions`, `kecermatan_details`, `kecermatan_test_packages` | Always tenant-owned; assigned question/package versions cannot change under an existing test/session |
+| Tests | Built as standalone tenant tables, not the unified `tests`: `tryouts`, `tryout_subtests`, `tryout_questions` (P08) and `kecermatan_tests`, `kecermatan_test_packages` (P10) | Always tenant-owned; assigned question/package versions cannot change under an existing test/session |
 | Commerce | `products`, `product_tests`, `orders`, proposed `payment_attempts`/`payment_events` | Tenant ownership; server price and immutable purchase snapshot; merchant reference globally unique across orders and top-ups |
 | Wallet | `topup_requests`, `wallet_transactions`, user balance projection | Fixed-precision money, signed movements, balance-after, typed actor and business-source uniqueness |
 | Access | `enrollments`, proposed `enrollment_grants` | One user/test aggregate; distinct source grants preserve order/manual provenance and repeat purchases; metered attempt increments are idempotent |
