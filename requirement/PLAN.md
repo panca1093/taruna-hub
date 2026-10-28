@@ -506,7 +506,7 @@ For every slice, use this verification loop:
 - [ ] Late/stale/reordered answer writes are rejected; submit retry is idempotent; direct access cannot return to a submitted subtest.
 - [ ] Seeded shuffle fixtures preserve option points and session order; all four question types and weighted-option grading match hand calculations; score appears at completion.
 
-**Decision / verification gate:** D04 score rules and D10 expiry/offline policy. Include server-accepted versus unsent browser-answer indicators.
+**Decision / verification gate:** D04 scoring and D10 deadlines resolved (weights from the settings page frozen at start, 0–100 display, normalized `isian`; deadline = min(timer, `active_until`) + tryout grace + staff extension, student-started subtests). The per-student extension API lands here; its monitoring UI lands with P19. Include server-accepted versus unsent browser-answer indicators.
 
 <a id="p17"></a>
 
@@ -575,7 +575,7 @@ For every slice, use this verification loop:
 - [ ] Tenant A cannot list B active/finished sessions or timeline by guessed ID.
 - [ ] Polling 50 active sessions meets ≤500ms p95 in the documented fixture; kecermatan has no violations or fullscreen enforcement.
 
-**Decision / verification gate:** Fullscreen availability is browser-dependent; test supported desktop/mobile paths and explicitly describe best-effort behavior.
+**Decision / verification gate:** Fullscreen availability is browser-dependent; test supported desktop/mobile paths and explicitly describe best-effort behavior. Includes the D10 per-student time extension control on the monitoring page.
 
 <a id="p20"></a>
 
