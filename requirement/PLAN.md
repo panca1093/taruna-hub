@@ -415,7 +415,7 @@ For every slice, use this verification loop:
 
 ### P13 — Manual and wallet checkout with enrollment
 
-**Status:** planned · **Size:** L · **Depends:** P02, P06, P11, P12
+**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Deferred: gateway orders (P14), kecermatan checkout and credit (P18), browser demo (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
 
 **Outcome:** Students purchase through manual transfer or wallet and receive the correct access after confirmation.
 
@@ -427,10 +427,14 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Insufficient wallet balance creates no debit/confirmed order/grant; mid-transaction failure rolls back all.
-- [ ] Repeated checkout/review creates one debit/grant per source; manual cancel opens no access.
-- [ ] Proof belongs to requesting student/tenant; staff sees/reviews only own tenant orders.
+- [x] Insufficient wallet balance creates no debit/confirmed order/grant; mid-transaction failure rolls back all.
+- [x] Repeated checkout/review creates one debit/grant per source; manual cancel opens no access.
+- [x] Proof belongs to requesting student/tenant; staff sees/reviews only own tenant orders.
+  - Student, proof and role cases are proven; no cross-tenant test by design (D17).
 - [ ] Bundle grants every purchased test; repeat kecermatan purchase preserves history on same enrollment; correct email/WA events enqueue atomically.
+  - Bundle grants and atomic enqueue are proven; kecermatan repeat purchase waits for P10/P18 (the enrollment row and grant table are ready for it).
+- [ ] Real browser to API to database demo of the screens.
+  - The API flow was smoked over HTTP against a real database and storage; the screens pass `tsc` and lint but were not driven in a browser (no dev server was allowed in this run).
 
 **Decision / verification gate:** D05 resolved (access over the tryout window, product sale window, reject repurchase of held tryouts, kecermatan credit added to one enrollment); D12 money policy; external delivery success is verified through P02.
 
