@@ -15,10 +15,17 @@ const id = {
   walletTitle: "Saldo (Wallet)",
   walletDescription: "Bayar dari saldo akun, akses terbuka otomatis.",
   scoringWeightTitle: "Bobot penilaian (weighted scoring)",
-  scoringWeightDescription: "Berlaku global untuk semua tryout dalam mode weighted.",
+  scoringWeightDescription: "Berlaku untuk attempt baru pada semua tryout. Attempt yang sudah berjalan memakai bobot saat dimulai.",
   fieldEasy: "Mudah",
   fieldMedium: "Sedang",
   fieldHard: "Sulit",
+  save: "Simpan",
+  saving: "Menyimpan...",
+  loading: "Memuat pengaturan...",
+  loadErrorDescription: "Periksa koneksi Anda lalu coba lagi.",
+  retry: "Coba Lagi",
+  toastSaved: "Bobot penilaian disimpan",
+  toastSaveFailed: "Gagal menyimpan",
 };
 
 const en: typeof id = {
@@ -34,10 +41,17 @@ const en: typeof id = {
   walletTitle: "Wallet Balance",
   walletDescription: "Pay from account balance, access opens automatically.",
   scoringWeightTitle: "Scoring weights (weighted scoring)",
-  scoringWeightDescription: "Applies globally to all tryouts in weighted mode.",
+  scoringWeightDescription: "Applies to new attempts on every tryout. An attempt already started keeps the weights it began with.",
   fieldEasy: "Easy",
   fieldMedium: "Medium",
   fieldHard: "Hard",
+  save: "Save",
+  saving: "Saving...",
+  loading: "Loading settings...",
+  loadErrorDescription: "Check your connection and try again.",
+  retry: "Retry",
+  toastSaved: "Scoring weights saved",
+  toastSaveFailed: "Could not save",
 };
 
 export function useSettingsT() {

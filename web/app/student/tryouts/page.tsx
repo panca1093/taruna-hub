@@ -8,10 +8,9 @@ import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
 import { useUser } from "@/lib/session-context";
-import { loadSession } from "@/lib/tryout-session";
 import { remainingAttempts } from "@/lib/kecermatan-session";
 import { useTryoutsListT } from "@/lib/i18n/dict/tryouts-list";
-import { api, type Enrollment } from "@/lib/api/client";
+import { api, type AttemptSummary, type Enrollment } from "@/lib/api/client";
 import {
   getKecermatanAttemptsPurchased,
   getKecermatanEnrollmentsForUser,
@@ -28,15 +27,17 @@ export default function StudentTryoutsPage() {
   const hydrated = useHydrated();
 
   const [enrollments, setEnrollments] = useState<Enrollment[] | null>(null);
+  const [attempts, setAttempts] = useState<AttemptSummary[]>([]);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    api.orders
-      .enrollments()
-      .then((list) => {
-        if (!cancelled) setEnrollments(list.enrollments);
+    Promise.all([api.orders.enrollments(), api.runtime.attempts()])
+      .then(([list, history]) => {
+        if (cancelled) return;
+        setEnrollments(list.enrollments);
+        setAttempts(history.attempts);
       })
       .catch(() => {
         if (!cancelled) setLoadFailed(true);
@@ -54,8 +55,12 @@ export default function StudentTryoutsPage() {
   const kecRemaining: Record<string, number> = {};
   if (hydrated) {
     for (const e of held) {
-      const session = loadSession(e.tryout_id, user.id);
-      statuses[e.tryout_id] = !session ? "not_started" : session.status === "completed" ? "completed" : "in_progress";
+      const own = attempts.filter((a) => a.tryout_id === e.tryout_id);
+      statuses[e.tryout_id] = own.some((a) => a.status === "in_progress")
+        ? "in_progress"
+        : own.length > 0
+          ? "completed"
+          : "not_started";
     }
     for (const testId of kecTestIds) {
       const purchased = getKecermatanAttemptsPurchased(user.id, testId);

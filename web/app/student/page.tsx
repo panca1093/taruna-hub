@@ -10,28 +10,20 @@ import { DonutStat } from "@/components/charts";
 import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
 import { useUser } from "@/lib/session-context";
-import { loadSession } from "@/lib/tryout-session";
 import { formatDateTime, formatIDR, getBalance, getEnrollmentsForUser, getProgram, getResultsForUser, getTryout } from "@/lib/mock-data";
 import { useStudentDashboardT } from "@/lib/i18n/dict/student-dashboard";
-import { useHydrated } from "@/lib/use-hydrated";
 
 type TryoutState = "not_started" | "in_progress" | "completed";
 
 export default function StudentDashboardPage() {
   const user = useUser();
   const t = useStudentDashboardT();
-  const hydrated = useHydrated();
 
   const enrollments = getEnrollmentsForUser(user.id);
   const results = [...getResultsForUser(user.id)].sort((a, b) => (a.completedAt < b.completedAt ? 1 : -1));
 
+  // This dashboard still reads the mock layer; real attempt state reaches it with the history slice (P17).
   const statuses: Record<string, TryoutState> = {};
-  if (hydrated) {
-    for (const e of enrollments) {
-      const session = loadSession(e.tryoutId, user.id);
-      statuses[e.tryoutId] = !session ? "not_started" : session.status === "completed" ? "completed" : "in_progress";
-    }
-  }
 
   const notStarted = enrollments.filter((e) => (statuses[e.tryoutId] ?? "not_started") === "not_started").length;
   const inProgress = enrollments.filter((e) => statuses[e.tryoutId] === "in_progress").length;

@@ -37,6 +37,18 @@ export type TryoutSummary = components["schemas"]["TryoutSummary"];
 export type TryoutList = components["schemas"]["TryoutList"];
 export type TryoutSubtest = components["schemas"]["Subtest"];
 export type TryoutAssignment = components["schemas"]["Assignment"];
+export type StudentTryout = components["schemas"]["StudentTryout"];
+export type TryoutSession = components["schemas"]["TryoutSession"];
+export type RuntimeSubtestState = components["schemas"]["RuntimeSubtestState"];
+export type RuntimeSubtest = components["schemas"]["RuntimeSubtest"];
+export type RuntimeQuestion = components["schemas"]["RuntimeQuestion"];
+export type TryoutResult = components["schemas"]["TryoutResult"];
+export type AttemptSummary = components["schemas"]["AttemptSummary"];
+export type AttemptList = components["schemas"]["AttemptList"];
+export type AnswerAck = components["schemas"]["AnswerAck"];
+export type AnswerBody = components["schemas"]["AnswerRequest"];
+export type Settings = components["schemas"]["Settings"];
+type GraceBody = components["schemas"]["GraceRequest"];
 type LoginBody = components["schemas"]["LoginRequest"];
 type RegisterBody = components["schemas"]["RegisterRequest"];
 type CreateProgramBody = components["schemas"]["CreateProgramRequest"];
@@ -188,6 +200,8 @@ const tryoutPath = (id: string) => `/api/v1/tryouts/${id}` as keyof paths;
 const productPath = (id: string) => `/api/v1/products/${id}` as keyof paths;
 
 const adminOrderPath = (id: string) => `/api/v1/admin/orders/${id}` as keyof paths;
+
+const sessionPath = (id: string) => `/api/v1/my/tryout-sessions/${id}` as keyof paths;
 
 const catalogProductPath = (id: string) => `/api/v1/catalog/products/${id}` as keyof paths;
 
@@ -429,5 +443,30 @@ export const api = {
     remove: (id: string) => mutate<void>("DELETE", tryoutPath(id)),
     publish: (id: string) => mutate<Tryout>("POST", `${tryoutPath(id)}/publish` as keyof paths),
     unpublish: (id: string) => mutate<Tryout>("POST", `${tryoutPath(id)}/unpublish` as keyof paths),
+    /** D10: Admin only, and the one change a locked tryout still accepts. */
+    setGrace: (id: string, body: GraceBody) => mutate<Tryout>("PUT", `${tryoutPath(id)}/grace` as keyof paths, body),
+  },
+
+  /** The signed-in student's attempts. Every deadline is decided by the server; these calls only report it. */
+  runtime: {
+    overview: (tryoutId: string) => authed<StudentTryout>(`/api/v1/my/tryouts/${tryoutId}` as keyof paths),
+    start: (tryoutId: string) => mutate<TryoutSession>("POST", `/api/v1/my/tryouts/${tryoutId}/sessions` as keyof paths),
+    attempts: () => authed<AttemptList>("/api/v1/my/tryout-sessions"),
+    session: (id: string) => authed<TryoutSession>(sessionPath(id)),
+    result: (id: string) => authed<TryoutResult>(`${sessionPath(id)}/result` as keyof paths),
+    subtest: (id: string, subtestId: string) =>
+      authed<RuntimeSubtest>(`${sessionPath(id)}/subtests/${subtestId}` as keyof paths),
+    startSubtest: (id: string, subtestId: string) =>
+      mutate<TryoutSession>("POST", `${sessionPath(id)}/subtests/${subtestId}/start` as keyof paths),
+    submitSubtest: (id: string, subtestId: string) =>
+      mutate<TryoutSession>("POST", `${sessionPath(id)}/subtests/${subtestId}/submit` as keyof paths),
+    saveAnswer: (id: string, questionId: string, body: AnswerBody) =>
+      mutate<AnswerAck>("PUT", `${sessionPath(id)}/answers/${questionId}` as keyof paths, body),
+  },
+
+  /** D04: the scoring weights new attempts freeze. Admin only. */
+  settings: {
+    get: () => authed<Settings>("/api/v1/admin/settings"),
+    update: (body: Settings) => mutate<Settings>("PUT", "/api/v1/admin/settings", body),
   },
 };

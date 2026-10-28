@@ -1,16 +1,68 @@
 "use client";
 
-import { useState } from "react";
-import { Card } from "@heroui/react";
+import { useEffect, useState } from "react";
+import { Button, Card, toast } from "@heroui/react";
 import { CreditCard, Scale } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { TextInput } from "@/components/ui/form";
+import { api, ApiError, errorText } from "@/lib/api/client";
 import { useSettingsT } from "@/lib/i18n/dict/settings";
+
+type Weights = { easy: string; medium: string; hard: string };
 
 export default function SettingsPage() {
   const t = useSettingsT();
-  const [weights, setWeights] = useState({ easy: 1, medium: 2, hard: 3 });
+  const [weights, setWeights] = useState<Weights | null>(null);
+  const [saved, setSaved] = useState<Weights | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    api.settings
+      .get()
+      .then(({ scoring_weights: w }) => {
+        if (cancelled) return;
+        const loaded = { easy: String(w.easy), medium: String(w.medium), hard: String(w.hard) };
+        setWeights(loaded);
+        setSaved(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const save = async () => {
+    if (!weights) return;
+    setSaving(true);
+    setErrors({});
+    try {
+      const result = await api.settings.update({
+        scoring_weights: { easy: Number(weights.easy), medium: Number(weights.medium), hard: Number(weights.hard) },
+      });
+      const next = {
+        easy: String(result.scoring_weights.easy),
+        medium: String(result.scoring_weights.medium),
+        hard: String(result.scoring_weights.hard),
+      };
+      setWeights(next);
+      setSaved(next);
+      toast.success(t.toastSaved);
+    } catch (err) {
+      if (err instanceof ApiError && err.fields) setErrors(err.fields);
+      toast.danger(t.toastSaveFailed, { description: errorText(err, t.loadErrorDescription) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dirty = weights !== null && saved !== null && JSON.stringify(weights) !== JSON.stringify(saved);
 
   const paymentOptions = [
     { title: t.paymentGatewayTitle, desc: t.paymentGatewayDescription },
@@ -39,16 +91,64 @@ export default function SettingsPage() {
           </Card>
 
           <Card className="gap-4 p-5">
-            <div className="flex items-center gap-2">
-              <Scale className="size-4 text-accent" />
-              <p className="text-sm font-semibold text-foreground">{t.scoringWeightTitle}</p>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Scale className="size-4 text-accent" />
+                <p className="text-sm font-semibold text-foreground">{t.scoringWeightTitle}</p>
+              </div>
+              <Button variant="primary" size="sm" onPress={save} isDisabled={!dirty || saving}>
+                {saving ? t.saving : t.save}
+              </Button>
             </div>
             <p className="text-xs text-muted">{t.scoringWeightDescription}</p>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <TextInput label={t.fieldEasy} type="number" value={String(weights.easy)} onChange={(e) => setWeights((w) => ({ ...w, easy: Number(e.target.value) || 0 }))} />
-              <TextInput label={t.fieldMedium} type="number" value={String(weights.medium)} onChange={(e) => setWeights((w) => ({ ...w, medium: Number(e.target.value) || 0 }))} />
-              <TextInput label={t.fieldHard} type="number" value={String(weights.hard)} onChange={(e) => setWeights((w) => ({ ...w, hard: Number(e.target.value) || 0 }))} />
-            </div>
+            {loadFailed ? (
+              <div className="py-4 text-center">
+                <p className="text-sm text-muted">{t.loadErrorDescription}</p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="mt-3"
+                  onPress={() => {
+                    setLoadFailed(false);
+                    setReloadKey((key) => key + 1);
+                  }}
+                >
+                  {t.retry}
+                </Button>
+              </div>
+            ) : weights === null ? (
+              <p className="py-4 text-center text-sm text-muted">{t.loading}</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <TextInput
+                  label={t.fieldEasy}
+                  type="number"
+                  min={0.01}
+                  step={0.5}
+                  value={weights.easy}
+                  error={errors["weights.easy"]}
+                  onChange={(e) => setWeights((w) => (w ? { ...w, easy: e.target.value } : w))}
+                />
+                <TextInput
+                  label={t.fieldMedium}
+                  type="number"
+                  min={0.01}
+                  step={0.5}
+                  value={weights.medium}
+                  error={errors["weights.medium"]}
+                  onChange={(e) => setWeights((w) => (w ? { ...w, medium: e.target.value } : w))}
+                />
+                <TextInput
+                  label={t.fieldHard}
+                  type="number"
+                  min={0.01}
+                  step={0.5}
+                  value={weights.hard}
+                  error={errors["weights.hard"]}
+                  onChange={(e) => setWeights((w) => (w ? { ...w, hard: e.target.value } : w))}
+                />
+              </div>
+            )}
           </Card>
         </div>
       </AppShell>
