@@ -113,7 +113,7 @@ type createTryoutRequest struct {
 	ExplanationReleaseAt *string                `json:"explanation_release_at"`
 	RandomizeQuestions   bool                   `json:"randomize_questions"`
 	RandomizeOptions     bool                   `json:"randomize_options"`
-	GraceSeconds         int                    `json:"grace_seconds"`
+	GraceSeconds         *int                   `json:"grace_seconds"`
 	Subtests             []tryoutSubtestRequest `json:"subtests"`
 }
 

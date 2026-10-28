@@ -81,7 +81,7 @@ type TryoutInput struct {
 	ExplanationReleaseAt *time.Time
 	RandomizeQuestions   bool
 	RandomizeOptions     bool
-	GraceSeconds         int
+	GraceSeconds         *int
 	Subtests             []TryoutSubtestInput
 	BaseRevision         int
 }
@@ -151,6 +151,7 @@ func (s *TryoutService) Create(ctx context.Context, scope HostScope, principal m
 	if err != nil {
 		return model.Tryout{}, err
 	}
+	input = adminOnlyGrace(principal, input)
 	input, err = tryoutScalars(input)
 	if err != nil {
 		return model.Tryout{}, err
@@ -178,6 +179,7 @@ func (s *TryoutService) Update(ctx context.Context, scope HostScope, principal m
 	if input.BaseRevision < 1 {
 		return model.Tryout{}, &InputError{Fields: map[string]string{"base_revision": ReasonTryoutRevision}}
 	}
+	input = adminOnlyGrace(principal, input)
 	input, err = tryoutScalars(input)
 	if err != nil {
 		return model.Tryout{}, err
@@ -202,12 +204,16 @@ func (s *TryoutService) Update(ctx context.Context, scope HostScope, principal m
 		if err != nil {
 			return err
 		}
+		next := tryoutOf(input, subtests)
+		if input.GraceSeconds == nil {
+			next.GraceSeconds = current.GraceSeconds
+		}
 		if current.Status == model.TryoutPublished {
-			if err := playable(tryoutOf(input, subtests), s.now()); err != nil {
+			if err := playable(next, s.now()); err != nil {
 				return err
 			}
 		}
-		if err := s.repo.UpdateHeadTx(ctx, tx, tenantID, id, tryoutOf(input, subtests)); err != nil {
+		if err := s.repo.UpdateHeadTx(ctx, tx, tenantID, id, next); err != nil {
 			return tryoutError(err)
 		}
 		if err := s.repo.ReplaceChildrenTx(ctx, tx, tenantID, id, subtests); err != nil {
@@ -400,6 +406,14 @@ func playable(tryout model.Tryout, now time.Time) error {
 	return nil
 }
 
+// adminOnlyGrace drops a grace sent by anyone but Admin (D10), so the stored value stands.
+func adminOnlyGrace(principal model.Principal, input TryoutInput) TryoutInput {
+	if principal.Role != model.RoleAdmin {
+		input.GraceSeconds = nil
+	}
+	return input
+}
+
 func tryoutScalars(input TryoutInput) (TryoutInput, error) {
 	fields := map[string]string{}
 	input.Title = strings.TrimSpace(input.Title)
@@ -422,7 +436,7 @@ func tryoutScalars(input TryoutInput) (TryoutInput, error) {
 	} else if input.ActiveFrom != nil && !input.ActiveFrom.Before(*input.ActiveUntil) {
 		fields["active_from"] = ReasonTryoutActiveFrom
 	}
-	if input.GraceSeconds < 0 || input.GraceSeconds > maxGraceSeconds {
+	if input.GraceSeconds != nil && (*input.GraceSeconds < 0 || *input.GraceSeconds > maxGraceSeconds) {
 		fields["grace_seconds"] = ReasonTryoutGrace
 	}
 	if len(input.Subtests) > maxSubtests {
@@ -478,7 +492,10 @@ func tryoutOf(input TryoutInput, subtests []model.Subtest) model.Tryout {
 		ProgramID: input.ProgramID, Title: input.Title, Description: input.Description,
 		ScoringMode: input.ScoringMode, ActiveFrom: input.ActiveFrom,
 		ExplanationReleaseAt: input.ExplanationReleaseAt, RandomizeQuestions: input.RandomizeQuestions,
-		RandomizeOptions: input.RandomizeOptions, GraceSeconds: input.GraceSeconds, Subtests: subtests,
+		RandomizeOptions: input.RandomizeOptions, Subtests: subtests,
+	}
+	if input.GraceSeconds != nil {
+		out.GraceSeconds = *input.GraceSeconds
 	}
 	if input.ActiveUntil != nil {
 		out.ActiveUntil = *input.ActiveUntil

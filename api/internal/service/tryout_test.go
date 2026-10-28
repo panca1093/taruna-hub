@@ -804,3 +804,56 @@ func TestProgramDeleteBlockedByTryout(t *testing.T) {
 		t.Fatalf("list the curriculum after the rejected delete: %v", err)
 	}
 }
+
+func TestTryoutGraceIsAdminOnlyAndOmissionKeepsIt(t *testing.T) {
+	h := newTryoutHarness(t)
+	tenant, ctx := h.q.a, context.Background()
+	question := h.question(t, tenant)
+	operator, admin := h.principal(tenant, model.RoleOperator), h.principal(tenant, model.RoleAdmin)
+	draft := func(grace *int) TryoutInput {
+		in := h.tryoutInput(tenant, subtestInput("Subtes", 600, question))
+		in.GraceSeconds = grace
+		return in
+	}
+
+	byOperator, err := h.svc.Create(ctx, h.scope(tenant), operator, draft(ptrInt(500)))
+	if err != nil || byOperator.GraceSeconds != 0 {
+		t.Fatalf("operator create with grace 500 = %d (err %v), want 0", byOperator.GraceSeconds, err)
+	}
+	if _, err := h.svc.Create(ctx, h.scope(tenant), operator, draft(ptrInt(99999))); err != nil {
+		t.Errorf("an operator's out-of-range grace is ignored, got %v", err)
+	}
+	created, err := h.svc.Create(ctx, h.scope(tenant), admin, draft(ptrInt(120)))
+	if err != nil || created.GraceSeconds != 120 {
+		t.Fatalf("admin create with grace 120 = %d (err %v), want 120", created.GraceSeconds, err)
+	}
+
+	next := func(who model.Principal, current model.Tryout, grace *int) model.Tryout {
+		t.Helper()
+		in := draft(grace)
+		in.BaseRevision = current.Revision
+		out, err := h.svc.Update(ctx, h.scope(tenant), who, current.ID, in)
+		if err != nil {
+			t.Fatalf("update: %v", err)
+		}
+		return out
+	}
+	current := next(operator, created, ptrInt(900))
+	if current.GraceSeconds != 120 {
+		t.Errorf("operator update to 900 left %d, want the stored 120", current.GraceSeconds)
+	}
+	current = next(admin, current, nil)
+	if current.GraceSeconds != 120 {
+		t.Errorf("admin update omitting the field left %d, want the stored 120", current.GraceSeconds)
+	}
+	current = next(operator, current, nil)
+	if current.GraceSeconds != 120 {
+		t.Errorf("operator update omitting the field left %d, want the stored 120", current.GraceSeconds)
+	}
+	if current = next(admin, current, ptrInt(0)); current.GraceSeconds != 0 {
+		t.Errorf("admin update to an explicit 0 left %d, want 0", current.GraceSeconds)
+	}
+	in := draft(ptrInt(3601))
+	in.BaseRevision = current.Revision
+	wantTryoutField(t, func() error { _, err := h.svc.Update(ctx, h.scope(tenant), admin, current.ID, in); return err }(), "grace_seconds")
+}
