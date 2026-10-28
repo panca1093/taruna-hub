@@ -62,6 +62,25 @@ export type ActiveSessionList = components["schemas"]["ActiveSessionList"];
 export type ExtensionBody = components["schemas"]["ExtensionRequest"];
 export type Extension = components["schemas"]["Extension"];
 export type ViolationTimeline = components["schemas"]["ViolationTimeline"];
+export type ItemPackage = components["schemas"]["ItemPackage"];
+export type ItemPackageType = components["schemas"]["ItemPackageType"];
+export type ItemPackageList = components["schemas"]["ItemPackageList"];
+export type ItemPackageDetail = components["schemas"]["ItemPackageDetail"];
+export type ItemElement = components["schemas"]["ItemElement"];
+export type ItemElementCheck = components["schemas"]["ItemElementCheck"];
+export type ItemElementPreview = components["schemas"]["ItemElementPreview"];
+export type ItemElementCommit = components["schemas"]["ItemElementCommit"];
+export type ItemCatalog = components["schemas"]["ItemCatalog"];
+export type SampleColumn = components["schemas"]["SampleColumn"];
+type CreateItemPackageBody = components["schemas"]["CreateItemPackageRequest"];
+type SampleColumnBody = components["schemas"]["SampleColumnRequest"];
+/** The parts of an element upload; which of them count depends on the package type. */
+export interface ElementUpload {
+  symbols?: string;
+  file?: File;
+  files?: File[];
+  ids?: string[];
+}
 type GraceBody = components["schemas"]["GraceRequest"];
 type LoginBody = components["schemas"]["LoginRequest"];
 type RegisterBody = components["schemas"]["RegisterRequest"];
@@ -242,6 +261,18 @@ function uploadForm<T>(path: keyof paths, file: File, rows?: number[]): Promise<
   if (rows !== undefined) body.append("rows", JSON.stringify(rows));
   return authed<T>(path, { method: "POST", body });
 }
+
+/** Multipart upload of the parts of an element add; preview and commit read the same body. */
+function uploadElements<T>(path: keyof paths, input: ElementUpload): Promise<T> {
+  const body = new FormData();
+  if (input.symbols) body.append("symbols", input.symbols);
+  if (input.file) body.append("file", input.file);
+  for (const file of input.files ?? []) body.append("files", file);
+  for (const id of input.ids ?? []) body.append("ids", id);
+  return authed<T>(path, { method: "POST", body });
+}
+
+const itemPackagePath = (id: string) => `/api/v1/item-packages/${id}` as keyof paths;
 
 /** Multipart upload of one image with its purpose, the way POST /api/v1/assets reads it. */
 function uploadAsset(file: File, purpose: "payment_proof"): Promise<Asset> {
@@ -447,6 +478,28 @@ export const api = {
     confirm: (id: string) => mutate<Order>("POST", `${adminOrderPath(id)}/confirm` as keyof paths),
     cancel: (id: string, reason: string) =>
       mutate<Order>("POST", `${adminOrderPath(id)}/cancel` as keyof paths, { reason }),
+  },
+
+  /** Kecermatan item packages: Admin and Operator. */
+  itemPackages: {
+    list: (type?: ItemPackageType) =>
+      authed<ItemPackageList>(`/api/v1/item-packages${queryOf({ type })}` as keyof paths),
+    create: (body: CreateItemPackageBody) => mutate<ItemPackage>("POST", "/api/v1/item-packages", body),
+    get: (id: string, revision?: number) =>
+      authed<ItemPackageDetail>(`${itemPackagePath(id)}${queryOf({ revision })}` as keyof paths),
+    rename: (id: string, name: string) => mutate<ItemPackage>("PUT", itemPackagePath(id), { name }),
+    remove: (id: string) => mutate<void>("DELETE", itemPackagePath(id)),
+    catalog: () => authed<ItemCatalog>("/api/v1/item-packages/catalog"),
+    symbolTemplate: (format: "xlsx" | "csv") =>
+      authedBlob(`/api/v1/item-packages/symbol-template?format=${format}` as keyof paths),
+    preview: (id: string, input: ElementUpload) =>
+      uploadElements<ItemElementPreview>(`${itemPackagePath(id)}/elements/preview` as keyof paths, input),
+    commit: (id: string, input: ElementUpload) =>
+      uploadElements<ItemElementCommit>(`${itemPackagePath(id)}/elements/commit` as keyof paths, input),
+    removeElement: (id: string, elementId: string) =>
+      mutate<ItemPackage>("DELETE", `${itemPackagePath(id)}/elements/${elementId}` as keyof paths),
+    sample: (id: string, body: SampleColumnBody) =>
+      mutate<SampleColumn>("POST", `${itemPackagePath(id)}/sample-column` as keyof paths, body),
   },
 
   assets: {

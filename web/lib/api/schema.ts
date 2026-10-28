@@ -2773,7 +2773,7 @@ export interface paths {
         /**
          * Upload an image as a staged asset
          * @description Any signed-in tenant user may upload, but `purpose` narrows who: `payment_proof` is Student,
-         *     Admin or Operator, `question_image` is Admin or Operator only (`403` otherwise).
+         *     Admin or Operator, `question_image` and `item_image` are Admin or Operator only (`403` otherwise).
          *
          *     The file is untrusted. The real type is read from the bytes — PNG, JPEG or WebP only, so SVG, a
          *     renamed file and corrupt data are refused with `422` on `file` — and nothing reaches storage
@@ -2803,7 +2803,7 @@ export interface paths {
                          */
                         file: string;
                         /** @enum {string} */
-                        purpose: "question_image" | "payment_proof";
+                        purpose: "question_image" | "payment_proof" | "item_image";
                     };
                 };
             };
@@ -3893,6 +3893,511 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/item-packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This tenant's kecermatan item packages
+         * @description P09, FR-ADM-KEC-11..15. Admin and Operator (D02). Each package carries its current revision,
+         *     the size of that revision and the pool size a referencing test needs (`required_count`, zero
+         *     when no test uses it), so the page can show "elements / minimum needed" (FR-ADM-KEC-15).
+         *     Multi-tenancy is deferred (D17): every package is tenant-owned; there are no master packages.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    type?: components["schemas"]["ItemPackageType"];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Packages ordered by name */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemPackageList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        /**
+         * Create an empty item package
+         * @description The package starts at revision 1 with no elements; elements arrive through the preview and
+         *     commit routes. A name already used in this tenant (case-insensitive) answers `409` with
+         *     `fields.name`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateItemPackageRequest"];
+                };
+            };
+            responses: {
+                /** @description The new package */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemPackage"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/item-packages/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Built-in emoji catalog, shapes and symbol palette
+         * @description The pickable sources the page offers without any upload: the emoji catalog (FR-ADM-KEC-24), the
+         *     seven flat shapes and the click-to-add symbol palette (FR-ADM-KEC-16b). Emoji are single-codepoint
+         *     and visually distinct only. Each emoji is drawn from the bundled Twemoji asset
+         *     `/emoji/{id}.svg` (CC-BY 4.0), never from the device font, so it looks the same everywhere; the
+         *     page must show `emoji_attribution` wherever the catalog is used.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The catalog */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemCatalog"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/item-packages/symbol-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the one-column symbol upload template */
+        get: {
+            parameters: {
+                query?: {
+                    format?: "xlsx" | "csv";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The template file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                        "text/csv": string;
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/item-packages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One package with the elements of a frozen revision
+         * @description Without `revision` the current revision is returned. A positive `revision` up to the current one
+         *     returns that frozen revision, so a test pinned to it keeps rendering exactly what it was built
+         *     from. A package id of another tenant answers `404`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    revision?: number;
+                };
+                header?: never;
+                path: {
+                    id: components["parameters"]["ItemPackageId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The package and its elements */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemPackageDetail"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        /**
+         * Rename a package
+         * @description A rename is not a content change and writes no revision.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ItemPackageId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RenameItemPackageRequest"];
+                };
+            };
+            responses: {
+                /** @description The renamed package */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemPackage"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        /**
+         * Delete an unused package
+         * @description A package that any kecermatan test pins cannot be deleted: `409` with code `package_in_use` and
+         *     nothing is removed (FR-ADM-KEC-14).
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ItemPackageId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/item-packages/{id}/elements/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview an element upload without saving it
+         * @description FR-ADM-KEC-18 and D09. Every candidate element comes back accepted or rejected with a reason;
+         *     nothing is written - no element, no revision, no object. Which parts count depends on the package
+         *     type, and a part that does not belong to it answers `422` with `fields.elements`:
+         *
+         *     - `symbol`: `symbols` (typed or pasted, separated by spaces or new lines; the palette simply adds
+         *       to this text) and/or one `file` (`.csv`, `.txt`, `.xlsx`, one column, at most 5 MB and 1000
+         *       symbols). One symbol is one character; an emoji is rejected with `emoji_in_symbol`, a longer
+         *       token with `symbol_multi`.
+         *     - `image`: any number of `files` (at most 200), each a PNG, JPEG or WebP of at most 5 MB, and/or
+         *       `.zip` files. SVG, corrupt and oversize images are rejected per element.
+         *     - `emoji` / `shape`: repeated `ids` from the catalog; an unknown id is `not_in_catalog`.
+         *
+         *     A ZIP is untrusted: at most 10 MB, 200 files and 50 MB extracted. An archive that breaks one of
+         *     those limits (or is corrupt) is rejected as one element and nothing of it is read further. Inside
+         *     a good archive each entry is judged alone: a path outside the folder (`..`, absolute, drive or
+         *     backslash) is `path_traversal`, a symbolic link is `symlink`, an archive inside the archive is
+         *     `nested_archive`. Duplicates are by exact symbol or by file-content SHA-256, never by file name:
+         *     a copy of something the package already holds is `duplicate`, a repeat inside the upload is
+         *     `duplicate_in_upload`. A package holds at most 500 elements; the rest are `package_full`. The ZIP limits are also request-wide: declared and inflated bytes of all files and archives together stay within 50 MB, and whatever comes after that is `upload_too_large`.
+         *     The request body is limited to 64 MB.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ItemPackageId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": components["schemas"]["ItemElementsUpload"];
+                };
+            };
+            responses: {
+                /** @description The verdict on every candidate element */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemElementPreview"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                413: components["responses"]["PayloadTooLarge"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/item-packages/{id}/elements/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save the accepted elements of an upload
+         * @description The same parts as the preview, sent again and judged again by the server. The accepted elements
+         *     are written together as ONE new revision in one transaction; rejected elements are never
+         *     written. A commit is idempotent: sending the same upload twice finds everything already present,
+         *     reports `added: 0` and writes no revision. Older revisions are never touched.
+         *     `503` means object storage is not configured (image packages need it).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ItemPackageId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": components["schemas"]["ItemElementsUpload"];
+                };
+            };
+            responses: {
+                /** @description What the commit did */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemElementCommit"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                413: components["responses"]["PayloadTooLarge"];
+                422: components["responses"]["ValidationFailed"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/item-packages/{id}/elements/{elementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove one element
+         * @description Writes a new revision without the element; older revisions keep it, so frozen content stays
+         *     renderable. If a kecermatan test pins this package and the removal would leave fewer elements
+         *     than that test needs, the answer is `409` with code `package_too_small` and nothing changes.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ItemPackageId"];
+                    elementId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The package at its new revision */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ItemPackage"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/item-packages/{id}/sample-column": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draw one sample column from the package ("Lihat contoh soal")
+         * @description FR-ADM-KEC-21. Draws `soal_per_kolom` questions from the package's current elements, each with
+         *     `options_per_soal` items of `item_length` distinct elements, all distinct within the question.
+         *     Nothing is stored and nothing is metered. This is a preview of the pool, not the P10 generator:
+         *     it has no seed, no reference item and no stability between calls. A pool smaller than
+         *     `options_per_soal` x `item_length` answers `422` with `fields.elements` (FR-ADM-KEC-10).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: components["parameters"]["ItemPackageId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SampleColumnRequest"];
+                };
+            };
+            responses: {
+                /** @description The sample column */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SampleColumn"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4609,7 +5114,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            purpose: "question_image" | "payment_proof";
+            purpose: "question_image" | "payment_proof" | "item_image";
             /**
              * @description The type detected from the bytes, never the client's.
              * @enum {string}
@@ -4632,7 +5137,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -5140,6 +5645,135 @@ export interface components {
             /** @description Every grant of that subtest summed; capped at 28800. */
             total_seconds: number;
         };
+        /** @enum {string} */
+        ItemPackageType: "symbol" | "image" | "emoji" | "shape";
+        ItemPackage: {
+            /** Format: uuid */
+            id: string;
+            type: components["schemas"]["ItemPackageType"];
+            name: string;
+            /** @description The current frozen revision. Every content change writes the next one. */
+            revision: number;
+            /** @description Elements in the current revision. */
+            element_count: number;
+            /** @description The largest pool size any referencing test needs; 0 when no test uses the package. */
+            required_count: number;
+            /** @description True when a test pins the package; it cannot be deleted then. */
+            in_use: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ItemPackageList: {
+            packages: components["schemas"]["ItemPackage"][];
+        };
+        CreateItemPackageRequest: {
+            type: components["schemas"]["ItemPackageType"];
+            name: string;
+        };
+        RenameItemPackageRequest: {
+            name: string;
+        };
+        ItemElement: {
+            /**
+             * Format: uuid
+             * @description Stable across revisions.
+             */
+            id: string;
+            position: number;
+            kind: components["schemas"]["ItemPackageType"];
+            /**
+             * @description The symbol itself, the emoji id (its hex codepoint; the picture is `/emoji/{value}.svg`) or the
+             *     shape id. Empty for an image.
+             */
+            value: string;
+            /** @description Dashboard label only (an image's file name, a catalog name); never shown to a student. */
+            label: string;
+            /**
+             * Format: uuid
+             * @description Image elements only. Fetch a download link with `GET /api/v1/assets/{id}/url`.
+             */
+            asset_id?: string;
+        };
+        ItemPackageDetail: {
+            package: components["schemas"]["ItemPackage"];
+            /** @description The revision `elements` belongs to; the package's own `revision` is its current one. */
+            revision: number;
+            elements: components["schemas"]["ItemElement"][];
+        };
+        ItemElementsUpload: {
+            /** @description Symbol packages. Typed or pasted symbols separated by spaces or new lines. */
+            symbols?: string;
+            /**
+             * Format: binary
+             * @description Symbol packages. One `.csv`, `.txt` or `.xlsx` column.
+             */
+            file?: string;
+            /** @description Image packages. PNG, JPEG, WebP or `.zip` files. */
+            files?: string[];
+            /** @description Emoji and shape packages. Catalog ids. */
+            ids?: string[];
+        };
+        ItemElementCheck: {
+            /** @description The symbol, an image's base name, or a catalog name. */
+            label: string;
+            kind: components["schemas"]["ItemPackageType"];
+            accepted: boolean;
+            /**
+             * @description Present when rejected.
+             * @enum {string}
+             */
+            reason?: "duplicate" | "duplicate_in_upload" | "emoji_in_symbol" | "symbol_multi" | "symbol_invalid" | "image_type" | "image_too_large" | "image_corrupt" | "image_dimensions" | "path_traversal" | "symlink" | "nested_archive" | "archive_corrupt" | "archive_too_large" | "archive_too_many_files" | "archive_extracted_too_large" | "not_in_catalog" | "package_full" | "upload_too_large";
+            /** @description Indonesian explanation of `reason`, with guidance, safe to show. */
+            message?: string;
+        };
+        ItemElementPreview: {
+            accepted: number;
+            rejected: number;
+            items: components["schemas"]["ItemElementCheck"][];
+        };
+        ItemElementCommit: {
+            /** @description Elements this commit wrote; 0 means no revision was written. */
+            added: number;
+            /** @description Duplicates of what the package already held or repeated within the upload. */
+            already_present: number;
+            /** @description Elements rejected for any other reason; they were not written. */
+            rejected: number;
+            /** @description The package's current revision after this call. */
+            revision: number;
+        };
+        EmojiCatalogItem: {
+            /** @description Lowercase hex codepoint; the bundled picture is `/emoji/{id}.svg`. */
+            id: string;
+            name: string;
+        };
+        ShapeCatalogItem: {
+            /** @enum {string} */
+            id: "kotak" | "segitiga" | "persegi_panjang" | "lingkaran" | "jajar_genjang" | "trapesium" | "belah_ketupat";
+            name: string;
+        };
+        ItemCatalog: {
+            emoji: components["schemas"]["EmojiCatalogItem"][];
+            /** @description The Twemoji CC-BY 4.0 credit to show wherever the emoji catalog is used. */
+            emoji_attribution: string;
+            shapes: components["schemas"]["ShapeCatalogItem"][];
+            symbol_palette: string[];
+        };
+        SampleColumnRequest: {
+            item_length: number;
+            options_per_soal: number;
+            soal_per_kolom: number;
+        };
+        SampleItem: {
+            elements: components["schemas"]["ItemElement"][];
+        };
+        SampleSoal: {
+            items: components["schemas"]["SampleItem"][];
+        };
+        SampleColumn: {
+            soal: components["schemas"]["SampleSoal"][];
+        };
     };
     responses: {
         /** @description No usable identity on the request */
@@ -5227,6 +5861,7 @@ export interface components {
         };
     };
     parameters: {
+        ItemPackageId: string;
         SessionId: string;
         SubtestId: string;
     };

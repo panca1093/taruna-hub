@@ -47,6 +47,8 @@ tags:
     description: Staff view of completed attempts, ranking and IRT calibration warnings
   - name: settings
     description: Tenant settings an Admin changes, today the scoring weights
+  - name: item-packages
+    description: Kecermatan item packages - symbol, image, emoji and shape pools with frozen revisions
   - name: monitoring
     description: Tryout violation evidence the student's browser reports, and the staff view of active sessions and timelines
 
@@ -2083,7 +2085,7 @@ paths:
       summary: Upload an image as a staged asset
       description: |
         Any signed-in tenant user may upload, but `purpose` narrows who: `payment_proof` is Student,
-        Admin or Operator, `question_image` is Admin or Operator only (`403` otherwise).
+        Admin or Operator, `question_image` and `item_image` are Admin or Operator only (`403` otherwise).
 
         The file is untrusted. The real type is read from the bytes — PNG, JPEG or WebP only, so SVG, a
         renamed file and corrupt data are refused with `422` on `file` — and nothing reaches storage
@@ -2112,7 +2114,7 @@ paths:
                   description: The PNG, JPEG or WebP image.
                 purpose:
                   type: string
-                  enum: [question_image, payment_proof]
+                  enum: [question_image, payment_proof, item_image]
       responses:
         "201":
           description: The staged asset
@@ -2853,6 +2855,377 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/item-packages:
+    get:
+      tags: [item-packages]
+      summary: This tenant's kecermatan item packages
+      description: |
+        P09, FR-ADM-KEC-11..15. Admin and Operator (D02). Each package carries its current revision,
+        the size of that revision and the pool size a referencing test needs (`required_count`, zero
+        when no test uses it), so the page can show "elements / minimum needed" (FR-ADM-KEC-15).
+        Multi-tenancy is deferred (D17): every package is tenant-owned; there are no master packages.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ItemPackageType"
+      responses:
+        "200":
+          description: Packages ordered by name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPackageList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    post:
+      tags: [item-packages]
+      summary: Create an empty item package
+      description: |
+        The package starts at revision 1 with no elements; elements arrive through the preview and
+        commit routes. A name already used in this tenant (case-insensitive) answers `409` with
+        `fields.name`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateItemPackageRequest"
+      responses:
+        "201":
+          description: The new package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPackage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/item-packages/catalog:
+    get:
+      tags: [item-packages]
+      summary: Built-in emoji catalog, shapes and symbol palette
+      description: |
+        The pickable sources the page offers without any upload: the emoji catalog (FR-ADM-KEC-24), the
+        seven flat shapes and the click-to-add symbol palette (FR-ADM-KEC-16b). Emoji are single-codepoint
+        and visually distinct only. Each emoji is drawn from the bundled Twemoji asset
+        `/emoji/{id}.svg` (CC-BY 4.0), never from the device font, so it looks the same everywhere; the
+        page must show `emoji_attribution` wherever the catalog is used.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemCatalog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/item-packages/symbol-template:
+    get:
+      tags: [item-packages]
+      summary: Download the one-column symbol upload template
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [xlsx, csv]
+            default: xlsx
+      responses:
+        "200":
+          description: The template file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/item-packages/{id}:
+    get:
+      tags: [item-packages]
+      summary: One package with the elements of a frozen revision
+      description: |
+        Without `revision` the current revision is returned. A positive `revision` up to the current one
+        returns that frozen revision, so a test pinned to it keeps rendering exactly what it was built
+        from. A package id of another tenant answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemPackageId"
+        - name: revision
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: The package and its elements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPackageDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    put:
+      tags: [item-packages]
+      summary: Rename a package
+      description: A rename is not a content change and writes no revision.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemPackageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenameItemPackageRequest"
+      responses:
+        "200":
+          description: The renamed package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPackage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      tags: [item-packages]
+      summary: Delete an unused package
+      description: |
+        A package that any kecermatan test pins cannot be deleted: `409` with code `package_in_use` and
+        nothing is removed (FR-ADM-KEC-14).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemPackageId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/item-packages/{id}/elements/preview:
+    post:
+      tags: [item-packages]
+      summary: Preview an element upload without saving it
+      description: |
+        FR-ADM-KEC-18 and D09. Every candidate element comes back accepted or rejected with a reason;
+        nothing is written - no element, no revision, no object. Which parts count depends on the package
+        type, and a part that does not belong to it answers `422` with `fields.elements`:
+
+        - `symbol`: `symbols` (typed or pasted, separated by spaces or new lines; the palette simply adds
+          to this text) and/or one `file` (`.csv`, `.txt`, `.xlsx`, one column, at most 5 MB and 1000
+          symbols). One symbol is one character; an emoji is rejected with `emoji_in_symbol`, a longer
+          token with `symbol_multi`.
+        - `image`: any number of `files` (at most 200), each a PNG, JPEG or WebP of at most 5 MB, and/or
+          `.zip` files. SVG, corrupt and oversize images are rejected per element.
+        - `emoji` / `shape`: repeated `ids` from the catalog; an unknown id is `not_in_catalog`.
+
+        A ZIP is untrusted: at most 10 MB, 200 files and 50 MB extracted. An archive that breaks one of
+        those limits (or is corrupt) is rejected as one element and nothing of it is read further. Inside
+        a good archive each entry is judged alone: a path outside the folder (`..`, absolute, drive or
+        backslash) is `path_traversal`, a symbolic link is `symlink`, an archive inside the archive is
+        `nested_archive`. Duplicates are by exact symbol or by file-content SHA-256, never by file name:
+        a copy of something the package already holds is `duplicate`, a repeat inside the upload is
+        `duplicate_in_upload`. A package holds at most 500 elements; the rest are `package_full`. The ZIP limits are also request-wide: declared and inflated bytes of all files and archives together stay within 50 MB, and whatever comes after that is `upload_too_large`.
+        The request body is limited to 64 MB.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemPackageId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ItemElementsUpload"
+      responses:
+        "200":
+          description: The verdict on every candidate element
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemElementPreview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/item-packages/{id}/elements/commit:
+    post:
+      tags: [item-packages]
+      summary: Save the accepted elements of an upload
+      description: |
+        The same parts as the preview, sent again and judged again by the server. The accepted elements
+        are written together as ONE new revision in one transaction; rejected elements are never
+        written. A commit is idempotent: sending the same upload twice finds everything already present,
+        reports `added: 0` and writes no revision. Older revisions are never touched.
+        `503` means object storage is not configured (image packages need it).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemPackageId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ItemElementsUpload"
+      responses:
+        "200":
+          description: What the commit did
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemElementCommit"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/item-packages/{id}/elements/{elementId}:
+    delete:
+      tags: [item-packages]
+      summary: Remove one element
+      description: |
+        Writes a new revision without the element; older revisions keep it, so frozen content stays
+        renderable. If a kecermatan test pins this package and the removal would leave fewer elements
+        than that test needs, the answer is `409` with code `package_too_small` and nothing changes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemPackageId"
+        - name: elementId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The package at its new revision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPackage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/item-packages/{id}/sample-column:
+    post:
+      tags: [item-packages]
+      summary: Draw one sample column from the package ("Lihat contoh soal")
+      description: |
+        FR-ADM-KEC-21. Draws `soal_per_kolom` questions from the package's current elements, each with
+        `options_per_soal` items of `item_length` distinct elements, all distinct within the question.
+        Nothing is stored and nothing is metered. This is a preview of the pool, not the P10 generator:
+        it has no seed, no reference item and no stability between calls. A pool smaller than
+        `options_per_soal` x `item_length` answers `422` with `fields.elements` (FR-ADM-KEC-10).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemPackageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SampleColumnRequest"
+      responses:
+        "200":
+          description: The sample column
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SampleColumn"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
@@ -4144,7 +4517,7 @@ components:
           format: uuid
         purpose:
           type: string
-          enum: [question_image, payment_proof]
+          enum: [question_image, payment_proof, item_image]
         content_type:
           type: string
           description: The type detected from the bytes, never the client's.
@@ -4204,6 +4577,8 @@ components:
                 - subtest_order
                 - result_not_ready
                 - explanations_not_released
+                - package_in_use
+                - package_too_small
             message:
               type: string
               description: Human-readable, Indonesian, safe to show to end users.
@@ -5180,7 +5555,315 @@ components:
           type: integer
           description: Every grant of that subtest summed; capped at 28800.
 
+    ItemPackageType:
+      type: string
+      enum: [symbol, image, emoji, shape]
+
+    ItemPackage:
+      type: object
+      additionalProperties: false
+      required: [id, type, name, revision, element_count, required_count, in_use, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: "#/components/schemas/ItemPackageType"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        revision:
+          type: integer
+          minimum: 1
+          description: The current frozen revision. Every content change writes the next one.
+        element_count:
+          type: integer
+          minimum: 0
+          maximum: 500
+          description: Elements in the current revision.
+        required_count:
+          type: integer
+          minimum: 0
+          description: The largest pool size any referencing test needs; 0 when no test uses the package.
+        in_use:
+          type: boolean
+          description: True when a test pins the package; it cannot be deleted then.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ItemPackageList:
+      type: object
+      additionalProperties: false
+      required: [packages]
+      properties:
+        packages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemPackage"
+
+    CreateItemPackageRequest:
+      type: object
+      additionalProperties: false
+      required: [type, name]
+      properties:
+        type:
+          $ref: "#/components/schemas/ItemPackageType"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    RenameItemPackageRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    ItemElement:
+      type: object
+      additionalProperties: false
+      required: [id, position, kind, value, label]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable across revisions.
+        position:
+          type: integer
+          minimum: 0
+        kind:
+          $ref: "#/components/schemas/ItemPackageType"
+        value:
+          type: string
+          description: |
+            The symbol itself, the emoji id (its hex codepoint; the picture is `/emoji/{value}.svg`) or the
+            shape id. Empty for an image.
+        label:
+          type: string
+          description: Dashboard label only (an image's file name, a catalog name); never shown to a student.
+        asset_id:
+          type: string
+          format: uuid
+          description: Image elements only. Fetch a download link with `GET /api/v1/assets/{id}/url`.
+
+    ItemPackageDetail:
+      type: object
+      additionalProperties: false
+      required: [package, revision, elements]
+      properties:
+        package:
+          $ref: "#/components/schemas/ItemPackage"
+        revision:
+          type: integer
+          minimum: 1
+          description: The revision `elements` belongs to; the package's own `revision` is its current one.
+        elements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemElement"
+
+    ItemElementsUpload:
+      type: object
+      additionalProperties: false
+      properties:
+        symbols:
+          type: string
+          description: Symbol packages. Typed or pasted symbols separated by spaces or new lines.
+        file:
+          type: string
+          format: binary
+          description: Symbol packages. One `.csv`, `.txt` or `.xlsx` column.
+        files:
+          type: array
+          description: Image packages. PNG, JPEG, WebP or `.zip` files.
+          items:
+            type: string
+            format: binary
+        ids:
+          type: array
+          description: Emoji and shape packages. Catalog ids.
+          items:
+            type: string
+
+    ItemElementCheck:
+      type: object
+      additionalProperties: false
+      required: [label, kind, accepted]
+      properties:
+        label:
+          type: string
+          description: The symbol, an image's base name, or a catalog name.
+        kind:
+          $ref: "#/components/schemas/ItemPackageType"
+        accepted:
+          type: boolean
+        reason:
+          type: string
+          description: Present when rejected.
+          enum:
+            - duplicate
+            - duplicate_in_upload
+            - emoji_in_symbol
+            - symbol_multi
+            - symbol_invalid
+            - image_type
+            - image_too_large
+            - image_corrupt
+            - image_dimensions
+            - path_traversal
+            - symlink
+            - nested_archive
+            - archive_corrupt
+            - archive_too_large
+            - archive_too_many_files
+            - archive_extracted_too_large
+            - not_in_catalog
+            - package_full
+            - upload_too_large
+        message:
+          type: string
+          description: Indonesian explanation of `reason`, with guidance, safe to show.
+
+    ItemElementPreview:
+      type: object
+      additionalProperties: false
+      required: [accepted, rejected, items]
+      properties:
+        accepted:
+          type: integer
+        rejected:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemElementCheck"
+
+    ItemElementCommit:
+      type: object
+      additionalProperties: false
+      required: [added, already_present, rejected, revision]
+      properties:
+        added:
+          type: integer
+          description: Elements this commit wrote; 0 means no revision was written.
+        already_present:
+          type: integer
+          description: Duplicates of what the package already held or repeated within the upload.
+        rejected:
+          type: integer
+          description: Elements rejected for any other reason; they were not written.
+        revision:
+          type: integer
+          minimum: 1
+          description: The package's current revision after this call.
+
+    EmojiCatalogItem:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: Lowercase hex codepoint; the bundled picture is `/emoji/{id}.svg`.
+        name:
+          type: string
+
+    ShapeCatalogItem:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          enum: [kotak, segitiga, persegi_panjang, lingkaran, jajar_genjang, trapesium, belah_ketupat]
+        name:
+          type: string
+
+    ItemCatalog:
+      type: object
+      additionalProperties: false
+      required: [emoji, emoji_attribution, shapes, symbol_palette]
+      properties:
+        emoji:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmojiCatalogItem"
+        emoji_attribution:
+          type: string
+          description: The Twemoji CC-BY 4.0 credit to show wherever the emoji catalog is used.
+        shapes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShapeCatalogItem"
+        symbol_palette:
+          type: array
+          items:
+            type: string
+
+    SampleColumnRequest:
+      type: object
+      additionalProperties: false
+      required: [item_length, options_per_soal, soal_per_kolom]
+      properties:
+        item_length:
+          type: integer
+          minimum: 1
+          maximum: 5
+        options_per_soal:
+          type: integer
+          minimum: 2
+        soal_per_kolom:
+          type: integer
+          minimum: 1
+          maximum: 100
+
+    SampleItem:
+      type: object
+      additionalProperties: false
+      required: [elements]
+      properties:
+        elements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ItemElement"
+
+    SampleSoal:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SampleItem"
+
+    SampleColumn:
+      type: object
+      additionalProperties: false
+      required: [soal]
+      properties:
+        soal:
+          type: array
+          items:
+            $ref: "#/components/schemas/SampleSoal"
+
   parameters:
+    ItemPackageId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     SessionId:
       name: id
       in: path
