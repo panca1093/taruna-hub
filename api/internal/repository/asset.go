@@ -63,6 +63,34 @@ func (r *AssetRepository) Find(ctx context.Context, q queryer, tenantID, id uuid
 	return a, nil
 }
 
+// KecermatanItemVisible reports whether the student's own kecermatan attempt currently shows the asset: in a
+// completed attempt any element of the snapshot (the review), in one in progress only the reference elements of the
+// running kolom's column. A paused or finished kolom, a later kolom and other students' attempts show nothing.
+func (r *AssetRepository) KecermatanItemVisible(ctx context.Context, q queryer, tenantID, userID, assetID uuid.UUID) (bool, error) {
+	if tenantID == uuid.Nil {
+		return false, ErrScopeRequired
+	}
+	var ok bool
+	err := q.QueryRow(ctx, `
+		SELECT EXISTS (
+		  SELECT 1 FROM kecermatan_sessions s
+		   WHERE s.tenant_id = $1 AND s.user_id = $2 AND (
+		     (s.status = 'completed'
+		      AND jsonb_path_exists(s.columns, '$[*].reference[*].elements[*] ? (@.asset_id == $id)',
+		                            jsonb_build_object('id', $3::text)))
+		     OR (s.status = 'in_progress' AND EXISTS (
+		         SELECT 1 FROM kecermatan_session_kolom k
+		          WHERE k.session_id = s.id AND k.status = 'running'
+		            AND jsonb_path_exists(s.columns -> ((k.kolom_number - 1) % (s.kolom_count / 2)),
+		                                  '$.reference[*].elements[*] ? (@.asset_id == $id)',
+		                                  jsonb_build_object('id', $3::text))))))`,
+		tenantID, userID, assetID.String()).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("check kecermatan item visibility: %w", err)
+	}
+	return ok, nil
+}
+
 // Finalize is idempotent: a final row keeps its first finalized_at.
 func (r *AssetRepository) Finalize(ctx context.Context, q queryer, tenantID, id uuid.UUID) (model.Asset, error) {
 	if tenantID == uuid.Nil {

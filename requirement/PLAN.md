@@ -548,7 +548,7 @@ For every slice, use this verification loop:
 
 ### P18 — Kecermatan attempts, quota and full results
 
-**Status:** in progress — kecermatan products and credit checkout, atomic admission with per-attempt snapshots, the server timeline and deadline worker, write-once answers, the versioned scoring function with a recompute path, results, review, history and the staff results list are built and tested (migration 000019, [docs/kecermatan-runtime.md](../docs/kecermatan-runtime.md)); **D03 stays open**: the scoring is the owner's provisional version 1, not client-approved. Deferred: the browser-to-API-to-database demo, image items for students (asset reads are staff-only), an HTTP/CLI trigger for the recompute · **Size:** XL · **Depends:** P10, P13
+**Status:** in progress — kecermatan products and credit checkout, atomic admission with per-attempt snapshots, the server timeline and deadline worker, write-once answers, the versioned scoring function with a recompute path, results, review, history and the staff results list are built and tested (migration 000019, [docs/kecermatan-runtime.md](../docs/kecermatan-runtime.md)); **D03 stays open**: the scoring is the owner's provisional version 1, not client-approved. Deferred: the browser-to-API-to-database demo, an HTTP/CLI trigger for the recompute · **Size:** XL · **Depends:** P10, P13
 
 **Outcome:** Students consume purchased credits once, complete repeated timed columns, and inspect confirmed composite results/history.
 

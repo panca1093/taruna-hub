@@ -243,6 +243,9 @@ func (s *KecermatanRuntimeService) Start(ctx context.Context, scope HostScope, p
 	var id uuid.UUID
 	created := false
 	err = runKeep(ctx, s.db, func(tx pgx.Tx) error {
+		if err := s.repo.LockStudent(ctx, tx, tenantID, principal.UserID); err != nil {
+			return kecError(err)
+		}
 		if _, err := s.repo.LockCredit(ctx, tx, tenantID, principal.UserID, testID); err != nil {
 			if errors.Is(err, repository.ErrNotFound) {
 				return ErrKecNotEnrolled
@@ -293,6 +296,8 @@ func (s *KecermatanRuntimeService) admit(ctx context.Context, tx pgx.Tx, tenantI
 	if err := s.repo.LockTest(ctx, tx, tenantID, testID, now); err != nil {
 		return uuid.Nil, kecError(err)
 	}
+	// The wait for the test lock may have been long; the attempt's clock starts once it is held.
+	now = s.now()
 	test, err := s.testRepo.Find(ctx, tx, tenantID, testID)
 	if err != nil {
 		return uuid.Nil, kecError(err)
@@ -557,11 +562,7 @@ func (s *KecermatanRuntimeService) FinalizeDue(ctx context.Context) (int, error)
 	settled := 0
 	var first error
 	for _, d := range due {
-		changed := false
-		err := s.withSession(ctx, d.TenantID, uuid.Nil, d.ID, func(_ pgx.Tx, _ model.KecSession, _ time.Time) error {
-			changed = true
-			return nil
-		})
+		changed, err := s.settleSession(ctx, d.TenantID, uuid.Nil, d.ID, func(pgx.Tx, model.KecSession, time.Time) error { return nil })
 		if err != nil {
 			if ctx.Err() != nil {
 				return settled, err
@@ -614,16 +615,27 @@ func (s *KecermatanRuntimeService) RecomputeScores(ctx context.Context, tenantID
 }
 
 // withSession runs fn with the attempt settled to now. A zero userID is the worker's. The lock order is the same
-// for every caller: the enrollment row (the credit), then the session row. A completed attempt needs neither
+// for every caller, and the same one checkout and confirmation use: the user row, the enrollment row (the credit),
+// then the session row. A completed attempt needs neither
 // lock, because nothing can change it any more.
 func (s *KecermatanRuntimeService) withSession(ctx context.Context, tenantID, userID, id uuid.UUID, fn func(pgx.Tx, model.KecSession, time.Time) error) error {
+	_, err := s.settleSession(ctx, tenantID, userID, id, fn)
+	return err
+}
+
+// settleSession is withSession that also reports whether settling moved the attempt.
+func (s *KecermatanRuntimeService) settleSession(ctx context.Context, tenantID, userID, id uuid.UUID, fn func(pgx.Tx, model.KecSession, time.Time) error) (bool, error) {
 	head, err := s.repo.FindSession(ctx, s.db, tenantID, userID, id, false)
 	if err != nil {
-		return kecError(err)
+		return false, kecError(err)
 	}
-	return runKeep(ctx, s.db, func(tx pgx.Tx) error {
+	changed := false
+	err = runKeep(ctx, s.db, func(tx pgx.Tx) error {
 		sess := head
 		if head.Status == model.KecSessionInProgress {
+			if err := s.repo.LockStudent(ctx, tx, tenantID, head.UserID); err != nil {
+				return kecError(err)
+			}
 			if _, err := s.repo.LockCredit(ctx, tx, tenantID, head.UserID, head.TestID); err != nil {
 				return kecError(err)
 			}
@@ -632,7 +644,7 @@ func (s *KecermatanRuntimeService) withSession(ctx context.Context, tenantID, us
 				return kecError(err)
 			}
 			now := s.now()
-			if _, err := s.settleLocked(ctx, tx, locked, now); err != nil {
+			if changed, err = s.settleLocked(ctx, tx, locked, now); err != nil {
 				return err
 			}
 			if sess, err = s.repo.FindSession(ctx, tx, tenantID, userID, id, false); err != nil {
@@ -642,6 +654,7 @@ func (s *KecermatanRuntimeService) withSession(ctx context.Context, tenantID, us
 		}
 		return fn(tx, sess, s.now())
 	})
+	return changed, err
 }
 
 // view reads the attempt settled to now and builds the student's state.

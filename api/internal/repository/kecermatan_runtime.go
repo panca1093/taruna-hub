@@ -59,8 +59,25 @@ func scanKecSession(row pgx.Row) (model.KecSession, error) {
 	return s, nil
 }
 
+// LockStudent takes the user row FOR NO KEY UPDATE, the lock checkout and confirmation take first, so every path
+// orders users before enrollment. It does not block the foreign-key share locks other inserts take on the row.
+func (r *KecermatanRuntimeRepository) LockStudent(ctx context.Context, q dbtx, tenantID, userID uuid.UUID) error {
+	if tenantID == uuid.Nil {
+		return ErrScopeRequired
+	}
+	var id uuid.UUID
+	err := q.QueryRow(ctx, `SELECT id FROM users WHERE tenant_id = $1 AND id = $2 FOR NO KEY UPDATE`, tenantID, userID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("lock student: %w", err)
+	}
+	return nil
+}
+
 // LockCredit takes the student's enrollment row for the rest of the transaction; no row means no access.
-// Every path that touches credits or an attempt takes this lock first, then the session row.
+// Every path that touches credits or an attempt takes the user row (LockStudent), then this one, then the session row.
 func (r *KecermatanRuntimeRepository) LockCredit(ctx context.Context, q dbtx, tenantID, userID, testID uuid.UUID) (model.KecCredit, error) {
 	return r.credit(ctx, q, tenantID, userID, testID, " FOR UPDATE")
 }

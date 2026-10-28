@@ -272,7 +272,7 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-5 py-6">
         <div>
           <p className="mb-2 text-xs font-medium tracking-wide text-muted uppercase">{t.referenceLabel}</p>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {kolom.reference.map((item) => (
               <div key={item.label} className="rounded-lg border border-border bg-surface-secondary py-2.5 text-center">
                 <p className="text-[10px] font-medium text-muted">{item.label}</p>
@@ -301,7 +301,7 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
 
         <div className="mt-8">
           <p className="mb-2 text-xs font-medium text-muted">{t.chooseMissingLabel}</p>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
             {kolom.reference.map((item) => (
               <button
                 key={item.label}

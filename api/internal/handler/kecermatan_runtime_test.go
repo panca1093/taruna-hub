@@ -18,6 +18,15 @@ import (
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
+// linkStore only presigns; no test here stores an object.
+type linkStore struct{}
+
+func (linkStore) Put(context.Context, string, []byte, string) error { return nil }
+func (linkStore) Delete(context.Context, string) error              { return nil }
+func (linkStore) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "https://storage.test/" + key, nil
+}
+
 type kecHTTPFixture struct {
 	walletHTTPFixture
 	e     http.Handler
@@ -35,6 +44,7 @@ func newKecHTTPFixture(t *testing.T) kecHTTPFixture {
 			`DELETE FROM kecermatan_session_answers WHERE tenant_id = ANY($1)`,
 			`DELETE FROM kecermatan_session_kolom WHERE tenant_id = ANY($1)`,
 			`DELETE FROM kecermatan_sessions WHERE tenant_id = ANY($1)`,
+			`DELETE FROM assets WHERE tenant_id = ANY($1) AND purpose = 'item_image'`,
 			`DELETE FROM enrollment_grants WHERE tenant_id = ANY($1)`,
 			`DELETE FROM enrollments WHERE tenant_id = ANY($1)`,
 			`DELETE FROM orders WHERE tenant_id = ANY($1)`,
@@ -54,7 +64,7 @@ func newKecHTTPFixture(t *testing.T) kecHTTPFixture {
 	logger := f.logger
 	auth := newAuthService(f.tenantFixture)
 	account := newAccountService(t, f.tenantFixture, auth)
-	assets := newAssetService(f.tenantFixture, nil, time.Minute)
+	assets := newAssetService(f.tenantFixture, linkStore{}, time.Minute)
 	runtime := newRuntimeService(f.tenantFixture)
 	f.e = f.deployments(func(slug string) *echo.Echo {
 		e := echo.New()

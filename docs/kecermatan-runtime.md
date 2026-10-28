@@ -22,8 +22,9 @@ tryout-only; kecermatan holdings are `GET /my/kecermatan-tests`.
 
 ## Locks
 
-Every path that touches credits or an attempt takes the **enrollment row first, then the session row**
-(`withSession`, `Start`). A payment adding credits and a completion consuming one therefore serialize on one row
+Every path that touches credits or an attempt takes the **user row (`FOR NO KEY UPDATE`), then the enrollment row, then
+the session row** (`withSession`, `Start`): the same user-then-enrollment order checkout and confirmation use, so a
+start and a purchase of one student cannot wait on each other (tested by racing them). A payment adding credits and a completion consuming one therefore serialize on one row
 (proved by a concurrent test), and `kecermatan_sessions_active_key` allows one attempt in progress per student and test.
 Admission takes the test row `FOR SHARE`, or `FOR UPDATE` for the very first attempt, which stamps `first_attempt_at`
 and locks the test against edits (P10).
@@ -100,5 +101,7 @@ attempt is reproduced exactly.
 
 ## Known limits
 
-Image-type items cannot render for a student yet: asset downloads are staff-only for `item_image`. The admin CSV
+Image items: `GET /assets/{id}/url` also serves a student an `item_image` asset when their own attempt shows it: in an
+attempt in progress only the running kolom's reference elements, in a completed one any element of the snapshot
+(the review). Emoji and shapes are bundled static assets and need no authorization. The admin CSV
 button exports the rows on screen; the bulk export is P21. The browser-to-API-to-database demo was not run.
