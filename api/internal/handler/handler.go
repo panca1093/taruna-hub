@@ -31,11 +31,12 @@ type Handler struct {
 	assets        *service.AssetService
 	orders        *service.OrderService
 	runtime       *service.RuntimeService
+	results       *service.ResultService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
 
-func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, orders *service.OrderService, runtime *service.RuntimeService, opts AuthOptions) *Handler {
+func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, orders *service.OrderService, runtime *service.RuntimeService, results *service.ResultService, opts AuthOptions) *Handler {
 	return &Handler{
 		logger:        logger,
 		health:        health,
@@ -49,6 +50,7 @@ func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, 
 		assets:        assets,
 		orders:        orders,
 		runtime:       runtime,
+		results:       results,
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
@@ -138,6 +140,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.GET("/my/tryout-sessions", h.MyAttempts, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/my/tryout-sessions/:id", h.TryoutSession, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/my/tryout-sessions/:id/result", h.TryoutSessionResult, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/my/tryout-sessions/:id/review", h.TryoutSessionReview, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/my/tryout-sessions/:id/subtests/:subtestId", h.TryoutSessionSubtest, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.POST("/my/tryout-sessions/:id/subtests/:subtestId/start", h.StartSubtest, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.POST("/my/tryout-sessions/:id/subtests/:subtestId/submit", h.SubmitSubtest, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
@@ -146,6 +149,8 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	// Staff extend one student's session (D10); the grace is an Admin setting that also works on a locked tryout.
 	v1.POST("/admin/tryout-sessions/:id/extensions", h.ExtendSession, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.PUT("/tryouts/:id/grace", h.SetTryoutGrace, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
+	v1.GET("/admin/results", h.StaffResults, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.GET("/admin/tryouts/:id/leaderboard", h.TryoutLeaderboard, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/settings", h.Settings, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.PUT("/admin/settings", h.UpdateSettings, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 

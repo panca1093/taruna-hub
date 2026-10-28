@@ -37,6 +37,10 @@ func newRuntimeService(f tenantFixture) *service.RuntimeService {
 	return service.NewRuntimeService(f.pool, repository.NewRuntimeRepository(f.pool))
 }
 
+func newResultService(f tenantFixture, rt *service.RuntimeService) *service.ResultService {
+	return service.NewResultService(rt, repository.NewResultRepository(f.pool), repository.NewRuntimeRepository(f.pool))
+}
+
 func newProductService(f tenantFixture) *service.ProductService {
 	return service.NewProductService(f.pool, repository.NewProductRepository(f.pool))
 }
