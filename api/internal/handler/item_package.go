@@ -535,6 +535,8 @@ func elementReason(reason string) string {
 		return "Tidak ada dalam katalog."
 	case service.ElemPackageFull:
 		return packageFullRule
+	case service.ElemUploadTooLarge:
+		return "Total ukuran unggahan melebihi 50 MB; berkas ini tidak diproses."
 	}
 	return reason
 }

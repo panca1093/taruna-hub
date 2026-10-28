@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -274,7 +275,9 @@ func TestImagesPlainFilesAreJudgedOneByOne(t *testing.T) {
 	cands, err := buildCandidates(context.Background(), model.ItemImage, ElementInput{Files: []UploadedFile{
 		{Name: "a.png", Data: good},
 		{Name: "b.jpg", Data: testJPEG(t, 4, 4)},
-		{Name: "c.webp", Data: testWebP("VP8L", 5, 5)},
+		{Name: "c.webp", Data: realWebP(t, "lossless")},
+		{Name: "d.webp", Data: realWebP(t, "lossy")},
+		{Name: "fake.webp", Data: testWebP("VP8L", 5, 5)},
 		{Name: "logo.svg", Data: svg},
 		{Name: "renamed.png", Data: svg},
 		{Name: "broken.png", Data: good[:20]},
@@ -289,6 +292,8 @@ func TestImagesPlainFilesAreJudgedOneByOne(t *testing.T) {
 	wantAccepted(t, cands, "a.png")
 	wantAccepted(t, cands, "b.jpg")
 	wantAccepted(t, cands, "c.webp")
+	wantAccepted(t, cands, "d.webp")
+	wantRejected(t, cands, "fake.webp", ElemImageCorrupt)
 	wantRejected(t, cands, "logo.svg", ElemImageType)
 	wantRejected(t, cands, "renamed.png", ElemImageType)
 	wantRejected(t, cands, "broken.png", ElemImageCorrupt)
@@ -463,5 +468,101 @@ func TestElementLabelKeepsOnlyABoundedBaseName(t *testing.T) {
 		if got := elementLabel(in); got != want {
 			t.Errorf("elementLabel(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// realWebP are 1x1 files from a real encoder; testWebP only builds a header that the container check accepts.
+func realWebP(t *testing.T, kind string) []byte {
+	t.Helper()
+	enc := map[string]string{
+		"lossless": "UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==",
+		"lossy":    "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA",
+	}[kind]
+	data, err := base64.StdEncoding.DecodeString(enc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func TestRequestWideBudgetStopsManySmallArchives(t *testing.T) {
+	// Each archive is far under every per-archive limit (one 4.9 MB image, a few KB zipped), so only a
+	// request-wide budget keeps 200 of them from retaining about a gigabyte.
+	files := make([]UploadedFile, maxUploadFiles)
+	for at := range files {
+		padded := append(testPNG(t, 3+at%40, 3+at/40), make([]byte, MaxAssetBytes-2000)...)
+		files[at] = UploadedFile{Name: fmt.Sprintf("z%03d.zip", at), Data: buildZip(t, zipEntry{name: "i.png", data: padded})}
+	}
+	cands, err := buildCandidates(context.Background(), model.ItemImage, ElementInput{Files: files})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retained int64
+	accepted, refused := 0, 0
+	for _, c := range cands {
+		retained += int64(len(c.data))
+		switch {
+		case c.Accepted:
+			accepted++
+		case c.Reason == ElemUploadTooLarge:
+			refused++
+		}
+	}
+	if retained > maxZipExtracted {
+		t.Errorf("retained %d bytes, want at most %d for the whole request", retained, maxZipExtracted)
+	}
+	if accepted == 0 || refused < maxUploadFiles-accepted-2 {
+		t.Errorf("accepted %d, refused %d of %d archives; want the first few kept and the rest upload_too_large", accepted, refused, len(files))
+	}
+}
+
+func TestRequestWideBudgetCoversPlainFilesAndTheElementCeiling(t *testing.T) {
+	big := append(testPNG(t, 3, 3), make([]byte, MaxAssetBytes-2000)...)
+	files := make([]UploadedFile, 15)
+	for at := range files {
+		files[at] = UploadedFile{Name: fmt.Sprintf("p%d.png", at), Data: append(append([]byte{}, big...), byte(at))}
+	}
+	cands, err := buildCandidates(context.Background(), model.ItemImage, ElementInput{Files: files})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retained int64
+	last := cands[len(cands)-1]
+	for _, c := range cands {
+		retained += int64(len(c.data))
+	}
+	if retained > maxZipExtracted || last.Reason != ElemUploadTooLarge {
+		t.Errorf("retained %d, last verdict %+v; want the 50 MB request budget to refuse the tail", retained, last.ElementCheck)
+	}
+
+	small := make([]UploadedFile, 0, 152)
+	for at := 0; at < 150; at++ {
+		small = append(small, UploadedFile{Name: fmt.Sprintf("s%03d.png", at), Data: testPNG(t, 2+at%90, 2+at/90)})
+	}
+	var zips []zipEntry
+	for at := 0; at < maxZipFiles; at++ {
+		zips = append(zips, zipEntry{name: fmt.Sprintf("e%03d.png", at), data: testPNG(t, 2+at%90, 100+at/90)})
+	}
+	files = append(small, UploadedFile{Name: "a.zip", Data: buildZip(t, zips...)}, UploadedFile{Name: "b.zip", Data: buildZip(t, zips...)})
+	cands, err = buildCandidates(context.Background(), model.ItemImage, ElementInput{Files: files})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := 0
+	for _, c := range cands {
+		if c.Accepted {
+			accepted++
+		}
+	}
+	if accepted != MaxPackageElements || cands[len(cands)-1].Reason != ElemPackageFull {
+		t.Errorf("%d images accepted, last verdict %+v; want exactly the %d-element ceiling and package_full after it", accepted, cands[len(cands)-1].ElementCheck, MaxPackageElements)
+	}
+}
+
+func TestSymbolTextIsCappedBeforeItIsSplit(t *testing.T) {
+	_, err := buildCandidates(context.Background(), model.ItemSymbol, ElementInput{Text: strings.Repeat("a ", maxSymbolTextBytes)})
+	var fileErr *ImportFileError
+	if !errors.As(err, &fileErr) || fileErr.Reason != ReasonImportSize {
+		t.Errorf("err = %v, want import_size", err)
 	}
 }

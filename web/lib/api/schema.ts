@@ -4202,7 +4202,7 @@ export interface paths {
          *     backslash) is `path_traversal`, a symbolic link is `symlink`, an archive inside the archive is
          *     `nested_archive`. Duplicates are by exact symbol or by file-content SHA-256, never by file name:
          *     a copy of something the package already holds is `duplicate`, a repeat inside the upload is
-         *     `duplicate_in_upload`. A package holds at most 500 elements; the rest are `package_full`.
+         *     `duplicate_in_upload`. A package holds at most 500 elements; the rest are `package_full`. The ZIP limits are also request-wide: declared and inflated bytes of all files and archives together stay within 50 MB, and whatever comes after that is `upload_too_large`.
          *     The request body is limited to 64 MB.
          */
         post: {
@@ -5724,7 +5724,7 @@ export interface components {
              * @description Present when rejected.
              * @enum {string}
              */
-            reason?: "duplicate" | "duplicate_in_upload" | "emoji_in_symbol" | "symbol_multi" | "symbol_invalid" | "image_type" | "image_too_large" | "image_corrupt" | "image_dimensions" | "path_traversal" | "symlink" | "nested_archive" | "archive_corrupt" | "archive_too_large" | "archive_too_many_files" | "archive_extracted_too_large" | "not_in_catalog" | "package_full";
+            reason?: "duplicate" | "duplicate_in_upload" | "emoji_in_symbol" | "symbol_multi" | "symbol_invalid" | "image_type" | "image_too_large" | "image_corrupt" | "image_dimensions" | "path_traversal" | "symlink" | "nested_archive" | "archive_corrupt" | "archive_too_large" | "archive_too_many_files" | "archive_extracted_too_large" | "not_in_catalog" | "package_full" | "upload_too_large";
             /** @description Indonesian explanation of `reason`, with guidance, safe to show. */
             message?: string;
         };

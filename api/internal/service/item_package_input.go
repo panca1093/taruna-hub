@@ -15,6 +15,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"golang.org/x/image/webp"
+
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
@@ -38,6 +40,7 @@ const (
 	ElemArchiveExtractBig = "archive_extracted_too_large"
 	ElemNotInCatalog      = "not_in_catalog"
 	ElemPackageFull       = "package_full"
+	ElemUploadTooLarge    = "upload_too_large"
 )
 
 // D09 limits. The 5MB image ceiling is MaxAssetBytes; a ZIP is read from memory only after these checks.
@@ -47,6 +50,7 @@ const (
 	maxZipExtracted     = 50 << 20
 	maxUploadFiles      = 200
 	maxSymbolTokens     = 1000
+	maxSymbolTextBytes  = maxImportBytes
 	MaxPackageElements  = 500
 	maxElementLabelRune = 200
 )
@@ -63,6 +67,16 @@ type ElementInput struct {
 	Files []UploadedFile
 	IDs   []string
 }
+
+// uploadBudget is shared by every file and archive of one request, so the per-archive limits cannot be
+// multiplied by sending many archives: declared and inflated bytes stay within the 50MB D09 ceiling in total.
+type uploadBudget struct {
+	declared int64
+	bytes    int64
+	accepted int
+}
+
+func (b *uploadBudget) full() bool { return b.accepted >= MaxPackageElements }
 
 type candidate struct {
 	model.ElementCheck
@@ -121,6 +135,9 @@ func catalogCandidates(in ElementInput, kind string, lookup func(string) (string
 func symbolCandidates(in ElementInput) ([]candidate, error) {
 	if len(in.IDs) > 0 || len(in.Files) > 1 {
 		return nil, kindMismatch("elements")
+	}
+	if len(in.Text) > maxSymbolTextBytes {
+		return nil, &ImportFileError{Reason: ReasonImportSize}
 	}
 	tokens := strings.Fields(in.Text)
 	if len(in.Files) == 1 {
@@ -260,19 +277,28 @@ func imageCandidates(ctx context.Context, in ElementInput) ([]candidate, error) 
 		return nil, &InputError{Fields: map[string]string{"elements": ReasonUploadTooMany}}
 	}
 	var out []candidate
+	budget := &uploadBudget{}
 	for _, file := range in.Files {
 		label := elementLabel(file.Name)
 		if strings.EqualFold(filepath.Ext(file.Name), ".zip") {
-			out = append(out, zipCandidates(ctx, label, file.Data)...)
+			out = append(out, zipCandidates(ctx, label, file.Data, budget)...)
 			continue
 		}
-		out = append(out, imageCandidate(ctx, label, file.Data))
+		if budget.bytes+int64(len(file.Data)) > maxZipExtracted {
+			out = append(out, rejected(label, model.ItemImage, ElemUploadTooLarge))
+			continue
+		}
+		budget.bytes += int64(len(file.Data))
+		out = append(out, imageCandidate(ctx, label, file.Data, budget))
 	}
 	return out, nil
 }
 
 // imageCandidate proves the bytes are a PNG, JPEG or WebP that decodes; SVG and everything else fail as a type.
-func imageCandidate(ctx context.Context, label string, data []byte) candidate {
+func imageCandidate(ctx context.Context, label string, data []byte, budget *uploadBudget) candidate {
+	if budget.full() {
+		return rejected(label, model.ItemImage, ElemPackageFull)
+	}
 	if len(data) > MaxAssetBytes {
 		return rejected(label, model.ItemImage, ElemImageTooLarge)
 	}
@@ -287,6 +313,12 @@ func imageCandidate(ctx context.Context, label string, data []byte) candidate {
 		}
 		return rejected(label, model.ItemImage, ElemImageCorrupt)
 	}
+	if contentType == "image/webp" {
+		if err := decodeWebP(ctx, data); err != nil {
+			return rejected(label, model.ItemImage, imageReason(err.Error()))
+		}
+	}
+	budget.accepted++
 	sum := sha256.Sum256(data)
 	return candidate{
 		ElementCheck: model.ElementCheck{Label: label, Kind: model.ItemImage, Key: hex.EncodeToString(sum[:]), Accepted: true},
@@ -317,7 +349,7 @@ func isArchive(data []byte) bool {
 
 // zipCandidates reads an archive entry by entry under hard bounds. An archive that breaks a global bound is
 // rejected as one element, with nothing of it kept; a bad entry rejects only itself.
-func zipCandidates(ctx context.Context, archiveLabel string, data []byte) []candidate {
+func zipCandidates(ctx context.Context, archiveLabel string, data []byte, budget *uploadBudget) []candidate {
 	reject := func(reason string) []candidate { return []candidate{rejected(archiveLabel, model.ItemImage, reason)} }
 	if len(data) > maxZipBytes {
 		return reject(ElemArchiveTooLarge)
@@ -341,10 +373,12 @@ func zipCandidates(ctx context.Context, archiveLabel string, data []byte) []cand
 		return reject(ElemArchiveTooMany)
 	case declared > maxZipExtracted:
 		return reject(ElemArchiveExtractBig)
+	case budget.declared+int64(declared) > maxZipExtracted || budget.bytes >= maxZipExtracted:
+		return reject(ElemUploadTooLarge)
 	}
+	budget.declared += int64(declared)
 
 	var out []candidate
-	var extracted int64
 	for _, entry := range reader.File {
 		if entry.FileInfo().IsDir() || junkEntry(entry.Name) {
 			continue
@@ -369,12 +403,12 @@ func zipCandidates(ctx context.Context, archiveLabel string, data []byte) []cand
 			out = append(out, rejected(label, model.ItemImage, ElemArchiveCorrupt))
 			continue
 		}
-		// The declared sizes are the archive's own claim, so the bytes actually inflated are counted too.
-		extracted += int64(len(body))
-		if extracted > maxZipExtracted {
-			return reject(ElemArchiveExtractBig)
+		// The declared sizes are the archive's own claim, so the bytes actually inflated are counted too, across the whole request.
+		budget.bytes += int64(len(body))
+		if budget.bytes > maxZipExtracted {
+			return reject(ElemUploadTooLarge)
 		}
-		out = append(out, imageCandidate(ctx, label, body))
+		out = append(out, imageCandidate(ctx, label, body, budget))
 	}
 	if len(out) == 0 {
 		return reject(ElemArchiveCorrupt)
@@ -454,4 +488,26 @@ func classify(cands []candidate, existing []model.ItemElement) []candidate {
 		}
 	}
 	return cands
+}
+
+// decodeWebP fully decodes the image under the shared decode slots; the stdlib check in detectImage only
+// reads the container header, so a corrupt payload would otherwise pass. The error text is an asset reason.
+func decodeWebP(ctx context.Context, data []byte) error {
+	cfg, err := webp.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return errors.New(ReasonAssetCorrupt)
+	}
+	if cfg.Width > maxAssetDimension || cfg.Height > maxAssetDimension {
+		return errors.New(ReasonAssetDimensions)
+	}
+	select {
+	case decodeSlots <- struct{}{}:
+		defer func() { <-decodeSlots }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if _, err := webp.Decode(bytes.NewReader(data)); err != nil {
+		return errors.New(ReasonAssetCorrupt)
+	}
+	return nil
 }
