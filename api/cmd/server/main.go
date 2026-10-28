@@ -116,10 +116,11 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	monitoring := service.NewMonitoringService(runtime, repository.NewMonitoringRepository(pool))
 	itemPackages := service.NewItemPackageService(pool, repository.NewItemPackageRepository(pool), assets)
 	kecermatan := service.NewKecermatanService(pool, repository.NewKecermatanRepository(pool), repository.NewItemPackageRepository(pool))
+	kecermatanRuntime := service.NewKecermatanRuntimeService(pool, repository.NewKecermatanRuntimeRepository(pool), kecermatan, repository.NewKecermatanRepository(pool))
 	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, products, wallets, assets, orders, runtime, results, monitoring, itemPackages, kecermatan, handler.AuthOptions{
 		SecureCookies: !cfg.IsDevelopment(),
 		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
-	})
+	}).WithKecermatanRuntime(kecermatanRuntime)
 
 	e := echo.New()
 	e.HideBanner = true

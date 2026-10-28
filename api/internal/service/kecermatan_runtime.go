@@ -505,6 +505,9 @@ func (s *KecermatanRuntimeService) StaffResults(ctx context.Context, scope HostS
 	if err != nil {
 		return nil, 0, err
 	}
+	if !isStaff(principal.Role) {
+		return nil, 0, ErrRuntimeForbidden
+	}
 	fields := map[string]string{}
 	if filter.Limit == 0 {
 		filter.Limit = defaultKecResultLen
@@ -528,6 +531,9 @@ func (s *KecermatanRuntimeService) StaffResult(ctx context.Context, scope HostSc
 	tenantID, err := questionTenant(scope, principal)
 	if err != nil {
 		return KecResultView{}, err
+	}
+	if !isStaff(principal.Role) {
+		return KecResultView{}, ErrRuntimeForbidden
 	}
 	res, err := s.repo.Result(ctx, s.db, tenantID, uuid.Nil, id)
 	if err != nil {
