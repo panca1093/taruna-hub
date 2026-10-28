@@ -405,3 +405,48 @@ UPDATE users u
   FROM (SELECT tenant_id, user_id, sum(amount) AS total
           FROM wallet_entries GROUP BY tenant_id, user_id) e
  WHERE u.tenant_id = e.tenant_id AND u.id = e.user_id AND u.balance <> e.total;
+
+-- P16: a published, in-window tryout holding all four question types, and an enrollment for the seeded student,
+-- so the runtime can be driven from login to result without buying anything first.
+INSERT INTO tryouts (tenant_id, program_id, title, description, scoring_mode, status, active_from, active_until,
+        randomize_questions, randomize_options, created_by)
+SELECT t.id, p.id, 'Tryout Uji Runtime', 'Dua subtes berisi keempat jenis soal untuk menguji pengerjaan.', 'weighted',
+       'published', now() - interval '1 day', now() + interval '60 days', true, true, u.id
+FROM tenants t
+JOIN programs p ON p.tenant_id = t.id AND p.code = 'SD'
+JOIN users u ON u.tenant_id = t.id AND u.email = 'admin@tarunaeduka.id'
+WHERE t.slug = 'taruna'
+  AND NOT EXISTS (SELECT 1 FROM tryouts x WHERE x.tenant_id = t.id AND x.title = 'Tryout Uji Runtime');
+
+INSERT INTO tryout_subtests (tryout_id, tenant_id, name, duration_seconds, position)
+SELECT x.id, x.tenant_id, v.name, v.duration_seconds, v.position
+FROM (VALUES ('Subtes Pilihan', 600, 1), ('Subtes Isian dan Benar Salah', 600, 2)) AS v (name, duration_seconds, position)
+JOIN tenants t ON t.slug = 'taruna'
+JOIN tryouts x ON x.tenant_id = t.id AND x.title = 'Tryout Uji Runtime'
+WHERE NOT EXISTS (SELECT 1 FROM tryout_subtests s WHERE s.tryout_id = x.id AND s.name = v.name);
+
+INSERT INTO tryout_questions (subtest_id, tryout_id, tenant_id, position, question_id, question_version_id)
+SELECT s.id, x.id, x.tenant_id, v.position, q.id, qv.id
+FROM (VALUES
+    ('Subtes Pilihan', 1, 'Hasil dari 248 + 179 adalah ...'),
+    ('Subtes Pilihan', 2, 'Berikut ini yang termasuk sumber energi terbarukan adalah ...'),
+    ('Subtes Isian dan Benar Salah', 1, 'Keliling persegi dengan panjang sisi 9 cm adalah ... cm'),
+    ('Subtes Isian dan Benar Salah', 2, 'Matahari terbit dari arah timur.')
+) AS v (subtest_name, position, content)
+JOIN tenants t ON t.slug = 'taruna'
+JOIN tryouts x ON x.tenant_id = t.id AND x.title = 'Tryout Uji Runtime'
+JOIN tryout_subtests s ON s.tryout_id = x.id AND s.name = v.subtest_name
+JOIN questions q ON q.tenant_id = t.id AND q.seq = (
+    SELECT min(q2.seq) FROM questions q2
+      JOIN question_versions v2 ON v2.question_id = q2.id AND v2.version = q2.current_version
+     WHERE q2.tenant_id = t.id AND v2.content = v.content)
+JOIN question_versions qv ON qv.question_id = q.id AND qv.version = q.current_version
+WHERE NOT EXISTS (SELECT 1 FROM tryout_questions tq WHERE tq.tryout_id = x.id AND tq.question_id = q.id);
+
+INSERT INTO enrollments (tenant_id, user_id, tryout_id)
+SELECT t.id, u.id, x.id
+FROM tenants t
+JOIN users u ON u.tenant_id = t.id AND u.email = 'naila@example.com'
+JOIN tryouts x ON x.tenant_id = t.id AND x.title = 'Tryout Uji Runtime'
+WHERE t.slug = 'taruna'
+ON CONFLICT (tenant_id, user_id, tryout_id) DO NOTHING;
