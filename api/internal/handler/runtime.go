@@ -269,22 +269,6 @@ func (h *Handler) TryoutSession(c echo.Context) error {
 	return c.JSON(http.StatusOK, sessionResponseOf(view))
 }
 
-func (h *Handler) TryoutSessionResult(c echo.Context) error {
-	scope, principal, ok := runtimeCaller(c)
-	if !ok {
-		return httpx.Unauthorized(sessionInvalid)
-	}
-	id, err := runtimeID(c, "id")
-	if err != nil {
-		return err
-	}
-	result, err := h.runtime.Result(c.Request().Context(), scope, principal, id)
-	if err != nil {
-		return runtimeError(err)
-	}
-	return c.JSON(http.StatusOK, resultResponseOf(result))
-}
-
 func (h *Handler) TryoutSessionSubtest(c echo.Context) error {
 	scope, principal, ok := runtimeCaller(c)
 	if !ok {
@@ -508,6 +492,8 @@ func runtimeReason(reason string) string {
 		return extensionTotal
 	case service.ReasonWeight:
 		return weightRule
+	case service.ReasonResultQuery:
+		return resultQueryRule
 	}
 	return invalidFormat
 }

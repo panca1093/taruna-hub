@@ -107,7 +107,7 @@ func (f runtimeHTTPFixture) runtimeServer(t *testing.T, rt *service.RuntimeServi
 		e.Use(httpx.CORS(devOrigins, true))
 		New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture),
 			newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets,
-			newOrderService(f.tenantFixture, assets), rt, AuthOptions{AllowedOrigin: httpx.OriginPolicy(devOrigins, true)}).
+			newOrderService(f.tenantFixture, assets), rt, newResultService(f.tenantFixture, rt), AuthOptions{AllowedOrigin: httpx.OriginPolicy(devOrigins, true)}).
 			Register(e, ResolveHostScope(f.tenants, slug))
 		return e
 	})

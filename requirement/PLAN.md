@@ -272,7 +272,7 @@ For every slice, use this verification loop:
 
 ### P07 — Question bank and imports
 
-**Status:** P07a and P07b done — four question types with immutable versions, filters, the bank page and the confirmed XLSX/CSV/DOCX import; D08's default commit policy still awaits Panca, and master content, copy, images and per-question weights are deferred · **Size:** L · **Depends:** P05, P06
+**Status:** P07a and P07b done — four question types with immutable versions, filters, the bank page and the confirmed XLSX/CSV/DOCX import; D08 is confirmed (preview, confirmed accepted set, one atomic commit), and master content, copy, images and per-question weights are deferred · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff create four question types or import real documents and maintain tenant/master content safely.
 
@@ -288,12 +288,11 @@ For every slice, use this verification loop:
       The four types are stored and validated; grading is proven only when P16 scores an attempt, and per-question weights are deferred.
 - [ ] Tenant copy survives master edit; current assignments retain old question/scoring/explanation revision.
       Immutable versions are done and tested (P08 assigns frozen versions); the master/copy half is deferred.
-- [ ] Upload malformed and valid rows, see real errors, confirm exact accepted set per D08; retry creates no duplicates.
-      Built and tested on the default commit policy (preview, confirmed subset, idempotent retry); ticks once D08 is confirmed.
+- [x] Upload malformed and valid rows, see real errors, confirm exact accepted set per D08; retry creates no duplicates.
 - [ ] LaTeX/images preview correctly; filters/IDs work; HTML and spreadsheet-formula input is handled safely.
       Filters, IDs, stored-verbatim HTML and formula neutralising are tested; images are deferred.
 
-**Decision / verification gate:** D08 import commit policy; D04 difficulty weights. No hardcoded import preview counts as done.
+**Decision / verification gate:** D08 resolved 2026-10-28 (confirmed accepted set, atomic commit); D04 resolved. No hardcoded import preview counts as done.
 
 <a id="p08"></a>
 
@@ -513,7 +512,7 @@ For every slice, use this verification loop:
 
 ### P17 — Tryout history, ranking and controlled review
 
-**Status:** planned · **Size:** L · **Depends:** P16
+**Status:** in progress, lean (API, student result/review and admin results wired and tested; Redis cache, browser demo and student history page changes deferred) · **Size:** L · **Depends:** P16
 
 **Outcome:** Students review all attempts and tenant-local average-based rankings without premature explanation access.
 
@@ -525,12 +524,17 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Scores 60/80/100 rank with average 80; no foreign-tenant participant enters ranking.
+- [x] Scores 60/80/100 rank with average 80; no foreign-tenant participant enters ranking.
+  - Average and rank are tested; every query is tenant-scoped, and per D17 no cross-tenant test was written.
 - [ ] Missing/stale Redis or lost cache event returns/rebuilds correct PostgreSQL average; tied scores follow D04.
-- [ ] Before explanation release inspect raw API and asset links: no hidden key/explanation leaks; after release own completed attempt review succeeds.
-- [ ] IRT threshold fixtures count approved distinct students/question revisions correctly; weighted scoring remains unchanged.
+  - Open: no Redis cache was built. Rank and average are read from PostgreSQL on every call, so nothing can be stale, but no test exercises a Redis fallback. Ties (1, 2, 2, 4) are tested.
+- [x] Before explanation release inspect raw API and asset links: no hidden key/explanation leaks; after release own completed attempt review succeeds.
+- [x] IRT threshold fixtures count approved distinct students/question revisions correctly; weighted scoring remains unchanged.
 
-**Decision / verification gate:** D04 counts/ties/global weights; current rank is distinguished from any historical result rank.
+- [ ] Browser demo of result, review and admin results pages.
+  - Open: no dev server or browser run in this slice; web checked by tsc, lint and build only.
+
+**Decision / verification gate:** D04 resolved 2026-10-28 (ties share a rank and skip: 1, 2, 2, 4; IRT counts distinct students per question version); current rank is distinguished from any historical result rank.
 
 <a id="p18"></a>
 
@@ -576,7 +580,7 @@ For every slice, use this verification loop:
 - [ ] Tenant A cannot list B active/finished sessions or timeline by guessed ID.
 - [ ] Polling 50 active sessions meets ≤500ms p95 in the documented fixture; kecermatan has no violations or fullscreen enforcement.
 
-**Decision / verification gate:** Fullscreen availability is browser-dependent; test supported desktop/mobile paths and explicitly describe best-effort behavior. Includes the D10 per-student time extension control on the monitoring page.
+**Decision / verification gate:** Fullscreen availability is browser-dependent; test supported desktop/mobile paths and explicitly describe best-effort behavior. Resolved 2026-10-28 (owner): a device without the Fullscreen API (e.g. iPhone Safari) may still take the tryout and records no violation. Includes the D10 per-student time extension control on the monitoring page.
 
 <a id="p20"></a>
 

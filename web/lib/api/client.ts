@@ -43,6 +43,12 @@ export type RuntimeSubtestState = components["schemas"]["RuntimeSubtestState"];
 export type RuntimeSubtest = components["schemas"]["RuntimeSubtest"];
 export type RuntimeQuestion = components["schemas"]["RuntimeQuestion"];
 export type TryoutResult = components["schemas"]["TryoutResult"];
+export type TryoutResultDetail = components["schemas"]["TryoutResultDetail"];
+export type TryoutReview = components["schemas"]["TryoutReview"];
+export type ReviewQuestion = components["schemas"]["ReviewQuestion"];
+export type Leaderboard = components["schemas"]["Leaderboard"];
+export type StaffResult = components["schemas"]["StaffResult"];
+export type StaffResultList = components["schemas"]["StaffResultList"];
 export type AttemptSummary = components["schemas"]["AttemptSummary"];
 export type AttemptList = components["schemas"]["AttemptList"];
 export type AnswerAck = components["schemas"]["AnswerAck"];
@@ -105,6 +111,12 @@ export type BankTransfer = components["schemas"]["BankTransfer"];
 export type CheckoutBody = components["schemas"]["CheckoutRequest"];
 export type Asset = components["schemas"]["Asset"];
 export type AssetLink = components["schemas"]["AssetURL"];
+
+/** Filters of `GET /api/v1/admin/results`; an absent field is not sent at all. */
+export type StaffResultFilters = Omit<
+  NonNullable<paths["/api/v1/admin/results"]["get"]["parameters"]["query"]>,
+  "limit" | "offset"
+> & { limit?: number; offset?: number };
 
 /** Page of `GET /api/v1/orders` and the staff list; an absent field is not sent at all. */
 export type OrderFilters = Omit<
@@ -453,7 +465,9 @@ export const api = {
     start: (tryoutId: string) => mutate<TryoutSession>("POST", `/api/v1/my/tryouts/${tryoutId}/sessions` as keyof paths),
     attempts: () => authed<AttemptList>("/api/v1/my/tryout-sessions"),
     session: (id: string) => authed<TryoutSession>(sessionPath(id)),
-    result: (id: string) => authed<TryoutResult>(`${sessionPath(id)}/result` as keyof paths),
+    result: (id: string) => authed<TryoutResultDetail>(`${sessionPath(id)}/result` as keyof paths),
+    /** 409 `explanations_not_released` before the tryout's release time. */
+    review: (id: string) => authed<TryoutReview>(`${sessionPath(id)}/review` as keyof paths),
     subtest: (id: string, subtestId: string) =>
       authed<RuntimeSubtest>(`${sessionPath(id)}/subtests/${subtestId}` as keyof paths),
     startSubtest: (id: string, subtestId: string) =>
@@ -462,6 +476,16 @@ export const api = {
       mutate<TryoutSession>("POST", `${sessionPath(id)}/subtests/${subtestId}/submit` as keyof paths),
     saveAnswer: (id: string, questionId: string, body: AnswerBody) =>
       mutate<AnswerAck>("PUT", `${sessionPath(id)}/answers/${questionId}` as keyof paths, body),
+  },
+
+  /** Staff results: completed attempts with each student's current rank, and the per-tryout leaderboard. */
+  results: {
+    list: (filters: StaffResultFilters = {}) =>
+      authed<StaffResultList>(`/api/v1/admin/results${queryOf(filters)}` as keyof paths),
+    leaderboard: (tryoutId: string, limit?: number) =>
+      authed<Leaderboard>(
+        `/api/v1/admin/tryouts/${tryoutId}/leaderboard${queryOf({ limit })}` as keyof paths,
+      ),
   },
 
   /** D04: the scoring weights new attempts freeze. Admin only. */

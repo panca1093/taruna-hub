@@ -43,6 +43,8 @@ tags:
     description: Wallet and manual-transfer checkout, order review by staff, and the access an order opens
   - name: runtime
     description: The student's tryout attempt - start, subtests, answers, deadlines and the immediate basic result
+  - name: results
+    description: Staff view of completed attempts, ranking and IRT calibration warnings
   - name: settings
     description: Tenant settings an Admin changes, today the scoring weights
 
@@ -2330,18 +2332,22 @@ paths:
       summary: The immediate basic result of a completed session
       description: |
         `score` is (earned points / maximum points) x 100 rounded to 2 decimals (D04). A session still in progress
-        answers `409` `result_not_ready`. Ranking and explanations are P17.
+        answers `409` `result_not_ready`. `ranking` is the student's current place among the tenant's participants of
+        this tryout, computed on every call (D04): the mean of the student's completed-attempt scores, 2 decimals,
+        ranked best first; equal averages share a rank and the next rank skips (1, 2, 2, 4). Every attempt of the
+        same student therefore shows the same rank. `explanations_released` and `explanation_release_at` tell the
+        page whether `GET .../review` will answer. The IRT warning is never part of a student response.
       security:
         - bearerAuth: []
       parameters:
         - $ref: "#/components/parameters/SessionId"
       responses:
         "200":
-          description: The result
+          description: The result with the current rank
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TryoutResult"
+                $ref: "#/components/schemas/TryoutResultDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2350,6 +2356,40 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: "`result_not_ready`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/my/tryout-sessions/{id}/review:
+    get:
+      tags: [runtime]
+      summary: Questions, own answers, keys and explanations of one completed attempt
+      description: |
+        Only the owner's completed attempt, and only once the tryout's `explanation_release_at` is null or in the
+        past. Before that the answer is `409` `explanations_not_released` and carries no key, no explanation and no
+        question content. A session still in progress answers `409` `result_not_ready`. Another student's session,
+        a staff caller and a malformed id never reveal existence. `correct` is the key as option ids (accepted
+        texts for `isian`; empty for an option-weighted question, whose options carry `points` instead).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: The review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TryoutReview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`result_not_ready` or `explanations_not_released`"
           content:
             application/json:
               schema:
@@ -2548,6 +2588,98 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/results:
+    get:
+      tags: [results]
+      summary: Completed attempts of the tenant with each student's current rank
+      description: |
+        Admin and Operator (D02: a role guard). Best current rank first, then newest, at most 100 per page.
+        `tryout_id` narrows to one tryout. `q` is a case-insensitive substring of the student's name; `%` and `_`
+        are literal. `rank` and `participant_count` are the student's current standing on that tryout (the same for
+        every attempt of that student). `irt_warning` is true only for an IRT-mode attempt that holds a question
+        version answered (non-blank, in a completed session) by fewer than 30 distinct students; retakes count
+        once and a new question version starts at 0.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tryout_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffResultList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/tryouts/{id}/leaderboard:
+    get:
+      tags: [results]
+      summary: The tenant's ranking of one tryout
+      description: |
+        Admin and Operator. Best first by the average of each student's completed attempts (2 decimals); ties share
+        a rank and the next rank skips (1, 2, 2, 4). Computed from PostgreSQL on every call. At most 100 per page.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of standings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Leaderboard"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
@@ -3944,6 +4076,7 @@ components:
                 - stale_answer
                 - subtest_order
                 - result_not_ready
+                - explanations_not_released
             message:
               type: string
               description: Human-readable, Indonesian, safe to show to end users.
@@ -4250,6 +4383,259 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TryoutResultSubtest"
+
+    TryoutRanking:
+      type: object
+      additionalProperties: false
+      required: [rank, participant_count, average_score, attempts_counted]
+      description: The student's current place on the tryout; never stored, so never stale.
+      properties:
+        rank:
+          type: integer
+          description: 1-based competition rank; equal averages share it and the next rank skips.
+        participant_count:
+          type: integer
+        average_score:
+          type: number
+          description: Mean of the student's completed-attempt scores, 2 decimals.
+        attempts_counted:
+          type: integer
+
+    TryoutResultDetail:
+      type: object
+      additionalProperties: false
+      description: A `TryoutResult` plus the current rank and the explanation release.
+      required: [session_id, tryout_id, attempt_number, score, scoring_mode, scoring_version, completed_at, subtests,
+                 ranking, explanations_released, explanation_release_at]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        tryout_id:
+          type: string
+          format: uuid
+        attempt_number:
+          type: integer
+        score:
+          type: number
+        scoring_mode:
+          type: string
+          enum: [weighted, irt]
+        scoring_version:
+          type: integer
+        completed_at:
+          type: string
+          format: date-time
+        subtests:
+          type: array
+          items:
+            $ref: "#/components/schemas/TryoutResultSubtest"
+        ranking:
+          $ref: "#/components/schemas/TryoutRanking"
+        explanations_released:
+          type: boolean
+        explanation_release_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ReviewOption:
+      type: object
+      additionalProperties: false
+      required: [id, label, points]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        points:
+          type: number
+          nullable: true
+          description: Only on an option-weighted question.
+
+    ReviewQuestion:
+      type: object
+      additionalProperties: false
+      required: [id, position, type, content, options, option_weighted, answer, correct, is_correct, explanation]
+      properties:
+        id:
+          type: string
+          format: uuid
+        position:
+          type: integer
+        type:
+          type: string
+          enum: [pg, pg_multi, isian, benar_salah]
+        content:
+          type: string
+        options:
+          type: array
+          description: In the order this student saw them.
+          items:
+            $ref: "#/components/schemas/ReviewOption"
+        option_weighted:
+          type: boolean
+        answer:
+          type: array
+          description: The student's saved answer; empty when the question was left blank.
+          items:
+            type: string
+        correct:
+          type: array
+          description: The key. Empty for an option-weighted question.
+          items:
+            type: string
+        is_correct:
+          type: boolean
+        explanation:
+          type: string
+
+    ReviewSubtest:
+      type: object
+      additionalProperties: false
+      required: [subtest_id, name, position, score, correct_count, question_count, questions]
+      properties:
+        subtest_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        position:
+          type: integer
+        score:
+          type: number
+        correct_count:
+          type: integer
+        question_count:
+          type: integer
+        questions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewQuestion"
+
+    TryoutReview:
+      type: object
+      additionalProperties: false
+      required: [session_id, tryout_id, subtests]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        tryout_id:
+          type: string
+          format: uuid
+        subtests:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewSubtest"
+
+    LeaderboardEntry:
+      type: object
+      additionalProperties: false
+      required: [rank, user_id, student_name, average_score, attempts_counted]
+      properties:
+        rank:
+          type: integer
+        user_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        average_score:
+          type: number
+        attempts_counted:
+          type: integer
+
+    Leaderboard:
+      type: object
+      additionalProperties: false
+      required: [entries, total]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardEntry"
+        total:
+          type: integer
+          description: Participants of the tryout.
+
+    StaffResultSubtest:
+      type: object
+      additionalProperties: false
+      required: [subtest_id, name, position, score, correct_count, question_count]
+      properties:
+        subtest_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        position:
+          type: integer
+        score:
+          type: number
+        correct_count:
+          type: integer
+        question_count:
+          type: integer
+
+    StaffResult:
+      type: object
+      additionalProperties: false
+      required: [session_id, tryout_id, tryout_title, program_code, scoring_mode, user_id, student_name,
+                 attempt_number, score, average_score, rank, participant_count, irt_warning, completed_at, subtests]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        tryout_id:
+          type: string
+          format: uuid
+        tryout_title:
+          type: string
+        program_code:
+          type: string
+        scoring_mode:
+          type: string
+          enum: [weighted, irt]
+        user_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        attempt_number:
+          type: integer
+        score:
+          type: number
+          description: This attempt's score out of 100.
+        average_score:
+          type: number
+          description: The student's average over completed attempts of this tryout, which ranks them.
+        rank:
+          type: integer
+          description: The student's current rank, not a rank frozen at completion.
+        participant_count:
+          type: integer
+        irt_warning:
+          type: boolean
+        completed_at:
+          type: string
+          format: date-time
+        subtests:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffResultSubtest"
+
+    StaffResultList:
+      type: object
+      additionalProperties: false
+      required: [results, total]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffResult"
+        total:
+          type: integer
 
     TryoutSession:
       type: object
