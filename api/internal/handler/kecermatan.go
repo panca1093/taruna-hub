@@ -355,6 +355,8 @@ func kecermatanHTTPError(err error) error {
 		return httpx.NotFound(kecNotFound)
 	case errors.Is(err, service.ErrTenantNotFound):
 		return httpx.NotFound(tenantNotFound)
+	case errors.Is(err, service.ErrKecermatanPool):
+		return httpx.Validation(incomplete, map[string]string{"pool": kecPoolRule})
 	case errors.Is(err, service.ErrKecermatanLocked):
 		return httpx.Conflict(kecLocked)
 	case errors.Is(err, service.ErrKecermatanStale):
