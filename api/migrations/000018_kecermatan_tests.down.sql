@@ -1,0 +1,2 @@
+ALTER TABLE kecermatan_test_packages DROP CONSTRAINT kecermatan_test_packages_test_fkey;
+DROP TABLE kecermatan_tests;
