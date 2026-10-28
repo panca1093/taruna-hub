@@ -1,126 +1,215 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
-import { notFound, useRouter } from "next/navigation";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertDialog, Button } from "@heroui/react";
-import {
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  Maximize,
-  Send,
-} from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, CloudOff, Maximize, Send } from "lucide-react";
 import { CountdownRing } from "@/components/countdown-ring";
 import { LatexText } from "@/components/latex";
 import { QuestionTypeBadge } from "@/components/status-badge";
 import { LanguageToggle } from "@/components/language-toggle";
-import { useUser } from "@/lib/session-context";
+import { api, ApiError, type RuntimeSubtest } from "@/lib/api/client";
 import { useCommonT } from "@/lib/i18n/dict/common";
 import { useTryoutSubtestT } from "@/lib/i18n/dict/tryout-subtest";
-import {
-  completeSubtest,
-  logViolation,
-  saveAnswer,
-  startSubtest,
-  type TryoutSessionState,
-} from "@/lib/tryout-session";
-import { getQuestionsForSubtest, getSubtest, getTryout } from "@/lib/mock-data";
+import { useAnswerSync, useServerClock, type InitialAnswer } from "@/lib/tryout-session";
 import { cn } from "@/lib/cn";
-import { useHydrated } from "@/lib/use-hydrated";
 
-export default function SubtestPage({
-  params,
-}: {
-  params: Promise<{ id: string; subtestId: string }>;
-}) {
+const RESYNC_MS = 120_000;
+const FLUSH_WAIT_MS = 4_000;
+
+interface Loaded {
+  title: string;
+  sessionId: string;
+  data: RuntimeSubtest;
+  initial: InitialAnswer[];
+}
+
+export default function SubtestPage({ params }: { params: Promise<{ id: string; subtestId: string }> }) {
   const { id, subtestId } = use(params);
   const router = useRouter();
-  const user = useUser();
   const t = useTryoutSubtestT();
   const commonT = useCommonT();
 
-  const tryout = getTryout(id);
-  const subtest = getSubtest(subtestId);
-  const questions = subtest ? getQuestionsForSubtest(subtest.id) : [];
-
-  const [session, setSession] = useState<TryoutSessionState | null>(null);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [index, setIndex] = useState(0);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [fullscreenWarning, setFullscreenWarning] = useState(false);
   const [screenshotWarning, setScreenshotWarning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
+  const [deadline, setDeadline] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const submittedRef = useRef(false);
+  const expiringRef = useRef(false);
+  const clock = useServerClock();
 
-  const found = !!tryout && !!subtest;
+  const leave = useCallback(
+    (completed: boolean) => {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+      router.replace(completed ? `/student/tryout/${id}/result` : `/student/tryout/${id}`);
+    },
+    [id, router],
+  );
 
-  const doSubmit = useCallback(() => {
-    if (!found || submittedRef.current) return;
+  // The server closed this subtest (deadline, or submitted elsewhere): the overview shows where things stand.
+  const handleClosed = useCallback(() => {
+    if (submittedRef.current) return;
     submittedRef.current = true;
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-    const updated = completeSubtest(id, user.id, subtestId);
-    if (updated.status === "completed") {
-      router.replace(`/student/tryout/${id}/result`);
-    } else {
-      router.replace(`/student/tryout/${id}`);
+    leave(false);
+  }, [leave]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.runtime
+      .overview(id)
+      .then(async (overview) => {
+        if (!overview.current) throw new ApiError(409, { code: "subtest_not_running", message: "" });
+        const sessionId = overview.current.id;
+        const data = await api.runtime.subtest(sessionId, subtestId);
+        if (cancelled) return;
+        clock.sync(data.server_time);
+        setDeadline(data.subtest.deadline_at ? new Date(data.subtest.deadline_at).getTime() : null);
+        setLoaded({
+          title: overview.title,
+          sessionId,
+          data,
+          initial: data.questions.map((q) => ({ id: q.id, answer: q.answer, seq: q.seq })),
+        });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+          submittedRef.current = true;
+          leave(false);
+          return;
+        }
+        setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, subtestId, clock, leave, reloadKey]);
+
+  const sessionId = loaded?.sessionId ?? null;
+  const questions = useMemo(() => loaded?.data.questions ?? [], [loaded]);
+  const loadAnswer = useCallback(
+    async (questionId: string) => {
+      if (!sessionId) return null;
+      const data = await api.runtime.subtest(sessionId, subtestId);
+      const q = data.questions.find((item) => item.id === questionId);
+      return q ? { id: q.id, answer: q.answer, seq: q.seq } : null;
+    },
+    [sessionId, subtestId],
+  );
+  const { answers, states, setAnswer, pendingCount, waitIdle } = useAnswerSync(
+    sessionId,
+    loaded?.initial ?? null,
+    handleClosed,
+    loadAnswer,
+  );
+
+  const doSubmit = useCallback(async () => {
+    if (!sessionId || submittedRef.current) return;
+    submittedRef.current = true;
+    try {
+      const session = await api.runtime.submitSubtest(sessionId, subtestId);
+      leave(session.status === "completed");
+    } catch (err) {
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
+        leave(false);
+        return;
+      }
+      submittedRef.current = false;
+      setFailed(true);
     }
-  }, [found, id, subtestId, user.id, router]);
+  }, [sessionId, subtestId, leave]);
 
-  // Init session + guard against re-entering a completed subtest.
-  const hydrated = useHydrated();
-  const seedKey = `${id}:${subtestId}:${user.id}`;
-  const [seededKey, setSeededKey] = useState<string | null>(null);
-  const [alreadyCompleted, setAlreadyCompleted] = useState(false);
+  // At zero the server decides: it settles on its own at the cutoff, so flush what is pending, then read the result.
+  const settleExpired = useCallback(async () => {
+    if (!sessionId || expiringRef.current || submittedRef.current) return;
+    expiringRef.current = true;
+    try {
+      await waitIdle(FLUSH_WAIT_MS);
+      const session = await api.runtime.session(sessionId);
+      clock.sync(session.server_time);
+      const part = session.subtests.find((p) => p.subtest_id === subtestId);
+      if (!part || part.status !== "running") {
+        submittedRef.current = true;
+        leave(session.status === "completed");
+        return;
+      }
+      if (part.deadline_at) setDeadline(new Date(part.deadline_at).getTime());
+    } catch (err) {
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 401 && err.status !== 429) {
+        submittedRef.current = true;
+        leave(false);
+      }
+    } finally {
+      expiringRef.current = false;
+    }
+  }, [sessionId, subtestId, clock, leave, waitIdle]);
 
-  if (hydrated && found && seededKey !== seedKey) {
-    const s = startSubtest(id, user.id, subtestId);
-    const completed = s.subtestStatus[subtestId] === "completed";
-    setSeededKey(seedKey);
-    setAlreadyCompleted(completed);
-    setSession(completed ? null : s);
-  }
-
+  // Countdown: server time at the last sync plus monotonic elapsed time. It runs on server deadlines only.
   useEffect(() => {
-    if (alreadyCompleted) router.replace(`/student/tryout/${id}`);
-  }, [alreadyCompleted, router, id]);
-
-  // Countdown timer, resilient to reloads via persisted subtestStartedAt.
-  useEffect(() => {
-    if (!tryout || !subtest || !session) return;
-    const startedAt = session.subtestStartedAt[subtest.id] ?? Date.now();
+    if (deadline === null) return;
     const tick = () => {
-      const elapsed = (Date.now() - startedAt) / 1000;
-      const left = Math.max(0, Math.round(subtest.durationSeconds - elapsed));
+      const now = clock.now();
+      if (now === null) return;
+      const left = Math.max(0, Math.ceil((deadline - now) / 1000));
       setRemaining(left);
-      if (left <= 0) doSubmit();
+      if (left <= 0) void settleExpired();
     };
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [tryout, subtest, session, doSubmit]);
+  }, [deadline, clock, settleExpired]);
 
-  // Fullscreen: request on entry, track exits as violations.
+  // Re-sync with the server clock and deadline on focus, and now and then as a keep-alive for long subtests.
   useEffect(() => {
-    if (!tryout || !subtest) return;
-    containerRef.current?.requestFullscreen?.().catch(() => {});
+    if (!sessionId) return;
+    const resync = () => {
+      api.runtime
+        .session(sessionId)
+        .then((session) => {
+          clock.sync(session.server_time);
+          const part = session.subtests.find((p) => p.subtest_id === subtestId);
+          if (!part || part.status !== "running") {
+            handleClosed();
+            return;
+          }
+          if (part.deadline_at) setDeadline(new Date(part.deadline_at).getTime());
+        })
+        .catch(() => {});
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") resync();
+    };
+    window.addEventListener("focus", resync);
+    document.addEventListener("visibilitychange", onVisible);
+    const interval = setInterval(resync, RESYNC_MS);
+    return () => {
+      window.removeEventListener("focus", resync);
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(interval);
+    };
+  }, [sessionId, subtestId, clock, handleClosed]);
 
+  // Fullscreen: request on entry and warn on exit. Persisting violations is P19.
+  useEffect(() => {
+    if (!loaded) return;
+    containerRef.current?.requestFullscreen?.().catch(() => {});
     const handleChange = () => {
-      if (!document.fullscreenElement && !submittedRef.current) {
-        setFullscreenWarning(true);
-        setSession(logViolation(tryout.id, user.id));
-      } else {
-        setFullscreenWarning(false);
-      }
+      setFullscreenWarning(!document.fullscreenElement && !submittedRef.current);
     };
     document.addEventListener("fullscreenchange", handleChange);
     return () => document.removeEventListener("fullscreenchange", handleChange);
-  }, [tryout, subtest, user.id]);
+  }, [loaded]);
 
-  // Screenshot shortcuts: best-effort deterrent only — OS-level capture
-  // (e.g. the screenshot utility itself) can't be reliably blocked from the browser.
+  // Screenshot shortcuts: best-effort deterrent only — OS-level capture can't be reliably blocked from the browser.
   useEffect(() => {
-    if (!tryout || !subtest) return;
+    if (!loaded) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       const isPrintScreen = e.key === "PrintScreen";
       const isMacCapture = e.metaKey && e.shiftKey && ["3", "4", "5"].includes(e.key);
@@ -128,32 +217,51 @@ export default function SubtestPage({
       if (!isPrintScreen && !isMacCapture && !isWinSnip) return;
       e.preventDefault();
       setScreenshotWarning(true);
-      setSession(logViolation(tryout.id, user.id, "screenshot_attempt"));
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [tryout, subtest, user.id]);
+  }, [loaded]);
 
-  if (!tryout || !subtest) notFound();
+  if (failed) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background p-6 text-center">
+        <CloudOff className="size-8 text-muted" />
+        <p className="text-sm font-medium text-foreground">{t.loadErrorTitle}</p>
+        <p className="text-xs text-muted">{t.loadErrorDescription}</p>
+        <Button
+          variant="primary"
+          size="sm"
+          onPress={() => {
+            setFailed(false);
+            setReloadKey((key) => key + 1);
+          }}
+        >
+          {t.retry}
+        </Button>
+      </div>
+    );
+  }
+  if (!loaded || questions.length === 0) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
+        <p className="text-sm text-muted">{t.loading}</p>
+      </div>
+    );
+  }
 
-  const question = questions[index];
-  const answered = session ? Object.keys(session.answers).filter((qid) => questions.some((q) => q.id === qid)) : [];
-
-  const setAnswer = (value: string[]) => {
-    if (!tryout) return;
-    setSession(saveAnswer(tryout.id, user.id, question.id, value));
-  };
+  const subtest = loaded.data.subtest;
+  const question = questions[Math.min(index, questions.length - 1)];
+  const answered = questions.filter((q) => (answers[q.id]?.length ?? 0) > 0);
+  const given = answers[question.id] ?? [];
 
   const toggleMulti = (optionId: string) => {
-    const current = session?.answers[question.id] ?? [];
-    const next = current.includes(optionId) ? current.filter((o) => o !== optionId) : [...current, optionId];
-    setAnswer(next);
+    setAnswer(question.id, given.includes(optionId) ? given.filter((o) => o !== optionId) : [...given, optionId]);
   };
 
   const minutes = remaining !== null ? Math.floor(remaining / 60) : 0;
   const seconds = remaining !== null ? remaining % 60 : 0;
   const urgent = remaining !== null && remaining <= 60;
-  const percentLeft = remaining !== null ? (remaining / subtest.durationSeconds) * 100 : 100;
+  const percentLeft = remaining !== null ? Math.min(100, (remaining / subtest.duration_seconds) * 100) : 100;
 
   return (
     <div
@@ -166,9 +274,10 @@ export default function SubtestPage({
       <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border px-5">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">{subtest.name}</p>
-          <p className="truncate text-xs text-muted">{tryout.title}</p>
+          <p className="truncate text-xs text-muted">{loaded.title}</p>
         </div>
         <div className="flex items-center gap-3">
+          {pendingCount > 0 && <span className="text-xs text-warning">{t.pendingCount(pendingCount)}</span>}
           <CountdownRing value={percentLeft} size={40} strokeWidth={4} urgent={urgent} animate={false}>
             <span className={cn("font-mono text-[11px] font-semibold", urgent ? "text-danger" : "text-foreground")}>
               {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
@@ -185,10 +294,13 @@ export default function SubtestPage({
         <main className="flex flex-1 flex-col overflow-y-auto">
           <div className="mx-auto w-full max-w-2xl flex-1 px-5 py-8">
             <div className="mb-4 flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">
-                {t.questionProgress(index + 1, questions.length)}
+              <span className="text-xs font-medium text-muted">{t.questionProgress(index + 1, questions.length)}</span>
+              <span className="flex items-center gap-2">
+                <span className={cn("text-xs", states[question.id] === "pending" ? "text-warning" : "text-muted")}>
+                  {states[question.id] === "pending" ? t.answerPending : t.answerSaved}
+                </span>
+                <QuestionTypeBadge type={question.type} />
               </span>
-              <QuestionTypeBadge type={question.type} />
             </div>
 
             <div className="text-[15px] leading-relaxed text-foreground">
@@ -197,12 +309,12 @@ export default function SubtestPage({
 
             <div className="mt-6 space-y-2.5">
               {(question.type === "pg" || question.type === "benar_salah") &&
-                question.options?.map((opt) => {
-                  const selected = session?.answers[question.id]?.[0] === opt.id;
+                question.options.map((opt) => {
+                  const selected = given[0] === opt.id;
                   return (
                     <button
                       key={opt.id}
-                      onClick={() => setAnswer([opt.id])}
+                      onClick={() => setAnswer(question.id, [opt.id])}
                       className={cn(
                         "flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors",
                         selected
@@ -224,8 +336,8 @@ export default function SubtestPage({
                 })}
 
               {question.type === "pg_multi" &&
-                question.options?.map((opt) => {
-                  const selected = session?.answers[question.id]?.includes(opt.id) ?? false;
+                question.options.map((opt) => {
+                  const selected = given.includes(opt.id);
                   return (
                     <button
                       key={opt.id}
@@ -253,8 +365,9 @@ export default function SubtestPage({
               {question.type === "isian" && (
                 <input
                   type="text"
-                  value={session?.answers[question.id]?.[0] ?? ""}
-                  onChange={(e) => setAnswer([e.target.value])}
+                  value={given[0] ?? ""}
+                  maxLength={500}
+                  onChange={(e) => setAnswer(question.id, [e.target.value])}
                   placeholder={t.answerPlaceholder}
                   className="w-full rounded-lg border border-border bg-field px-4 py-3 text-sm text-field-foreground outline-none focus:border-accent"
                 />
@@ -266,25 +379,19 @@ export default function SubtestPage({
             <Button variant="ghost" size="sm" isDisabled={index === 0} onPress={() => setIndex((i) => i - 1)}>
               <ChevronLeft className="size-3.5" /> {t.previousButton}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              isDisabled={index === questions.length - 1}
-              onPress={() => setIndex((i) => i + 1)}
-            >
+            <Button variant="ghost" size="sm" isDisabled={index === questions.length - 1} onPress={() => setIndex((i) => i + 1)}>
               {t.nextButton} <ChevronRight className="size-3.5" />
             </Button>
           </div>
         </main>
 
         <aside className="hidden w-56 shrink-0 overflow-y-auto border-l border-border p-4 lg:block">
-          <p className="mb-3 text-xs font-medium text-muted">
-            {t.answeredCount(answered.length, questions.length)}
-          </p>
+          <p className="mb-3 text-xs font-medium text-muted">{t.answeredCount(answered.length, questions.length)}</p>
           <div className="grid grid-cols-5 gap-2">
             {questions.map((q, i) => {
-              const isAnswered = (session?.answers[q.id]?.length ?? 0) > 0;
+              const isAnswered = (answers[q.id]?.length ?? 0) > 0;
               const isCurrent = i === index;
+              const isPending = states[q.id] === "pending";
               return (
                 <button
                   key={q.id}
@@ -296,6 +403,7 @@ export default function SubtestPage({
                       : isAnswered
                         ? "bg-accent-soft text-accent-soft-foreground"
                         : "bg-surface-secondary text-muted",
+                    isPending && "ring-2 ring-warning",
                   )}
                 >
                   {i + 1}
@@ -313,9 +421,7 @@ export default function SubtestPage({
               <AlertTriangle className="size-5" />
             </span>
             <p className="mt-3 text-sm font-semibold text-foreground">{t.screenshotWarningTitle}</p>
-            <p className="mt-1.5 text-xs text-muted">
-              {t.screenshotWarningBody}
-            </p>
+            <p className="mt-1.5 text-xs text-muted">{t.screenshotWarningBody}</p>
             <Button variant="primary" size="sm" className="mt-4 w-full" onPress={() => setScreenshotWarning(false)}>
               {t.understood}
             </Button>
@@ -330,9 +436,7 @@ export default function SubtestPage({
               <AlertTriangle className="size-5" />
             </span>
             <p className="mt-3 text-sm font-semibold text-foreground">{t.fullscreenWarningTitle}</p>
-            <p className="mt-1.5 text-xs text-muted">
-              {t.fullscreenWarningBody}
-            </p>
+            <p className="mt-1.5 text-xs text-muted">{t.fullscreenWarningBody}</p>
             <Button
               variant="primary"
               size="sm"
@@ -357,12 +461,13 @@ export default function SubtestPage({
               </AlertDialog.Header>
               <AlertDialog.Body>
                 {t.confirmSubmitBody(answered.length, questions.length)}
+                {pendingCount > 0 && <span className="mt-2 block text-warning">{t.confirmPendingWarning(pendingCount)}</span>}
               </AlertDialog.Body>
               <AlertDialog.Footer>
                 <Button variant="ghost" onPress={() => setConfirmOpen(false)}>
                   {commonT.cancel}
                 </Button>
-                <Button variant="primary" onPress={doSubmit}>
+                <Button variant="primary" onPress={() => void doSubmit()}>
                   {t.confirmSubmitYes}
                 </Button>
               </AlertDialog.Footer>

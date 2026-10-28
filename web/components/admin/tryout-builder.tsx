@@ -30,6 +30,7 @@ interface TryoutDraft {
   explanationReleaseAt: string;
   randomizeQuestions: boolean;
   randomizeOptions: boolean;
+  graceSeconds: string;
   subtests: SubtestDraft[];
 }
 
@@ -43,6 +44,7 @@ const blankDraft: TryoutDraft = {
   explanationReleaseAt: "",
   randomizeQuestions: false,
   randomizeOptions: false,
+  graceSeconds: "0",
   subtests: [],
 };
 
@@ -58,6 +60,12 @@ function inputDate(instant: string | null): string {
   return shifted.toISOString().slice(0, 10);
 }
 
+// An empty or fractional field would otherwise reach the API as NaN; the server still enforces 0-3600.
+function graceOf(raw: string): number {
+  const value = Math.trunc(Number(raw));
+  return Number.isFinite(value) ? value : 0;
+}
+
 function draftOf(tryout: Tryout): TryoutDraft {
   return {
     title: tryout.title,
@@ -69,6 +77,7 @@ function draftOf(tryout: Tryout): TryoutDraft {
     explanationReleaseAt: inputDate(tryout.explanation_release_at),
     randomizeQuestions: tryout.randomize_questions,
     randomizeOptions: tryout.randomize_options,
+    graceSeconds: String(tryout.grace_seconds),
     subtests: tryout.subtests.map((subtest) => ({
       key: subtest.id,
       name: subtest.name,
@@ -211,6 +220,7 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
     explanation_release_at: wireDate(draft.explanationReleaseAt, "end"),
     randomize_questions: draft.randomizeQuestions,
     randomize_options: draft.randomizeOptions,
+    grace_seconds: graceOf(draft.graceSeconds),
     subtests: draft.subtests.map((subtest) => ({
       name: subtest.name,
       duration_seconds: Math.round(subtest.durationMinutes * 60),
@@ -229,6 +239,23 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
   };
 
   const handleSave = async () => {
+    if (tryout && locked) {
+      // D10: the grace is the one field Admin may still change once students have started.
+      setSaving(true);
+      setFormErrors({});
+      try {
+        const saved = await api.tryouts.setGrace(tryout.id, { grace_seconds: graceOf(draft.graceSeconds) });
+        setTryout(saved);
+        setDraft((current) => ({ ...current, graceSeconds: String(saved.grace_seconds) }));
+        toast.success(t.toastGraceSaved);
+      } catch (err) {
+        if (err instanceof ApiError && err.fields) setFormErrors(err.fields);
+        toast.danger(t.toastSaveFailedTitle, { description: errorText(err, t.loadErrorDescription) });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!draft.title.trim() || draft.activeUntil === "") {
       toast.danger(t.toastIncompleteTitle, { description: t.toastIncompleteDescription });
       return;
@@ -297,6 +324,7 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
   }
 
   const dirty = tryout !== null && JSON.stringify(draft) !== JSON.stringify(draftOf(tryout));
+  const graceDirty = tryout !== null && draft.graceSeconds !== String(tryout.grace_seconds);
   const programOptions = (programs ?? []).map((program) => ({ id: program.id, label: program.name }));
 
   return (
@@ -315,7 +343,7 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
               {working ? t.publishing : tryout.status === "published" ? t.unpublish : t.publish}
             </Button>
           )}
-          <Button variant="primary" size="sm" onPress={handleSave} isDisabled={locked || saving || working}>
+          <Button variant="primary" size="sm" onPress={handleSave} isDisabled={(locked && !graceDirty) || saving || working}>
             {saving ? t.saving : t.saveTryout}
           </Button>
         </div>
@@ -415,6 +443,16 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
             isSelected={draft.randomizeOptions}
             onChange={(checked) => setDraft((current) => ({ ...current, randomizeOptions: checked }))}
             isDisabled={locked}
+          />
+          <TextInput
+            label={t.graceLabel}
+            description={t.graceDescription}
+            type="number"
+            min={0}
+            max={3600}
+            value={draft.graceSeconds}
+            error={formErrors.grace_seconds}
+            onChange={(e) => setDraft((current) => ({ ...current, graceSeconds: e.target.value }))}
           />
           <p className="text-xs text-muted">{t.coverColorNote}</p>
         </Card>

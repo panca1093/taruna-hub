@@ -119,7 +119,7 @@ func (f authFixture) echoWithAssets(t *testing.T, assets *service.AssetService, 
 		e.Use(httpx.Recover(logger))
 		e.Use(httpx.RequestLogger(logger))
 		e.Use(httpx.CORS(devOrigins, true))
-		New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets, newOrderService(f.tenantFixture, assets), AuthOptions{
+		New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets, newOrderService(f.tenantFixture, assets), newRuntimeService(f.tenantFixture), AuthOptions{
 			SecureCookies: f.secure,
 			AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
 		}).Register(e, ResolveHostScope(f.tenants, slug))

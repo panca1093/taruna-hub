@@ -17,6 +17,10 @@ import (
 
 const reconcileInterval = 10 * time.Minute
 
+// deadlineInterval is how often expired exam parts are settled. It is the ceiling on how late an abandoned session
+// finalizes, so it stays well inside the PRD's +-5s tolerance; the due scan walks a partial index and costs little.
+const deadlineInterval = 2 * time.Second
+
 // stagedAssetTTL is how long an upload nobody finalized survives; a preview is never open that long.
 const stagedAssetTTL = 24 * time.Hour
 
@@ -95,9 +99,33 @@ func run() error {
 	}()
 	reconcile(ctx, notifications, assets, logger)
 
+	runtime := service.NewRuntimeService(pool, repository.NewRuntimeRepository(pool))
+	go finalizeDeadlines(ctx, runtime, logger)
+
 	<-ctx.Done()
 	logger.Info("shutting down")
 	return infra.StopGracefully(ctx, client, cfg.ShutdownGrace)
+}
+
+// finalizeDeadlines is the independent deadline worker of ARCHITECTURE 4.6. PostgreSQL decides what is due, so a
+// restart or a missed tick only delays finalization; the answer path enforces expiry on its own meanwhile.
+func finalizeDeadlines(ctx context.Context, runtime *service.RuntimeService, logger *slog.Logger) {
+	ticker := time.NewTicker(deadlineInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			settled, err := runtime.FinalizeDue(ctx)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				logger.Error("finalize due sessions failed", slog.String("error", err.Error()))
+			}
+			if settled > 0 {
+				logger.Info("settled expired exam sessions", slog.Int("count", settled))
+			}
+		}
+	}
 }
 
 func reconcile(ctx context.Context, notifications *service.NotificationService, assets *service.AssetService, logger *slog.Logger) {

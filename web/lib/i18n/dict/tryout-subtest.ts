@@ -4,6 +4,14 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   submitButton: "Submit Subtes",
+  loading: "Memuat subtes…",
+  loadErrorTitle: "Subtes tidak dapat dimuat",
+  loadErrorDescription: "Waktu tetap berjalan di server. Periksa koneksi lalu coba lagi.",
+  retry: "Coba Lagi",
+  answerSaved: "Tersimpan",
+  answerPending: "Belum tersimpan di server",
+  pendingCount: (n: number) => `${n} jawaban belum tersimpan`,
+  confirmPendingWarning: (n: number) => `${n} jawaban belum tersimpan di server dan tidak akan dihitung.`,
   questionProgress: (current: number, total: number) => `Soal ${current} dari ${total}`,
   answerPlaceholder: "Ketik jawabanmu",
   previousButton: "Sebelumnya",
@@ -25,6 +33,14 @@ const id = {
 
 const en: typeof id = {
   submitButton: "Submit Subtest",
+  loading: "Loading subtest…",
+  loadErrorTitle: "The subtest could not be loaded",
+  loadErrorDescription: "The clock keeps running on the server. Check your connection and try again.",
+  retry: "Retry",
+  answerSaved: "Saved",
+  answerPending: "Not saved on the server yet",
+  pendingCount: (n: number) => `${n} answers not saved yet`,
+  confirmPendingWarning: (n: number) => `${n} answers are not saved on the server and will not be counted.`,
   questionProgress: (current: number, total: number) => `Question ${current} of ${total}`,
   answerPlaceholder: "Type your answer",
   previousButton: "Previous",

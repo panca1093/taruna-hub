@@ -38,6 +38,8 @@ const (
 	tryoutWindow      = "Tanggal berakhir harus setelah sekarang."
 	tryoutRevision    = "Versi tryout wajib diisi."
 	tryoutListLimit   = "Batas 1–100."
+	tryoutGraceRule   = "Toleransi 0–3600 detik."
+	tryoutAdminOnly   = "Hanya Admin yang dapat mengubah toleransi waktu."
 )
 
 type assignmentResponse struct {
@@ -71,6 +73,7 @@ type tryoutSummaryResponse struct {
 	ExplanationReleaseAt *time.Time `json:"explanation_release_at"`
 	RandomizeQuestions   bool       `json:"randomize_questions"`
 	RandomizeOptions     bool       `json:"randomize_options"`
+	GraceSeconds         int        `json:"grace_seconds"`
 	Revision             int        `json:"revision"`
 	Locked               bool       `json:"locked"`
 	SubtestCount         int        `json:"subtest_count"`
@@ -110,6 +113,7 @@ type createTryoutRequest struct {
 	ExplanationReleaseAt *string                `json:"explanation_release_at"`
 	RandomizeQuestions   bool                   `json:"randomize_questions"`
 	RandomizeOptions     bool                   `json:"randomize_options"`
+	GraceSeconds         *int                   `json:"grace_seconds"`
 	Subtests             []tryoutSubtestRequest `json:"subtests"`
 }
 
@@ -253,6 +257,30 @@ func (h *Handler) UnpublishTryout(c echo.Context) error {
 	return c.JSON(http.StatusOK, tryoutResponseOf(tryout))
 }
 
+type graceRequest struct {
+	GraceSeconds int `json:"grace_seconds"`
+}
+
+func (h *Handler) SetTryoutGrace(c echo.Context) error {
+	scope, principal, ok := curriculumCaller(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return httpx.NotFound(tryoutNotFound)
+	}
+	var req graceRequest
+	if err := bindTryout(c, &req); err != nil {
+		return err
+	}
+	tryout, err := h.tryouts.SetGrace(c.Request().Context(), scope, principal, id, req.GraceSeconds)
+	if err != nil {
+		return tryoutError(err)
+	}
+	return c.JSON(http.StatusOK, tryoutResponseOf(tryout))
+}
+
 func tryoutFilterOf(c echo.Context) (service.TryoutFilter, error) {
 	filter := service.TryoutFilter{}
 	fields := map[string]string{}
@@ -295,6 +323,7 @@ func tryoutInputOf(req createTryoutRequest) (service.TryoutInput, error) {
 	input := service.TryoutInput{
 		Title: req.Title, Description: req.Description, ScoringMode: req.ScoringMode,
 		RandomizeQuestions: req.RandomizeQuestions, RandomizeOptions: req.RandomizeOptions,
+		GraceSeconds: req.GraceSeconds,
 	}
 	if req.ProgramID != "" {
 		id, err := uuid.Parse(req.ProgramID)
@@ -369,7 +398,7 @@ func tryoutSummaryOf(tryout model.Tryout) tryoutSummaryResponse {
 		Description: tryout.Description, ScoringMode: tryout.ScoringMode, Status: tryout.Status,
 		ActiveFrom: tryout.ActiveFrom, ActiveUntil: tryout.ActiveUntil,
 		ExplanationReleaseAt: tryout.ExplanationReleaseAt, RandomizeQuestions: tryout.RandomizeQuestions,
-		RandomizeOptions: tryout.RandomizeOptions, Revision: tryout.Revision, Locked: tryout.Locked,
+		RandomizeOptions: tryout.RandomizeOptions, GraceSeconds: tryout.GraceSeconds, Revision: tryout.Revision, Locked: tryout.Locked,
 		SubtestCount: tryout.SubtestCount, QuestionCount: tryout.QuestionCount,
 		CreatedAt: tryout.CreatedAt, UpdatedAt: tryout.UpdatedAt,
 	}
@@ -417,6 +446,8 @@ func tryoutError(err error) error {
 		return httpx.Conflict(tryoutConflict)
 	case errors.Is(err, service.ErrTryoutReferenced):
 		return httpx.Conflict(tryoutReferenced)
+	case errors.Is(err, service.ErrTryoutForbidden):
+		return httpx.Forbidden(tryoutAdminOnly)
 	}
 	return err
 }
@@ -457,6 +488,8 @@ func tryoutReason(reason string) string {
 		return tryoutRevision
 	case service.ReasonTryoutQuery:
 		return tryoutListLimit
+	case service.ReasonTryoutGrace:
+		return tryoutGraceRule
 	}
 	return invalidFormat
 }

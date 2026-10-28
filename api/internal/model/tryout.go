@@ -51,6 +51,7 @@ type Tryout struct {
 	ExplanationReleaseAt *time.Time
 	RandomizeQuestions   bool
 	RandomizeOptions     bool
+	GraceSeconds         int
 	Revision             int
 	Locked               bool
 	Subtests             []Subtest

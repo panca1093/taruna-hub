@@ -21,6 +21,7 @@ var (
 	ErrTryoutStale      = errors.New("tryout changed by someone else")
 	ErrTryoutLocked     = errors.New("tryout already attempted")
 	ErrTryoutReferenced = errors.New("tryout still referenced")
+	ErrTryoutForbidden  = errors.New("tryout change needs an admin")
 )
 
 // Tryout field reasons; the transport turns each into the copy the builder shows.
@@ -42,6 +43,7 @@ const (
 	ReasonTryoutWindow      = "tryout_window"
 	ReasonTryoutRevision    = "tryout_base_revision"
 	ReasonTryoutQuery       = "tryout_query"
+	ReasonTryoutGrace       = "tryout_grace"
 )
 
 const (
@@ -52,6 +54,7 @@ const (
 	maxQuestionsPerTryout  = 500
 	maxTryoutTitleLen      = 200
 	maxTryoutDescription   = 2000
+	maxGraceSeconds        = 3600
 	defaultTryoutLimit     = 50
 	maxTryoutLimit         = 100
 )
@@ -78,6 +81,7 @@ type TryoutInput struct {
 	ExplanationReleaseAt *time.Time
 	RandomizeQuestions   bool
 	RandomizeOptions     bool
+	GraceSeconds         *int
 	Subtests             []TryoutSubtestInput
 	BaseRevision         int
 }
@@ -147,6 +151,7 @@ func (s *TryoutService) Create(ctx context.Context, scope HostScope, principal m
 	if err != nil {
 		return model.Tryout{}, err
 	}
+	input = adminOnlyGrace(principal, input)
 	input, err = tryoutScalars(input)
 	if err != nil {
 		return model.Tryout{}, err
@@ -174,6 +179,7 @@ func (s *TryoutService) Update(ctx context.Context, scope HostScope, principal m
 	if input.BaseRevision < 1 {
 		return model.Tryout{}, &InputError{Fields: map[string]string{"base_revision": ReasonTryoutRevision}}
 	}
+	input = adminOnlyGrace(principal, input)
 	input, err = tryoutScalars(input)
 	if err != nil {
 		return model.Tryout{}, err
@@ -198,12 +204,16 @@ func (s *TryoutService) Update(ctx context.Context, scope HostScope, principal m
 		if err != nil {
 			return err
 		}
+		next := tryoutOf(input, subtests)
+		if input.GraceSeconds == nil {
+			next.GraceSeconds = current.GraceSeconds
+		}
 		if current.Status == model.TryoutPublished {
-			if err := playable(tryoutOf(input, subtests), s.now()); err != nil {
+			if err := playable(next, s.now()); err != nil {
 				return err
 			}
 		}
-		if err := s.repo.UpdateHeadTx(ctx, tx, tenantID, id, tryoutOf(input, subtests)); err != nil {
+		if err := s.repo.UpdateHeadTx(ctx, tx, tenantID, id, next); err != nil {
 			return tryoutError(err)
 		}
 		if err := s.repo.ReplaceChildrenTx(ctx, tx, tenantID, id, subtests); err != nil {
@@ -276,6 +286,25 @@ func (s *TryoutService) setStatus(ctx context.Context, scope HostScope, principa
 		return model.Tryout{}, err
 	}
 	return out, nil
+}
+
+// SetGrace is deliberately allowed on a locked tryout: D10 lets Admin change the grace while the exam runs,
+// and the runtime reads it live, so the new value governs every answer admitted after this commit.
+func (s *TryoutService) SetGrace(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID, seconds int) (model.Tryout, error) {
+	tenantID, err := questionTenant(scope, principal)
+	if err != nil {
+		return model.Tryout{}, err
+	}
+	if principal.Role != model.RoleAdmin {
+		return model.Tryout{}, ErrTryoutForbidden
+	}
+	if seconds < 0 || seconds > maxGraceSeconds {
+		return model.Tryout{}, &InputError{Fields: map[string]string{"grace_seconds": ReasonTryoutGrace}}
+	}
+	if err := s.repo.SetGraceSeconds(ctx, tenantID, id, seconds); err != nil {
+		return model.Tryout{}, tryoutError(err)
+	}
+	return s.Get(ctx, scope, principal, id)
 }
 
 func (s *TryoutService) checkProgram(ctx context.Context, tenantID, programID uuid.UUID) error {
@@ -377,6 +406,14 @@ func playable(tryout model.Tryout, now time.Time) error {
 	return nil
 }
 
+// adminOnlyGrace drops a grace sent by anyone but Admin (D10), so the stored value stands.
+func adminOnlyGrace(principal model.Principal, input TryoutInput) TryoutInput {
+	if principal.Role != model.RoleAdmin {
+		input.GraceSeconds = nil
+	}
+	return input
+}
+
 func tryoutScalars(input TryoutInput) (TryoutInput, error) {
 	fields := map[string]string{}
 	input.Title = strings.TrimSpace(input.Title)
@@ -398,6 +435,9 @@ func tryoutScalars(input TryoutInput) (TryoutInput, error) {
 		fields["active_until"] = ReasonTryoutActiveUntil
 	} else if input.ActiveFrom != nil && !input.ActiveFrom.Before(*input.ActiveUntil) {
 		fields["active_from"] = ReasonTryoutActiveFrom
+	}
+	if input.GraceSeconds != nil && (*input.GraceSeconds < 0 || *input.GraceSeconds > maxGraceSeconds) {
+		fields["grace_seconds"] = ReasonTryoutGrace
 	}
 	if len(input.Subtests) > maxSubtests {
 		fields["subtests"] = ReasonTryoutSubtestMax
@@ -453,6 +493,9 @@ func tryoutOf(input TryoutInput, subtests []model.Subtest) model.Tryout {
 		ScoringMode: input.ScoringMode, ActiveFrom: input.ActiveFrom,
 		ExplanationReleaseAt: input.ExplanationReleaseAt, RandomizeQuestions: input.RandomizeQuestions,
 		RandomizeOptions: input.RandomizeOptions, Subtests: subtests,
+	}
+	if input.GraceSeconds != nil {
+		out.GraceSeconds = *input.GraceSeconds
 	}
 	if input.ActiveUntil != nil {
 		out.ActiveUntil = *input.ActiveUntil

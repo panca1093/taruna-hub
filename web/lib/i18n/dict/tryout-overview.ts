@@ -4,6 +4,11 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   noAccess: "Kamu belum memiliki akses ke tryout ini.",
+  loading: "Memuat tryout…",
+  loadErrorTitle: "Tryout tidak dapat dimuat",
+  loadErrorDescription: "Periksa koneksi kamu lalu coba lagi.",
+  retry: "Coba Lagi",
+  actionFailed: "Tidak dapat memulai",
   pageTitle: "Detail Tryout",
   irtModeChip: "Mode IRT",
   completedBanner: "Tryout ini sudah selesai kamu kerjakan.",
@@ -24,6 +29,11 @@ const id = {
 
 const en: typeof id = {
   noAccess: "You don't have access to this tryout.",
+  loading: "Loading tryout…",
+  loadErrorTitle: "The tryout could not be loaded",
+  loadErrorDescription: "Check your connection and try again.",
+  retry: "Retry",
+  actionFailed: "Could not start",
   pageTitle: "Tryout Detail",
   irtModeChip: "IRT Mode",
   completedBanner: "You've already completed this tryout.",
