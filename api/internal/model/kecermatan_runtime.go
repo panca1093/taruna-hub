@@ -105,6 +105,8 @@ type KecStudentTest struct {
 	KolomCount           int
 	SoalPerKolom         int
 	KolomDurationSeconds int
+	CoverFrom            string
+	CoverTo              string
 	Purchased            int
 	Used                 int
 	InProgress           bool

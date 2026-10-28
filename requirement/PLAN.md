@@ -376,7 +376,7 @@ For every slice, use this verification loop:
 
 ### P11 — Catalog, products and tenant landing
 
-**Status:** done, lean — individual and bundle products with exact-numeric prices, admin CRUD and an anonymous host-resolved catalog plus landing/catalog pages on the API; kecermatan products (no test entity yet), checkout, covers and the D06 platform landing are deferred · **Size:** M · **Depends:** P04, P08, P10
+**Status:** done, lean — individual, bundle and (P18) kecermatan products with exact-numeric prices, admin CRUD and an anonymous host-resolved catalog plus landing/catalog pages on the API; covers and the D06 platform landing are deferred · **Size:** M · **Depends:** P04, P08, P10
 
 **Outcome:** Each school publishes all three product types and students see its real branded landing/catalog.
 
@@ -388,7 +388,7 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [x] Individual exactly one tryout and bundle two to twenty in one program; the kecermatan half waits for P09's test entity.
+- [x] Individual exactly one tryout and bundle two to twenty in one program; the kecermatan half (one test of the same program, 1–1000 attempts, no tryouts) landed in P18 with service, HTTP and catalog tests.
 - [x] Inactive product is hidden publicly; active products, filters and details contain only resolved tenant data.
 - [x] Deactivate product and verify landing/catalog update without deploy; sequential A/B requests show correct branding/content.
 - [ ] Root CTAs target approved hosts and the landing download copy matches D11 — both wait on D06/D11; the "1.000+ siswa" claim was replaced with the real visible-tryout count.
@@ -422,7 +422,7 @@ For every slice, use this verification loop:
 
 ### P13 — Manual and wallet checkout with enrollment
 
-**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Deferred: gateway orders (P14), kecermatan checkout and credit (P18), browser demo (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
+**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Kecermatan checkout and credit landed in P18. Deferred: gateway orders (P14), browser demo (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
 
 **Outcome:** Students purchase through manual transfer or wallet and receive the correct access after confirmation.
 
@@ -439,8 +439,8 @@ For every slice, use this verification loop:
 - [x] Checkout is rejected with `price_changed` when the price differs from the one the student saw, and with `order_pending` while the student has a pending order for the product (unique index); owner decisions.
 - [x] Proof belongs to requesting student/tenant; staff sees/reviews only own tenant orders.
   - Student, proof and role cases are proven; no cross-tenant test by design (D17).
-- [ ] Bundle grants every purchased test; repeat kecermatan purchase preserves history on same enrollment; correct email/WA events enqueue atomically.
-  - Bundle grants and atomic enqueue are proven; kecermatan repeat purchase waits for P10/P18 (the enrollment row and grant table are ready for it).
+- [x] Bundle grants every purchased test; repeat kecermatan purchase preserves history on same enrollment; correct email/WA events enqueue atomically.
+  - Bundle grants and atomic enqueue were proven in P13; P18 proves a repeat kecermatan purchase adds credits to the one enrollment row, a replayed key, a repeated confirm and a cancel add nothing, and a payment racing a completion lands on the same row consistently.
 - [ ] Real browser to API to database demo of the screens.
   - The API flow was smoked over HTTP against a real database and storage; the screens pass `tsc` and lint but were not driven in a browser (no dev server was allowed in this run).
 
@@ -548,7 +548,7 @@ For every slice, use this verification loop:
 
 ### P18 — Kecermatan attempts, quota and full results
 
-**Status:** planned · **Size:** XL · **Depends:** P10, P13
+**Status:** in progress — kecermatan products and credit checkout, atomic admission with per-attempt snapshots, the server timeline and deadline worker, write-once answers, the versioned scoring function with a recompute path, results, review, history and the staff results list are built and tested (migration 000019, [docs/kecermatan-runtime.md](../docs/kecermatan-runtime.md)); **D03 stays open**: the scoring is the owner's provisional version 1, not client-approved. Deferred: the browser-to-API-to-database demo, image items for students (asset reads are staff-only), an HTTP/CLI trigger for the recompute · **Size:** XL · **Depends:** P10, P13
 
 **Outcome:** Students consume purchased credits once, complete repeated timed columns, and inspect confirmed composite results/history.
 
@@ -560,10 +560,14 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Concurrent/retried start consumes exactly one credit; zero quota redirects to purchase; resume does not consume again.
-- [ ] Second half exactly replays first-half content while storing independent answers and does not announce repetition.
-- [ ] Expiry records unanswered as kosong; closed-tab/resume and transition tests cannot reset timers.
+- [x] Concurrent/retried start consumes exactly one credit; zero quota redirects to purchase; resume does not consume again.
+  - Eight concurrent starts make one attempt and consume nothing until it completes, which consumes exactly one in the result's transaction; zero credit answers `409 kecermatan_no_credit`. The redirect to the purchase is in the web code but was not driven in a browser.
+- [x] Second half exactly replays first-half content while storing independent answers and does not announce repetition.
+  - Snapshot equals a replay of the attempt seed; kolom k and k + N/2 are identical, answers are stored per kolom; no field marks a repetition.
+- [x] Expiry records unanswered as kosong; closed-tab/resume and transition tests cannot reset timers.
+  - Service tests move the clock: expiry, the pause, an automatic start at the pause's end, "Lanjut", an attempt opened late and the worker finalizing an abandoned attempt.
 - [ ] Client-approved N=10 and N>10 fixtures, zero-attempt/zero-first-half/overflow cases and rounding validate all four scores; detailed review reproduces the exact attempt.
+  - Table tests cover N=10, N=12, zero attempts, zero first half, overflow and rounding for version 1, and the review reproduces the attempt; the fixtures are the owner's provisional formula, not client-approved (D03), so the box stays open.
 
 **Decision / verification gate:** D03 scoring is a full-scope completion gate; D05 resolved (credit consumed on completion only); D10 transitions. A provisional UI label alone is insufficient.
 

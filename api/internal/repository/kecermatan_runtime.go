@@ -501,7 +501,7 @@ func (r *KecermatanRuntimeRepository) StudentTest(ctx context.Context, tenantID,
 func (r *KecermatanRuntimeRepository) studentTests(ctx context.Context, tenantID, userID, testID uuid.UUID) ([]model.KecStudentTest, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT t.id, t.title, t.description, pr.code, pr.name, t.options_per_soal, t.kolom_count, t.soal_per_kolom,
-		       t.kolom_duration_seconds, e.attempts_purchased, e.attempts_used,
+		       t.kolom_duration_seconds, t.cover_from, t.cover_to, e.attempts_purchased, e.attempts_used,
 		       EXISTS (SELECT 1 FROM kecermatan_sessions s WHERE s.tenant_id = e.tenant_id AND s.user_id = e.user_id
 		                AND s.test_id = t.id AND s.status = 'in_progress')
 		  FROM enrollments e
@@ -517,7 +517,7 @@ func (r *KecermatanRuntimeRepository) studentTests(ctx context.Context, tenantID
 	for rows.Next() {
 		var t model.KecStudentTest
 		if err := rows.Scan(&t.TestID, &t.Title, &t.Description, &t.ProgramCode, &t.ProgramName, &t.OptionsPerSoal,
-			&t.KolomCount, &t.SoalPerKolom, &t.KolomDurationSeconds, &t.Purchased, &t.Used, &t.InProgress); err != nil {
+			&t.KolomCount, &t.SoalPerKolom, &t.KolomDurationSeconds, &t.CoverFrom, &t.CoverTo, &t.Purchased, &t.Used, &t.InProgress); err != nil {
 			return nil, fmt.Errorf("scan kecermatan enrollment: %w", err)
 		}
 		out = append(out, t)

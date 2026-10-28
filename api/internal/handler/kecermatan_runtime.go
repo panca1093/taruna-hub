@@ -65,6 +65,8 @@ type kecStudentTestResponse struct {
 	KolomCount           int       `json:"kolom_count"`
 	SoalPerKolom         int       `json:"soal_per_kolom"`
 	KolomDurationSeconds int       `json:"kolom_duration_seconds"`
+	CoverFrom            string    `json:"cover_from"`
+	CoverTo              string    `json:"cover_to"`
 	AttemptsPurchased    int       `json:"attempts_purchased"`
 	AttemptsUsed         int       `json:"attempts_used"`
 	AttemptsRemaining    int       `json:"attempts_remaining"`
@@ -475,7 +477,7 @@ func kecStudentTestOf(t model.KecStudentTest) kecStudentTestResponse {
 	return kecStudentTestResponse{
 		TestID: t.TestID, Title: t.Title, Description: t.Description, ProgramCode: t.ProgramCode, ProgramName: t.ProgramName,
 		OptionsPerSoal: t.OptionsPerSoal, KolomCount: t.KolomCount, SoalPerKolom: t.SoalPerKolom,
-		KolomDurationSeconds: t.KolomDurationSeconds, AttemptsPurchased: t.Purchased, AttemptsUsed: t.Used,
+		KolomDurationSeconds: t.KolomDurationSeconds, CoverFrom: t.CoverFrom, CoverTo: t.CoverTo, AttemptsPurchased: t.Purchased, AttemptsUsed: t.Used,
 		AttemptsRemaining: t.Purchased - t.Used, InProgress: t.InProgress,
 	}
 }

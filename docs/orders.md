@@ -74,8 +74,10 @@ user's single `enrollments` row and a grant naming the source; a tryout the user
 
 D05a: a tryout's access window is the tryout's own `active_from`/`active_until`, so `enrollments.active_until`
 stays `NULL` for tryouts and `GET /api/v1/enrollments` reads the window live from the tryout. The column and
-`attempts_purchased`/`attempts_used` exist so a kecermatan purchase (P18) adds credit to the same user/test row;
-P18 also widens the key from `tryout_id` to a generic test reference. Nothing here builds kecermatan checkout.
+`attempts_purchased`/`attempts_used` hold a kecermatan test's credits. P18 made `tryout_id` nullable beside a
+`kecermatan_test_id`, with a CHECK that exactly one is set and a second unique key per user and kecermatan test: a
+kecermatan order (no items; it snapshots the test and `included_attempts`) adds credit to that one row through
+`IssueEnrollmentsTx`. See [kecermatan-runtime.md](kecermatan-runtime.md).
 
 ## Product sale window
 
@@ -104,5 +106,5 @@ with a reason.
 
 ## Not done here
 
-Gateway orders (P14), top-up requests, refunds, kecermatan products and credit (P18), the tryout runtime that
+Gateway orders (P14), top-up requests, refunds, the tryout runtime that
 consumes an enrollment (P16), and a pending-order de-duplication for the same student and product.
