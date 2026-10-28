@@ -33,11 +33,12 @@ type Handler struct {
 	runtime       *service.RuntimeService
 	results       *service.ResultService
 	monitoring    *service.MonitoringService
+	itemPackages  *service.ItemPackageService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
 
-func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, orders *service.OrderService, runtime *service.RuntimeService, results *service.ResultService, monitoring *service.MonitoringService, opts AuthOptions) *Handler {
+func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, account *service.AccountService, curriculum *service.CurriculumService, questions *service.QuestionService, tryouts *service.TryoutService, products *service.ProductService, wallets *service.WalletService, assets *service.AssetService, orders *service.OrderService, runtime *service.RuntimeService, results *service.ResultService, monitoring *service.MonitoringService, itemPackages *service.ItemPackageService, opts AuthOptions) *Handler {
 	return &Handler{
 		logger:        logger,
 		health:        health,
@@ -53,6 +54,7 @@ func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, 
 		runtime:       runtime,
 		results:       results,
 		monitoring:    monitoring,
+		itemPackages:  itemPackages,
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
@@ -159,6 +161,21 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.GET("/admin/tryouts/:id/leaderboard", h.TryoutLeaderboard, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/settings", h.Settings, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.PUT("/admin/settings", h.UpdateSettings, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
+
+	// Item packages are tenant content, so an Operator writes them too (D02). The static paths come before
+	// :id, so a catalog or template request is never read as a package id.
+	staff := RequireRole(model.RoleAdmin, model.RoleOperator)
+	v1.GET("/item-packages", h.ListItemPackages, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.POST("/item-packages", h.CreateItemPackage, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.GET("/item-packages/catalog", h.ItemCatalog, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.GET("/item-packages/symbol-template", h.ItemSymbolTemplate, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.GET("/item-packages/:id", h.GetItemPackage, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.PUT("/item-packages/:id", h.RenameItemPackage, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.DELETE("/item-packages/:id", h.DeleteItemPackage, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.POST("/item-packages/:id/elements/preview", h.PreviewItemElements, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.POST("/item-packages/:id/elements/commit", h.CommitItemElements, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.DELETE("/item-packages/:id/elements/:elementId", h.RemoveItemElement, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.POST("/item-packages/:id/sample-column", h.SampleItemColumn, httpx.NoStore(), Authenticate(h.auth), staff)
 
 	// Any tenant user may upload; the purpose narrows who, and every read is re-authorized in the service.
 	v1.POST("/assets", h.UploadAsset, httpx.NoStore(), Authenticate(h.auth))

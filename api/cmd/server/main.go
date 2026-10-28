@@ -114,7 +114,8 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	runtime := service.NewRuntimeService(pool, runtimeRepo)
 	results := service.NewResultService(runtime, repository.NewResultRepository(pool), runtimeRepo)
 	monitoring := service.NewMonitoringService(runtime, repository.NewMonitoringRepository(pool))
-	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, products, wallets, assets, orders, runtime, results, monitoring, handler.AuthOptions{
+	itemPackages := service.NewItemPackageService(pool, repository.NewItemPackageRepository(pool), assets)
+	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, products, wallets, assets, orders, runtime, results, monitoring, itemPackages, handler.AuthOptions{
 		SecureCookies: !cfg.IsDevelopment(),
 		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
 	})
