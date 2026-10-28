@@ -21,10 +21,10 @@ const (
 // KecermatanElement is one drawable member of a generation pool. Key is the dedup identity inside its kind
 // (the symbol, the emoji or shape id, an image's content hash).
 type KecermatanElement struct {
-	Kind    string
-	Key     string
-	Value   string
-	AssetID *uuid.UUID
+	Kind    string     `json:"kind"`
+	Key     string     `json:"key"`
+	Value   string     `json:"value"`
+	AssetID *uuid.UUID `json:"asset_id,omitempty"`
 }
 
 // KecermatanPackageRef is a package a test pins at one frozen revision.

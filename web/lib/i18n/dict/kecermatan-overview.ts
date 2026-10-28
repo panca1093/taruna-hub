@@ -4,6 +4,10 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   pageTitle: "Detail Tes Kecermatan",
+  loading: "Memuat tes…",
+  loadErrorTitle: "Tes gagal dimuat",
+  loadErrorDescription: "Periksa koneksi lalu coba lagi.",
+  retry: "Coba lagi",
   noAccess: "Kamu belum memiliki akses ke tes kecermatan ini.",
   chipKecermatan: "Tes Kecermatan",
   attemptsRemaining: (n: number) => `${n} attempt tersisa`,
@@ -20,6 +24,10 @@ const id = {
 
 const en: typeof id = {
   pageTitle: "Kecermatan Test Detail",
+  loading: "Loading test…",
+  loadErrorTitle: "The test could not be loaded",
+  loadErrorDescription: "Check the connection and try again.",
+  retry: "Try again",
   noAccess: "You don't have access to this kecermatan test yet.",
   chipKecermatan: "Kecermatan Test",
   attemptsRemaining: (n: number) => `${n} attempts left`,

@@ -42,22 +42,24 @@ type orderItemResponse struct {
 }
 
 type orderResponse struct {
-	ID            uuid.UUID           `json:"id"`
-	Code          string              `json:"code"`
-	Status        string              `json:"status"`
-	PaymentMethod string              `json:"payment_method"`
-	StudentID     uuid.UUID           `json:"student_id"`
-	StudentName   string              `json:"student_name"`
-	ProductID     uuid.UUID           `json:"product_id"`
-	ProductType   string              `json:"product_type"`
-	ProductTitle  string              `json:"product_title"`
-	Price         string              `json:"price"`
-	Items         []orderItemResponse `json:"items"`
-	ProofAssetID  *uuid.UUID          `json:"proof_asset_id"`
-	CancelReason  string              `json:"cancel_reason"`
-	CreatedAt     time.Time           `json:"created_at"`
-	ConfirmedAt   *time.Time          `json:"confirmed_at"`
-	CancelledAt   *time.Time          `json:"cancelled_at"`
+	ID               uuid.UUID           `json:"id"`
+	Code             string              `json:"code"`
+	Status           string              `json:"status"`
+	PaymentMethod    string              `json:"payment_method"`
+	StudentID        uuid.UUID           `json:"student_id"`
+	StudentName      string              `json:"student_name"`
+	ProductID        uuid.UUID           `json:"product_id"`
+	ProductType      string              `json:"product_type"`
+	ProductTitle     string              `json:"product_title"`
+	Price            string              `json:"price"`
+	Items            []orderItemResponse `json:"items"`
+	KecermatanTestID *uuid.UUID          `json:"kecermatan_test_id"`
+	IncludedAttempts *int                `json:"included_attempts"`
+	ProofAssetID     *uuid.UUID          `json:"proof_asset_id"`
+	CancelReason     string              `json:"cancel_reason"`
+	CreatedAt        time.Time           `json:"created_at"`
+	ConfirmedAt      *time.Time          `json:"confirmed_at"`
+	CancelledAt      *time.Time          `json:"cancelled_at"`
 }
 
 type ordersResponse struct {
@@ -310,6 +312,7 @@ func orderResponseOf(o model.Order) orderResponse {
 		ProductTitle: o.ProductTitle, Price: o.Price, Items: make([]orderItemResponse, 0, len(o.Items)),
 		ProofAssetID: o.ProofAssetID, CancelReason: o.CancelReason, CreatedAt: o.CreatedAt,
 		ConfirmedAt: o.ConfirmedAt, CancelledAt: o.CancelledAt,
+		KecermatanTestID: o.KecermatanTestID, IncludedAttempts: o.IncludedAttempts,
 	}
 	for _, item := range o.Items {
 		out.Items = append(out.Items, orderItemResponse{TryoutID: item.TryoutID, Title: item.Title})

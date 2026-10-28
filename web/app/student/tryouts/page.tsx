@@ -7,37 +7,30 @@ import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
-import { useUser } from "@/lib/session-context";
-import { remainingAttempts } from "@/lib/kecermatan-session";
 import { useTryoutsListT } from "@/lib/i18n/dict/tryouts-list";
-import { api, type AttemptSummary, type Enrollment } from "@/lib/api/client";
-import {
-  getKecermatanAttemptsPurchased,
-  getKecermatanEnrollmentsForUser,
-  getKecermatanTest,
-  getProgram,
-} from "@/lib/mock-data";
+import { api, type AttemptSummary, type Enrollment, type KecermatanStudentTest } from "@/lib/api/client";
 import { useHydrated } from "@/lib/use-hydrated";
 
 type TryoutState = "not_started" | "in_progress" | "completed";
 
 export default function StudentTryoutsPage() {
   const t = useTryoutsListT();
-  const user = useUser();
   const hydrated = useHydrated();
 
   const [enrollments, setEnrollments] = useState<Enrollment[] | null>(null);
   const [attempts, setAttempts] = useState<AttemptSummary[]>([]);
+  const [kecTests, setKecTests] = useState<KecermatanStudentTest[]>([]);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.orders.enrollments(), api.runtime.attempts()])
-      .then(([list, history]) => {
+    Promise.all([api.orders.enrollments(), api.runtime.attempts(), api.kecermatanRuntime.tests()])
+      .then(([list, history, kecermatan]) => {
         if (cancelled) return;
         setEnrollments(list.enrollments);
         setAttempts(history.attempts);
+        setKecTests(kecermatan.tests);
       })
       .catch(() => {
         if (!cancelled) setLoadFailed(true);
@@ -48,11 +41,8 @@ export default function StudentTryoutsPage() {
   }, [reloadKey]);
 
   const held = enrollments ?? [];
-  // Kecermatan purchases arrive with P18; until then this still reads the mock layer.
-  const kecTestIds = [...new Set(getKecermatanEnrollmentsForUser(user.id).map((e) => e.kecermatanTestId))];
 
   const statuses: Record<string, TryoutState> = {};
-  const kecRemaining: Record<string, number> = {};
   if (hydrated) {
     for (const e of held) {
       const own = attempts.filter((a) => a.tryout_id === e.tryout_id);
@@ -61,10 +51,6 @@ export default function StudentTryoutsPage() {
         : own.length > 0
           ? "completed"
           : "not_started";
-    }
-    for (const testId of kecTestIds) {
-      const purchased = getKecermatanAttemptsPurchased(user.id, testId);
-      kecRemaining[testId] = remainingAttempts(testId, user.id, purchased);
     }
   }
 
@@ -96,7 +82,7 @@ export default function StudentTryoutsPage() {
     );
   }
 
-  if (held.length === 0 && kecTestIds.length === 0) {
+  if (held.length === 0 && kecTests.length === 0) {
     return (
       <AppShell title={t.pageTitle} description={t.pageDescription} maxWidth="max-w-6xl">
         <EmptyState
@@ -167,31 +153,28 @@ export default function StudentTryoutsPage() {
         </div>
       )}
 
-      {kecTestIds.length > 0 && (
+      {kecTests.length > 0 && (
         <div className={held.length > 0 ? "mt-8" : undefined}>
           <p className="mb-3 text-sm font-semibold text-foreground">{t.kecermatanSectionTitle}</p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {kecTestIds.map((testId) => {
-              const test = getKecermatanTest(testId);
-              if (!test) return null;
-              const program = getProgram(test.programId);
-              const left = kecRemaining[testId] ?? 0;
+            {kecTests.map((test) => {
+              const left = test.attempts_remaining;
 
               return (
-                <Card key={testId} className="gap-0 overflow-hidden p-0">
-                  <div className="h-20 w-full" style={{ background: `linear-gradient(135deg, ${test.coverFrom}, ${test.coverTo})` }} />
+                <Card key={test.test_id} className="gap-0 overflow-hidden p-0">
+                  <div className="h-20 w-full" style={{ background: `linear-gradient(135deg, ${test.cover_from}, ${test.cover_to})` }} />
                   <div className="space-y-3 p-4">
                     <div className="flex items-center justify-between gap-2">
-                      {program && <ProgramBadge code={program.code} />}
+                      <ProgramBadge code={test.program_code} />
                       <Chip size="sm" className={`font-medium ${left > 0 ? "bg-accent-soft text-accent-soft-foreground" : "bg-danger-soft text-danger-soft-foreground"}`}>
                         {left > 0 ? t.attemptsRemaining(left) : t.quotaExhausted}
                       </Chip>
                     </div>
                     <p className="line-clamp-1 text-sm font-semibold text-foreground">{test.title}</p>
                     <p className="flex items-center gap-1.5 text-xs text-muted">
-                      <Sparkles className="size-3.5" /> {t.kolomSoalStat(test.kolomCount, test.soalPerKolom)}
+                      <Sparkles className="size-3.5" /> {t.kolomSoalStat(test.kolom_count, test.soal_per_kolom)}
                     </p>
-                    <LinkButton href={`/student/kecermatan/${testId}`} variant={left > 0 ? "primary" : "secondary"} size="sm" className="w-full">
+                    <LinkButton href={`/student/kecermatan/${test.test_id}`} variant={left > 0 ? "primary" : "secondary"} size="sm" className="w-full">
                       {left > 0 ? t.ctaWork : t.ctaViewHistory}
                     </LinkButton>
                   </div>

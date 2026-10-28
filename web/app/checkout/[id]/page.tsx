@@ -132,6 +132,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
   }
 
   const instantConfirm = order?.status === "confirmed";
+  const isKecermatan = order?.product_type === "kecermatan";
   const short = balance !== null && isLessMoney(balance, product.price);
 
   if (order) {
@@ -150,7 +151,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
               {instantConfirm ? (
                 <>
                   {t.orderCodeLabel} <span className="font-mono font-medium text-foreground">{order.code}</span> —{" "}
-                  {t.accessOpenInstant} {t.confirmationSentMsg}
+                  {isKecermatan ? t.attemptsAddedInstant(order.included_attempts ?? 0) : t.accessOpenInstant} {t.confirmationSentMsg}
                   {order.payment_method === "wallet" &&
                     balanceAfter !== null &&
                     t.walletUsedMsg(formatIDR(order.price), formatIDR(balanceAfter))}
@@ -158,7 +159,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
               ) : (
                 <>
                   {t.orderCodeLabel} <span className="font-mono font-medium text-foreground">{order.code}</span>{" "}
-                  {t.pendingAdminMsg} {t.accessOpenPending}
+                  {t.pendingAdminMsg} {isKecermatan ? t.attemptAddedPending : t.accessOpenPending}
                 </>
               )}
             </p>
@@ -180,8 +181,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
                 </Chip>
               </div>
             </Card>
-            <LinkButton href="/student/tryouts" variant="primary" size="lg" className="mt-6 w-full">
-              {t.viewMyPackages}
+            <LinkButton
+              href={isKecermatan ? `/student/kecermatan/${order.kecermatan_test_id}` : "/student/tryouts"}
+              variant="primary"
+              size="lg"
+              className="mt-6 w-full"
+            >
+              {isKecermatan ? t.viewKecermatanTest : t.viewMyPackages}
             </LinkButton>
           </div>
         </main>

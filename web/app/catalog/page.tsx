@@ -15,7 +15,7 @@ import { api, type PublicProduct } from "@/lib/api/client";
 import { formatIDR } from "@/lib/format-money";
 import { cn } from "@/lib/cn";
 
-type TypeFilter = "all" | "individual" | "bundle";
+type TypeFilter = "all" | "individual" | "bundle" | "kecermatan";
 
 const PAGE_SIZE = 60;
 
@@ -100,7 +100,11 @@ function CatalogContent() {
               {product.program_code}
             </Chip>
             <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
-              {product.type === "bundle" ? t.bundleSize(product.tryouts.length) : t.typeIndividual}
+              {product.type === "bundle"
+                ? t.bundleSize(product.tryouts.length)
+                : product.type === "kecermatan"
+                  ? t.typeKecermatan
+                  : t.typeIndividual}
             </Chip>
             {product.discount_percent !== null && (
               <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
@@ -127,6 +131,7 @@ function CatalogContent() {
     { key: "all", label: t.filterAllType },
     { key: "individual", label: t.typeIndividual },
     { key: "bundle", label: t.typeBundle },
+    { key: "kecermatan", label: t.sectionPsychometric },
   ];
 
   const body = (

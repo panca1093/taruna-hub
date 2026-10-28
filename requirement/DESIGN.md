@@ -317,6 +317,7 @@ Toasts are provided globally at `bottom end`. Use them for concise action outcom
 | `DonutStat` | 140px diameter; 16px stroke; 20px legend gap; 12px labels/counts | Show a small set of part-to-whole statuses; always retain counts |
 | `Sparkline` | Default 160×40px; 2px accent line; fading fill | Supplement a KPI with a trend, not an unexplained standalone graph |
 | `CountdownRing` | Default 120px; 8px stroke; clamps value to 0–100; rounded ends | Show explicit time/score/progress text and what it represents |
+| `KecermatanItem` | Inline; text kinds read as one mono string, emoji/shape/image draw each element at `size-5` via `ItemElementView` | One kecermatan reference or shown item in the attempt and the review; never show a missing-item marker |
 
 The ring uses `ring-start` → `ring-end`; `urgent` changes the stroke to danger. The caller determines urgency. Product timer policy must come from the exam specification, not a new visual threshold invented per screen.
 

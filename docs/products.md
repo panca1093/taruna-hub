@@ -84,7 +84,8 @@ already lists as pending for auth.
 
 `app/admin/products` is the staff table: real list, create, edit, delete, "Muat lebih banyak", inline
 server field errors, toasts, and a tryout picker fed by `GET /api/v1/tryouts?status=published&program_id=`.
-The type choice offers only `individual` and `bundle`, because there is no kecermatan test entity yet.
+The type choice offers `individual`, `bundle` and (P18) `kecermatan`: a kecermatan product picks one test of the program
+and its attempts per purchase, attaches no tryouts, and is sold while its test exists. See [kecermatan-runtime.md](kecermatan-runtime.md).
 
 `app/catalog` and `app/catalog/[id]` read the public API only: program, type and title filters, loading,
 empty and error states, and prices formatted from the string. The "Beli" button links into

@@ -26,6 +26,9 @@ const id = {
   skip: "Lewati",
   soalPrompt: "Item mana yang hilang dari set referensi di atas?",
   chooseMissingLabel: "Pilih label item yang hilang",
+  loadErrorTitle: "Tes gagal dimuat",
+  loadErrorDescription: "Periksa koneksi lalu coba lagi. Waktu kolom tetap berjalan di server.",
+  retry: "Coba lagi",
 };
 
 const en: typeof id = {
@@ -52,6 +55,9 @@ const en: typeof id = {
   skip: "Skip",
   soalPrompt: "Which item is missing from the reference set above?",
   chooseMissingLabel: "Choose the missing item's label",
+  loadErrorTitle: "The test could not be loaded",
+  loadErrorDescription: "Check the connection and try again. The kolom timer keeps running on the server.",
+  retry: "Try again",
 };
 
 export function useKecermatanAttemptT() {

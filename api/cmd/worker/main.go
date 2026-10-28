@@ -100,7 +100,10 @@ func run() error {
 	reconcile(ctx, notifications, assets, logger)
 
 	runtime := service.NewRuntimeService(pool, repository.NewRuntimeRepository(pool))
-	go finalizeDeadlines(ctx, runtime, logger)
+	kecermatanRepo := repository.NewKecermatanRepository(pool)
+	kecermatanRuntime := service.NewKecermatanRuntimeService(pool, repository.NewKecermatanRuntimeRepository(pool),
+		service.NewKecermatanService(pool, kecermatanRepo, repository.NewItemPackageRepository(pool)), kecermatanRepo)
+	go finalizeDeadlines(ctx, runtime, kecermatanRuntime, logger)
 
 	<-ctx.Done()
 	logger.Info("shutting down")
@@ -109,7 +112,7 @@ func run() error {
 
 // finalizeDeadlines is the independent deadline worker of ARCHITECTURE 4.6. PostgreSQL decides what is due, so a
 // restart or a missed tick only delays finalization; the answer path enforces expiry on its own meanwhile.
-func finalizeDeadlines(ctx context.Context, runtime *service.RuntimeService, logger *slog.Logger) {
+func finalizeDeadlines(ctx context.Context, runtime *service.RuntimeService, kecermatan *service.KecermatanRuntimeService, logger *slog.Logger) {
 	ticker := time.NewTicker(deadlineInterval)
 	defer ticker.Stop()
 	for {
@@ -123,6 +126,13 @@ func finalizeDeadlines(ctx context.Context, runtime *service.RuntimeService, log
 			}
 			if settled > 0 {
 				logger.Info("settled expired exam sessions", slog.Int("count", settled))
+			}
+			moved, err := kecermatan.FinalizeDue(ctx)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				logger.Error("finalize due kecermatan attempts failed", slog.String("error", err.Error()))
+			}
+			if moved > 0 {
+				logger.Info("settled due kecermatan attempts", slog.Int("count", moved))
 			}
 		}
 	}

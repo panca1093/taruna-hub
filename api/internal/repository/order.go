@@ -39,7 +39,8 @@ func NewOrderRepository(db *pgxpool.Pool) *OrderRepository {
 
 const orderColumns = `o.id, o.number, o.tenant_id, o.user_id, u.name, o.product_id, o.product_type,
 	o.product_title, o.price::text, o.payment_method, o.status, o.idempotency_key, o.proof_asset_id,
-	o.cancel_reason, o.reviewed_by, o.confirmed_at, o.cancelled_at, o.created_at, o.updated_at`
+	o.cancel_reason, o.reviewed_by, o.confirmed_at, o.cancelled_at, o.created_at, o.updated_at,
+	o.kecermatan_test_id, o.included_attempts`
 
 const orderFrom = ` FROM orders o JOIN users u ON u.id = o.user_id AND u.tenant_id = o.tenant_id`
 
@@ -97,11 +98,11 @@ func (r *OrderRepository) InsertTx(ctx context.Context, tx pgx.Tx, tenantID uuid
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `
 		INSERT INTO orders (tenant_id, user_id, product_id, product_type, product_title, price,
-		        payment_method, status, idempotency_key, proof_asset_id)
-		VALUES ($1, $2, $3, $4, $5, $6::numeric, $7, 'pending', $8, $9)
+		        payment_method, status, idempotency_key, proof_asset_id, kecermatan_test_id, included_attempts)
+		VALUES ($1, $2, $3, $4, $5, $6::numeric, $7, 'pending', $8, $9, $10, $11)
 		RETURNING id`,
 		tenantID, order.UserID, order.ProductID, order.ProductType, order.ProductTitle, order.Price,
-		order.PaymentMethod, order.Key, order.ProofAssetID).Scan(&id)
+		order.PaymentMethod, order.Key, order.ProofAssetID, order.KecermatanTestID, order.IncludedAttempts).Scan(&id)
 	if err != nil {
 		return model.Order{}, mapOrderError("insert order", err)
 	}
@@ -290,6 +291,46 @@ func (r *OrderRepository) InsertEnrollmentTx(ctx context.Context, tx pgx.Tx, ten
 	return id, true, nil
 }
 
+// AddKecermatanCreditTx opens (or finds) the user's single enrollment for a test and adds the credits of one
+// grant source. The enrollment row is locked first, so it serializes with an attempt's completion on the same row;
+// the grant's unique source key makes a retried source add nothing twice. It reports whether credits were added.
+func (r *OrderRepository) AddKecermatanCreditTx(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID, g model.EnrollmentGrant, userID, testID uuid.UUID) (bool, error) {
+	if tenantID == uuid.Nil {
+		return false, ErrScopeRequired
+	}
+	if g.Attempts == nil || *g.Attempts < 1 {
+		return false, fmt.Errorf("kecermatan grant needs a positive credit")
+	}
+	var enrollmentID uuid.UUID
+	created := true
+	err := tx.QueryRow(ctx, `
+		INSERT INTO enrollments (tenant_id, user_id, kecermatan_test_id, attempts_purchased)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (tenant_id, user_id, kecermatan_test_id) DO NOTHING
+		RETURNING id`, tenantID, userID, testID, *g.Attempts).Scan(&enrollmentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		created = false
+		err = tx.QueryRow(ctx, `
+			SELECT id FROM enrollments WHERE tenant_id = $1 AND user_id = $2 AND kecermatan_test_id = $3 FOR UPDATE`,
+			tenantID, userID, testID).Scan(&enrollmentID)
+	}
+	if err != nil {
+		return false, mapOrderError("open kecermatan enrollment", err)
+	}
+	g.EnrollmentID = enrollmentID
+	granted, err := r.InsertGrantTx(ctx, tx, tenantID, g)
+	if err != nil || !granted {
+		return false, err
+	}
+	if !created {
+		if _, err := tx.Exec(ctx, `UPDATE enrollments SET attempts_purchased = attempts_purchased + $3
+			 WHERE tenant_id = $1 AND id = $2`, tenantID, enrollmentID, *g.Attempts); err != nil {
+			return false, mapOrderError("add kecermatan credit", err)
+		}
+	}
+	return true, nil
+}
+
 // InsertGrantTx reports false when this source already granted this enrollment.
 func (r *OrderRepository) InsertGrantTx(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID, g model.EnrollmentGrant) (bool, error) {
 	if tenantID == uuid.Nil {
@@ -297,10 +338,10 @@ func (r *OrderRepository) InsertGrantTx(ctx context.Context, tx pgx.Tx, tenantID
 	}
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO enrollment_grants (tenant_id, enrollment_id, order_id, source_type, source_id,
-		        actor_kind, actor_id, reason)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		        actor_kind, actor_id, reason, attempts)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (tenant_id, source_type, source_id, enrollment_id) DO NOTHING`,
-		tenantID, g.EnrollmentID, g.OrderID, g.SourceType, g.SourceID, g.ActorKind, g.ActorID, g.Reason)
+		tenantID, g.EnrollmentID, g.OrderID, g.SourceType, g.SourceID, g.ActorKind, g.ActorID, g.Reason, g.Attempts)
 	if err != nil {
 		return false, mapOrderError("insert enrollment grant", err)
 	}
@@ -341,7 +382,8 @@ func scanOrder(row pgx.Row) (model.Order, error) {
 	var o model.Order
 	err := row.Scan(&o.ID, &o.Number, &o.TenantID, &o.UserID, &o.StudentName, &o.ProductID, &o.ProductType,
 		&o.ProductTitle, &o.Price, &o.PaymentMethod, &o.Status, &o.Key, &o.ProofAssetID,
-		&o.CancelReason, &o.ReviewedBy, &o.ConfirmedAt, &o.CancelledAt, &o.CreatedAt, &o.UpdatedAt)
+		&o.CancelReason, &o.ReviewedBy, &o.ConfirmedAt, &o.CancelledAt, &o.CreatedAt, &o.UpdatedAt,
+		&o.KecermatanTestID, &o.IncludedAttempts)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Order{}, ErrNotFound
 	}

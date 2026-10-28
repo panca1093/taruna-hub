@@ -85,6 +85,9 @@ type IssueInput struct {
 	ActorKind  string
 	ActorID    *uuid.UUID
 	Reason     string
+	// KecermatanTestID with Attempts adds credits to the user's single enrollment for that test (D05).
+	KecermatanTestID *uuid.UUID
+	Attempts         int
 }
 
 type OrderOption func(*OrderService)
@@ -194,6 +197,7 @@ func (s *OrderService) Checkout(ctx context.Context, scope HostScope, principal 
 			UserID: principal.UserID, ProductID: product.ID, ProductType: product.Type,
 			ProductTitle: product.Title, Price: product.Price, PaymentMethod: in.Method,
 			Key: in.Key, ProofAssetID: in.ProofAssetID, Items: items,
+			KecermatanTestID: product.KecermatanTestID, IncludedAttempts: product.IncludedAttempts,
 		})
 		if err != nil {
 			return orderError(err)
@@ -312,7 +316,12 @@ func (s *OrderService) grantOrder(ctx context.Context, tx pgx.Tx, order model.Or
 		ids = append(ids, item.TryoutID)
 	}
 	orderID := order.ID
+	var attempts int
+	if order.IncludedAttempts != nil {
+		attempts = *order.IncludedAttempts
+	}
 	_, err := s.IssueEnrollmentsTx(ctx, tx, IssueInput{
+		KecermatanTestID: order.KecermatanTestID, Attempts: attempts,
 		TenantID: order.TenantID, UserID: order.UserID, TryoutIDs: ids,
 		SourceType: model.GrantSourceOrder, SourceID: order.ID.String(), OrderID: &orderID,
 		ActorKind: actorKind, ActorID: actor,
@@ -326,6 +335,17 @@ func (s *OrderService) grantOrder(ctx context.Context, tx pgx.Tx, order model.Or
 func (s *OrderService) IssueEnrollmentsTx(ctx context.Context, tx pgx.Tx, in IssueInput) ([]uuid.UUID, error) {
 	if in.SourceType == "" || in.SourceID == "" {
 		return nil, ErrEnrollmentSourceRequired
+	}
+	if in.KecermatanTestID != nil {
+		if in.Attempts < 1 {
+			return nil, ErrEnrollmentSourceRequired
+		}
+		attempts := in.Attempts
+		_, err := s.repo.AddKecermatanCreditTx(ctx, tx, in.TenantID, model.EnrollmentGrant{
+			OrderID: in.OrderID, SourceType: in.SourceType, SourceID: in.SourceID,
+			ActorKind: in.ActorKind, ActorID: in.ActorID, Reason: in.Reason, Attempts: &attempts,
+		}, in.UserID, *in.KecermatanTestID)
+		return nil, err
 	}
 	var opened []uuid.UUID
 	for _, tryoutID := range in.TryoutIDs {

@@ -35,6 +35,7 @@ type Handler struct {
 	monitoring    *service.MonitoringService
 	itemPackages  *service.ItemPackageService
 	kecermatan    *service.KecermatanService
+	kecRuntime    *service.KecermatanRuntimeService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
@@ -186,6 +187,19 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.PUT("/kecermatan-tests/:id", h.UpdateKecermatanTest, httpx.NoStore(), Authenticate(h.auth), staff)
 	v1.DELETE("/kecermatan-tests/:id", h.DeleteKecermatanTest, httpx.NoStore(), Authenticate(h.auth), staff)
 	v1.POST("/kecermatan-tests/:id/preview", h.PreviewKecermatanTest, httpx.NoStore(), Authenticate(h.auth), staff)
+
+	// Kecermatan attempts are the student's own; the staff routes read results only (no fullscreen, violations or ranking).
+	student := RequireRole(model.RoleStudent)
+	v1.GET("/my/kecermatan-tests", h.MyKecermatanTests, httpx.NoStore(), Authenticate(h.auth), student)
+	v1.GET("/my/kecermatan-tests/:id", h.MyKecermatanTest, httpx.NoStore(), Authenticate(h.auth), student)
+	v1.POST("/my/kecermatan-tests/:id/sessions", h.StartKecermatanSession, httpx.NoStore(), Authenticate(h.auth), student)
+	v1.GET("/my/kecermatan-sessions/:id", h.KecermatanSession, httpx.NoStore(), Authenticate(h.auth), student)
+	v1.POST("/my/kecermatan-sessions/:id/continue", h.ContinueKecermatanSession, httpx.NoStore(), Authenticate(h.auth), student)
+	v1.PUT("/my/kecermatan-sessions/:id/kolom/:kolom/soal/:soal", h.AnswerKecermatan, httpx.NoStore(), Authenticate(h.auth), student)
+	v1.GET("/my/kecermatan-sessions/:id/result", h.KecermatanResult, httpx.NoStore(), Authenticate(h.auth), student)
+	v1.GET("/my/kecermatan-sessions/:id/review", h.KecermatanReview, httpx.NoStore(), Authenticate(h.auth), student)
+	v1.GET("/admin/kecermatan-results", h.StaffKecermatanResults, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.GET("/admin/kecermatan-results/:id", h.StaffKecermatanResult, httpx.NoStore(), Authenticate(h.auth), staff)
 
 	// Any tenant user may upload; the purpose narrows who, and every read is re-authorized in the service.
 	v1.POST("/assets", h.UploadAsset, httpx.NoStore(), Authenticate(h.auth))

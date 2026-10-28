@@ -51,6 +51,8 @@ tags:
     description: Kecermatan item packages - symbol, image, emoji and shape pools with frozen revisions
   - name: kecermatan-tests
     description: Kecermatan test builder - frozen generation configuration, pinned item packages and a staff column preview
+  - name: kecermatan-runtime
+    description: The student's kecermatan attempts - credits, server-timed kolom, answers, results and review - and the staff results list
   - name: monitoring
     description: Tryout violation evidence the student's browser reports, and the staff view of active sessions and timelines
 
@@ -1268,7 +1270,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [individual, bundle]
+            enum: [individual, bundle, kecermatan]
         - name: status
           in: query
           schema:
@@ -1448,7 +1450,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [individual, bundle]
+            enum: [individual, bundle, kecermatan]
         - name: q
           in: query
           description: Case-insensitive substring of the title; `%` and `_` are literal.
@@ -3450,6 +3452,336 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /api/v1/my/kecermatan-tests:
+    get:
+      tags: [kecermatan-runtime]
+      summary: The kecermatan tests the student holds credits for
+      description: Student only. One row per test the student ever bought attempts for, with the credit state.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The held tests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanStudentTestList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/my/kecermatan-tests/{id}:
+    get:
+      tags: [kecermatan-runtime]
+      summary: The student's overview of one kecermatan test
+      description: |
+        Student only. A test the student holds no credits for answers `404`. `current` is the attempt in progress
+        (timeline already settled), `attempts` is the history newest first, `product_id` is a product the student
+        can buy more attempts from, or `null` when none is on sale.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/KecermatanTestId"
+      responses:
+        "200":
+          description: The overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanOverview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/my/kecermatan-tests/{id}/sessions:
+    post:
+      tags: [kecermatan-runtime]
+      summary: Start or resume an attempt
+      description: |
+        Student only, no body. Under the enrollment row lock this returns the attempt already in progress (`200`:
+        a retry, a second tab or a resume, which consumes nothing) or, when at least one credit remains, admits a
+        new one (`201`): a fresh per-attempt seed is drawn on the server, the generated N/2 columns are frozen into
+        the attempt, and kolom 1 starts at once on the server clock. A credit is consumed only when the attempt
+        completes, in the same transaction as its result (D05). With no credit left the answer is `409`
+        `kecermatan_no_credit`, which the web turns into a redirect to the purchase. Holding no credits at all is `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/KecermatanTestId"
+      responses:
+        "200":
+          description: The attempt that was already in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanSession"
+        "201":
+          description: A new attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`kecermatan_no_credit`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/my/kecermatan-sessions/{id}:
+    get:
+      tags: [kecermatan-runtime]
+      summary: The student's current state of an attempt
+      description: |
+        Student only, owner only (anything else is `404`). Passed deadlines are settled first, so the answer is
+        what the server clock says: `phase` is `kolom` (the one running kolom with its reference set, the labels
+        shown per soal and the answers stored so far), `pause` (between two kolom; the next one starts by itself at
+        `next_starts_at`) or `completed` (with the `result`). Only the running kolom's content is ever sent, and
+        never the missing item, a seed or a later kolom.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: The attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/my/kecermatan-sessions/{id}/continue:
+    post:
+      tags: [kecermatan-runtime]
+      summary: "Lanjut: start the next kolom now"
+      description: |
+        Student only, no body. During a pause it starts the next kolom at this instant instead of waiting out the
+        pause. While a kolom runs, or repeated, it changes nothing. Timers are server-side: a closed tab never
+        resets or pauses them.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: The attempt after the call
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanSession"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/my/kecermatan-sessions/{id}/kolom/{kolom}/soal/{soal}:
+    put:
+      tags: [kecermatan-runtime]
+      summary: Answer or skip one soal
+      description: |
+        Student only. `answer` must be present: a label `A`.. up to the test's options, or `null` to skip. Answers
+        are write-once per soal: repeating the same one is a harmless retry (`200`), a different one is `409`
+        `kecermatan_answer_locked`. Only the running kolom accepts answers and only before its server deadline
+        (`409` `kecermatan_kolom_not_running`); a finished attempt is `409` `kecermatan_session_completed`. A soal
+        never answered is `kosong`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - name: kolom
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: soal
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KecermatanAnswerRequest"
+      responses:
+        "200":
+          description: The stored answer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanAnswerAck"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`kecermatan_answer_locked`, `kecermatan_kolom_not_running` or `kecermatan_session_completed`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/my/kecermatan-sessions/{id}/result:
+    get:
+      tags: [kecermatan-runtime]
+      summary: The result of a completed attempt
+      description: |
+        Student only, owner only. Per-kolom and total benar/salah/kosong are authoritative and immutable. The four
+        composite scores are provisional (D03, client confirmation pending) and carry the `scoring_version` they
+        were computed under, so a revised formula can recompute them from the counts. An attempt in progress is
+        `409` `kecermatan_result_not_ready`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`kecermatan_result_not_ready`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/my/kecermatan-sessions/{id}/review:
+    get:
+      tags: [kecermatan-runtime]
+      summary: The detailed review of a completed attempt
+      description: |
+        Student only, owner only, and only once the attempt is completed (`409` `kecermatan_result_not_ready`
+        before). It reproduces the attempt exactly: the N/2 generated `columns` (reference set, shown subset and
+        missing item per soal) and, per kolom, the stored answers and which column it replayed. Kolom k and k + N/2
+        share a column but carry their own answers.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: The review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanReview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`kecermatan_result_not_ready`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/admin/kecermatan-results:
+    get:
+      tags: [kecermatan-runtime]
+      summary: Completed kecermatan attempts of the tenant
+      description: Admin and Operator. Newest first, filtered by test and/or program. No student-facing review is exposed here.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: test_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: program_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: A page of results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanStaffResultList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/kecermatan-results/{id}:
+    get:
+      tags: [kecermatan-runtime]
+      summary: One completed attempt with its per-kolom counts
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: The result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanStaffResultDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4394,14 +4726,26 @@ components:
       type: object
       additionalProperties: false
       required: [id, type, title, description, program_id, price, original_price, is_active, active_from, active_until,
-                 tryouts, created_at, updated_at]
+                 tryouts, kecermatan_test_id, kecermatan_test_title, included_attempts, created_at, updated_at]
       properties:
         id:
           type: string
           format: uuid
         type:
           type: string
-          enum: [individual, bundle]
+          enum: [individual, bundle, kecermatan]
+        kecermatan_test_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The test a `kecermatan` product sells attempts for; `null` for the other types.
+        kecermatan_test_title:
+          type: string
+          nullable: true
+        included_attempts:
+          type: integer
+          nullable: true
+          description: Attempt credits one purchase adds to the student's enrollment for the test (1-1000).
         title:
           type: string
         description:
@@ -4459,7 +4803,16 @@ components:
       properties:
         type:
           type: string
-          enum: [individual, bundle]
+          enum: [individual, bundle, kecermatan]
+        kecermatan_test_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Required for `kecermatan` (a test of the same program, else `422`), and refused for the other types.
+        included_attempts:
+          type: integer
+          nullable: true
+          description: Required for `kecermatan`, 1-1000; refused for the other types.
         title:
           type: string
           minLength: 1
@@ -4496,7 +4849,7 @@ components:
           nullable: true
         tryout_ids:
           type: array
-          description: The complete package, in order. One id for `individual`, two to twenty for `bundle`.
+          description: The complete package, in order. One id for `individual`, two to twenty for `bundle`, none for `kecermatan`.
           items:
             type: string
             format: uuid
@@ -4518,18 +4871,45 @@ components:
         duration_seconds_total:
           type: integer
 
+    PublicKecermatan:
+      type: object
+      additionalProperties: false
+      required: [test_id, item_type, options_per_soal, kolom_count, soal_per_kolom, kolom_duration_seconds]
+      description: What the catalog shows of a kecermatan test; never a seed, key or content.
+      properties:
+        test_id:
+          type: string
+          format: uuid
+        item_type:
+          type: string
+        options_per_soal:
+          type: integer
+        kolom_count:
+          type: integer
+        soal_per_kolom:
+          type: integer
+        kolom_duration_seconds:
+          type: integer
+
     PublicProduct:
       type: object
       additionalProperties: false
       required: [id, type, title, description, program_id, program_code, program_name, price, original_price,
-                 discount_percent, active_until, tryouts]
+                 discount_percent, active_until, tryouts, included_attempts, kecermatan]
       properties:
         id:
           type: string
           format: uuid
         type:
           type: string
-          enum: [individual, bundle]
+          enum: [individual, bundle, kecermatan]
+        included_attempts:
+          type: integer
+          nullable: true
+        kecermatan:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/PublicKecermatan"
         title:
           type: string
         description:
@@ -4800,6 +5180,11 @@ components:
                 - explanations_not_released
                 - package_in_use
                 - package_too_small
+                - kecermatan_no_credit
+                - kecermatan_session_completed
+                - kecermatan_kolom_not_running
+                - kecermatan_answer_locked
+                - kecermatan_result_not_ready
             message:
               type: string
               description: Human-readable, Indonesian, safe to show to end users.
@@ -4862,7 +5247,8 @@ components:
       type: object
       additionalProperties: false
       required: [id, code, status, payment_method, student_id, student_name, product_id, product_type, product_title,
-                 price, items, proof_asset_id, cancel_reason, created_at, confirmed_at, cancelled_at]
+                 price, items, proof_asset_id, cancel_reason, created_at, confirmed_at, cancelled_at,
+                 kecermatan_test_id, included_attempts]
       description: The checkout snapshot. Editing or deleting the product later changes nothing here.
       properties:
         id:
@@ -4887,7 +5273,15 @@ components:
           format: uuid
         product_type:
           type: string
-          enum: [individual, bundle]
+          enum: [individual, bundle, kecermatan]
+        kecermatan_test_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: A kecermatan order has no `items`; it adds `included_attempts` credits to the enrollment for this test.
+        included_attempts:
+          type: integer
+          nullable: true
         product_title:
           type: string
         price:
@@ -6325,6 +6719,464 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/KecermatanPreviewSoal"
+
+    KecermatanStudentTest:
+      type: object
+      additionalProperties: false
+      required: [test_id, title, description, program_code, program_name, options_per_soal, kolom_count, soal_per_kolom,
+                 kolom_duration_seconds, cover_from, cover_to, attempts_purchased, attempts_used, attempts_remaining, in_progress]
+      properties:
+        test_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        program_code:
+          type: string
+        program_name:
+          type: string
+        options_per_soal:
+          type: integer
+        kolom_count:
+          type: integer
+        soal_per_kolom:
+          type: integer
+        kolom_duration_seconds:
+          type: integer
+        cover_from:
+          type: string
+          description: "`#rrggbb`, the test's own cover gradient start."
+        cover_to:
+          type: string
+        attempts_purchased:
+          type: integer
+        attempts_used:
+          type: integer
+          description: Completed attempts; a credit is consumed only on completion.
+        attempts_remaining:
+          type: integer
+        in_progress:
+          type: boolean
+
+    KecermatanStudentTestList:
+      type: object
+      additionalProperties: false
+      required: [tests]
+      properties:
+        tests:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanStudentTest"
+
+    KecermatanAttempt:
+      type: object
+      additionalProperties: false
+      required: [session_id, attempt_number, status, started_at, completed_at, nilai_akhir]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        attempt_number:
+          type: integer
+        status:
+          type: string
+          enum: [in_progress, completed]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        nilai_akhir:
+          type: number
+          nullable: true
+          description: Provisional composite (D03); `null` until completed.
+
+    KecermatanOverview:
+      type: object
+      additionalProperties: false
+      required: [test, current, attempts, product_id]
+      properties:
+        test:
+          $ref: "#/components/schemas/KecermatanStudentTest"
+        current:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/KecermatanSession"
+        attempts:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanAttempt"
+        product_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    KecermatanRuntimeElement:
+      type: object
+      additionalProperties: false
+      required: [kind, value, asset_id]
+      description: One drawable element; text kinds carry the text in `value`, emoji and shape their id, image an `asset_id`.
+      properties:
+        kind:
+          type: string
+        value:
+          type: string
+        asset_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    KecermatanReference:
+      type: object
+      additionalProperties: false
+      required: [label, elements]
+      properties:
+        label:
+          type: string
+          example: A
+        elements:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanRuntimeElement"
+
+    KecermatanSoal:
+      type: object
+      additionalProperties: false
+      required: [number, shown]
+      description: The labels shown on one soal; the one missing label is never sent to a student.
+      properties:
+        number:
+          type: integer
+        shown:
+          type: array
+          items:
+            type: string
+
+    KecermatanStoredAnswer:
+      type: object
+      additionalProperties: false
+      required: [soal, answer]
+      properties:
+        soal:
+          type: integer
+        answer:
+          type: string
+          nullable: true
+          description: The chosen label, or `null` for a skip.
+
+    KecermatanKolom:
+      type: object
+      additionalProperties: false
+      required: [number, started_at, deadline_at, reference, soal, answers]
+      properties:
+        number:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        deadline_at:
+          type: string
+          format: date-time
+          description: The authoritative end of this kolom on the server clock.
+        reference:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanReference"
+        soal:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanSoal"
+        answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanStoredAnswer"
+
+    KecermatanScores:
+      type: object
+      additionalProperties: false
+      required: [kecepatan, ketahanan, ketelitian, nilai_akhir]
+      description: Provisional composite scores (D03), each clamped to 0-100 with two decimals.
+      properties:
+        kecepatan:
+          type: number
+        ketahanan:
+          type: number
+        ketelitian:
+          type: number
+        nilai_akhir:
+          type: number
+
+    KecermatanKolomResult:
+      type: object
+      additionalProperties: false
+      required: [number, benar, salah, kosong]
+      properties:
+        number:
+          type: integer
+        benar:
+          type: integer
+        salah:
+          type: integer
+        kosong:
+          type: integer
+
+    KecermatanResult:
+      type: object
+      additionalProperties: false
+      required: [session_id, test_id, test_title, attempt_number, benar_total, salah_total, kosong_total, scores,
+                 scoring_version, completed_at, kolom]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        test_id:
+          type: string
+          format: uuid
+        test_title:
+          type: string
+        attempt_number:
+          type: integer
+        benar_total:
+          type: integer
+        salah_total:
+          type: integer
+        kosong_total:
+          type: integer
+        scores:
+          $ref: "#/components/schemas/KecermatanScores"
+        scoring_version:
+          type: integer
+        completed_at:
+          type: string
+          format: date-time
+        kolom:
+          description: Per-kolom counts; empty inside a session payload, filled on the result endpoints.
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanKolomResult"
+
+    KecermatanSession:
+      type: object
+      additionalProperties: false
+      required: [id, test_id, test_title, attempt_number, status, phase, started_at, completed_at, server_time, kolom_count,
+                 soal_per_kolom, options_per_soal, kolom_duration_seconds, pause_seconds, kolom, finished_kolom,
+                 next_kolom, next_starts_at, result]
+      properties:
+        id:
+          type: string
+          format: uuid
+        test_id:
+          type: string
+          format: uuid
+        test_title:
+          type: string
+        attempt_number:
+          type: integer
+        status:
+          type: string
+          enum: [in_progress, completed]
+        phase:
+          type: string
+          enum: [kolom, pause, completed]
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        server_time:
+          type: string
+          format: date-time
+          description: The server clock at this response; the browser counts down from it, never from its own clock.
+        kolom_count:
+          type: integer
+        soal_per_kolom:
+          type: integer
+        options_per_soal:
+          type: integer
+        kolom_duration_seconds:
+          type: integer
+        pause_seconds:
+          type: integer
+          description: The jeda between two kolom; the next one starts by itself when it ends.
+        kolom:
+          nullable: true
+          description: Present only while `phase` is `kolom`.
+          allOf:
+            - $ref: "#/components/schemas/KecermatanKolom"
+        finished_kolom:
+          type: integer
+          nullable: true
+        next_kolom:
+          type: integer
+          nullable: true
+        next_starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        result:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/KecermatanResult"
+
+    KecermatanAnswerRequest:
+      type: object
+      additionalProperties: false
+      required: [answer]
+      properties:
+        answer:
+          type: string
+          nullable: true
+          description: A label `A`.. within the test's options, or `null` to skip. The field must be present.
+
+    KecermatanAnswerAck:
+      type: object
+      additionalProperties: false
+      required: [kolom, soal, answer, server_time]
+      properties:
+        kolom:
+          type: integer
+        soal:
+          type: integer
+        answer:
+          type: string
+          nullable: true
+        server_time:
+          type: string
+          format: date-time
+
+    KecermatanReviewSoal:
+      type: object
+      additionalProperties: false
+      required: [shown, missing]
+      properties:
+        shown:
+          type: array
+          items:
+            type: string
+        missing:
+          type: string
+
+    KecermatanReviewColumn:
+      type: object
+      additionalProperties: false
+      required: [reference, soal]
+      properties:
+        reference:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanReference"
+        soal:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanReviewSoal"
+
+    KecermatanReviewKolom:
+      type: object
+      additionalProperties: false
+      required: [number, source_column, benar, salah, kosong, answers]
+      properties:
+        number:
+          type: integer
+        source_column:
+          type: integer
+          description: 1-based index into `columns` this kolom replayed.
+        benar:
+          type: integer
+        salah:
+          type: integer
+        kosong:
+          type: integer
+        answers:
+          type: array
+          description: One entry per soal in order; `null` is a skip or no answer.
+          items:
+            type: string
+            nullable: true
+
+    KecermatanReview:
+      type: object
+      additionalProperties: false
+      required: [result, columns, kolom]
+      properties:
+        result:
+          $ref: "#/components/schemas/KecermatanResult"
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanReviewColumn"
+        kolom:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanReviewKolom"
+
+    KecermatanStaffResult:
+      type: object
+      additionalProperties: false
+      required: [session_id, student_id, student_name, test_id, test_title, program_id, program_code, attempt_number,
+                 benar_total, salah_total, kosong_total, scores, scoring_version, completed_at]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        student_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        test_id:
+          type: string
+          format: uuid
+        test_title:
+          type: string
+        program_id:
+          type: string
+          format: uuid
+        program_code:
+          type: string
+        attempt_number:
+          type: integer
+        benar_total:
+          type: integer
+        salah_total:
+          type: integer
+        kosong_total:
+          type: integer
+        scores:
+          $ref: "#/components/schemas/KecermatanScores"
+        scoring_version:
+          type: integer
+        completed_at:
+          type: string
+          format: date-time
+
+    KecermatanStaffResultList:
+      type: object
+      additionalProperties: false
+      required: [results, total]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanStaffResult"
+        total:
+          type: integer
+
+    KecermatanStaffResultDetail:
+      allOf:
+        - $ref: "#/components/schemas/KecermatanStaffResult"
+        - type: object
+          required: [kolom]
+          properties:
+            kolom:
+              type: array
+              items:
+                $ref: "#/components/schemas/KecermatanKolomResult"
 
   parameters:
     KecermatanTestId:

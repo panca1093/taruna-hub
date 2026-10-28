@@ -158,7 +158,15 @@ func (s *AssetService) DownloadURL(ctx context.Context, scope HostScope, princip
 		return AssetLink{}, assetRepoError(err)
 	}
 	if !isUploader(asset, principal) && !(asset.Status == model.AssetFinal && isStaff(principal.Role)) {
-		return AssetLink{}, ErrAssetNotFound
+		visible := false
+		if asset.Status == model.AssetFinal && asset.Purpose == model.PurposeItemImage && principal.Role == model.RoleStudent {
+			if visible, err = s.repo.KecermatanItemVisible(ctx, s.db, tenantID, principal.UserID, id); err != nil {
+				return AssetLink{}, assetRepoError(err)
+			}
+		}
+		if !visible {
+			return AssetLink{}, ErrAssetNotFound
+		}
 	}
 	expires := time.Now().Add(s.urlTTL)
 	link, err := s.store.PresignGet(ctx, asset.ObjectKey, s.urlTTL)

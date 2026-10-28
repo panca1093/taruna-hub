@@ -18,3 +18,4 @@ decisions behind them stay in `requirement/` (PRD, ARCHITECTURE, PLAN), and the 
 | Orders, checkout and enrollments | P13 | [orders.md](orders.md) |
 | Tryout runtime: sessions, deadlines, scoring and the result | P16 | [tryout-runtime.md](tryout-runtime.md) |
 | Kecermatan item packages: symbol, image, emoji and shape pools in frozen revisions | P09 | [item-packages.md](item-packages.md) |
+| Kecermatan attempts: credits, server-timed kolom, answers, versioned scoring and results | P18 | [kecermatan-runtime.md](kecermatan-runtime.md) |
