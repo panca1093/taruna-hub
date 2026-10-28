@@ -39,6 +39,8 @@ tags:
     description: Tenant students, their wallets and staff adjustments
   - name: assets
     description: Private image uploads, finalization and short-lived download links
+  - name: orders
+    description: Wallet and manual-transfer checkout, order review by staff, and the access an order opens
 
 paths:
   /healthz:
@@ -1741,6 +1743,326 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /api/v1/orders:
+    post:
+      tags: [orders]
+      summary: Check out a product
+      description: |
+        Student only. The server checks that the product is active, inside its own sale window (`active_from` to
+        `active_until`) and that every tryout is still published, then stores a snapshot of its title, price and
+        tryouts on the order; the client never sends a price.
+
+        `payment_method` is `wallet` or `manual` (the gateway arrives with P14). A `wallet` order is debited,
+        confirmed, granted and queued for notification in one transaction: if the balance is too low it answers
+        `422` with code `insufficient_balance` and nothing is written. A `manual` order needs `proof_asset_id`, an
+        unused `payment_proof` asset the caller uploaded through `POST /api/v1/assets`; it is finalized with the
+        order and the order waits as `pending` for staff. Anyone else's, a missing, a wrongly typed or an already
+        used proof answers the same `422` on `proof_asset_id`. `503` when no bank account is configured.
+
+        `idempotency_key` (8–64 characters, `[A-Za-z0-9_-]`) identifies the purchase. The first call answers `201`;
+        the same key for the same product, method and proof answers `200` with the original order and moves
+        nothing; the same key for anything else answers `409`.
+
+        An `individual` product whose tryout the student already holds with active access answers `409` with code
+        `already_owned`. A `bundle` can still be bought: only the tryouts not yet held are granted.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+      responses:
+        "201":
+          description: The new order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "200":
+          description: The original order for this idempotency key, nothing written
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: |
+            `already_owned` (an individual product's tryout is already held) or `conflict` (the idempotency key
+            belongs to a different order).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: |
+            `validation_failed` with `fields`, or `insufficient_balance` when the wallet cannot pay the price.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    get:
+      tags: [orders]
+      summary: The signed-in student's own orders
+      description: Student only. Newest first, at most 100 per page, only the caller's own orders.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of the student's orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/orders/{id}:
+    get:
+      tags: [orders]
+      summary: One of the student's own orders
+      description: Student only. Another student's order answers the same `404` as a missing one.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/enrollments:
+    get:
+      tags: [orders]
+      summary: The tryouts the signed-in student holds ("Paket Belajar Saya")
+      description: |
+        Student only. The access window is the tryout's own `active_from` and `active_until`, read live; a
+        purchase does not carry a window of its own (D05a).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Every tryout the student holds, newest grant first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrollmentList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/payments/bank-transfer:
+    get:
+      tags: [orders]
+      summary: Where a manual transfer is sent
+      description: |
+        Student only. The single tenant's account, from server configuration. `503` when it is not configured,
+        which also makes manual checkout unavailable.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The bank account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankTransfer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/admin/orders:
+    get:
+      tags: [orders]
+      summary: Every order of the tenant, for review
+      description: |
+        Admin and Operator (D02: a role guard). Newest first, at most 100 per page. `status` narrows to one
+        state. `q` is a case-insensitive substring of the order code, the student's name or the product title;
+        `%` and `_` are literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, cancelled]
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of orders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/orders/{id}:
+    get:
+      tags: [orders]
+      summary: One order for review
+      description: Admin and Operator only.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/admin/orders/{id}/confirm:
+    post:
+      tags: [orders]
+      summary: Accept a pending order's payment
+      description: |
+        Admin and Operator. Moves a `pending` order to `confirmed`, opens the tryouts it bought that the student
+        does not hold yet and queues the email and WhatsApp notifications, all in one transaction. Repeating the
+        call on a confirmed order answers `200` and changes nothing. A `cancelled` order answers `409`; a
+        confirmed order never goes back to pending.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The order as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/admin/orders/{id}/cancel:
+    post:
+      tags: [orders]
+      summary: Refuse a pending order
+      description: |
+        Admin and Operator. Moves a `pending` order to `cancelled` with a required `reason` (1–500 characters),
+        opens no access and queues the cancellation notifications. Repeating the call on a cancelled order
+        answers `200` and keeps the first reason. A `confirmed` order answers `409`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelOrderRequest"
+      responses:
+        "200":
+          description: The order as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
   /api/v1/assets:
     post:
       tags: [assets]
@@ -2756,7 +3078,7 @@ components:
     Product:
       type: object
       additionalProperties: false
-      required: [id, type, title, description, program_id, price, original_price, is_active, active_until,
+      required: [id, type, title, description, program_id, price, original_price, is_active, active_from, active_until,
                  tryouts, created_at, updated_at]
       properties:
         id:
@@ -2783,6 +3105,11 @@ components:
           example: "200000.00"
         is_active:
           type: boolean
+        active_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: First moment the product can be bought; `null` means no start. Never changes tryout access (D05a).
         active_until:
           type: string
           format: date-time
@@ -2840,6 +3167,14 @@ components:
           pattern: '^[0-9]+(\.[0-9]{1,2})?$'
         is_active:
           type: boolean
+        active_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Optional. First moment the product can be bought. Must be before `active_until` when both are set,
+            otherwise `422` on `active_from`. It bounds the catalog and checkout only; a tryout's own window
+            decides when it can be taken.
         active_until:
           type: string
           format: date-time
@@ -3135,6 +3470,8 @@ components:
                 - too_many_requests
                 - internal_error
                 - service_unavailable
+                - already_owned
+                - insufficient_balance
             message:
               type: string
               description: Human-readable, Indonesian, safe to show to end users.
@@ -3146,6 +3483,174 @@ components:
             request_id:
               type: string
               description: Correlates with the server log line for this request.
+
+    CheckoutRequest:
+      type: object
+      additionalProperties: false
+      required: [product_id, payment_method, idempotency_key]
+      properties:
+        product_id:
+          type: string
+          format: uuid
+        payment_method:
+          type: string
+          enum: [manual, wallet]
+        idempotency_key:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{8,64}$'
+        proof_asset_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Required for `manual` and refused for `wallet`. An unused `payment_proof` asset the caller uploaded.
+
+    CancelOrderRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    OrderItem:
+      type: object
+      additionalProperties: false
+      required: [tryout_id, title]
+      properties:
+        tryout_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          description: The tryout's title when the order was placed.
+
+    Order:
+      type: object
+      additionalProperties: false
+      required: [id, code, status, payment_method, student_id, student_name, product_id, product_type, product_title,
+                 price, items, proof_asset_id, cancel_reason, created_at, confirmed_at, cancelled_at]
+      description: The checkout snapshot. Editing or deleting the product later changes nothing here.
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: ORD-000042
+        status:
+          type: string
+          enum: [pending, confirmed, cancelled]
+        payment_method:
+          type: string
+          enum: [manual, wallet]
+        student_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        product_id:
+          type: string
+          format: uuid
+        product_type:
+          type: string
+          enum: [individual, bundle]
+        product_title:
+          type: string
+        price:
+          type: string
+          description: Canonical decimal string with two fraction digits, exactly what was charged or to be transferred.
+          example: "150000.00"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        proof_asset_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The transfer proof of a `manual` order; read it with `GET /api/v1/assets/{id}/url`.
+        cancel_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        cancelled_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    OrderList:
+      type: object
+      additionalProperties: false
+      required: [orders, total]
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        total:
+          type: integer
+
+    Enrollment:
+      type: object
+      additionalProperties: false
+      required: [id, tryout_id, tryout_title, program_code, program_name, subtest_count, active_from, active_until,
+                 created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tryout_id:
+          type: string
+          format: uuid
+        tryout_title:
+          type: string
+        program_code:
+          type: string
+        program_name:
+          type: string
+        subtest_count:
+          type: integer
+        active_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: The tryout's own start; access has not begun before it.
+        active_until:
+          type: string
+          format: date-time
+          description: The tryout's own end (D05a).
+        created_at:
+          type: string
+          format: date-time
+
+    EnrollmentList:
+      type: object
+      additionalProperties: false
+      required: [enrollments]
+      properties:
+        enrollments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Enrollment"
+
+    BankTransfer:
+      type: object
+      additionalProperties: false
+      required: [bank_name, account_number, account_holder]
+      properties:
+        bank_name:
+          type: string
+        account_number:
+          type: string
+        account_holder:
+          type: string
 
   responses:
     Unauthorized:

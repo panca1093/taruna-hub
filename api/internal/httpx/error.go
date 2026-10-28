@@ -23,6 +23,10 @@ const (
 	CodeRateLimited  Code = "too_many_requests"
 	CodeInternal     Code = "internal_error"
 	CodeUnavailable  Code = "service_unavailable"
+	// CodeAlreadyOwned: the student already holds an individual product's tryout (D05b).
+	CodeAlreadyOwned Code = "already_owned"
+	// CodeInsufficientBalance: a wallet payment would take the balance below zero; nothing was written.
+	CodeInsufficientBalance Code = "insufficient_balance"
 )
 
 // Envelope is the single response shape for every failing request.

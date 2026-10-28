@@ -39,6 +39,14 @@ type S3Config struct {
 	Region    string
 }
 
+// BankConfig is where manual transfers are sent; the one tenant's account, never taken from a request.
+// Without all three fields manual checkout answers 503 and nothing else is affected.
+type BankConfig struct {
+	Name          string
+	AccountNumber string
+	AccountHolder string
+}
+
 type Config struct {
 	Env         string
 	Port        string
@@ -51,6 +59,7 @@ type Config struct {
 	TenantSlug string
 	SMTP       SMTPConfig
 	S3         S3Config
+	Bank       BankConfig
 	// NotificationSealKey seals the codes and reset links queued for delivery. Required everywhere.
 	NotificationSealKey []byte
 	// AppURL is the web origin that links in emails point at; never taken from a request.
@@ -78,6 +87,11 @@ func Load() (Config, error) {
 			From:     env("SMTP_FROM", ""),
 			TLS:      env("SMTP_TLS", SMTPTLSStartTLS),
 		},
+	}
+	c.Bank = BankConfig{
+		Name:          env("BANK_NAME", ""),
+		AccountNumber: env("BANK_ACCOUNT_NUMBER", ""),
+		AccountHolder: env("BANK_ACCOUNT_HOLDER", ""),
 	}
 	if c.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")

@@ -208,6 +208,14 @@ func NewNotificationService(repo *repository.NotificationRepository, jobs JobIns
 			"Halo {{.Get \"name\"}},\n\nBuka tautan berikut untuk mengatur ulang kata sandi akun {{.Get \"tenant_name\"}} Anda:\n" +
 				"{{.Get \"reset_url\"}}\n\nTautan berlaku {{.Get \"minutes\"}} menit dan hanya dapat dipakai sekali.\n" +
 				"Abaikan email ini jika Anda tidak memintanya; kata sandi Anda tidak berubah."},
+		{TemplateOrderConfirmed,
+			`Pesanan {{.Get "code"}} terkonfirmasi - {{.Get "tenant_name"}}`,
+			"Halo {{.Get \"name\"}},\n\nPesanan {{.Get \"code\"}} ({{.Get \"product\"}}) sudah terkonfirmasi. " +
+				"Akses tryout kamu kini terbuka di menu Paket Belajar Saya.\n\nSalam belajar,\n{{.Get \"tenant_name\"}}"},
+		{TemplateOrderCancelled,
+			`Pesanan {{.Get "code"}} dibatalkan - {{.Get "tenant_name"}}`,
+			"Halo {{.Get \"name\"}},\n\nPesanan {{.Get \"code\"}} ({{.Get \"product\"}}) dibatalkan.\n" +
+				"Alasan: {{.Get \"reason\"}}\n\nAkses tryout tidak dibuka. Hubungi admin {{.Get \"tenant_name\"}} jika ada pertanyaan."},
 	} {
 		if err := s.RegisterTemplate(t.name, t.subject, t.body); err != nil {
 			return nil, err

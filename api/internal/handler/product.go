@@ -25,6 +25,7 @@ const (
 	productProgram        = "Program tidak ditemukan."
 	productPriceRule      = "Harga harus angka lebih dari 0 dengan maksimal 2 desimal."
 	productOriginalRule   = "Harga coret harus angka dan tidak lebih kecil dari harga."
+	productWindowRule     = "Mulai penjualan harus sebelum akhir penjualan."
 	productTryoutsRule    = "Produk individual butuh 1 tryout dan bundle 2–20 tryout."
 	productTryoutRule     = "Tryout tidak ditemukan atau belum dipublikasikan pada program ini."
 	productListRule       = "Batas 1–100."
@@ -48,6 +49,7 @@ type productResponse struct {
 	Price         string                  `json:"price"`
 	OriginalPrice *string                 `json:"original_price"`
 	IsActive      bool                    `json:"is_active"`
+	ActiveFrom    *time.Time              `json:"active_from"`
 	ActiveUntil   *time.Time              `json:"active_until"`
 	Tryouts       []productTryoutResponse `json:"tryouts"`
 	CreatedAt     time.Time               `json:"created_at"`
@@ -101,6 +103,7 @@ type productRequest struct {
 	Price         string   `json:"price"`
 	OriginalPrice *string  `json:"original_price"`
 	IsActive      bool     `json:"is_active"`
+	ActiveFrom    *string  `json:"active_from"`
 	ActiveUntil   *string  `json:"active_until"`
 	TryoutIDs     []string `json:"tryout_ids"`
 }
@@ -304,10 +307,17 @@ func productInputOf(req productRequest) (service.ProductInput, error) {
 	} else {
 		input.ProgramID = id
 	}
-	if req.ActiveUntil != nil && strings.TrimSpace(*req.ActiveUntil) != "" {
-		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(*req.ActiveUntil))
+	for name, raw := range map[string]*string{"active_from": req.ActiveFrom, "active_until": req.ActiveUntil} {
+		if raw == nil || strings.TrimSpace(*raw) == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(*raw))
 		if err != nil {
-			fields["active_until"] = invalidFormat
+			fields[name] = invalidFormat
+			continue
+		}
+		if name == "active_from" {
+			input.ActiveFrom = &parsed
 		} else {
 			input.ActiveUntil = &parsed
 		}
@@ -330,7 +340,7 @@ func productResponseOf(product model.Product) productResponse {
 	out := productResponse{
 		ID: product.ID, Type: product.Type, Title: product.Title, Description: product.Description,
 		ProgramID: product.ProgramID, Price: product.Price, OriginalPrice: product.OriginalPrice,
-		IsActive: product.IsActive, ActiveUntil: product.ActiveUntil,
+		IsActive: product.IsActive, ActiveFrom: product.ActiveFrom, ActiveUntil: product.ActiveUntil,
 		Tryouts:   make([]productTryoutResponse, 0, len(product.Tryouts)),
 		CreatedAt: product.CreatedAt, UpdatedAt: product.UpdatedAt,
 	}
@@ -394,6 +404,8 @@ func productReason(reason string) string {
 		return productPriceRule
 	case service.ReasonProductOriginalPrice:
 		return productOriginalRule
+	case service.ReasonProductWindow:
+		return productWindowRule
 	case service.ReasonProductTryouts:
 		return productTryoutsRule
 	case service.ReasonProductTryout:

@@ -30,6 +30,7 @@ const (
 	ReasonProductProgram       = "product_program"
 	ReasonProductPrice         = "product_price"
 	ReasonProductOriginalPrice = "product_original_price"
+	ReasonProductWindow        = "product_window"
 	ReasonProductTryouts       = "product_tryouts"
 	ReasonProductTryout        = "product_tryout"
 	ReasonProductQuery         = "product_query"
@@ -53,6 +54,7 @@ type ProductInput struct {
 	Price         string
 	OriginalPrice *string
 	IsActive      bool
+	ActiveFrom    *time.Time
 	ActiveUntil   *time.Time
 	TryoutIDs     []uuid.UUID
 }
@@ -303,6 +305,9 @@ func productScalars(input ProductInput) (ProductInput, error) {
 	if input.Type != model.ProductIndividual && input.Type != model.ProductBundle {
 		fields["type"] = ReasonProductType
 	}
+	if input.ActiveFrom != nil && input.ActiveUntil != nil && !input.ActiveFrom.Before(*input.ActiveUntil) {
+		fields["active_from"] = ReasonProductWindow
+	}
 	if input.ProgramID == uuid.Nil {
 		fields["program_id"] = ReasonProductProgram
 	}
@@ -436,7 +441,7 @@ func productOf(input ProductInput) model.Product {
 	out := model.Product{
 		Type: input.Type, Title: input.Title, Description: input.Description,
 		ProgramID: input.ProgramID, Price: input.Price, OriginalPrice: input.OriginalPrice,
-		IsActive: input.IsActive, ActiveUntil: input.ActiveUntil,
+		IsActive: input.IsActive, ActiveFrom: input.ActiveFrom, ActiveUntil: input.ActiveUntil,
 	}
 	for _, id := range input.TryoutIDs {
 		out.Tryouts = append(out.Tryouts, model.ProductTryout{ID: id})
