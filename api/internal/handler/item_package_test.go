@@ -655,12 +655,12 @@ func TestPackageInUseCannotBeDeletedOrShrunkBelowATestsNeed(t *testing.T) {
 	f.symbols(t, pkg.ID, "♠ ♥ ★ ▲")
 	current := f.detail(t, f.hostA, f.tokenAdminA, pkg.ID, "")
 
-	// P10 will write this row when a test pins a package; the table is the seam it plugs into.
-	_, err := f.pool.Exec(context.Background(), `
-		INSERT INTO kecermatan_test_packages (test_id, tenant_id, package_id, revision, required_count)
-		VALUES ($1, $2, $3, $4, 3)`, uuid.New(), f.tenantA.ID, pkg.ID, current.Package.Revision)
-	if err != nil {
-		t.Fatalf("pin the package: %v", err)
+	// A real kecermatan test pins the package: 3 options of 1 symbol need 3 of the 4 elements.
+	program := questionCurriculum(t, f.e, f.hostA, f.tokenAdminA)
+	body := kecermatanBody(program, "symbol", pkg.ID.String())
+	body["item_length"], body["options_per_soal"] = 1, 3
+	if rec := sendTryoutJSON(f.e, http.MethodPost, f.hostA, "/api/v1/kecermatan-tests", body, f.tokenAdminA); rec.Code != http.StatusCreated {
+		t.Fatalf("pin the package with a test = %d %s, want 201", rec.Code, rec.Body.String())
 	}
 
 	list := sendTryoutJSON(f.e, http.MethodGet, f.hostA, "/api/v1/item-packages?type=symbol", nil, f.tokenAdminA)

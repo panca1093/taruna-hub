@@ -57,7 +57,7 @@ func newTenantEcho(f tenantFixture, slug string) *echo.Echo {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	e := echo.New()
 	e.HTTPErrorHandler = httpx.ErrorHandler(logger)
-	New(logger, NewHealthHandler(nil), newAuthService(f), nil, newCurriculumService(f), newQuestionService(f), newTryoutService(f), newProductService(f), newWalletService(f), newAssetService(f, nil, time.Minute), newOrderService(f, nil), newRuntimeService(f), newResultService(f, newRuntimeService(f)), newMonitoringService(f, newRuntimeService(f)), newItemPackageService(f, nil), AuthOptions{
+	New(logger, NewHealthHandler(nil), newAuthService(f), nil, newCurriculumService(f), newQuestionService(f), newTryoutService(f), newProductService(f), newWalletService(f), newAssetService(f, nil, time.Minute), newOrderService(f, nil), newRuntimeService(f), newResultService(f, newRuntimeService(f)), newMonitoringService(f, newRuntimeService(f)), newItemPackageService(f, nil), newKecermatanService(f), AuthOptions{
 		AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
 	}).Register(e, ResolveHostScope(f.tenants, slug))
 	return e
@@ -99,7 +99,7 @@ func newTenantFixture(t *testing.T) tenantFixture {
 	var ids []uuid.UUID
 	t.Cleanup(func() {
 		// Curriculum, question and tryout rows carry the tenant, so they go before the tenant itself.
-		for _, table := range []string{"kecermatan_test_packages", "item_packages", "enrollment_grants", "enrollments", "order_items", "orders", "assets", "product_tryouts", "products", "tryout_questions", "tryout_subtests", "tryouts", "question_versions", "questions", "chapters", "subjects", "programs", "notification_logs"} {
+		for _, table := range []string{"kecermatan_test_packages", "kecermatan_tests", "item_packages", "enrollment_grants", "enrollments", "order_items", "orders", "assets", "product_tryouts", "products", "tryout_questions", "tryout_subtests", "tryouts", "question_versions", "questions", "chapters", "subjects", "programs", "notification_logs"} {
 			if _, err := pool.Exec(ctx, `DELETE FROM `+table+` WHERE tenant_id = ANY($1)`, ids); err != nil {
 				t.Errorf("cleanup %s of the fixture tenants: %v", table, err)
 			}
