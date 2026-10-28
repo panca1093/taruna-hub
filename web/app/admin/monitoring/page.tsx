@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Chip } from "@heroui/react";
+import { Button, Chip, toast } from "@heroui/react";
 import { AlertTriangle, CloudOff, Radio, RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { FormModal } from "@/components/ui/form-modal";
-import { api, type ActiveSession, type ViolationTimeline } from "@/lib/api/client";
+import { TextInput, TextareaInput } from "@/components/ui/form";
+import { api, ApiError, errorText, type ActiveSession, type ViolationTimeline } from "@/lib/api/client";
 import { useMonitoringT } from "@/lib/i18n/dict/monitoring";
 
 const POLL_MS = 30_000;
@@ -33,6 +34,11 @@ export default function MonitoringPage() {
   const [detail, setDetail] = useState<ActiveSession | null>(null);
   const [timeline, setTimeline] = useState<ViolationTimeline | null>(null);
   const [timelineFailed, setTimelineFailed] = useState(false);
+  const [extendOpen, setExtendOpen] = useState(false);
+  const [minutes, setMinutes] = useState("");
+  const [reason, setReason] = useState("");
+  const [extendErrors, setExtendErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -80,6 +86,34 @@ export default function MonitoringPage() {
     setTimeline(null);
     setTimelineFailed(false);
     setDetail(s);
+  };
+
+  const openExtend = () => {
+    setMinutes("");
+    setReason("");
+    setExtendErrors({});
+    setExtendOpen(true);
+  };
+
+  const submitExtend = async () => {
+    if (!detail) return;
+    const errors: Record<string, string> = {};
+    const mins = Number(minutes);
+    if (!/^\d+$/.test(minutes.trim()) || mins < 1 || mins > 240) errors.seconds = t.minutesRule;
+    if (reason.trim() === "" || reason.trim().length > 500) errors.reason = t.reasonRule;
+    setExtendErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    setSaving(true);
+    try {
+      const ext = await api.monitoring.extend(detail.session_id, { seconds: mins * 60, reason: reason.trim() });
+      toast.success(t.extendSaved, { description: t.extendSavedDescription(Math.round(ext.total_seconds / 60)) });
+      setExtendOpen(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.fields) setExtendErrors(err.fields);
+      toast.danger(t.extendFailed, { description: errorText(err, t.loadErrorDescription) });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const columns: Column<ActiveSession>[] = [
@@ -163,18 +197,24 @@ export default function MonitoringPage() {
           ) : (
             <DataTable columns={columns} rows={sessions} rowKey={(s) => s.session_id} />
           )}
+          {total > sessions.length && <p className="mt-3 text-xs text-muted">{t.showingOf(sessions.length, total)}</p>}
         </>
       )}
 
       <FormModal
-        isOpen={!!detail}
+        isOpen={!!detail && !extendOpen}
         onOpenChange={(open) => !open && setDetail(null)}
         title={t.detailTitle}
         description={detail ? t.detailDescription(detail.student_name, detail.tryout_title) : undefined}
         footer={
-          <Button variant="ghost" onPress={() => setDetail(null)}>
-            {t.close}
-          </Button>
+          <>
+            <Button variant="secondary" isDisabled={!detail?.subtest} onPress={openExtend}>
+              {t.extendButton}
+            </Button>
+            <Button variant="ghost" onPress={() => setDetail(null)}>
+              {t.close}
+            </Button>
+          </>
         }
       >
         {detail && (
@@ -217,6 +257,41 @@ export default function MonitoringPage() {
             </div>
           </>
         )}
+      </FormModal>
+
+      <FormModal
+        isOpen={extendOpen}
+        onOpenChange={(open) => !open && setExtendOpen(false)}
+        title={t.extendTitle}
+        description={detail ? t.extendDescription(detail.student_name, detail.subtest?.name ?? t.extendNoSubtest) : undefined}
+        footer={
+          <>
+            <Button variant="ghost" onPress={() => setExtendOpen(false)} isDisabled={saving}>
+              {t.cancel}
+            </Button>
+            <Button variant="primary" onPress={() => void submitExtend()} isDisabled={saving}>
+              {t.save}
+            </Button>
+          </>
+        }
+      >
+        <TextInput
+          label={t.minutesLabel}
+          required
+          inputMode="numeric"
+          value={minutes}
+          onChange={(e) => setMinutes(e.target.value)}
+          error={extendErrors.seconds}
+        />
+        <TextareaInput
+          label={t.reasonLabel}
+          required
+          rows={3}
+          maxLength={500}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          error={extendErrors.reason}
+        />
       </FormModal>
     </AppShell>
   );

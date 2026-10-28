@@ -59,6 +59,8 @@ export type ViolationType = components["schemas"]["ViolationType"];
 export type ViolationBody = components["schemas"]["ViolationRequest"];
 export type ActiveSession = components["schemas"]["ActiveSession"];
 export type ActiveSessionList = components["schemas"]["ActiveSessionList"];
+export type ExtensionBody = components["schemas"]["ExtensionRequest"];
+export type Extension = components["schemas"]["Extension"];
 export type ViolationTimeline = components["schemas"]["ViolationTimeline"];
 type GraceBody = components["schemas"]["GraceRequest"];
 type LoginBody = components["schemas"]["LoginRequest"];
@@ -491,6 +493,9 @@ export const api = {
   monitoring: {
     active: (filters: { limit?: number; offset?: number } = {}) =>
       authed<ActiveSessionList>(`/api/v1/admin/monitoring/sessions${queryOf(filters)}` as keyof paths),
+    /** Admin and Operator: adds seconds to the subtest running in this session (D10). */
+    extend: (sessionId: string, body: ExtensionBody) =>
+      mutate<Extension>("POST", `/api/v1/admin/tryout-sessions/${sessionId}/extensions` as keyof paths, body),
     violations: (sessionId: string) =>
       authed<ViolationTimeline>(`/api/v1/admin/tryout-sessions/${sessionId}/violations` as keyof paths),
   },

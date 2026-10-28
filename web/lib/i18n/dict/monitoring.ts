@@ -31,6 +31,20 @@ const id = {
   retry: "Coba Lagi",
   refreshFailed: "Pembaruan terakhir gagal — menampilkan data sebelumnya.",
   timelineError: "Riwayat pelanggaran tidak dapat dimuat.",
+  showingOf: (shown: number, total: number) => `Menampilkan ${shown} dari ${total} sesi.`,
+  extendButton: "Tambah waktu",
+  extendTitle: "Tambah waktu",
+  extendDescription: (name: string, subtest: string) => `${name} — tambahan berlaku untuk subtes yang sedang berjalan (${subtest}).`,
+  extendNoSubtest: "Tidak ada subtes yang sedang berjalan.",
+  minutesLabel: "Tambahan (menit)",
+  minutesRule: "Isi bilangan bulat 1–240.",
+  reasonLabel: "Alasan",
+  reasonRule: "Alasan wajib diisi, maksimal 500 karakter.",
+  cancel: "Batal",
+  save: "Simpan",
+  extendSaved: "Waktu ditambahkan",
+  extendSavedDescription: (minutes: number) => `Total tambahan untuk subtes ini ${minutes} menit.`,
+  extendFailed: "Waktu tidak dapat ditambahkan",
 };
 
 const en: typeof id = {
@@ -62,6 +76,20 @@ const en: typeof id = {
   retry: "Retry",
   refreshFailed: "The last refresh failed — showing the previous data.",
   timelineError: "The violation history could not be loaded.",
+  showingOf: (shown: number, total: number) => `Showing ${shown} of ${total} sessions.`,
+  extendButton: "Add time",
+  extendTitle: "Add time",
+  extendDescription: (name: string, subtest: string) => `${name} — the extra time applies to the running subtest (${subtest}).`,
+  extendNoSubtest: "No subtest is running.",
+  minutesLabel: "Extra time (minutes)",
+  minutesRule: "Enter a whole number from 1 to 240.",
+  reasonLabel: "Reason",
+  reasonRule: "A reason is required, at most 500 characters.",
+  cancel: "Cancel",
+  save: "Save",
+  extendSaved: "Time added",
+  extendSavedDescription: (minutes: number) => `This subtest now has ${minutes} extra minutes in total.`,
+  extendFailed: "The time could not be added",
 };
 
 export function useMonitoringT() {

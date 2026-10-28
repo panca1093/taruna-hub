@@ -563,7 +563,7 @@ For every slice, use this verification loop:
 
 ### P19 — Monitoring and violation timelines
 
-**Status:** in progress, lean (API, recording rules, staff monitoring page, violation timelines and student runtime reporting built and tested; browser demo, monitoring-page time-extension control and cross-tenant test deferred) · **Size:** M · **Depends:** P16, P17
+**Status:** in progress, lean (API, recording rules, staff monitoring page, violation timelines and student runtime reporting built and tested; browser demo and cross-tenant test deferred; time-extension control built but browser-unverified) · **Size:** M · **Depends:** P16, P17
 
 **Outcome:** Staff see active tryouts and retained violation history through 30-second polling.
 
@@ -587,7 +587,7 @@ For every slice, use this verification loop:
 **Decision / verification gate:** Fullscreen availability is browser-dependent; test supported desktop/mobile paths and explicitly describe best-effort behavior. Resolved 2026-10-28 (owner): a device without the Fullscreen API (e.g. iPhone Safari) may still take the tryout and records no violation. Includes the D10 per-student time extension control on the monitoring page.
 
 - [ ] Per-student time extension control on the monitoring page.
-  - Open: the monitoring mockup has no place for it, so no new UI was added; the P16 endpoint is unchanged.
+  - Open: owner approved a "Tambah waktu" button and form modal in the session detail (2026-10-28) and it calls the P16 endpoint, which P16 tests cover; the control itself was checked by tsc, lint and build only, not in a browser.
 - [ ] Browser demo of student fullscreen/screenshot warnings, monitoring page and results detail.
   - Open: web checked by tsc, lint and build only.
 
