@@ -216,6 +216,14 @@ func NewNotificationService(repo *repository.NotificationRepository, jobs JobIns
 			`Pesanan {{.Get "code"}} dibatalkan - {{.Get "tenant_name"}}`,
 			"Halo {{.Get \"name\"}},\n\nPesanan {{.Get \"code\"}} ({{.Get \"product\"}}) dibatalkan.\n" +
 				"Alasan: {{.Get \"reason\"}}\n\nAkses tryout tidak dibuka. Hubungi admin {{.Get \"tenant_name\"}} jika ada pertanyaan."},
+		{TemplateTopupApproved,
+			`Top-up {{.Get "code"}} disetujui - {{.Get "tenant_name"}}`,
+			"Halo {{.Get \"name\"}},\n\nTop-up {{.Get \"code\"}} sebesar {{.Get \"amount\"}} sudah disetujui. " +
+				"Saldo dompet kamu sudah bertambah.\n\nSalam belajar,\n{{.Get \"tenant_name\"}}"},
+		{TemplateTopupRejected,
+			`Top-up {{.Get "code"}} ditolak - {{.Get "tenant_name"}}`,
+			"Halo {{.Get \"name\"}},\n\nTop-up {{.Get \"code\"}} sebesar {{.Get \"amount\"}} ditolak.\n" +
+				"Alasan: {{.Get \"reason\"}}\n\nSaldo dompet tidak berubah. Hubungi admin {{.Get \"tenant_name\"}} jika ada pertanyaan."},
 	} {
 		if err := s.RegisterTemplate(t.name, t.subject, t.body); err != nil {
 			return nil, err

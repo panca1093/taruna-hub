@@ -2761,6 +2761,345 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/topups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in student's own top-up requests
+         * @description Student only. Newest first, at most 100 per page, only the caller's own requests. `min_topup` is the
+         *     current tenant minimum, so the page can show it; the create call still validates it on the server.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of the student's requests */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TopupList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        /**
+         * Ask for a wallet top-up by manual transfer
+         * @description Student only (P15, FR-PAY-W-01..09). The student transfers money to the configured bank account and sends
+         *     the `amount` with `proof_asset_id`, an unused `payment_proof` asset the caller uploaded through
+         *     `POST /api/v1/assets`. The request waits as `pending` and credits nothing until staff approve it. A top-up
+         *     never creates an order or grants a test.
+         *
+         *     The amount is whole rupiah, written as digits with an optional `.00`, at least the tenant minimum
+         *     (`min_topup`, default Rp10.000, an Admin setting) and with no upper bound. The server decides: a smaller,
+         *     fractional, zero or malformed amount answers `422` on `amount`. Anyone else's, a missing, a wrongly typed or
+         *     an already used proof answers the same `422` on `proof_asset_id`.
+         *
+         *     `idempotency_key` (8–64 characters, `[A-Za-z0-9_-]`) identifies the request. The first call answers `201`;
+         *     the same key with the same amount and proof answers `200` with the original request and writes nothing;
+         *     the same key for anything else answers `409`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TopupCreateRequest"];
+                };
+            };
+            responses: {
+                /** @description The original request for this idempotency key, nothing written */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Topup"];
+                    };
+                };
+                /** @description The new pending request */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Topup"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/topups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One of the student's own top-up requests
+         * @description Student only. Another student's request answers the same `404` as a missing one.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The request */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Topup"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/topups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every top-up request of the tenant, for review
+         * @description Admin and Operator (D02: a role guard). Newest first, at most 100 per page. `status` narrows to one
+         *     state. `q` is a case-insensitive substring of the request code or the student's name; `%` and `_` are
+         *     literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "pending" | "approved" | "rejected";
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of requests */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TopupList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/topups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One top-up request for review
+         * @description Admin and Operator only.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The request */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Topup"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/topups/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a pending top-up
+         * @description Admin and Operator. Moves a `pending` request to `approved`, credits the student's wallet through the one
+         *     wallet movement path (ledger source `topup`, source id the request id, the reviewing staff as actor) and
+         *     queues the email and WhatsApp notifications, all in one transaction. Two concurrent approvals credit once.
+         *     Repeating the call on an approved request answers `200` and changes nothing. A `rejected` request answers
+         *     `409`; an approved request never goes back to pending.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The request as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Topup"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/topups/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refuse a pending top-up
+         * @description Admin and Operator. Moves a `pending` request to `rejected` with a required `reason` (1–500 characters),
+         *     credits nothing and queues the rejection notifications. Repeating the call on a rejected request answers
+         *     `200` and keeps the first reason. An `approved` request answers `409`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TopupRejectRequest"];
+                };
+            };
+            responses: {
+                /** @description The request as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Topup"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assets": {
         parameters: {
             query?: never;
@@ -3829,8 +4168,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The tenant's scoring weights
-         * @description Admin only. Defaults to 1 / 2 / 3 until Admin saves one (D04).
+         * The tenant's settings
+         * @description Admin only. The scoring weights default to 1 / 2 / 3 until Admin saves them (D04); `min_topup` defaults to
+         *     Rp10.000 (D12).
          */
         get: {
             parameters: {
@@ -3855,9 +4195,12 @@ export interface paths {
             };
         };
         /**
-         * Save the scoring weights
+         * Save the settings
          * @description Admin only. Each weight is greater than 0, at most 1000, with at most two decimals. A session freezes the
          *     weights when its attempt starts, so saving never changes a session already started or a stored result.
+         *     `min_topup` is optional: absent or empty keeps the current minimum. Otherwise it is whole rupiah of at
+         *     least 1 (digits with an optional `.00`); a top-up request already made keeps the minimum it was checked
+         *     against.
          */
         put: {
             parameters: {
@@ -3868,11 +4211,11 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["Settings"];
+                    "application/json": components["schemas"]["SettingsUpdate"];
                 };
             };
             responses: {
-                /** @description The saved weights */
+                /** @description The saved settings */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -6037,6 +6380,61 @@ export interface components {
             orders: components["schemas"]["Order"][];
             total: number;
         };
+        TopupCreateRequest: {
+            /** @description Whole rupiah, at least the tenant minimum. The server validates it; this pattern is only the shape. */
+            amount: string;
+            idempotency_key: string;
+            /**
+             * Format: uuid
+             * @description An unused `payment_proof` asset the caller uploaded.
+             */
+            proof_asset_id: string;
+        };
+        TopupRejectRequest: {
+            reason: string;
+        };
+        Topup: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Also the wallet ledger reference (`source_type` `topup`, `source_id` this id) once approved.
+             * @example TUP-000042
+             */
+            code: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected";
+            /**
+             * @description Only `manual` exists until P14 adds the gateway.
+             * @enum {string}
+             */
+            method: "manual";
+            /** Format: uuid */
+            student_id: string;
+            student_name: string;
+            /** @example 50000.00 */
+            amount: string;
+            /**
+             * Format: uuid
+             * @description The transfer proof; read it with `GET /api/v1/assets/{id}/url`.
+             */
+            proof_asset_id: string | null;
+            reject_reason: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            approved_at: string | null;
+            /** Format: date-time */
+            rejected_at: string | null;
+        };
+        TopupList: {
+            topups: components["schemas"]["Topup"][];
+            total: number;
+            /**
+             * @description The tenant minimum at the time of the call.
+             * @example 10000.00
+             */
+            min_topup: string;
+        };
         Enrollment: {
             /** Format: uuid */
             id: string;
@@ -6071,8 +6469,25 @@ export interface components {
             grace_seconds: number;
         };
         Settings: {
+            /**
+             * @description The smallest top-up a student may request, whole rupiah as a canonical decimal string.
+             * @example 10000.00
+             */
+            min_topup: string;
             scoring_weights: {
                 /** @description Points of a correctly answered easy question. */
+                easy: number;
+                medium: number;
+                hard: number;
+            };
+        };
+        SettingsUpdate: {
+            /**
+             * @description Whole rupiah. Absent or empty keeps the current minimum.
+             * @example 10000
+             */
+            min_topup?: string;
+            scoring_weights: {
                 easy: number;
                 medium: number;
                 hard: number;

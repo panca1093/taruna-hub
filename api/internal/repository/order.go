@@ -99,10 +99,15 @@ func (r *OrderRepository) InsertTx(ctx context.Context, tx pgx.Tx, tenantID uuid
 	err := tx.QueryRow(ctx, `
 		INSERT INTO orders (tenant_id, user_id, product_id, product_type, product_title, price,
 		        payment_method, status, idempotency_key, proof_asset_id, kecermatan_test_id, included_attempts)
-		VALUES ($1, $2, $3, $4, $5, $6::numeric, $7, 'pending', $8, $9, $10, $11)
+		SELECT $1::uuid, $2::uuid, $3::uuid, $4::text, $5::text, $6::numeric, $7::text, 'pending', $8::text, $9::uuid,
+		       $10::uuid, $11::int
+		 WHERE $9::uuid IS NULL OR NOT EXISTS (SELECT 1 FROM topup_requests WHERE proof_asset_id = $9::uuid)
 		RETURNING id`,
 		tenantID, order.UserID, order.ProductID, order.ProductType, order.ProductTitle, order.Price,
 		order.PaymentMethod, order.Key, order.ProofAssetID, order.KecermatanTestID, order.IncludedAttempts).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.Order{}, ErrProofTaken
+	}
 	if err != nil {
 		return model.Order{}, mapOrderError("insert order", err)
 	}

@@ -41,6 +41,7 @@ const (
 	ReasonExtraReason   = "extension_reason"
 	ReasonExtraTotal    = "extension_total"
 	ReasonWeight        = "settings_weight"
+	ReasonMinTopup      = "settings_min_topup"
 	maxAnswerLen        = 500
 	maxExtensionSeconds = 14400
 	maxExtraTotal       = 28800
@@ -1011,32 +1012,41 @@ func (s *RuntimeService) FinalizeDue(ctx context.Context) (int, error) {
 	return settled, first
 }
 
-// SettingsInput is D04's scoring setting for the tenant.
+// SettingsInput is what an Admin saves: D04's scoring weights and D12's minimum top-up.
 type SettingsInput struct {
-	Weights model.Weights
+	Weights  model.Weights
+	MinTopup string
 }
 
-// Settings reads the tenant's scoring weights.
-func (s *RuntimeService) Settings(ctx context.Context, scope HostScope, principal model.Principal) (model.Weights, error) {
+// Settings reads the tenant's scoring weights and minimum top-up.
+func (s *RuntimeService) Settings(ctx context.Context, scope HostScope, principal model.Principal) (model.Settings, error) {
 	tenantID, err := questionTenant(scope, principal)
 	if err != nil {
-		return model.Weights{}, err
+		return model.Settings{}, err
 	}
 	if principal.Role != model.RoleAdmin {
-		return model.Weights{}, ErrRuntimeForbidden
+		return model.Settings{}, ErrRuntimeForbidden
 	}
 	w, err := s.repo.Weights(ctx, s.db, tenantID)
-	return w, runtimeError(err)
+	if err != nil {
+		return model.Settings{}, runtimeError(err)
+	}
+	minimum, err := s.repo.MinTopup(ctx, s.db, tenantID)
+	if err != nil {
+		return model.Settings{}, runtimeError(err)
+	}
+	return model.Settings{Weights: w, MinTopup: minimum}, nil
 }
 
-// UpdateSettings stores the weights new attempts will freeze; sessions already started keep theirs.
-func (s *RuntimeService) UpdateSettings(ctx context.Context, scope HostScope, principal model.Principal, in SettingsInput) (model.Weights, error) {
+// UpdateSettings stores the weights new attempts will freeze, so sessions already started keep theirs, and the
+// minimum the next top-up request is checked against.
+func (s *RuntimeService) UpdateSettings(ctx context.Context, scope HostScope, principal model.Principal, in SettingsInput) (model.Settings, error) {
 	tenantID, err := questionTenant(scope, principal)
 	if err != nil {
-		return model.Weights{}, err
+		return model.Settings{}, err
 	}
 	if principal.Role != model.RoleAdmin {
-		return model.Weights{}, ErrRuntimeForbidden
+		return model.Settings{}, ErrRuntimeForbidden
 	}
 	fields := map[string]string{}
 	for name, w := range map[string]float64{"easy": in.Weights.Easy, "medium": in.Weights.Medium, "hard": in.Weights.Hard} {
@@ -1044,11 +1054,22 @@ func (s *RuntimeService) UpdateSettings(ctx context.Context, scope HostScope, pr
 			fields["weights."+name] = ReasonWeight
 		}
 	}
+	minimum := ""
+	if in.MinTopup != "" {
+		var ok bool
+		if minimum, ok = parseWholeRupiah(in.MinTopup); !ok {
+			fields["min_topup"] = ReasonMinTopup
+		}
+	}
 	if len(fields) > 0 {
-		return model.Weights{}, &InputError{Fields: fields}
+		return model.Settings{}, &InputError{Fields: fields}
 	}
-	if err := s.repo.SetWeights(ctx, tenantID, principal.UserID, in.Weights); err != nil {
-		return model.Weights{}, runtimeError(err)
+	if err := s.repo.SetSettings(ctx, tenantID, principal.UserID, in.Weights, minimum); err != nil {
+		return model.Settings{}, runtimeError(err)
 	}
-	return in.Weights, nil
+	current, err := s.repo.MinTopup(ctx, s.db, tenantID)
+	if err != nil {
+		return model.Settings{}, runtimeError(err)
+	}
+	return model.Settings{Weights: in.Weights, MinTopup: current}, nil
 }

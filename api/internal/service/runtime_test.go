@@ -260,7 +260,7 @@ func TestRuntimeAttemptScoresFromTheFrozenSnapshot(t *testing.T) {
 
 	// Changing the setting afterwards moves neither the stored result nor the attempt's frozen weights.
 	admin := h.staff(model.RoleAdmin)
-	if _, err := h.rt.UpdateSettings(context.Background(), h.scopeA(), admin, SettingsInput{Weights: model.Weights{Easy: 2, Medium: 4, Hard: 6}}); err != nil {
+	if _, err := h.rt.UpdateSettings(context.Background(), h.scopeA(), admin, SettingsInput{Weights: model.Weights{Easy: 2, Medium: 4, Hard: 6}, MinTopup: "10000"}); err != nil {
 		t.Fatalf("update settings: %v", err)
 	}
 	again, err := h.rt.Result(context.Background(), h.scopeA(), p, sid)
@@ -848,10 +848,10 @@ func TestRuntimeAccessAndOwnership(t *testing.T) {
 		t.Errorf("operator reading settings: %v, want ErrRuntimeForbidden", err)
 	}
 	var input *InputError
-	if _, err := h.rt.UpdateSettings(ctx, scope, h.staff(model.RoleAdmin), SettingsInput{Weights: model.Weights{Easy: 0, Medium: 2, Hard: 3}}); !errors.As(err, &input) {
+	if _, err := h.rt.UpdateSettings(ctx, scope, h.staff(model.RoleAdmin), SettingsInput{Weights: model.Weights{Easy: 0, Medium: 2, Hard: 3}, MinTopup: "10000"}); !errors.As(err, &input) {
 		t.Errorf("a zero weight: %v, want an InputError", err)
 	}
-	if w, err := h.rt.Settings(ctx, scope, h.staff(model.RoleAdmin)); err != nil || w != model.DefaultWeights {
+	if w, err := h.rt.Settings(ctx, scope, h.staff(model.RoleAdmin)); err != nil || w.Weights != model.DefaultWeights || w.MinTopup != model.DefaultMinTopup {
 		t.Errorf("settings without a saved row = %+v (err %v), want the 1/2/3 defaults", w, err)
 	}
 }

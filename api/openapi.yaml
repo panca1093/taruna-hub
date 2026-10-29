@@ -41,12 +41,14 @@ tags:
     description: Private image uploads, finalization and short-lived download links
   - name: orders
     description: Wallet and manual-transfer checkout, order review by staff, and the access an order opens
+  - name: topups
+    description: Self-service manual wallet top-up requests, and their review by staff
   - name: runtime
     description: The student's tryout attempt - start, subtests, answers, deadlines and the immediate basic result
   - name: results
     description: Staff view of completed attempts, ranking and IRT calibration warnings
   - name: settings
-    description: Tenant settings an Admin changes, today the scoring weights
+    description: Tenant settings an Admin changes - the scoring weights and the minimum top-up
   - name: item-packages
     description: Kecermatan item packages - symbol, image, emoji and shape pools with frozen revisions
   - name: kecermatan-tests
@@ -2083,6 +2085,268 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /api/v1/topups:
+    post:
+      tags: [topups]
+      summary: Ask for a wallet top-up by manual transfer
+      description: |
+        Student only (P15, FR-PAY-W-01..09). The student transfers money to the configured bank account and sends
+        the `amount` with `proof_asset_id`, an unused `payment_proof` asset the caller uploaded through
+        `POST /api/v1/assets`. The request waits as `pending` and credits nothing until staff approve it. A top-up
+        never creates an order or grants a test.
+
+        The amount is whole rupiah, written as digits with an optional `.00`, at least the tenant minimum
+        (`min_topup`, default Rp10.000, an Admin setting) and with no upper bound. The server decides: a smaller,
+        fractional, zero or malformed amount answers `422` on `amount`. Anyone else's, a missing, a wrongly typed or
+        an already used proof answers the same `422` on `proof_asset_id`.
+
+        `idempotency_key` (8–64 characters, `[A-Za-z0-9_-]`) identifies the request. The first call answers `201`;
+        the same key with the same amount and proof answers `200` with the original request and writes nothing;
+        the same key for anything else answers `409`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TopupCreateRequest"
+      responses:
+        "201":
+          description: The new pending request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topup"
+        "200":
+          description: The original request for this idempotency key, nothing written
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    get:
+      tags: [topups]
+      summary: The signed-in student's own top-up requests
+      description: |
+        Student only. Newest first, at most 100 per page, only the caller's own requests. `min_topup` is the
+        current tenant minimum, so the page can show it; the create call still validates it on the server.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of the student's requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/topups/{id}:
+    get:
+      tags: [topups]
+      summary: One of the student's own top-up requests
+      description: Student only. Another student's request answers the same `404` as a missing one.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/admin/topups:
+    get:
+      tags: [topups]
+      summary: Every top-up request of the tenant, for review
+      description: |
+        Admin and Operator (D02: a role guard). Newest first, at most 100 per page. `status` narrows to one
+        state. `q` is a case-insensitive substring of the request code or the student's name; `%` and `_` are
+        literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopupList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/topups/{id}:
+    get:
+      tags: [topups]
+      summary: One top-up request for review
+      description: Admin and Operator only.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/admin/topups/{id}/approve:
+    post:
+      tags: [topups]
+      summary: Accept a pending top-up
+      description: |
+        Admin and Operator. Moves a `pending` request to `approved`, credits the student's wallet through the one
+        wallet movement path (ledger source `topup`, source id the request id, the reviewing staff as actor) and
+        queues the email and WhatsApp notifications, all in one transaction. Two concurrent approvals credit once.
+        Repeating the call on an approved request answers `200` and changes nothing. A `rejected` request answers
+        `409`; an approved request never goes back to pending.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The request as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/admin/topups/{id}/reject:
+    post:
+      tags: [topups]
+      summary: Refuse a pending top-up
+      description: |
+        Admin and Operator. Moves a `pending` request to `rejected` with a required `reason` (1–500 characters),
+        credits nothing and queues the rejection notifications. Repeating the call on a rejected request answers
+        `200` and keeps the first reason. An `approved` request answers `409`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TopupRejectRequest"
+      responses:
+        "200":
+          description: The request as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
   /api/v1/assets:
     post:
       tags: [assets]
@@ -2819,8 +3083,10 @@ paths:
   /api/v1/admin/settings:
     get:
       tags: [settings]
-      summary: The tenant's scoring weights
-      description: Admin only. Defaults to 1 / 2 / 3 until Admin saves one (D04).
+      summary: The tenant's settings
+      description: |
+        Admin only. The scoring weights default to 1 / 2 / 3 until Admin saves them (D04); `min_topup` defaults to
+        Rp10.000 (D12).
       security:
         - bearerAuth: []
       responses:
@@ -2836,10 +3102,13 @@ paths:
           $ref: "#/components/responses/Forbidden"
     put:
       tags: [settings]
-      summary: Save the scoring weights
+      summary: Save the settings
       description: |
         Admin only. Each weight is greater than 0, at most 1000, with at most two decimals. A session freezes the
         weights when its attempt starts, so saving never changes a session already started or a stored result.
+        `min_topup` is optional: absent or empty keeps the current minimum. Otherwise it is whole rupiah of at
+        least 1 (digits with an optional `.00`); a top-up request already made keeps the minimum it was checked
+        against.
       security:
         - bearerAuth: []
       requestBody:
@@ -2847,10 +3116,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Settings"
+              $ref: "#/components/schemas/SettingsUpdate"
       responses:
         "200":
-          description: The saved weights
+          description: The saved settings
           content:
             application/json:
               schema:
@@ -5323,6 +5592,96 @@ components:
         total:
           type: integer
 
+    TopupCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [amount, idempotency_key, proof_asset_id]
+      properties:
+        amount:
+          type: string
+          pattern: '^[0-9]+(\.0{1,2})?$'
+          description: Whole rupiah, at least the tenant minimum. The server validates it; this pattern is only the shape.
+        idempotency_key:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{8,64}$'
+        proof_asset_id:
+          type: string
+          format: uuid
+          description: An unused `payment_proof` asset the caller uploaded.
+
+    TopupRejectRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    Topup:
+      type: object
+      additionalProperties: false
+      required: [id, code, status, method, student_id, student_name, amount, proof_asset_id, reject_reason,
+                 created_at, approved_at, rejected_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: TUP-000042
+          description: Also the wallet ledger reference (`source_type` `topup`, `source_id` this id) once approved.
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        method:
+          type: string
+          enum: [manual]
+          description: Only `manual` exists until P14 adds the gateway.
+        student_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        amount:
+          type: string
+          example: "50000.00"
+        proof_asset_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The transfer proof; read it with `GET /api/v1/assets/{id}/url`.
+        reject_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        rejected_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    TopupList:
+      type: object
+      additionalProperties: false
+      required: [topups, total, min_topup]
+      properties:
+        topups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Topup"
+        total:
+          type: integer
+        min_topup:
+          type: string
+          description: The tenant minimum at the time of the call.
+          example: "10000.00"
+
     Enrollment:
       type: object
       additionalProperties: false
@@ -5391,8 +5750,12 @@ components:
     Settings:
       type: object
       additionalProperties: false
-      required: [scoring_weights]
+      required: [scoring_weights, min_topup]
       properties:
+        min_topup:
+          type: string
+          description: The smallest top-up a student may request, whole rupiah as a canonical decimal string.
+          example: "10000.00"
         scoring_weights:
           type: object
           additionalProperties: false
@@ -5401,6 +5764,27 @@ components:
             easy:
               type: number
               description: Points of a correctly answered easy question.
+            medium:
+              type: number
+            hard:
+              type: number
+
+    SettingsUpdate:
+      type: object
+      additionalProperties: false
+      required: [scoring_weights]
+      properties:
+        min_topup:
+          type: string
+          description: Whole rupiah. Absent or empty keeps the current minimum.
+          example: "10000"
+        scoring_weights:
+          type: object
+          additionalProperties: false
+          required: [easy, medium, hard]
+          properties:
+            easy:
+              type: number
             medium:
               type: number
             hard:

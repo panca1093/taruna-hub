@@ -16,6 +16,7 @@ decisions behind them stay in `requirement/` (PRD, ARCHITECTURE, PLAN), and the 
 | Wallet ledger, balance projection and staff adjustments | P12 | [wallet.md](wallet.md) |
 | Assets: private image uploads and short-lived downloads | P06 | [assets.md](assets.md) |
 | Orders, checkout and enrollments | P13 | [orders.md](orders.md) |
+| Self-service manual top-up and review | P15 | [topups.md](topups.md) |
 | Tryout runtime: sessions, deadlines, scoring and the result | P16 | [tryout-runtime.md](tryout-runtime.md) |
 | Kecermatan item packages: symbol, image, emoji and shape pools in frozen revisions | P09 | [item-packages.md](item-packages.md) |
 | Kecermatan attempts: credits, server-timed kolom, answers, versioned scoring and results | P18 | [kecermatan-runtime.md](kecermatan-runtime.md) |

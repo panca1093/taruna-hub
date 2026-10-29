@@ -18,10 +18,14 @@ type weightsBody struct {
 
 type settingsBody struct {
 	ScoringWeights weightsBody `json:"scoring_weights"`
+	MinTopup       string      `json:"min_topup"`
 }
 
-func settingsResponseOf(w model.Weights) settingsBody {
-	return settingsBody{ScoringWeights: weightsBody{Easy: w.Easy, Medium: w.Medium, Hard: w.Hard}}
+func settingsResponseOf(s model.Settings) settingsBody {
+	return settingsBody{
+		ScoringWeights: weightsBody{Easy: s.Weights.Easy, Medium: s.Weights.Medium, Hard: s.Weights.Hard},
+		MinTopup:       s.MinTopup,
+	}
 }
 
 func (h *Handler) Settings(c echo.Context) error {
@@ -47,7 +51,8 @@ func (h *Handler) UpdateSettings(c echo.Context) error {
 		return err
 	}
 	w, err := h.runtime.UpdateSettings(c.Request().Context(), scope, principal, service.SettingsInput{
-		Weights: model.Weights{Easy: req.ScoringWeights.Easy, Medium: req.ScoringWeights.Medium, Hard: req.ScoringWeights.Hard},
+		Weights:  model.Weights{Easy: req.ScoringWeights.Easy, Medium: req.ScoringWeights.Medium, Hard: req.ScoringWeights.Hard},
+		MinTopup: req.MinTopup,
 	})
 	if err != nil {
 		return runtimeError(err)

@@ -467,13 +467,13 @@ For every slice, use this verification loop:
 - [ ] Wrong signature/reference/amount/fraud status does not confirm; ambiguous create timeout does not make a second payment.
 - [ ] Late paid cancellation, rejected top-up, chargeback and paused-tenant events retain evidence and follow approved D07/D15 policy.
 
-**Decision / verification gate:** D07 late/reversal cases; D15 paused operations; D16 one platform-owned merchant account.
+**Decision / verification gate:** D07 resolved 2026-10-29 (late success on a cancelled/expired order is held for staff review); D15 deferred by D17; D16 one platform-owned merchant account.
 
 <a id="p15"></a>
 
 ### P15 — Self-service manual top-up and review
 
-**Status:** planned · **Size:** M · **Depends:** P02, P06, P12
+**Status:** done, lean — migration 000020, `topup_requests` with idempotent create, proof ownership, the server-checked Admin minimum, approve/reject through the one wallet path with notifications, and the student wallet, admin Top-up and Settings screens on the API ([docs/topups.md](../docs/topups.md)). Deferred: the gateway extension (P14) and a browser demo (see boxes) · **Size:** M · **Depends:** P02, P06, P12
 
 **Outcome:** Students request a top-up and staff approve or reject it with a complete audit trail.
 
@@ -485,12 +485,18 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Below-minimum value fails server validation; valid request remains pending without credit.
-- [ ] Two concurrent approvals create one credit; reject requires reason and creates none.
-- [ ] Student sees own status/history and staff filters tenant requests; proof access obeys ownership.
+- [x] Below-minimum value fails server validation; valid request remains pending without credit.
+  - Service and handler tests cover below-minimum, fractional, zero and malformed amounts, the saved Admin minimum, and a pending request that moves no money and creates no order or enrollment.
+- [x] Two concurrent approvals create one credit; reject requires reason and creates none.
+  - Eight concurrent approvals against Postgres leave one ledger entry and one set of notifications; a failed notification rolls back the credit and the status.
+- [x] Student sees own status/history and staff filters tenant requests; proof access obeys ownership.
+  - Student, staff and proof cases are proven over HTTP; no cross-tenant test by design (D17).
 - [ ] Gateway extension uses the same business credit invariant while keeping provider evidence distinct.
+  - P14: the table admits `method = 'gateway'` and the credit path is shared, but no gateway code or evidence tables exist yet.
+- [ ] Real browser to API to database demo of the screens.
+  - The API flow is proven by Postgres-backed tests and the screens pass `tsc`, lint and `next build`, but they were not driven in a browser (no dev server was allowed in this run).
 
-**Decision / verification gate:** D12 amount policy. Listed before P14 in execution order despite stable numeric slice labels.
+**Decision / verification gate:** D12 resolved 2026-10-29 (whole rupiah, no upper bound, Admin-set minimum default Rp10.000); the admin top-up page follows the admin Orders page (owner-approved, no mockup). Listed before P14 in execution order despite stable numeric slice labels.
 
 <a id="p16"></a>
 

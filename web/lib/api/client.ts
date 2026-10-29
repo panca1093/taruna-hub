@@ -158,6 +158,9 @@ export type Enrollment = components["schemas"]["Enrollment"];
 export type EnrollmentList = components["schemas"]["EnrollmentList"];
 export type BankTransfer = components["schemas"]["BankTransfer"];
 export type CheckoutBody = components["schemas"]["CheckoutRequest"];
+export type Topup = components["schemas"]["Topup"];
+export type TopupList = components["schemas"]["TopupList"];
+export type TopupBody = components["schemas"]["TopupCreateRequest"];
 export type Asset = components["schemas"]["Asset"];
 export type AssetLink = components["schemas"]["AssetURL"];
 
@@ -170,6 +173,12 @@ export type StaffResultFilters = Omit<
 /** Page of `GET /api/v1/orders` and the staff list; an absent field is not sent at all. */
 export type OrderFilters = Omit<
   NonNullable<paths["/api/v1/admin/orders"]["get"]["parameters"]["query"]>,
+  "limit" | "offset"
+> & { limit?: number; offset?: number };
+
+/** Page of `GET /api/v1/topups` and the staff list; an absent field is not sent at all. */
+export type TopupFilters = Omit<
+  NonNullable<paths["/api/v1/admin/topups"]["get"]["parameters"]["query"]>,
   "limit" | "offset"
 > & { limit?: number; offset?: number };
 
@@ -261,6 +270,8 @@ const tryoutPath = (id: string) => `/api/v1/tryouts/${id}` as keyof paths;
 const productPath = (id: string) => `/api/v1/products/${id}` as keyof paths;
 
 const adminOrderPath = (id: string) => `/api/v1/admin/orders/${id}` as keyof paths;
+
+const adminTopupPath = (id: string) => `/api/v1/admin/topups/${id}` as keyof paths;
 
 const sessionPath = (id: string) => `/api/v1/my/tryout-sessions/${id}` as keyof paths;
 
@@ -501,6 +512,22 @@ export const api = {
     confirm: (id: string) => mutate<Order>("POST", `${adminOrderPath(id)}/confirm` as keyof paths),
     cancel: (id: string, reason: string) =>
       mutate<Order>("POST", `${adminOrderPath(id)}/cancel` as keyof paths, { reason }),
+  },
+
+  /** The signed-in student's own manual top-up requests; the list also carries the tenant minimum. */
+  topups: {
+    create: (body: TopupBody) => mutate<Topup>("POST", "/api/v1/topups", body),
+    list: (filters: Pick<TopupFilters, "limit" | "offset"> = {}) =>
+      authed<TopupList>(`/api/v1/topups${queryOf(filters)}` as keyof paths),
+  },
+
+  /** Staff review of every top-up request of the tenant. */
+  adminTopups: {
+    list: (filters: TopupFilters = {}) =>
+      authed<TopupList>(`/api/v1/admin/topups${queryOf(filters)}` as keyof paths),
+    approve: (id: string) => mutate<Topup>("POST", `${adminTopupPath(id)}/approve` as keyof paths),
+    reject: (id: string, reason: string) =>
+      mutate<Topup>("POST", `${adminTopupPath(id)}/reject` as keyof paths, { reason }),
   },
 
   /** Kecermatan item packages: Admin and Operator. */

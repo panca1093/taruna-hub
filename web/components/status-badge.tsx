@@ -9,6 +9,7 @@ import type {
   SessionStatus,
 } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import type { Topup } from "@/lib/api/client";
 import { useStatusBadgeT } from "@/lib/i18n/dict/status-badge";
 
 const orderStatusClassName: Record<OrderStatus, string> = {
@@ -22,6 +23,21 @@ export function OrderStatusBadge({ status }: { status: OrderStatus }) {
   return (
     <Chip size="sm" className={cn("font-medium", orderStatusClassName[status])}>
       {t.orderStatus[status]}
+    </Chip>
+  );
+}
+
+const topupStatusClassName: Record<Topup["status"], string> = {
+  pending: "bg-warning-soft text-warning-soft-foreground",
+  approved: "bg-success-soft text-success-soft-foreground",
+  rejected: "bg-danger-soft text-danger-soft-foreground",
+};
+
+export function TopupStatusBadge({ status }: { status: Topup["status"] }) {
+  const t = useStatusBadgeT();
+  return (
+    <Chip size="sm" className={cn("font-medium", topupStatusClassName[status])}>
+      {t.topupStatus[status]}
     </Chip>
   );
 }

@@ -122,7 +122,7 @@ func (f authFixture) echoWithAssets(t *testing.T, assets *service.AssetService, 
 		New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets, newOrderService(f.tenantFixture, assets), newRuntimeService(f.tenantFixture), newResultService(f.tenantFixture, newRuntimeService(f.tenantFixture)), newMonitoringService(f.tenantFixture, newRuntimeService(f.tenantFixture)), newItemPackageService(f.tenantFixture, assets), newKecermatanService(f.tenantFixture), AuthOptions{
 			SecureCookies: f.secure,
 			AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
-		}).Register(e, ResolveHostScope(f.tenants, slug))
+		}).WithTopups(newTopupService(f.tenantFixture, assets)).Register(e, ResolveHostScope(f.tenants, slug))
 		return e
 	})
 }
