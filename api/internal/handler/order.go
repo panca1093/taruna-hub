@@ -321,8 +321,8 @@ func orderResponseOf(o model.Order) orderResponse {
 		out.Items = append(out.Items, orderItemResponse{TryoutID: item.TryoutID, Title: item.Title})
 	}
 	out.RedirectURL = o.RedirectURL
-	if o.ExceptionID != nil && o.ExceptionKind != nil {
-		out.PaymentException = &paymentExceptionRef{ID: *o.ExceptionID, Kind: *o.ExceptionKind}
+	if o.ExceptionID != nil && o.ExceptionKind != nil && o.ExceptionAmount != nil {
+		out.PaymentException = &paymentExceptionRef{ID: *o.ExceptionID, Kind: *o.ExceptionKind, PaidAmount: *o.ExceptionAmount}
 	}
 	return out
 }

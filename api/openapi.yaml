@@ -5753,12 +5753,15 @@ components:
           type: object
           nullable: true
           additionalProperties: false
-          required: [id, kind]
+          required: [id, kind, paid_amount]
           description: A held payment exception on this order (staff review); null when none is held.
           properties:
             id:
               type: string
               format: uuid
+            paid_amount:
+              type: string
+              example: "100000.00"
             kind:
               type: string
               enum: [late_success, amount_mismatch, unexpected_state]

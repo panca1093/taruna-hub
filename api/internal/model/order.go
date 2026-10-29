@@ -52,11 +52,12 @@ type Order struct {
 	KecermatanTestID *uuid.UUID
 	IncludedAttempts *int
 	// Gateway orders carry the provider's payment page while it is open, and the held exception, if any.
-	RedirectURL   *string
-	ExceptionID   *uuid.UUID
-	ExceptionKind *string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	RedirectURL     *string
+	ExceptionID     *uuid.UUID
+	ExceptionKind   *string
+	ExceptionAmount *string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // Enrollment is what a student holds in one tryout. The window is the tryout's own (D05a), read live.

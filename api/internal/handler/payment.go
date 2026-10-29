@@ -38,8 +38,9 @@ type notificationBody struct {
 }
 
 type paymentExceptionRef struct {
-	ID   uuid.UUID `json:"id"`
-	Kind string    `json:"kind"`
+	ID         uuid.UUID `json:"id"`
+	Kind       string    `json:"kind"`
+	PaidAmount string    `json:"paid_amount"`
 }
 
 type paymentExceptionResponse struct {
