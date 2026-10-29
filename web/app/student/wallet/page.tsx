@@ -1,18 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button, Chip } from "@heroui/react";
-import { ArrowDownLeft, ArrowUpRight, CloudOff, Wallet as WalletIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Button, Chip, toast } from "@heroui/react";
+import { ArrowDownLeft, ArrowUpRight, CloudOff, Copy, FileUp, Wallet as WalletIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { TopupStatusBadge } from "@/components/status-badge";
+import { FormModal } from "@/components/ui/form-modal";
+import { TextInput } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
-import { api, errorText, type Wallet, type WalletEntry } from "@/lib/api/client";
+import {
+  api,
+  ApiError,
+  errorText,
+  type BankTransfer,
+  type Topup,
+  type Wallet,
+  type WalletEntry,
+} from "@/lib/api/client";
 import { formatIDR, formatSignedIDR } from "@/lib/format-money";
 import { useStudentWalletT } from "@/lib/i18n/dict/student-wallet";
 
 const PAGE_SIZE = 50;
 
 const when = (iso: string) => new Date(iso).toLocaleString();
+
+const newKey = () => crypto.randomUUID();
 
 export default function StudentWalletPage() {
   const t = useStudentWalletT();
@@ -23,15 +36,30 @@ export default function StudentWalletPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [topups, setTopups] = useState<Topup[]>([]);
+  const [minTopup, setMinTopup] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [bank, setBank] = useState<BankTransfer | null>(null);
+  const [bankFailed, setBankFailed] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const keyRef = useRef(newKey());
+  const proofRef = useRef<{ file: File; assetId: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.wallet.get(), api.wallet.entries({ limit: PAGE_SIZE })])
-      .then(([head, page]) => {
+    Promise.all([api.wallet.get(), api.wallet.entries({ limit: PAGE_SIZE }), api.topups.list({ limit: PAGE_SIZE })])
+      .then(([head, page, requests]) => {
         if (cancelled) return;
         setWallet(head);
         setEntries(page.entries);
         setTotal(page.total);
+        setTopups(requests.topups);
+        setMinTopup(requests.min_topup);
       })
       .catch(() => {
         if (!cancelled) setLoadFailed(true);
@@ -47,6 +75,56 @@ export default function StudentWalletPage() {
     setLoadFailed(false);
     setReloadKey((key) => key + 1);
   };
+
+  const openModal = () => {
+    setModalOpen(true);
+    if (bank === null) {
+      setBankFailed(false);
+      api.orders
+        .bankTransfer()
+        .then(setBank)
+        .catch(() => setBankFailed(true));
+    }
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setAmount("");
+    setFile(null);
+    setFieldErrors({});
+    setSubmitError("");
+    proofRef.current = null;
+    keyRef.current = newKey();
+  };
+
+  const submit = async () => {
+    if (!file) return;
+    setSubmitting(true);
+    setFieldErrors({});
+    setSubmitError("");
+    try {
+      if (proofRef.current?.file !== file) {
+        const asset = await api.assets.uploadProof(file);
+        proofRef.current = { file, assetId: asset.id };
+      }
+      await api.topups.create({
+        amount,
+        idempotency_key: keyRef.current,
+        proof_asset_id: proofRef.current.assetId,
+      });
+      toast.success(t.toastCreated, { description: t.toastCreatedDescription });
+      closeModal();
+      retry();
+    } catch (err) {
+      if (err instanceof ApiError && err.fields?.proof_asset_id) proofRef.current = null;
+      if (err instanceof ApiError && err.fields) setFieldErrors(err.fields);
+      setSubmitError(errorText(err, t.submitFailed));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const topupCodes = new Map(topups.map((topup) => [topup.id, topup.code]));
 
   const loadMore = async () => {
     setLoadingMore(true);
@@ -79,6 +157,9 @@ export default function StudentWalletPage() {
             <p className="mt-0.5 text-sm text-muted">{t.balanceLabel}</p>
           </div>
           <p className="mt-1 text-xs text-muted">{t.topUpHint}</p>
+          <Button variant="primary" size="sm" className="mt-3" onPress={openModal} isDisabled={wallet === null}>
+            {t.topUpButton}
+          </Button>
           <div className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm">
             <div>
               <p className="text-xs text-muted">{t.totalCredits}</p>
@@ -90,6 +171,32 @@ export default function StudentWalletPage() {
             </div>
           </div>
         </div>
+
+        {!loadFailed && entries !== null && (
+          <div className="rounded-xl border border-border bg-surface">
+            <p className="border-b border-border px-4 py-3 text-sm font-semibold text-foreground">{t.requestsTitle}</p>
+            {topups.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-muted">{t.requestsEmpty}</p>
+            ) : (
+              <ul>
+                {topups.map((topup) => (
+                  <li key={topup.id} className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-sm last:border-b-0">
+                    <div>
+                      <p className="font-mono text-xs text-muted">
+                        {topup.code} · {when(topup.created_at)}
+                      </p>
+                      <p className="font-medium text-foreground">{formatIDR(topup.amount)}</p>
+                      {topup.status === "rejected" && (
+                        <p className="text-xs text-danger">{t.rejectReason(topup.reject_reason)}</p>
+                      )}
+                    </div>
+                    <TopupStatusBadge status={topup.status} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {loadFailed ? (
           <EmptyState
@@ -140,7 +247,11 @@ export default function StudentWalletPage() {
                             </Chip>
                           </td>
                           <td className="px-4 py-3 text-foreground">{entry.reason === "" ? "—" : entry.reason}</td>
-                          <td className="px-4 py-3 text-muted">{t.sourceLabel[entry.source_type] ?? entry.source_type}</td>
+                          <td className="px-4 py-3 text-muted">{t.sourceLabel[entry.source_type] ?? entry.source_type}
+                            {entry.source_type === "topup" && topupCodes.get(entry.source_id) && (
+                              <span className="ml-1 font-mono text-xs">{topupCodes.get(entry.source_id)}</span>
+                            )}
+                          </td>
                           <td
                             className={cn(
                               "px-4 py-3 text-right font-mono font-medium whitespace-nowrap",
@@ -170,6 +281,87 @@ export default function StudentWalletPage() {
           </>
         )}
       </div>
+
+      <FormModal
+        isOpen={modalOpen}
+        onOpenChange={(open) => !open && closeModal()}
+        title={t.topUpTitle}
+        description={t.topUpDescription}
+        footer={
+          <>
+            <Button variant="ghost" isDisabled={submitting} onPress={closeModal}>
+              {t.cancel}
+            </Button>
+            <Button variant="primary" isDisabled={submitting || !file || amount === "" || !bank} onPress={submit}>
+              {submitting ? t.submitting : t.submit}
+            </Button>
+          </>
+        }
+      >
+        <TextInput
+          label={t.amountLabel}
+          description={t.amountHint(formatIDR(minTopup === "" ? "0" : minTopup))}
+          inputMode="numeric"
+          value={amount}
+          error={fieldErrors.amount}
+          onChange={(e) => {
+            setAmount(e.target.value.replace(/\D/g, ""));
+            setSubmitError("");
+            keyRef.current = newKey();
+          }}
+        />
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-foreground">{t.bankTitle}</p>
+          {bank ? (
+            <div className="flex items-center justify-between rounded-lg border border-border bg-surface-secondary px-3.5 py-3">
+              <div>
+                <p className="text-xs text-muted">
+                  {bank.bank_name} — a.n. {bank.account_holder}
+                </p>
+                <p className="font-mono text-sm font-medium text-foreground">{bank.account_number}</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                isIconOnly
+                onPress={() => navigator.clipboard?.writeText(bank.account_number)}
+              >
+                <Copy className="size-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <p className={cn("text-xs", bankFailed ? "text-danger" : "text-muted")}>
+              {bankFailed ? t.bankUnavailable : t.loadingBank}
+            </p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-foreground">{t.proofTitle}</p>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null);
+              setSubmitError("");
+              keyRef.current = newKey();
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-border py-6 text-center transition-colors hover:border-accent/50 hover:bg-accent-soft/30"
+          >
+            <FileUp className="size-5 text-muted" />
+            <span className="text-sm font-medium text-foreground">{file?.name ?? t.uploadPrompt}</span>
+            <span className="text-xs text-muted">{t.uploadHint}</span>
+          </button>
+          {fieldErrors.proof_asset_id && <p className="text-xs text-danger">{fieldErrors.proof_asset_id}</p>}
+        </div>
+        {submitError !== "" && <p className="text-sm text-danger">{submitError}</p>}
+      </FormModal>
     </AppShell>
   );
 }

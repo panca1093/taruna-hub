@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
+  Banknote,
   BarChart3,
   BookOpen,
   ClipboardList,
@@ -44,6 +45,7 @@ export const dashboardNav: NavItem[] = [
   { href: "/admin/item-packages", label: "Paket Item", icon: Shapes },
   { href: "/admin/products", label: "Produk", icon: Package },
   { href: "/admin/orders", label: "Pesanan", icon: BarChart3 },
+  { href: "/admin/topups", label: "Top-up", icon: Banknote },
   { href: "/admin/students", label: "Siswa", icon: Users },
   { href: "/admin/results", label: "Hasil", icon: BarChart3 },
   { href: "/admin/kecermatan-results", label: "Hasil Kecermatan", icon: BarChart3 },

@@ -16,6 +16,9 @@ const id = {
   walletDescription: "Bayar dari saldo akun, akses terbuka otomatis.",
   scoringWeightTitle: "Bobot penilaian (weighted scoring)",
   scoringWeightDescription: "Berlaku untuk attempt baru pada semua tryout. Attempt yang sudah berjalan memakai bobot saat dimulai.",
+  minTopupTitle: "Minimum top-up",
+  minTopupDescription: "Jumlah terkecil yang boleh diajukan siswa. Rupiah penuh, tanpa batas atas.",
+  fieldMinTopup: "Minimum (Rp)",
   fieldEasy: "Mudah",
   fieldMedium: "Sedang",
   fieldHard: "Sulit",
@@ -24,7 +27,7 @@ const id = {
   loading: "Memuat pengaturan...",
   loadErrorDescription: "Periksa koneksi Anda lalu coba lagi.",
   retry: "Coba Lagi",
-  toastSaved: "Bobot penilaian disimpan",
+  toastSaved: "Pengaturan disimpan",
   toastSaveFailed: "Gagal menyimpan",
 };
 
@@ -42,6 +45,9 @@ const en: typeof id = {
   walletDescription: "Pay from account balance, access opens automatically.",
   scoringWeightTitle: "Scoring weights (weighted scoring)",
   scoringWeightDescription: "Applies to new attempts on every tryout. An attempt already started keeps the weights it began with.",
+  minTopupTitle: "Minimum top-up",
+  minTopupDescription: "The smallest amount a student may request. Whole rupiah, no upper limit.",
+  fieldMinTopup: "Minimum (Rp)",
   fieldEasy: "Easy",
   fieldMedium: "Medium",
   fieldHard: "Hard",
@@ -50,7 +56,7 @@ const en: typeof id = {
   loading: "Loading settings...",
   loadErrorDescription: "Check your connection and try again.",
   retry: "Retry",
-  toastSaved: "Scoring weights saved",
+  toastSaved: "Settings saved",
   toastSaveFailed: "Could not save",
 };
 

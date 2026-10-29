@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Button, Card, toast } from "@heroui/react";
-import { CreditCard, Scale } from "lucide-react";
+import { Banknote, CreditCard, Scale } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { TextInput } from "@/components/ui/form";
 import { api, ApiError, errorText } from "@/lib/api/client";
 import { useSettingsT } from "@/lib/i18n/dict/settings";
 
-type Weights = { easy: string; medium: string; hard: string };
+type Weights = { easy: string; medium: string; hard: string; minTopup: string };
+
+const wholeRupiah = (value: string) => value.split(".")[0];
 
 export default function SettingsPage() {
   const t = useSettingsT();
@@ -24,9 +26,9 @@ export default function SettingsPage() {
     let cancelled = false;
     api.settings
       .get()
-      .then(({ scoring_weights: w }) => {
+      .then(({ scoring_weights: w, min_topup }) => {
         if (cancelled) return;
-        const loaded = { easy: String(w.easy), medium: String(w.medium), hard: String(w.hard) };
+        const loaded = { easy: String(w.easy), medium: String(w.medium), hard: String(w.hard), minTopup: wholeRupiah(min_topup) };
         setWeights(loaded);
         setSaved(loaded);
       })
@@ -45,11 +47,13 @@ export default function SettingsPage() {
     try {
       const result = await api.settings.update({
         scoring_weights: { easy: Number(weights.easy), medium: Number(weights.medium), hard: Number(weights.hard) },
+        min_topup: weights.minTopup,
       });
       const next = {
         easy: String(result.scoring_weights.easy),
         medium: String(result.scoring_weights.medium),
         hard: String(result.scoring_weights.hard),
+        minTopup: wholeRupiah(result.min_topup),
       };
       setWeights(next);
       setSaved(next);
@@ -69,6 +73,8 @@ export default function SettingsPage() {
     { title: t.manualConfirmTitle, desc: t.manualConfirmDescription },
     { title: t.walletTitle, desc: t.walletDescription },
   ];
+
+  const minTopupError = errors["min_topup"];
 
   return (
     <RequireRole roles={["admin"]} title={t.pageTitle} deniedMessage={t.deniedMessage}>
@@ -146,6 +152,28 @@ export default function SettingsPage() {
                   value={weights.hard}
                   error={errors["weights.hard"]}
                   onChange={(e) => setWeights((w) => (w ? { ...w, hard: e.target.value } : w))}
+                />
+              </div>
+            )}
+          </Card>
+
+          <Card className="gap-4 p-5">
+            <div className="flex items-center gap-2">
+              <Banknote className="size-4 text-accent" />
+              <p className="text-sm font-semibold text-foreground">{t.minTopupTitle}</p>
+            </div>
+            <p className="text-xs text-muted">{t.minTopupDescription}</p>
+            {weights !== null && (
+              <div className="max-w-xs">
+                <TextInput
+                  label={t.fieldMinTopup}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  step={1000}
+                  value={weights.minTopup}
+                  error={minTopupError}
+                  onChange={(e) => setWeights((w) => (w ? { ...w, minTopup: e.target.value } : w))}
                 />
               </div>
             )}
