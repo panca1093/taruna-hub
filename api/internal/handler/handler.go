@@ -37,6 +37,7 @@ type Handler struct {
 	kecermatan    *service.KecermatanService
 	kecRuntime    *service.KecermatanRuntimeService
 	topups        *service.TopupService
+	payments      *service.PaymentService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
@@ -71,9 +72,18 @@ func (h *Handler) WithTopups(s *service.TopupService) *Handler {
 	return h
 }
 
+// WithPayments attaches the gateway payment service for the same reason.
+func (h *Handler) WithPayments(s *service.PaymentService) *Handler {
+	h.payments = s
+	return h
+}
+
 func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	e.GET("/healthz", h.health.Live)
 	e.GET("/readyz", h.health.Ready)
+
+	// The provider calls this without a session or tenant host; the signature and the stored reference decide.
+	e.POST("/api/v1/payments/midtrans/notification", h.MidtransNotification, httpx.NoStore())
 
 	v1 := e.Group("/api/v1")
 	v1.Use(apiMiddleware...)
@@ -142,6 +152,10 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.GET("/orders", h.MyOrders, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/orders/:id", h.MyOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/enrollments", h.MyEnrollments, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/payments/gateway", h.GatewayMethod, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/admin/payment-exceptions", h.PaymentExceptions, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/admin/payment-exceptions/:id/credit", h.CreditPaymentException, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/admin/payment-exceptions/:id/refund", h.RefundPaymentException, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/payments/bank-transfer", h.BankTransfer, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/admin/orders", h.StaffOrders, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/orders/:id", h.StaffOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))

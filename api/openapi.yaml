@@ -1769,7 +1769,14 @@ paths:
         tryouts on the order. The client sends `expected_price`, the price its page showed, and the server price must
         equal it.
 
-        `payment_method` is `wallet` or `manual` (the gateway arrives with P14). A `wallet` order is debited,
+        `payment_method` is `wallet`, `manual` or `gateway`. A `gateway` order (Midtrans, whole-rupiah price only)
+        is created `pending`, and the response carries `redirect_url`, the Midtrans payment page. Nothing is
+        granted until Midtrans' confirmed success arrives (webhook or status read); the return URL alone grants
+        nothing. The server calls Midtrans after committing, so if that call is ambiguous the answer is `502`
+        `gateway_error`: retry with the same `idempotency_key`, which reuses the same Midtrans order id. If the
+        page can never be opened the order is cancelled and `502` says so. `503` when the gateway is not
+        configured. A pending gateway order is cancelled when Midtrans reports expiry (24 hours) or cancellation.
+        A `wallet` order is debited,
         confirmed, granted and queued for notification in one transaction: if the balance is too low it answers
         `422` with code `insufficient_balance` and nothing is written. A `manual` order needs `proof_asset_id`, an
         unused `payment_proof` asset the caller uploaded through `POST /api/v1/assets`; it is finalized with the
@@ -1825,6 +1832,12 @@ paths:
         "422":
           description: |
             `validation_failed` with `fields`, or `insufficient_balance` when the wallet cannot pay the price.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Midtrans could not be reached or refused (`gateway_error`); see the description.
           content:
             application/json:
               schema:
@@ -1935,6 +1948,205 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/Unavailable"
+
+  /api/v1/payments/gateway:
+    get:
+      tags: [orders]
+      summary: Whether Midtrans is offered
+      description: |
+        Student only. `200` when the Midtrans keys are configured, `503` otherwise; checkout and top-up with
+        method `gateway` answer `503` in the same case.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The gateway is available
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [provider]
+                properties:
+                  provider:
+                    type: string
+                    enum: [midtrans]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/payments/midtrans/notification:
+    post:
+      tags: [orders]
+      summary: Midtrans payment notification (provider only)
+      description: |
+        Called by Midtrans, with no session and no tenant host. The only credential is `signature_key`, the
+        SHA512 of `order_id + status_code + gross_amount + server_key`; a wrong one answers `403` and nothing is
+        stored. The tenant and the order or top-up come from the stored provider reference, never from the
+        request. A reference this system never issued answers `200` so the provider stops retrying.
+
+        Before anything moves, the server asks Midtrans' Status API for the truth and applies that, so a forged
+        or stale body cannot confirm anything. If the provider cannot be reached the answer is `5xx` and Midtrans
+        retries. Replays and reordered `pending`/`settlement` notifications produce one confirmation or credit
+        and never downgrade a final state. A success for a cancelled or expired order or top-up, with a wrong
+        amount, or on an order already confirmed some other way is held as a payment exception for staff.
+        `refund` and `chargeback` notifications are stored as evidence only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id, status_code, gross_amount, transaction_status, signature_key]
+              properties:
+                order_id:
+                  type: string
+                status_code:
+                  type: string
+                gross_amount:
+                  type: string
+                transaction_status:
+                  type: string
+                fraud_status:
+                  type: string
+                transaction_id:
+                  type: string
+                signature_key:
+                  type: string
+      responses:
+        "200":
+          description: Accepted (including a reference this system does not know)
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/admin/payment-exceptions:
+    get:
+      tags: [orders]
+      summary: Gateway payments held for review
+      description: |
+        Admin and Operator. A held exception is a provider success the system refused to apply by itself (D07):
+        a late success for a cancelled order or top-up, a wrong amount, or a payment on an order already
+        confirmed another way. `status` narrows to `held`, `credited` or `refunded`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [held, credited, refunded]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: The exceptions, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentExceptionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/payment-exceptions/{id}/credit:
+    post:
+      tags: [orders]
+      summary: Credit a held payment to the student's wallet
+      description: |
+        Admin and Operator. Credits the paid amount once (ledger source `payment_exception`, actor staff with the
+        reason) and resolves the exception. Repeating it, or running it concurrently, changes nothing more. It does
+        not reopen access. `409` when the exception was already marked refunded.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentExceptionResolveRequest"
+      responses:
+        "200":
+          description: The resolved exception
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentException"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/payment-exceptions/{id}/refund:
+    post:
+      tags: [orders]
+      summary: Mark a held payment as refunded outside the system
+      description: |
+        Admin and Operator. Records who returned the money and why; nothing is sent to Midtrans and no wallet money
+        moves. `409` when the exception was already credited.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentExceptionResolveRequest"
+      responses:
+        "200":
+          description: The resolved exception
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentException"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
 
   /api/v1/admin/orders:
     get:
@@ -5438,6 +5650,7 @@ components:
                 - insufficient_balance
                 - price_changed
                 - order_pending
+                - gateway_error
                 - tryout_not_open
                 - tryout_closed
                 - session_completed
@@ -5480,7 +5693,7 @@ components:
           description: The price the page showed, as the same decimal string `Product.price` uses.
         payment_method:
           type: string
-          enum: [manual, wallet]
+          enum: [manual, wallet, gateway]
         idempotency_key:
           type: string
           pattern: '^[A-Za-z0-9_-]{8,64}$'
@@ -5517,7 +5730,7 @@ components:
       additionalProperties: false
       required: [id, code, status, payment_method, student_id, student_name, product_id, product_type, product_title,
                  price, items, proof_asset_id, cancel_reason, created_at, confirmed_at, cancelled_at,
-                 kecermatan_test_id, included_attempts]
+                 kecermatan_test_id, included_attempts, redirect_url, payment_exception]
       description: The checkout snapshot. Editing or deleting the product later changes nothing here.
       properties:
         id:
@@ -5531,7 +5744,24 @@ components:
           enum: [pending, confirmed, cancelled]
         payment_method:
           type: string
-          enum: [manual, wallet]
+          enum: [manual, wallet, gateway]
+        redirect_url:
+          type: string
+          nullable: true
+          description: The Midtrans payment page of a `gateway` order that is still pending; otherwise null.
+        payment_exception:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [id, kind]
+          description: A held payment exception on this order (staff review); null when none is held.
+          properties:
+            id:
+              type: string
+              format: uuid
+            kind:
+              type: string
+              enum: [late_success, amount_mismatch, unexpected_state]
         student_id:
           type: string
           format: uuid
@@ -5592,11 +5822,86 @@ components:
         total:
           type: integer
 
+    PaymentExceptionResolveRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    PaymentException:
+      type: object
+      additionalProperties: false
+      required: [id, kind, status, student_id, student_name, order_id, order_code, topup_id, topup_code, paid_amount,
+                 reason, created_at, resolved_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [late_success, amount_mismatch, unexpected_state]
+        status:
+          type: string
+          enum: [held, credited, refunded]
+        student_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        order_id:
+          type: string
+          format: uuid
+          nullable: true
+        order_code:
+          type: string
+          nullable: true
+        topup_id:
+          type: string
+          format: uuid
+          nullable: true
+        topup_code:
+          type: string
+          nullable: true
+        paid_amount:
+          type: string
+          description: What Midtrans reports as paid, a canonical decimal string; this is what a credit adds.
+          example: "100000.00"
+        reason:
+          type: string
+          description: Staff's reason once resolved; empty while held.
+        created_at:
+          type: string
+          format: date-time
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    PaymentExceptionList:
+      type: object
+      additionalProperties: false
+      required: [exceptions, total]
+      properties:
+        exceptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PaymentException"
+        total:
+          type: integer
+
     TopupCreateRequest:
       type: object
       additionalProperties: false
-      required: [amount, idempotency_key, proof_asset_id]
+      required: [amount, idempotency_key]
       properties:
+        method:
+          type: string
+          enum: [manual, gateway]
+          description: Defaults to `manual`. A `gateway` top-up pays through Midtrans and refuses `proof_asset_id`.
         amount:
           type: string
           pattern: '^[0-9]+(\.0{1,2})?$'
@@ -5607,7 +5912,7 @@ components:
         proof_asset_id:
           type: string
           format: uuid
-          description: An unused `payment_proof` asset the caller uploaded.
+          description: Required for `manual` and refused for `gateway`. An unused `payment_proof` asset the caller uploaded.
 
     TopupRejectRequest:
       type: object
@@ -5623,8 +5928,12 @@ components:
       type: object
       additionalProperties: false
       required: [id, code, status, method, student_id, student_name, amount, proof_asset_id, reject_reason,
-                 created_at, approved_at, rejected_at]
+                 created_at, approved_at, rejected_at, redirect_url]
       properties:
+        redirect_url:
+          type: string
+          nullable: true
+          description: The Midtrans payment page of a `gateway` top-up that is still pending; otherwise null.
         id:
           type: string
           format: uuid
@@ -5637,8 +5946,7 @@ components:
           enum: [pending, approved, rejected]
         method:
           type: string
-          enum: [manual]
-          description: Only `manual` exists until P14 adds the gateway.
+          enum: [manual, gateway]
         student_id:
           type: string
           format: uuid

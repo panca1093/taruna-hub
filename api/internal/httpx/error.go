@@ -31,6 +31,8 @@ const (
 	CodePriceChanged Code = "price_changed"
 	// CodeOrderPending: the student already has a pending order for this product.
 	CodeOrderPending Code = "order_pending"
+	// CodeGatewayError: the payment provider could not be reached or refused; retry with the same key or start over.
+	CodeGatewayError Code = "gateway_error"
 )
 
 // Envelope is the single response shape for every failing request.
@@ -75,6 +77,8 @@ func Unauthorized(msg string) *Error { return New(http.StatusUnauthorized, CodeU
 func Forbidden(msg string) *Error    { return New(http.StatusForbidden, CodeForbidden, msg) }
 func NotFound(msg string) *Error     { return New(http.StatusNotFound, CodeNotFound, msg) }
 func Conflict(msg string) *Error     { return New(http.StatusConflict, CodeConflict, msg) }
+
+func BadGateway(msg string) *Error { return New(http.StatusBadGateway, CodeGatewayError, msg) }
 
 func Unavailable(msg string) *Error {
 	return New(http.StatusServiceUnavailable, CodeUnavailable, msg)

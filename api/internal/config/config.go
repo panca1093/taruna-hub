@@ -47,6 +47,15 @@ type BankConfig struct {
 	AccountHolder string
 }
 
+// MidtransConfig is the one platform-owned merchant account (D16). An empty ServerKey means the gateway method is
+// simply not offered. Sandbox is the default; production must be asked for.
+type MidtransConfig struct {
+	ServerKey  string
+	Production bool
+	// NotificationURL overrides the dashboard's notification URL for each transaction; optional.
+	NotificationURL string
+}
+
 type Config struct {
 	Env         string
 	Port        string
@@ -60,6 +69,7 @@ type Config struct {
 	SMTP       SMTPConfig
 	S3         S3Config
 	Bank       BankConfig
+	Midtrans   MidtransConfig
 	// NotificationSealKey seals the codes and reset links queued for delivery. Required everywhere.
 	NotificationSealKey []byte
 	// AppURL is the web origin that links in emails point at; never taken from a request.
@@ -92,6 +102,17 @@ func Load() (Config, error) {
 		Name:          env("BANK_NAME", ""),
 		AccountNumber: env("BANK_ACCOUNT_NUMBER", ""),
 		AccountHolder: env("BANK_ACCOUNT_HOLDER", ""),
+	}
+	c.Midtrans = MidtransConfig{
+		ServerKey:       env("MIDTRANS_SERVER_KEY", ""),
+		NotificationURL: env("MIDTRANS_NOTIFICATION_URL", ""),
+	}
+	if raw := env("MIDTRANS_IS_PRODUCTION", ""); raw != "" {
+		production, err := strconv.ParseBool(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("MIDTRANS_IS_PRODUCTION must be true or false, got %q", raw)
+		}
+		c.Midtrans.Production = production
 	}
 	if c.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")

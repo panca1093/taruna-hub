@@ -40,7 +40,10 @@ func NewOrderRepository(db *pgxpool.Pool) *OrderRepository {
 const orderColumns = `o.id, o.number, o.tenant_id, o.user_id, u.name, o.product_id, o.product_type,
 	o.product_title, o.price::text, o.payment_method, o.status, o.idempotency_key, o.proof_asset_id,
 	o.cancel_reason, o.reviewed_by, o.confirmed_at, o.cancelled_at, o.created_at, o.updated_at,
-	o.kecermatan_test_id, o.included_attempts`
+	o.kecermatan_test_id, o.included_attempts,
+	(SELECT a.redirect_url FROM payment_attempts a WHERE a.order_id = o.id AND a.status IN ('pending', 'failed')),
+	(SELECT x.id FROM payment_exceptions x WHERE x.order_id = o.id AND x.status = 'held'),
+	(SELECT x.kind FROM payment_exceptions x WHERE x.order_id = o.id AND x.status = 'held')`
 
 const orderFrom = ` FROM orders o JOIN users u ON u.id = o.user_id AND u.tenant_id = o.tenant_id`
 
@@ -388,7 +391,7 @@ func scanOrder(row pgx.Row) (model.Order, error) {
 	err := row.Scan(&o.ID, &o.Number, &o.TenantID, &o.UserID, &o.StudentName, &o.ProductID, &o.ProductType,
 		&o.ProductTitle, &o.Price, &o.PaymentMethod, &o.Status, &o.Key, &o.ProofAssetID,
 		&o.CancelReason, &o.ReviewedBy, &o.ConfirmedAt, &o.CancelledAt, &o.CreatedAt, &o.UpdatedAt,
-		&o.KecermatanTestID, &o.IncludedAttempts)
+		&o.KecermatanTestID, &o.IncludedAttempts, &o.RedirectURL, &o.ExceptionID, &o.ExceptionKind)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Order{}, ErrNotFound
 	}

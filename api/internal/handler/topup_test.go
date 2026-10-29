@@ -210,7 +210,7 @@ func TestTopupCreateValidationAndMinimum(t *testing.T) {
 		{"short key", topupBody("50000", proof, map[string]any{"idempotency_key": "x"}), "idempotency_key", http.StatusUnprocessableEntity},
 		{"no proof", map[string]any{"amount": "50000", "idempotency_key": "key-" + uuid.NewString()[:12]}, "proof_asset_id", http.StatusUnprocessableEntity},
 		{"malformed proof", topupBody("50000", "nope", nil), "proof_asset_id", http.StatusUnprocessableEntity},
-		{"unknown field", topupBody("50000", proof, map[string]any{"method": "gateway"}), "body", http.StatusUnprocessableEntity},
+		{"unknown field", topupBody("50000", proof, map[string]any{"bogus": "gateway"}), "body", http.StatusUnprocessableEntity},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

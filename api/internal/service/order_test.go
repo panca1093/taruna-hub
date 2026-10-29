@@ -708,7 +708,7 @@ func TestCheckoutRejectsWhatItCannotPay(t *testing.T) {
 		in    CheckoutInput
 		field string
 	}{
-		{"gateway is not available yet", CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: "gateway", Key: "valid-key-0001"}, "payment_method"},
+		{"unknown method", CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: "paypal", Key: "valid-key-0001"}, "payment_method"},
 		{"manual without a proof", CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "valid-key-0002"}, "proof_asset_id"},
 		{"wallet with a proof", CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentWallet, Key: "valid-key-0003", ProofAssetID: &proof}, "proof_asset_id"},
 		{"short key", CheckoutInput{ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentWallet, Key: "short"}, "idempotency_key"},
@@ -719,6 +719,11 @@ func TestCheckoutRejectsWhatItCannotPay(t *testing.T) {
 			_, _, err := h.svc.Checkout(ctx, scope, p, tc.in)
 			wantInputField(t, err, tc.field)
 		})
+	}
+	if _, _, err := h.svc.Checkout(ctx, scope, p, CheckoutInput{
+		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentGateway, Key: "valid-key-0006",
+	}); !errors.Is(err, ErrGatewayUnavailable) {
+		t.Errorf("gateway without a configured provider: err = %v, want ErrGatewayUnavailable", err)
 	}
 	if _, _, err := h.svc.Checkout(ctx, scope, h.staff(tenant, model.RoleAdmin), CheckoutInput{
 		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentWallet, Key: "valid-key-0005",

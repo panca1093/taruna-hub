@@ -12,7 +12,6 @@ const (
 	OrderCancelled = "cancelled"
 )
 
-// Gateway joins in P14; until then these are the only ways to pay.
 const (
 	PaymentManual = "manual"
 	PaymentWallet = "wallet"
@@ -52,8 +51,12 @@ type Order struct {
 	// A kecermatan order has no items; it snapshots the test and the credits it adds.
 	KecermatanTestID *uuid.UUID
 	IncludedAttempts *int
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// Gateway orders carry the provider's payment page while it is open, and the held exception, if any.
+	RedirectURL   *string
+	ExceptionID   *uuid.UUID
+	ExceptionKind *string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // Enrollment is what a student holds in one tryout. The window is the tryout's own (D05a), read live.
