@@ -27,7 +27,7 @@ const (
 	orderKeyConflict  = "Kunci idempotensi sudah dipakai untuk pesanan lain."
 	orderBankMissing  = "Transfer manual belum tersedia."
 	orderProductRule  = "Produk wajib dipilih."
-	orderMethodRule   = "Metode pembayaran harus manual atau wallet."
+	orderMethodRule   = "Metode pembayaran harus manual, wallet atau gateway (harga rupiah penuh)."
 	orderKeyRule      = "Kunci idempotensi 8–64 karakter: huruf, angka, _ atau -."
 	orderProofRule    = "Bukti transfer wajib untuk transfer manual dan harus berkas milikmu yang belum dipakai."
 	orderCancelRule   = "Alasan pembatalan wajib diisi, maksimal 500 karakter."
@@ -60,6 +60,9 @@ type orderResponse struct {
 	CreatedAt        time.Time           `json:"created_at"`
 	ConfirmedAt      *time.Time          `json:"confirmed_at"`
 	CancelledAt      *time.Time          `json:"cancelled_at"`
+	// RedirectURL is the Midtrans payment page of a gateway order that is still open.
+	RedirectURL      *string              `json:"redirect_url"`
+	PaymentException *paymentExceptionRef `json:"payment_exception"`
 }
 
 type ordersResponse struct {
@@ -317,6 +320,10 @@ func orderResponseOf(o model.Order) orderResponse {
 	for _, item := range o.Items {
 		out.Items = append(out.Items, orderItemResponse{TryoutID: item.TryoutID, Title: item.Title})
 	}
+	out.RedirectURL = o.RedirectURL
+	if o.ExceptionID != nil && o.ExceptionKind != nil && o.ExceptionAmount != nil {
+		out.PaymentException = &paymentExceptionRef{ID: *o.ExceptionID, Kind: *o.ExceptionKind, PaidAmount: *o.ExceptionAmount}
+	}
 	return out
 }
 
@@ -360,8 +367,10 @@ func orderError(err error) error {
 		return httpx.Conflict(orderKeyConflict)
 	case errors.Is(err, service.ErrBankTransferUnavailable):
 		return httpx.Unavailable(orderBankMissing)
+	case errors.Is(err, service.ErrGatewayManaged):
+		return httpx.New(http.StatusConflict, httpx.CodeGatewayManaged, gatewayManaged)
 	}
-	return err
+	return gatewayError(err)
 }
 
 func orderReason(reason string) string {

@@ -111,6 +111,7 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	orders := service.NewOrderService(pool, repository.NewOrderRepository(pool), repository.NewProductRepository(pool), wallets, assets, notifications,
 		service.BankAccount{Bank: cfg.Bank.Name, Number: cfg.Bank.AccountNumber, Holder: cfg.Bank.AccountHolder})
 	topups := service.NewTopupService(pool, repository.NewTopupRepository(pool), wallets, assets, notifications)
+	payments := service.NewPaymentService(pool, repository.NewPaymentRepository(pool), orders, topups, wallets, infra.NewMidtrans(cfg.Midtrans), cfg.AppURL)
 	runtimeRepo := repository.NewRuntimeRepository(pool)
 	runtime := service.NewRuntimeService(pool, runtimeRepo)
 	results := service.NewResultService(runtime, repository.NewResultRepository(pool), runtimeRepo)
@@ -121,7 +122,7 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, products, wallets, assets, orders, runtime, results, monitoring, itemPackages, kecermatan, handler.AuthOptions{
 		SecureCookies: !cfg.IsDevelopment(),
 		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
-	}).WithKecermatanRuntime(kecermatanRuntime).WithTopups(topups)
+	}).WithKecermatanRuntime(kecermatanRuntime).WithTopups(topups).WithPayments(payments)
 
 	e := echo.New()
 	e.HideBanner = true

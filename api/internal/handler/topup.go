@@ -23,6 +23,7 @@ const (
 	topupProofRule   = "Bukti transfer wajib dan harus berkas milikmu yang belum dipakai."
 	topupRejectRule  = "Alasan penolakan wajib diisi, maksimal 500 karakter."
 	topupQueryRule   = "Parameter tidak valid."
+	topupMethodRule  = "Metode top-up harus manual atau gateway."
 	topupMaxBody     = 8 << 10
 )
 
@@ -39,6 +40,7 @@ type topupResponse struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	ApprovedAt   *time.Time `json:"approved_at"`
 	RejectedAt   *time.Time `json:"rejected_at"`
+	RedirectURL  *string    `json:"redirect_url"`
 }
 
 type topupsResponse struct {
@@ -48,6 +50,7 @@ type topupsResponse struct {
 }
 
 type topupCreateRequest struct {
+	Method         string  `json:"method"`
 	Amount         string  `json:"amount"`
 	IdempotencyKey string  `json:"idempotency_key"`
 	ProofAssetID   *string `json:"proof_asset_id"`
@@ -68,7 +71,7 @@ func (h *Handler) CreateTopup(c echo.Context) error {
 	if err := bindStrict(c, &req); err != nil {
 		return err
 	}
-	input := service.CreateTopupInput{Amount: req.Amount, Key: req.IdempotencyKey}
+	input := service.CreateTopupInput{Method: req.Method, Amount: req.Amount, Key: req.IdempotencyKey}
 	if req.ProofAssetID != nil && strings.TrimSpace(*req.ProofAssetID) != "" {
 		id, err := uuid.Parse(strings.TrimSpace(*req.ProofAssetID))
 		if err != nil {
@@ -192,7 +195,7 @@ func topupResponseOf(t model.Topup) topupResponse {
 	return topupResponse{
 		ID: t.ID, Code: service.TopupCode(t.Number), Status: t.Status, Method: t.Method, StudentID: t.UserID,
 		StudentName: t.StudentName, Amount: t.Amount, ProofAssetID: t.ProofAssetID, RejectReason: t.RejectReason,
-		CreatedAt: t.CreatedAt, ApprovedAt: t.ApprovedAt, RejectedAt: t.RejectedAt,
+		CreatedAt: t.CreatedAt, ApprovedAt: t.ApprovedAt, RejectedAt: t.RejectedAt, RedirectURL: t.RedirectURL,
 	}
 }
 
@@ -224,8 +227,10 @@ func topupError(err error) error {
 		return httpx.Conflict(topupStateRule)
 	case errors.Is(err, service.ErrTopupKeyConflict):
 		return httpx.Conflict(topupKeyConflict)
+	case errors.Is(err, service.ErrGatewayManaged):
+		return httpx.New(http.StatusConflict, httpx.CodeGatewayManaged, gatewayManaged)
 	}
-	return err
+	return gatewayError(err)
 }
 
 func topupReason(reason string) string {
@@ -240,6 +245,8 @@ func topupReason(reason string) string {
 		return topupRejectRule
 	case service.ReasonTopupQuery:
 		return topupQueryRule
+	case service.ReasonTopupMethod:
+		return topupMethodRule
 	}
 	return invalidFormat
 }

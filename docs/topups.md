@@ -15,7 +15,7 @@ never creates an order and never grants a test. Money moves only through the P12
 
 The code is `TUP-` plus the number padded to six digits. `method` already admits `gateway`: P14 reuses the
 status machine and the credit invariant and keeps its provider evidence (payment attempts, events) in its own
-tables. Only `manual` is created today.
+tables. `manual` is described here; `gateway` top-ups are in [payments-gateway.md](payments-gateway.md).
 
 ## Amount (D12)
 
@@ -81,7 +81,7 @@ ledger reference.
 
 ## Not covered
 
-- Gateway top-ups (P14).
+- Gateway top-ups are covered in [payments-gateway.md](payments-gateway.md).
 - No limit on how many requests a student may keep pending; staff see them all.
 - Create does not refuse when the bank account is not configured (checkout answers `503`); the page shows
   "unavailable" because the account lookup fails.

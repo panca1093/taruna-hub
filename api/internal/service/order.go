@@ -27,6 +27,7 @@ var (
 	ErrOrderPending             = errors.New("a pending order for this product already exists")
 	ErrBankTransferUnavailable  = errors.New("bank transfer account is not configured")
 	ErrEnrollmentSourceRequired = errors.New("enrollment grant needs a source")
+	ErrGatewayManaged           = errors.New("a gateway payment is confirmed by the provider, not by staff")
 )
 
 // Order field reasons; the transport turns each into the copy its screens show.
@@ -105,6 +106,7 @@ type OrderService struct {
 	assets   *AssetService
 	notes    *NotificationService
 	bank     BankAccount
+	payments *PaymentService
 	now      func() time.Time
 }
 
@@ -134,6 +136,9 @@ func (s *OrderService) Checkout(ctx context.Context, scope HostScope, principal 
 	}
 	if in.Method == model.PaymentManual && !s.bank.Configured() {
 		return model.Order{}, false, ErrBankTransferUnavailable
+	}
+	if in.Method == model.PaymentGateway && !s.payments.Available() {
+		return model.Order{}, false, ErrGatewayUnavailable
 	}
 
 	var out model.Order
@@ -180,6 +185,9 @@ func (s *OrderService) Checkout(ctx context.Context, scope HostScope, principal 
 				return ErrAlreadyOwned
 			}
 		}
+		if in.Method == model.PaymentGateway && !strings.HasSuffix(product.Price, ".00") {
+			return &InputError{Fields: map[string]string{"payment_method": ReasonOrderMethod}}
+		}
 		if in.ProofAssetID != nil {
 			asset, err := s.assets.FinalizeTx(ctx, tx, scope, principal, *in.ProofAssetID)
 			if err != nil {
@@ -208,11 +216,24 @@ func (s *OrderService) Checkout(ctx context.Context, scope HostScope, principal 
 				return err
 			}
 		}
+		if in.Method == model.PaymentGateway {
+			if err := s.payments.insertAttemptTx(ctx, tx, tenantID, principal.UserID, &order.ID, nil, order.Price); err != nil {
+				return err
+			}
+		}
 		out = order
 		return nil
 	})
 	if err != nil {
 		return model.Order{}, false, err
+	}
+	if out.PaymentMethod == model.PaymentGateway && out.Status == model.OrderPending {
+		// The provider is called after the commit, never under a lock; a replay of the same key finishes it.
+		opened, err := s.payments.ensureOrderRedirect(ctx, out)
+		if err != nil {
+			return model.Order{}, false, err
+		}
+		out = opened
 	}
 	return out, replayed, nil
 }
@@ -277,6 +298,9 @@ func (s *OrderService) review(ctx context.Context, scope HostScope, principal mo
 			}
 			out = order
 			return nil
+		}
+		if target == model.OrderConfirmed && order.PaymentMethod == model.PaymentGateway {
+			return ErrGatewayManaged
 		}
 		contact, err := s.repo.LockStudentTx(ctx, tx, tenantID, order.UserID)
 		if err != nil {
@@ -429,6 +453,12 @@ func (s *OrderService) Order(ctx context.Context, scope HostScope, principal mod
 	if principal.Role != model.RoleStudent && !isStaff(principal.Role) {
 		return model.Order{}, ErrOrderForbidden
 	}
+	if order.PaymentMethod == model.PaymentGateway && order.Status == model.OrderPending && s.payments != nil {
+		s.payments.reconcileOrder(ctx, order)
+		if fresh, err := s.repo.Find(ctx, tenantID, id); err == nil {
+			order = fresh
+		}
+	}
 	return order, nil
 }
 
@@ -495,7 +525,7 @@ func checkedCheckout(in CheckoutInput) error {
 		if in.ProofAssetID == nil {
 			fields["proof_asset_id"] = ReasonOrderProof
 		}
-	case model.PaymentWallet:
+	case model.PaymentWallet, model.PaymentGateway:
 		if in.ProofAssetID != nil {
 			fields["proof_asset_id"] = ReasonOrderProof
 		}

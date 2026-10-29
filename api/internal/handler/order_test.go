@@ -188,7 +188,7 @@ func TestCheckoutEndpointValidation(t *testing.T) {
 		status int
 		field  string
 	}{
-		{"gateway is not available", checkoutBody(productID, "gateway", nil), http.StatusUnprocessableEntity, "payment_method"},
+		{"unknown method", checkoutBody(productID, "paypal", nil), http.StatusUnprocessableEntity, "payment_method"},
 		{"manual without a proof", checkoutBody(productID, "manual", nil), http.StatusUnprocessableEntity, "proof_asset_id"},
 		{"wallet with a proof", checkoutBody(productID, "wallet", map[string]any{"proof_asset_id": proof.ID.String()}), http.StatusUnprocessableEntity, "proof_asset_id"},
 		{"malformed product id", checkoutBody("nope", "wallet", nil), http.StatusUnprocessableEntity, "product_id"},

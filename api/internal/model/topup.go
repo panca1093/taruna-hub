@@ -12,7 +12,6 @@ const (
 	TopupRejected = "rejected"
 )
 
-// Gateway joins in P14; until then a manual transfer is the only way to ask for a top-up.
 const TopupManual = "manual"
 
 // WalletSourceTopup is the ledger source type of a credited top-up; the source id is the request id.
@@ -37,8 +36,10 @@ type Topup struct {
 	ReviewedBy   *uuid.UUID
 	ApprovedAt   *time.Time
 	RejectedAt   *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// RedirectURL is the provider's payment page of a gateway top-up while it is open.
+	RedirectURL *string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // Settings are the tenant values an Admin changes.

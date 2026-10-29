@@ -65,6 +65,8 @@ type authFixture struct {
 	logs   *syncBuffer
 	logger *slog.Logger
 	secure bool
+	// gateway stands in for Midtrans in every deployment this fixture builds.
+	gateway *handlerGateway
 }
 
 func newAuthFixture(t *testing.T, secure bool) authFixture {
@@ -75,6 +77,7 @@ func newAuthFixture(t *testing.T, secure bool) authFixture {
 		logs:          buf,
 		logger:        slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		secure:        secure,
+		gateway:       newHandlerGateway(),
 	}
 }
 
@@ -119,10 +122,12 @@ func (f authFixture) echoWithAssets(t *testing.T, assets *service.AssetService, 
 		e.Use(httpx.Recover(logger))
 		e.Use(httpx.RequestLogger(logger))
 		e.Use(httpx.CORS(devOrigins, true))
-		New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets, newOrderService(f.tenantFixture, assets), newRuntimeService(f.tenantFixture), newResultService(f.tenantFixture, newRuntimeService(f.tenantFixture)), newMonitoringService(f.tenantFixture, newRuntimeService(f.tenantFixture)), newItemPackageService(f.tenantFixture, assets), newKecermatanService(f.tenantFixture), AuthOptions{
+		orders, topups := newOrderService(f.tenantFixture, assets), newTopupService(f.tenantFixture, assets)
+		payments := service.NewPaymentService(f.pool, repository.NewPaymentRepository(f.pool), orders, topups, newWalletService(f.tenantFixture), f.gateway, "https://app.example")
+		New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture), newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets, orders, newRuntimeService(f.tenantFixture), newResultService(f.tenantFixture, newRuntimeService(f.tenantFixture)), newMonitoringService(f.tenantFixture, newRuntimeService(f.tenantFixture)), newItemPackageService(f.tenantFixture, assets), newKecermatanService(f.tenantFixture), AuthOptions{
 			SecureCookies: f.secure,
 			AllowedOrigin: httpx.OriginPolicy(devOrigins, true),
-		}).WithTopups(newTopupService(f.tenantFixture, assets)).Register(e, ResolveHostScope(f.tenants, slug))
+		}).WithTopups(topups).WithPayments(payments).Register(e, ResolveHostScope(f.tenants, slug))
 		return e
 	})
 }

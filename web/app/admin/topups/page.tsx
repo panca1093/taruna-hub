@@ -218,9 +218,11 @@ export default function TopupsPage() {
                 <Button variant="danger" isDisabled={busy} onPress={() => setRejecting(true)}>
                   <XCircle className="size-3.5" /> {t.reject}
                 </Button>
-                <Button variant="primary" isDisabled={busy} onPress={() => approve(detail)}>
-                  <CheckCircle2 className="size-3.5" /> {t.approve}
-                </Button>
+                {detail.method !== "gateway" && (
+                  <Button variant="primary" isDisabled={busy} onPress={() => approve(detail)}>
+                    <CheckCircle2 className="size-3.5" /> {t.approve}
+                  </Button>
+                )}
               </>
             )
           ) : (

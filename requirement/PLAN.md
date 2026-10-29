@@ -422,7 +422,7 @@ For every slice, use this verification loop:
 
 ### P13 — Manual and wallet checkout with enrollment
 
-**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Kecermatan checkout and credit landed in P18. Deferred: gateway orders (P14), browser demo (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
+**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Kecermatan checkout and credit landed in P18. Gateway orders landed in P14. Deferred: browser demo (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
 
 **Outcome:** Students purchase through manual transfer or wallet and receive the correct access after confirmation.
 
@@ -450,7 +450,7 @@ For every slice, use this verification loop:
 
 ### P14 — Gateway orders and top-ups
 
-**Status:** planned · **Size:** L · **Depends:** P13, P15
+**Status:** in progress — built and proven against a fake gateway and the real adapter against a local fake server (migration 000021, [docs/payments-gateway.md](../docs/payments-gateway.md)). Open: the live Midtrans sandbox run and a browser demo (see boxes). Not built: a screen for held top-up exceptions and a "continue payment" button (see the doc) · **Size:** L · **Depends:** P13, P15
 
 **Outcome:** Verified Midtrans success confirms purchases or credits top-ups exactly once across tenants.
 
@@ -463,9 +463,13 @@ For every slice, use this verification loop:
 **Acceptance scenarios:**
 
 - [ ] Sandbox purchase and top-up succeed; return URL alone cannot grant access or credit.
-- [ ] Replay notification three times and reorder pending/success events: one money movement/grant and no state downgrade.
-- [ ] Wrong signature/reference/amount/fraud status does not confirm; ambiguous create timeout does not make a second payment.
+  - Not run against the live sandbox: no Midtrans keys in the build environment. The fake-gateway and HTTP tests prove a purchase and a top-up succeed only after the Status API confirms, and that polling the order while the provider says pending grants nothing.
+- [x] Replay notification three times and reorder pending/success events: one money movement/grant and no state downgrade.
+  - Service tests replay settlement three times, deliver pending before and after settlement, and run eight concurrent identical notifications against Postgres; one enrollment/grant/credit and one set of notifications result.
+- [x] Wrong signature/reference/amount/fraud status does not confirm; ambiguous create timeout does not make a second payment.
+  - Covered for a bad signature (403), an unknown reference, a wrong amount (held), `fraud_status=deny`, a notification the Status API contradicts, and both ambiguous-create outcomes (retry reuses the provider order id; a created-but-unseen page cancels the order instead of duplicating).
 - [ ] Late paid cancellation, rejected top-up, chargeback and paused-tenant events retain evidence and follow approved D07/D15 policy.
+  - Late success on a cancelled order, a rejected top-up and refund/chargeback evidence are proven, with staff credit once under concurrency and mark-refunded. Paused-tenant events are out: D15 is deferred by D17.
 
 **Decision / verification gate:** D07 resolved 2026-10-29 (late success on a cancelled/expired order is held for staff review); D15 deferred by D17; D16 one platform-owned merchant account.
 
@@ -473,7 +477,7 @@ For every slice, use this verification loop:
 
 ### P15 — Self-service manual top-up and review
 
-**Status:** done, lean — migration 000020, `topup_requests` with idempotent create, proof ownership, the server-checked Admin minimum, approve/reject through the one wallet path with notifications, and the student wallet, admin Top-up and Settings screens on the API ([docs/topups.md](../docs/topups.md)). Deferred: the gateway extension (P14) and a browser demo (see boxes) · **Size:** M · **Depends:** P02, P06, P12
+**Status:** done, lean — migration 000020, `topup_requests` with idempotent create, proof ownership, the server-checked Admin minimum, approve/reject through the one wallet path with notifications, and the student wallet, admin Top-up and Settings screens on the API ([docs/topups.md](../docs/topups.md)). The gateway extension landed in P14. Deferred: a browser demo (see boxes) · **Size:** M · **Depends:** P02, P06, P12
 
 **Outcome:** Students request a top-up and staff approve or reject it with a complete audit trail.
 
@@ -491,8 +495,8 @@ For every slice, use this verification loop:
   - Eight concurrent approvals against Postgres leave one ledger entry and one set of notifications; a failed notification rolls back the credit and the status.
 - [x] Student sees own status/history and staff filters tenant requests; proof access obeys ownership.
   - Student, staff and proof cases are proven over HTTP; no cross-tenant test by design (D17).
-- [ ] Gateway extension uses the same business credit invariant while keeping provider evidence distinct.
-  - P14: the table admits `method = 'gateway'` and the credit path is shared, but no gateway code or evidence tables exist yet.
+- [x] Gateway extension uses the same business credit invariant while keeping provider evidence distinct.
+  - P14: a gateway top-up credits through the same `Apply` path (one `topup`/request-id ledger source) and keeps its provider evidence in `payment_attempts` and `payment_events`.
 - [ ] Real browser to API to database demo of the screens.
   - The API flow is proven by Postgres-backed tests and the screens pass `tsc`, lint and `next build`, but they were not driven in a browser (no dev server was allowed in this run).
 

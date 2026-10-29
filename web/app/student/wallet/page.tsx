@@ -41,6 +41,8 @@ export default function StudentWalletPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [bank, setBank] = useState<BankTransfer | null>(null);
   const [bankFailed, setBankFailed] = useState(false);
+  const [gatewayOk, setGatewayOk] = useState(false);
+  const [method, setMethod] = useState<"manual" | "gateway">("manual");
   const [amount, setAmount] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -69,6 +71,23 @@ export default function StudentWalletPage() {
     };
   }, [reloadKey]);
 
+  // Coming back from Midtrans: refresh the page once a pending gateway top-up has been settled by the server.
+  useEffect(() => {
+    const pending = topups.filter((topup) => topup.method === "gateway" && topup.status === "pending");
+    if (pending.length === 0) return;
+    const timer = setInterval(() => {
+      pending.forEach((topup) =>
+        api.topups
+          .get(topup.id)
+          .then((fresh) => {
+            if (fresh.status !== topup.status) setReloadKey((key) => key + 1);
+          })
+          .catch(() => {}),
+      );
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [topups]);
+
   const retry = () => {
     setWallet(null);
     setEntries(null);
@@ -76,8 +95,21 @@ export default function StudentWalletPage() {
     setReloadKey((key) => key + 1);
   };
 
+  const cancelTopup = async (topupId: string) => {
+    try {
+      await api.topups.cancel(topupId);
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      toast.danger(t.cancelTopupFailed, { description: errorText(err, t.loadErrorDescription) });
+    }
+  };
+
   const openModal = () => {
     setModalOpen(true);
+    api.orders
+      .gateway()
+      .then(() => setGatewayOk(true))
+      .catch(() => setGatewayOk(false));
     if (bank === null) {
       setBankFailed(false);
       api.orders
@@ -89,6 +121,7 @@ export default function StudentWalletPage() {
 
   const closeModal = () => {
     setModalOpen(false);
+    setMethod("manual");
     setAmount("");
     setFile(null);
     setFieldErrors({});
@@ -98,11 +131,23 @@ export default function StudentWalletPage() {
   };
 
   const submit = async () => {
-    if (!file) return;
+    if (method === "manual" && !file) return;
     setSubmitting(true);
     setFieldErrors({});
     setSubmitError("");
     try {
+      if (method === "gateway") {
+        const created = await api.topups.create({ method: "gateway", amount, idempotency_key: keyRef.current });
+        if (created.redirect_url) {
+          // Leaving for Midtrans: the balance changes only when the server hears back from the provider.
+          window.location.assign(created.redirect_url);
+          return;
+        }
+        closeModal();
+        retry();
+        return;
+      }
+      if (!file) return;
       if (proofRef.current?.file !== file) {
         const asset = await api.assets.uploadProof(file);
         proofRef.current = { file, assetId: asset.id };
@@ -190,7 +235,14 @@ export default function StudentWalletPage() {
                         <p className="text-xs text-danger">{t.rejectReason(topup.reject_reason)}</p>
                       )}
                     </div>
-                    <TopupStatusBadge status={topup.status} />
+                    <span className="inline-flex items-center gap-2">
+                      <TopupStatusBadge status={topup.status} />
+                      {topup.method === "gateway" && topup.status === "pending" && (
+                        <Button size="sm" variant="ghost" onPress={() => cancelTopup(topup.id)}>
+                          {t.cancelTopup}
+                        </Button>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -292,12 +344,44 @@ export default function StudentWalletPage() {
             <Button variant="ghost" isDisabled={submitting} onPress={closeModal}>
               {t.cancel}
             </Button>
-            <Button variant="primary" isDisabled={submitting || !file || amount === "" || !bank} onPress={submit}>
-              {submitting ? t.submitting : t.submit}
+            <Button
+              variant="primary"
+              isDisabled={submitting || amount === "" || (method === "manual" && (!file || !bank))}
+              onPress={submit}
+            >
+              {submitting ? t.submitting : method === "gateway" ? t.submitGateway : t.submit}
             </Button>
           </>
         }
       >
+        {gatewayOk && (
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { id: "manual", label: t.methodManual },
+                { id: "gateway", label: t.methodGateway },
+              ] as const
+            ).map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  setMethod(m.id);
+                  setSubmitError("");
+                  keyRef.current = newKey();
+                }}
+                className={cn(
+                  "rounded-xl border px-3 py-2.5 text-xs font-medium transition-colors",
+                  method === m.id
+                    ? "border-accent bg-accent-soft text-accent-soft-foreground"
+                    : "border-border text-muted hover:border-accent/40",
+                )}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
         <TextInput
           label={t.amountLabel}
           description={t.amountHint(formatIDR(minTopup === "" ? "0" : minTopup))}
@@ -310,6 +394,9 @@ export default function StudentWalletPage() {
             keyRef.current = newKey();
           }}
         />
+        {method === "gateway" && <p className="text-xs text-muted">{t.gatewayHint}</p>}
+        {method === "manual" && (
+        <>
         <div className="space-y-2">
           <p className="text-sm font-semibold text-foreground">{t.bankTitle}</p>
           {bank ? (
@@ -360,6 +447,8 @@ export default function StudentWalletPage() {
           </button>
           {fieldErrors.proof_asset_id && <p className="text-xs text-danger">{fieldErrors.proof_asset_id}</p>}
         </div>
+        </>
+        )}
         {submitError !== "" && <p className="text-sm text-danger">{submitError}</p>}
       </FormModal>
     </AppShell>

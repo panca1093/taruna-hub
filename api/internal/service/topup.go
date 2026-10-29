@@ -29,6 +29,7 @@ const (
 	ReasonTopupProof  = "topup_proof"
 	ReasonTopupReason = "topup_reason"
 	ReasonTopupQuery  = "topup_query"
+	ReasonTopupMethod = "topup_method"
 )
 
 const (
@@ -41,6 +42,8 @@ const (
 )
 
 type CreateTopupInput struct {
+	// Method is manual (default) or gateway; a gateway top-up has no proof.
+	Method       string
 	Amount       string
 	Key          string
 	ProofAssetID *uuid.UUID
@@ -60,6 +63,8 @@ type TopupService struct {
 	wallets *WalletService
 	assets  *AssetService
 	notes   *NotificationService
+	// payments is set by NewPaymentService; nil means no gateway.
+	payments *PaymentService
 }
 
 func NewTopupService(db *pgxpool.Pool, repo *repository.TopupRepository, wallets *WalletService, assets *AssetService, notes *NotificationService) *TopupService {
@@ -79,9 +84,15 @@ func (s *TopupService) Create(ctx context.Context, scope HostScope, principal mo
 	if principal.Role != model.RoleStudent {
 		return model.Topup{}, false, ErrTopupForbidden
 	}
+	if in.Method == "" {
+		in.Method = model.TopupManual
+	}
 	amount, err := checkedTopup(in)
 	if err != nil {
 		return model.Topup{}, false, err
+	}
+	if in.Method == model.TopupGateway && !s.payments.Available() {
+		return model.Topup{}, false, ErrGatewayUnavailable
 	}
 
 	var out model.Topup
@@ -92,7 +103,7 @@ func (s *TopupService) Create(ctx context.Context, scope HostScope, principal mo
 		}
 		existing, err := s.repo.FindByKeyTx(ctx, tx, tenantID, principal.UserID, in.Key)
 		if err == nil {
-			if existing.Amount != amount || existing.Method != model.TopupManual || !sameProof(existing.ProofAssetID, in.ProofAssetID) {
+			if existing.Amount != amount || existing.Method != in.Method || !sameProof(existing.ProofAssetID, in.ProofAssetID) {
 				return ErrTopupKeyConflict
 			}
 			out, replayed = existing, true
@@ -109,23 +120,38 @@ func (s *TopupService) Create(ctx context.Context, scope HostScope, principal mo
 		if moneyCents(amount) < moneyCents(minimum) {
 			return &InputError{Fields: map[string]string{"amount": ReasonTopupAmount}}
 		}
-		asset, err := s.assets.FinalizeTx(ctx, tx, scope, principal, *in.ProofAssetID)
-		if err != nil {
-			if errors.Is(err, ErrAssetNotFound) {
+		if in.ProofAssetID != nil {
+			asset, err := s.assets.FinalizeTx(ctx, tx, scope, principal, *in.ProofAssetID)
+			if err != nil {
+				if errors.Is(err, ErrAssetNotFound) {
+					return topupProofInvalid()
+				}
+				return err
+			}
+			if asset.Purpose != model.PurposePaymentProof {
 				return topupProofInvalid()
 			}
-			return err
-		}
-		if asset.Purpose != model.PurposePaymentProof {
-			return topupProofInvalid()
 		}
 		out, err = s.repo.InsertTx(ctx, tx, tenantID, model.Topup{
-			UserID: principal.UserID, Amount: amount, Method: model.TopupManual, Key: in.Key, ProofAssetID: in.ProofAssetID,
+			UserID: principal.UserID, Amount: amount, Method: in.Method, Key: in.Key, ProofAssetID: in.ProofAssetID,
 		})
-		return topupError(err)
+		if err != nil {
+			return topupError(err)
+		}
+		if in.Method == model.TopupGateway {
+			return s.payments.insertAttemptTx(ctx, tx, tenantID, principal.UserID, nil, &out.ID, amount)
+		}
+		return nil
 	})
 	if err != nil {
 		return model.Topup{}, false, err
+	}
+	if out.Method == model.TopupGateway && out.Status == model.TopupPending {
+		opened, err := s.payments.ensureTopupRedirect(ctx, out)
+		if err != nil {
+			return model.Topup{}, false, err
+		}
+		out = opened
 	}
 	return out, replayed, nil
 }
@@ -164,6 +190,9 @@ func (s *TopupService) review(ctx context.Context, scope HostScope, principal mo
 			}
 			out = request
 			return nil
+		}
+		if target == model.TopupApproved && request.Method == model.TopupGateway {
+			return ErrGatewayManaged
 		}
 		contact, err := s.repo.ContactOf(ctx, tx, tenantID, request.UserID)
 		if err != nil {
@@ -264,6 +293,12 @@ func (s *TopupService) Topup(ctx context.Context, scope HostScope, principal mod
 	if principal.Role != model.RoleStudent && !isStaff(principal.Role) {
 		return model.Topup{}, ErrTopupForbidden
 	}
+	if request.Method == model.TopupGateway && request.Status == model.TopupPending && s.payments != nil {
+		s.payments.reconcileTopup(ctx, request)
+		if fresh, err := s.repo.Find(ctx, tenantID, id); err == nil {
+			request = fresh
+		}
+	}
 	return request, nil
 }
 
@@ -324,8 +359,17 @@ func checkedTopup(in CreateTopupInput) (string, error) {
 	if !idempotencyKey.MatchString(in.Key) {
 		fields["idempotency_key"] = ReasonTopupKey
 	}
-	if in.ProofAssetID == nil {
-		fields["proof_asset_id"] = ReasonTopupProof
+	switch in.Method {
+	case model.TopupManual:
+		if in.ProofAssetID == nil {
+			fields["proof_asset_id"] = ReasonTopupProof
+		}
+	case model.TopupGateway:
+		if in.ProofAssetID != nil {
+			fields["proof_asset_id"] = ReasonTopupProof
+		}
+	default:
+		fields["method"] = ReasonTopupMethod
 	}
 	if len(fields) > 0 {
 		return "", &InputError{Fields: fields}

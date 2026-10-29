@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, toast } from "@heroui/react";
-import { CheckCircle2, ChevronRight, ClipboardList, CloudOff, FileImage, XCircle } from "lucide-react";
+import { Button, Chip, toast } from "@heroui/react";
+import { CheckCircle2, ChevronRight, ClipboardList, CloudOff, FileImage, Undo2, Wallet, XCircle } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
@@ -34,6 +34,7 @@ export default function OrdersPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [detail, setDetail] = useState<Order | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [resolving, setResolving] = useState<"credit" | "refund" | null>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -90,6 +91,7 @@ export default function OrdersPage() {
   const closeDetail = () => {
     setDetail(null);
     setCancelling(false);
+    setResolving(null);
     setReason("");
     setReasonError("");
   };
@@ -128,6 +130,24 @@ export default function OrdersPage() {
     }
   };
 
+  const resolve = async (order: Order, action: "credit" | "refund") => {
+    if (!order.payment_exception) return;
+    setBusy(true);
+    setReasonError("");
+    try {
+      const call = action === "credit" ? api.paymentExceptions.credit : api.paymentExceptions.refund;
+      await call(order.payment_exception.id, reason);
+      toast.success(action === "credit" ? t.exceptionCredited : t.exceptionRefunded);
+      closeDetail();
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setReasonError(err instanceof ApiError ? (err.fields?.reason ?? "") : "");
+      toast.danger(t.actionFailed, { description: errorText(err, t.loadErrorDescription) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openProof = async (assetId: string) => {
     try {
       const link = await api.assets.url(assetId);
@@ -137,8 +157,10 @@ export default function OrdersPage() {
     }
   };
 
-  const methodShort = (o: Order) => (o.payment_method === "wallet" ? t.paymentWalletShort : t.paymentManualShort);
-  const methodLong = (o: Order) => (o.payment_method === "wallet" ? t.paymentWalletLong : t.paymentManualLong);
+  const methodShort = (o: Order) =>
+    o.payment_method === "wallet" ? t.paymentWalletShort : o.payment_method === "gateway" ? t.paymentGatewayShort : t.paymentManualShort;
+  const methodLong = (o: Order) =>
+    o.payment_method === "wallet" ? t.paymentWalletLong : o.payment_method === "gateway" ? t.paymentGatewayLong : t.paymentManualLong;
 
   const columns: Column<Order>[] = [
     { key: "code", header: t.colCode, render: (o) => <span className="font-mono text-xs text-muted">{o.code}</span> },
@@ -147,7 +169,20 @@ export default function OrdersPage() {
     { key: "amount", header: t.colTotal, render: (o) => formatIDR(o.price) },
     { key: "payment", header: t.colMethod, render: (o) => <span className="text-muted">{methodShort(o)}</span> },
     { key: "date", header: t.colDate, render: (o) => new Date(o.created_at).toLocaleString() },
-    { key: "status", header: t.colStatus, render: (o) => <OrderStatusBadge status={o.status} /> },
+    {
+      key: "status",
+      header: t.colStatus,
+      render: (o) => (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <OrderStatusBadge status={o.status} />
+          {o.payment_exception && (
+            <Chip size="sm" className="bg-warning-soft font-medium text-warning-soft-foreground">
+              {t.needsReview}
+            </Chip>
+          )}
+        </span>
+      ),
+    },
     {
       key: "actions",
       header: "",
@@ -208,7 +243,30 @@ export default function OrdersPage() {
         title={detail?.code ?? ""}
         description={detail?.product_title}
         footer={
-          detail?.status === "pending" ? (
+          detail?.payment_exception ? (
+            resolving ? (
+              <>
+                <Button variant="ghost" isDisabled={busy} onPress={() => setResolving(null)}>
+                  {t.back}
+                </Button>
+                <Button variant="primary" isDisabled={busy || reason.trim() === ""} onPress={() => resolve(detail, resolving)}>
+                  {resolving === "credit" ? t.creditConfirm : t.refundConfirm}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" isDisabled={busy} onPress={closeDetail}>
+                  {t.close}
+                </Button>
+                <Button variant="secondary" isDisabled={busy} onPress={() => setResolving("refund")}>
+                  <Undo2 className="size-3.5" /> {t.refundAction}
+                </Button>
+                <Button variant="primary" isDisabled={busy} onPress={() => setResolving("credit")}>
+                  <Wallet className="size-3.5" /> {t.creditAction}
+                </Button>
+              </>
+            )
+          ) : detail?.status === "pending" ? (
             cancelling ? (
               <>
                 <Button variant="ghost" isDisabled={busy} onPress={() => setCancelling(false)}>
@@ -223,9 +281,11 @@ export default function OrdersPage() {
                 <Button variant="danger" isDisabled={busy} onPress={() => setCancelling(true)}>
                   <XCircle className="size-3.5" /> {t.cancel}
                 </Button>
-                <Button variant="primary" isDisabled={busy} onPress={() => confirm(detail)}>
-                  <CheckCircle2 className="size-3.5" /> {t.confirmPayment}
-                </Button>
+                {detail.payment_method !== "gateway" && (
+                  <Button variant="primary" isDisabled={busy} onPress={() => confirm(detail)}>
+                    <CheckCircle2 className="size-3.5" /> {t.confirmPayment}
+                  </Button>
+                )}
               </>
             )
           ) : (
@@ -275,6 +335,24 @@ export default function OrdersPage() {
               </button>
             ) : (
               detail.payment_method === "manual" && <p className="text-xs text-muted">{t.proofNotUploaded}</p>
+            )}
+            {detail.payment_exception && (
+              <div className="rounded-lg border border-warning/40 bg-warning-soft p-3 text-sm text-warning-soft-foreground">
+                <p className="font-semibold">{t.needsReview}</p>
+                <p className="mt-1 text-xs">{t.exceptionKind[detail.payment_exception.kind]}</p>
+                <p className="mt-1 text-xs">{t.exceptionPaid(formatIDR(detail.payment_exception.paid_amount))}</p>
+              </div>
+            )}
+            {resolving && (
+              <TextareaInput
+                label={resolving === "credit" ? t.creditReasonLabel : t.refundReasonLabel}
+                description={resolving === "credit" ? t.creditReasonHint : t.refundReasonHint}
+                value={reason}
+                error={reasonError}
+                rows={3}
+                maxLength={500}
+                onChange={(e) => setReason(e.target.value)}
+              />
             )}
             {cancelling && (
               <TextareaInput

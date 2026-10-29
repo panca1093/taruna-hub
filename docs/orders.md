@@ -45,8 +45,9 @@ Student only. In one PostgreSQL transaction the server:
    enrollments and enqueues the notifications. Too little balance is `422 insufficient_balance` and the whole
    transaction rolls back, as does any later failure, including the job insert.
 
-A manual order stays `pending` with no access until staff review it. The gateway method is P14; asking for it is
-`422 payment_method`.
+A manual order stays `pending` with no access until staff review it. A `gateway` order (P14) is also created `pending`
+with a Midtrans payment page and is confirmed by the verified provider notification, not by staff: see
+[payments-gateway.md](payments-gateway.md).
 
 ## Review (`/api/v1/admin/orders`)
 
@@ -99,12 +100,12 @@ checkout answer `503`.
 ## The web
 
 `app/checkout/[id]` reads the public product, the wallet balance and the bank account from the API and offers
-manual and wallet payment (the Midtrans option is hidden until P14). One idempotency key is kept per purchase
+manual and wallet payment, and Midtrans (redirect) when the gateway is configured. One idempotency key is kept per purchase
 attempt and the proof is uploaded once per chosen file. `app/student/orders` and `app/student/tryouts` read the
 student's own orders and enrollments; `app/admin/orders` lists, filters, opens the proof, confirms, and cancels
 with a reason.
 
 ## Not done here
 
-Gateway orders (P14), top-up requests, refunds, the tryout runtime that
+Top-up requests (see topups.md), refunds, the tryout runtime that
 consumes an enrollment (P16), and a pending-order de-duplication for the same student and product.
