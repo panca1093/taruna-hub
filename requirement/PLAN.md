@@ -467,7 +467,7 @@ For every slice, use this verification loop:
 - [ ] Wrong signature/reference/amount/fraud status does not confirm; ambiguous create timeout does not make a second payment.
 - [ ] Late paid cancellation, rejected top-up, chargeback and paused-tenant events retain evidence and follow approved D07/D15 policy.
 
-**Decision / verification gate:** D07 late/reversal cases; D15 paused operations; D16 one platform-owned merchant account.
+**Decision / verification gate:** D07 resolved 2026-10-29 (late success on a cancelled/expired order is held for staff review); D15 deferred by D17; D16 one platform-owned merchant account.
 
 <a id="p15"></a>
 
@@ -490,7 +490,7 @@ For every slice, use this verification loop:
 - [ ] Student sees own status/history and staff filters tenant requests; proof access obeys ownership.
 - [ ] Gateway extension uses the same business credit invariant while keeping provider evidence distinct.
 
-**Decision / verification gate:** D12 amount policy. Listed before P14 in execution order despite stable numeric slice labels.
+**Decision / verification gate:** D12 resolved 2026-10-29 (whole rupiah, no upper bound, Admin-set minimum default Rp10.000); the admin top-up page follows the admin Orders page (owner-approved, no mockup). Listed before P14 in execution order despite stable numeric slice labels.
 
 <a id="p16"></a>
 
