@@ -37,6 +37,8 @@ type S3Config struct {
 	Bucket    string
 	UseSSL    bool
 	Region    string
+	// Browsers must reach presigned links; inside compose the API sees minio:9000, browsers localhost:9002.
+	PublicEndpoint string
 }
 
 // BankConfig is where manual transfers are sent; the one tenant's account, never taken from a request.
@@ -187,6 +189,8 @@ func loadS3(development bool) (S3Config, error) {
 		Bucket:    env("S3_BUCKET", ""),
 		Region:    env("S3_REGION", ""),
 		UseSSL:    !development,
+
+		PublicEndpoint: env("S3_PUBLIC_ENDPOINT", ""),
 	}
 	if raw := env("S3_USE_SSL", ""); raw != "" {
 		ssl, err := strconv.ParseBool(raw)

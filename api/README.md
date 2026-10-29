@@ -10,6 +10,7 @@ This file is how to run it. How it behaves is in [`docs/`](../docs/index.md) at 
 ```bash
 make reset   # containers + schema + dev fixtures
 make run     # server on :8081
+go run ./cmd/worker  # background jobs; or `docker compose up -d --build` from the repo root for everything
 ```
 
 `make reset` is idempotent — safe to re-run whenever local state drifts.

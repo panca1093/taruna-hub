@@ -15,8 +15,9 @@ import (
 
 // Storage is any S3-compatible server: MinIO locally, GCS through its HMAC interoperability.
 type Storage struct {
-	client *minio.Client
-	bucket string
+	client  *minio.Client
+	presign *minio.Client
+	bucket  string
 }
 
 var _ service.ObjectStore = (*Storage)(nil)
@@ -30,7 +31,23 @@ func NewStorage(cfg config.S3Config) (*Storage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage client: %w", err)
 	}
-	return &Storage{client: client, bucket: cfg.Bucket}, nil
+	presign := client
+	if cfg.PublicEndpoint != "" {
+		region := cfg.Region
+		if region == "" {
+			// A known region keeps presigning offline; otherwise minio-go asks the public host, which the API may not reach.
+			region = "us-east-1"
+		}
+		presign, err = minio.New(cfg.PublicEndpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+			Secure: cfg.UseSSL,
+			Region: region,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("storage presign client: %w", err)
+		}
+	}
+	return &Storage{client: client, presign: presign, bucket: cfg.Bucket}, nil
 }
 
 // EnsureBucket never sets a policy: a bucket is private until someone deliberately opens it.
@@ -62,7 +79,7 @@ func (s *Storage) Delete(ctx context.Context, key string) error {
 }
 
 func (s *Storage) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
+	u, err := s.presign.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
 	if err != nil {
 		return "", err
 	}

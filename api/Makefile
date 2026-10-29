@@ -10,7 +10,7 @@ MIGRATE = go run -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migra
 .PHONY: up down run build test vet lint migrate-up migrate-down migrate-create seed reset
 
 up:
-	docker compose -f ../docker-compose.yml up -d --wait
+	docker compose -f ../docker-compose.yml up -d --wait postgres redis minio
 
 down:
 	docker compose -f ../docker-compose.yml down

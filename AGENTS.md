@@ -46,12 +46,23 @@ docker-compose.yml    Postgres, Redis, MinIO
 
 Default ports were already taken, so these are shifted: API **8081**, Postgres **5433**, Redis **6380**, MinIO **9002** (console 9003).
 
+Whole stack in Docker (needs `api/.env` with `JWT_SECRET` and `NOTIFICATION_SEAL_KEY`; compose overrides the database, Redis, MinIO and URL settings):
+
 ```bash
-cd api && make reset     # containers + migrations + seed (idempotent)
+docker compose up -d --build   # postgres, redis, minio, migrate, seed, api :8081, worker, web :3000
+```
+
+Or run the API, worker and web natively for hot reload:
+
+```bash
+cd api && make reset     # infra containers + migrations + seed (idempotent)
 cd api && make run       # API on :8081
+cd api && go run ./cmd/worker   # deadlines, notifications, payment sweeps, upload purges
 cd web && npm run dev    # web on :3000
 cd web && npm run gen:api   # after any openapi.yaml change
 ```
+
+Override host ports with `API_PORT`, `WEB_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `MINIO_PORT`; if `API_PORT` is not 8081, also set `NEXT_PUBLIC_API_URL=http://localhost:<API_PORT>` before building `web`.
 
 ## Slice workflow
 

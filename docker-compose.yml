@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: tryout
       POSTGRES_DB: tryout
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +20,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6380:6379"
+      - "${REDIS_PORT:-6380}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s
@@ -36,8 +36,8 @@ services:
       MINIO_ROOT_PASSWORD: tryout123
     # Host ports shifted off the defaults; 9000/9001 are already taken on this machine.
     ports:
-      - "9002:9000"
-      - "9003:9001"
+      - "${MINIO_PORT:-9002}:9000"
+      - "${MINIO_CONSOLE_PORT:-9003}:9001"
     volumes:
       - miniodata:/data
     healthcheck:
@@ -45,6 +45,74 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  migrate:
+    image: migrate/migrate:v4.18.1
+    command: ["-path", "/migrations", "-database", "postgres://tryout:tryout@postgres:5432/tryout?sslmode=disable", "up"]
+    volumes:
+      - ./api/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Dev fixtures (api/seed/dev.sql); every insert is ON CONFLICT DO NOTHING, so re-running is safe.
+  seed:
+    image: postgres:16-alpine
+    command: ["psql", "postgres://tryout:tryout@postgres:5432/tryout?sslmode=disable", "-v", "ON_ERROR_STOP=1", "-q", "-f", "/seed/dev.sql"]
+    volumes:
+      - ./api/seed:/seed:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  api:
+    build: ./api
+    env_file:
+      - path: ./api/.env
+        required: false
+    environment: &app-env
+      PORT: "8081"
+      DATABASE_URL: postgres://tryout:tryout@postgres:5432/tryout?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT: minio:9000
+      S3_PUBLIC_ENDPOINT: localhost:${MINIO_PORT:-9002}
+      APP_URL: http://localhost:${WEB_PORT:-3000}
+      CORS_ORIGINS: http://localhost:${WEB_PORT:-3000}
+    ports:
+      - "${API_PORT:-8081}:8081"
+    depends_on: &app-deps
+      seed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Deadlines, notifications, payment sweeps and upload purges all run here, so the stack needs it.
+  worker:
+    build: ./api
+    command: ["worker"]
+    env_file:
+      - path: ./api/.env
+        required: false
+    environment: *app-env
+    depends_on: *app-deps
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:
