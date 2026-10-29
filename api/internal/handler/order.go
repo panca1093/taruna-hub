@@ -367,6 +367,8 @@ func orderError(err error) error {
 		return httpx.Conflict(orderKeyConflict)
 	case errors.Is(err, service.ErrBankTransferUnavailable):
 		return httpx.Unavailable(orderBankMissing)
+	case errors.Is(err, service.ErrGatewayManaged):
+		return httpx.New(http.StatusConflict, httpx.CodeGatewayManaged, gatewayManaged)
 	}
 	return gatewayError(err)
 }

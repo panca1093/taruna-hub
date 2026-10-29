@@ -21,6 +21,13 @@ const reconcileInterval = 10 * time.Minute
 // finalizes, so it stays well inside the PRD's +-5s tolerance; the due scan walks a partial index and costs little.
 const deadlineInterval = 2 * time.Second
 
+// paymentSweepInterval is how often overdue gateway payments are settled through the Status API; the sweep only
+// matters for an abandoned payment whose expiry notification never came, so a minute is plenty.
+const (
+	paymentSweepInterval = time.Minute
+	paymentSweepBatch    = 50
+)
+
 // stagedAssetTTL is how long an upload nobody finalized survives; a preview is never open that long.
 const stagedAssetTTL = 24 * time.Hour
 
@@ -105,6 +112,12 @@ func run() error {
 		service.NewKecermatanService(pool, kecermatanRepo, repository.NewItemPackageRepository(pool)), kecermatanRepo)
 	go finalizeDeadlines(ctx, runtime, kecermatanRuntime, logger)
 
+	wallets := service.NewWalletService(pool, repository.NewWalletRepository(pool))
+	orders := service.NewOrderService(pool, repository.NewOrderRepository(pool), repository.NewProductRepository(pool), wallets, assets, notifications, service.BankAccount{})
+	topups := service.NewTopupService(pool, repository.NewTopupRepository(pool), wallets, assets, notifications)
+	payments := service.NewPaymentService(pool, repository.NewPaymentRepository(pool), orders, topups, wallets, infra.NewMidtrans(cfg.Midtrans), cfg.AppURL)
+	go sweepPayments(ctx, payments, logger)
+
 	<-ctx.Done()
 	logger.Info("shutting down")
 	return infra.StopGracefully(ctx, client, cfg.ShutdownGrace)
@@ -133,6 +146,26 @@ func finalizeDeadlines(ctx context.Context, runtime *service.RuntimeService, kec
 			}
 			if moved > 0 {
 				logger.Info("settled due kecermatan attempts", slog.Int("count", moved))
+			}
+		}
+	}
+}
+
+// sweepPayments settles gateway payments past their expiry, so an unread abandoned order frees its slot.
+func sweepPayments(ctx context.Context, payments *service.PaymentService, logger *slog.Logger) {
+	ticker := time.NewTicker(paymentSweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			checked, err := payments.SweepExpired(ctx, paymentSweepBatch)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				logger.Error("payment sweep failed", slog.String("error", err.Error()))
+			}
+			if checked > 0 {
+				logger.Info("swept overdue gateway payments", slog.Int("count", checked))
 			}
 		}
 	}

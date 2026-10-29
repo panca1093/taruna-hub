@@ -509,6 +509,8 @@ export const api = {
     bankTransfer: () => authed<BankTransfer>("/api/v1/payments/bank-transfer"),
     /** Reading a pending gateway order also asks Midtrans for its state, so this is the page's poll. */
     get: (id: string) => authed<Order>(orderPath(id)),
+    /** Abandon an unpaid gateway order; a payment that already succeeded answers 409. */
+    cancel: (id: string) => mutate<Order>("POST", `${orderPath(id)}/cancel` as keyof paths),
     /** Resolves when Midtrans is configured; a 503 means the gateway method is not offered. */
     gateway: () => authed<{ provider: "midtrans" }>("/api/v1/payments/gateway"),
   },
@@ -534,6 +536,7 @@ export const api = {
   topups: {
     create: (body: TopupBody) => mutate<Topup>("POST", "/api/v1/topups", body),
     get: (id: string) => authed<Topup>(topupPath(id)),
+    cancel: (id: string) => mutate<Topup>("POST", `${topupPath(id)}/cancel` as keyof paths),
     list: (filters: Pick<TopupFilters, "limit" | "offset"> = {}) =>
       authed<TopupList>(`/api/v1/topups${queryOf(filters)}` as keyof paths),
   },

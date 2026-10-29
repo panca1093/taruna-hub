@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Button } from "@heroui/react";
+import { Button, toast } from "@heroui/react";
 import { CloudOff, Receipt } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
@@ -57,6 +57,16 @@ export default function StudentOrdersPage() {
     }, 5000);
     return () => clearInterval(timer);
   }, [orders]);
+
+  const cancelOrder = async (orderId: string) => {
+    try {
+      const cancelled = await api.orders.cancel(orderId);
+      setOrders((prev) => (prev ?? []).map((row) => (row.id === cancelled.id ? cancelled : row)));
+    } catch (err) {
+      // A payment that already succeeded answers 409; the poll then shows the confirmed order.
+      toast.danger(t.cancelFailed, { description: errorText(err, t.loadErrorDescription) });
+    }
+  };
 
   const retry = () => {
     setOrders(null);
@@ -126,7 +136,14 @@ export default function StudentOrdersPage() {
                       <td className="px-4 py-3 font-medium text-foreground">{formatIDR(o.price)}</td>
                       <td className="px-4 py-3 text-muted">{t.paymentModeLabel[o.payment_method]}</td>
                       <td className="px-4 py-3">
-                        <OrderStatusBadge status={o.status} />
+                        <span className="inline-flex items-center gap-2">
+                          <OrderStatusBadge status={o.status} />
+                          {o.payment_method === "gateway" && o.status === "pending" && (
+                            <Button size="sm" variant="ghost" onPress={() => cancelOrder(o.id)}>
+                              {t.cancelOrder}
+                            </Button>
+                          )}
+                        </span>
                       </td>
                     </tr>
                   ))}

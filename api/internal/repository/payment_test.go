@@ -87,7 +87,7 @@ func TestPaymentRepositoryRequiresScope(t *testing.T) {
 	if _, err := f.payments.FindException(ctx, uuid.Nil, uuid.New()); !errors.Is(err, ErrScopeRequired) {
 		t.Errorf("FindException: %v, want ErrScopeRequired", err)
 	}
-	if err := f.payments.SetRedirect(ctx, uuid.Nil, uuid.New(), "x"); !errors.Is(err, ErrScopeRequired) {
+	if err := f.payments.SetRedirect(ctx, uuid.Nil, uuid.New(), "x", time.Now()); !errors.Is(err, ErrScopeRequired) {
 		t.Errorf("SetRedirect: %v, want ErrScopeRequired", err)
 	}
 }

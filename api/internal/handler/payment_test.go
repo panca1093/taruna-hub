@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -257,5 +258,35 @@ func TestGatewayTopupOverHTTP(t *testing.T) {
 	var balance string
 	if err := f.pool.QueryRow(context.Background(), `SELECT balance::text FROM users WHERE id = $1`, f.studentA.ID).Scan(&balance); err != nil || balance != "50000.00" {
 		t.Errorf("balance = %s, %v", balance, err)
+	}
+}
+
+func TestStaffCannotConfirmGatewayPaymentsAndStudentCanCancelThem(t *testing.T) {
+	f := newPaymentHTTPFixture(t)
+	order, _ := f.gatewayOrder(t, f.tokenA)
+	rec := f.post("/api/v1/admin/orders/"+order.ID.String()+"/confirm", nil, f.tokenAdminA)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "gateway_managed") {
+		t.Errorf("confirm gateway order: status = %d body = %s, want 409 gateway_managed", rec.Code, rec.Body.String())
+	}
+	rec = f.post("/api/v1/topups", map[string]any{"method": "gateway", "amount": "50000", "idempotency_key": "topup-key-" + uuid.NewString()[:6]}, f.tokenA)
+	topup := decodeTopup(t, rec)
+	rec = f.post("/api/v1/admin/topups/"+topup.ID.String()+"/approve", nil, f.tokenOperatorA)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "gateway_managed") {
+		t.Errorf("approve gateway top-up: status = %d body = %s, want 409 gateway_managed", rec.Code, rec.Body.String())
+	}
+
+	if rec := f.post("/api/v1/orders/"+order.ID.String()+"/cancel", nil, f.tokenSecond); rec.Code != http.StatusNotFound {
+		t.Errorf("foreign cancel: status = %d, want 404", rec.Code)
+	}
+	if rec := f.post("/api/v1/orders/"+order.ID.String()+"/cancel", nil, f.tokenAdminA); rec.Code != http.StatusForbidden {
+		t.Errorf("staff on the student cancel: status = %d, want 403", rec.Code)
+	}
+	rec = f.post("/api/v1/orders/"+order.ID.String()+"/cancel", nil, f.tokenA)
+	if got := decodeOrder(t, rec); rec.Code != http.StatusOK || got.Status != "cancelled" {
+		t.Errorf("student cancel: status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	rec = f.post("/api/v1/topups/"+topup.ID.String()+"/cancel", nil, f.tokenA)
+	if got := decodeTopup(t, rec); rec.Code != http.StatusOK || got.Status != "rejected" {
+		t.Errorf("student top-up cancel: status = %d body = %s", rec.Code, rec.Body.String())
 	}
 }

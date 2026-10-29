@@ -61,7 +61,7 @@ No session and no tenant host. In order:
 
 | Provider status | Effect |
 |---|---|
-| `settlement`; `capture` with `fraud_status=accept` | Success (below) |
+| `settlement`; `capture` unless `fraud_status` is `challenge` or `deny` (Midtrans omits it for some captures) | Success (below) |
 | `pending`, `authorize`, `capture` + `challenge` | Nothing |
 | `deny`, `failure`, any `fraud_status=deny` | Attempt `failed` (order stays pending; a later success still counts) |
 | `cancel`, `expire` | Attempt `cancelled`; a pending order is cancelled (reason shown, `order-cancelled` notice) or a pending top-up rejected |
@@ -91,19 +91,25 @@ Admin and Operator resolve it, each with a required reason (1-500 characters) re
   `payment_exception`/`<id>`, actor staff). It does not reopen access. Concurrent or repeated calls change nothing
   more.
 - `POST .../refund` records that the money went back outside the system. It sends nothing to Midtrans.
+- Resolving also cancels (orders) or rejects (top-ups) the linked row if it is still pending, with the staff reason and the usual notice, in the same transaction, so a held payment never leaves the student blocked.
+- Staff cannot Confirm a pending gateway order or Approve a gateway top-up: `409 gateway_managed`. Cancel and Reject stay allowed.
 - Credit after refund (or the reverse) is `409`. `GET /api/v1/admin/payment-exceptions?status=held` lists them; the
   admin Orders page shows a "Perlu tinjauan" badge and the two actions in the order detail. A held top-up exception
   has no screen yet (see below).
 
+## Student cancel
+
+`POST /api/v1/orders/{id}/cancel` and `POST /api/v1/topups/{id}/cancel` let a student abandon their own unpaid gateway row. The provider is asked first (outside any lock): a payment that already succeeded confirms instead and the call is `409`. A later settlement of an abandoned row becomes a `late_success` exception. The student orders page and the wallet request list show a "Batalkan" button on pending gateway rows.
+
 ## Expiry and reading the status
 
-Snap transactions expire after 24 hours. Midtrans normally sends `expire`. As a safety net, reading a pending
-gateway order or top-up (`GET /orders/{id}`, `GET /topups/{id}`) asks the Status API at most once every 10 seconds:
-a settled payment is applied, and a transaction Midtrans does not know about, past its 24-hour expiry, is treated as
-expired. The student orders page and the wallet page poll these reads every 5 seconds while a gateway payment is
-pending. There is no background sweeper; an abandoned pending order that nobody reads and Midtrans never reports
-stays pending (and keeps the one-pending-per-product rule) until it is read. Add a River sweep before launch if
-that matters.
+Snap transactions expire after 24 hours, counted from when the payment page is created (the attempt's `expires_at` is
+restarted then). Midtrans normally sends `expire`. As safety nets, reading a pending gateway order or top-up asks the
+Status API at most once every 10 seconds (checked time is recorded only after the provider answered), and the worker
+runs `PaymentService.SweepExpired` every minute: it reconciles up to 50 open attempts past their expiry, least recently
+checked first, outside any lock. A settled payment is applied; a transaction Midtrans does not know is treated as
+expired and the order cancelled, which frees the one-pending-per-product slot even if nobody reads it. The student
+pages poll every 5 seconds while a gateway payment is pending.
 
 ## Tests
 
@@ -121,5 +127,4 @@ without auth, role and ownership checks, the exception flow over HTTP, gateway t
 - A "continue payment" action for a pending order after the student closes the payment page (the redirect URL is in
   the API; the screens have no button for it).
 - A screen for held top-up exceptions (the API lists and resolves them); notice to the student when staff credit.
-- Background sweep of abandoned pending gateway orders (see above).
 - Paused-tenant behavior (D15, deferred by D17); partial refunds and chargebacks beyond stored evidence.

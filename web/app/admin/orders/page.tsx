@@ -281,9 +281,11 @@ export default function OrdersPage() {
                 <Button variant="danger" isDisabled={busy} onPress={() => setCancelling(true)}>
                   <XCircle className="size-3.5" /> {t.cancel}
                 </Button>
-                <Button variant="primary" isDisabled={busy} onPress={() => confirm(detail)}>
-                  <CheckCircle2 className="size-3.5" /> {t.confirmPayment}
-                </Button>
+                {detail.payment_method !== "gateway" && (
+                  <Button variant="primary" isDisabled={busy} onPress={() => confirm(detail)}>
+                    <CheckCircle2 className="size-3.5" /> {t.confirmPayment}
+                  </Button>
+                )}
               </>
             )
           ) : (

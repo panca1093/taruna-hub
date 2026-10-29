@@ -227,6 +227,8 @@ func topupError(err error) error {
 		return httpx.Conflict(topupStateRule)
 	case errors.Is(err, service.ErrTopupKeyConflict):
 		return httpx.Conflict(topupKeyConflict)
+	case errors.Is(err, service.ErrGatewayManaged):
+		return httpx.New(http.StatusConflict, httpx.CodeGatewayManaged, gatewayManaged)
 	}
 	return gatewayError(err)
 }

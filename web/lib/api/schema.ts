@@ -2583,6 +2583,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/orders/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Abandon the caller's own unpaid gateway order
+         * @description Student only, own `gateway` orders only (anyone else's is `404`). The server asks Midtrans first: a payment
+         *     that already succeeded confirms the order and this answers `409`. Otherwise the order is cancelled with a
+         *     fixed reason and the one-pending-per-product slot is released. If the abandoned payment later settles it is
+         *     held as a `late_success` payment exception for staff. Repeating the call on a cancelled order answers `200`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The cancelled order */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Order"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/topups/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Abandon the caller's own unpaid gateway top-up
+         * @description Student only, own `gateway` top-ups only. Same rules as cancelling a gateway order: a payment that already
+         *     succeeded credits the wallet and this answers `409`; otherwise the request is rejected with a fixed reason.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The rejected request */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Topup"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments/gateway": {
         parameters: {
             query?: never;
@@ -2950,7 +3044,8 @@ export interface paths {
          * @description Admin and Operator. Moves a `pending` order to `confirmed`, opens the tryouts it bought that the student
          *     does not hold yet and queues the email and WhatsApp notifications, all in one transaction. Repeating the
          *     call on a confirmed order answers `200` and changes nothing. A `cancelled` order answers `409`; a
-         *     confirmed order never goes back to pending.
+         *     confirmed order never goes back to pending. A `gateway` order is confirmed only by Midtrans' verified
+         *     payment: staff get `409` with code `gateway_managed` (cancelling stays allowed).
          */
         post: {
             parameters: {
@@ -3288,6 +3383,8 @@ export interface paths {
          * @description Admin and Operator. Moves a `pending` request to `approved`, credits the student's wallet through the one
          *     wallet movement path (ledger source `topup`, source id the request id, the reviewing staff as actor) and
          *     queues the email and WhatsApp notifications, all in one transaction. Two concurrent approvals credit once.
+         *     A `gateway` request is approved only by Midtrans' verified payment: staff get `409` with code
+         *     `gateway_managed` (rejecting stays allowed).
          *     Repeating the call on an approved request answers `200` and changes nothing. A `rejected` request answers
          *     `409`; an approved request never goes back to pending.
          */
@@ -6574,7 +6671,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */

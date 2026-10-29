@@ -1949,6 +1949,72 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /api/v1/orders/{id}/cancel:
+    post:
+      tags: [orders]
+      summary: Abandon the caller's own unpaid gateway order
+      description: |
+        Student only, own `gateway` orders only (anyone else's is `404`). The server asks Midtrans first: a payment
+        that already succeeded confirms the order and this answers `409`. Otherwise the order is cancelled with a
+        fixed reason and the one-pending-per-product slot is released. If the abandoned payment later settles it is
+        held as a `late_success` payment exception for staff. Repeating the call on a cancelled order answers `200`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The cancelled order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/topups/{id}/cancel:
+    post:
+      tags: [topups]
+      summary: Abandon the caller's own unpaid gateway top-up
+      description: |
+        Student only, own `gateway` top-ups only. Same rules as cancelling a gateway order: a payment that already
+        succeeded credits the wallet and this answers `409`; otherwise the request is rejected with a fixed reason.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The rejected request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /api/v1/payments/gateway:
     get:
       tags: [orders]
@@ -2230,7 +2296,8 @@ paths:
         Admin and Operator. Moves a `pending` order to `confirmed`, opens the tryouts it bought that the student
         does not hold yet and queues the email and WhatsApp notifications, all in one transaction. Repeating the
         call on a confirmed order answers `200` and changes nothing. A `cancelled` order answers `409`; a
-        confirmed order never goes back to pending.
+        confirmed order never goes back to pending. A `gateway` order is confirmed only by Midtrans' verified
+        payment: staff get `409` with code `gateway_managed` (cancelling stays allowed).
       security:
         - bearerAuth: []
       parameters:
@@ -2491,6 +2558,8 @@ paths:
         Admin and Operator. Moves a `pending` request to `approved`, credits the student's wallet through the one
         wallet movement path (ledger source `topup`, source id the request id, the reviewing staff as actor) and
         queues the email and WhatsApp notifications, all in one transaction. Two concurrent approvals credit once.
+        A `gateway` request is approved only by Midtrans' verified payment: staff get `409` with code
+        `gateway_managed` (rejecting stays allowed).
         Repeating the call on an approved request answers `200` and changes nothing. A `rejected` request answers
         `409`; an approved request never goes back to pending.
       security:
@@ -5651,6 +5720,7 @@ components:
                 - price_changed
                 - order_pending
                 - gateway_error
+                - gateway_managed
                 - tryout_not_open
                 - tryout_closed
                 - session_completed

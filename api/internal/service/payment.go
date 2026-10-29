@@ -179,12 +179,20 @@ func (s *PaymentService) ensureRedirect(ctx context.Context, a model.PaymentAtte
 	redirect, err := s.gateway.CreateTransaction(ctx, req)
 	switch {
 	case err == nil:
-		return s.repo.SetRedirect(ctx, a.TenantID, a.ID, redirect)
+		return s.repo.SetRedirect(ctx, a.TenantID, a.ID, redirect, s.now().Add(gatewayExpiryMinutes*time.Minute))
 	case errors.Is(err, ErrGatewayDuplicate):
 		st, serr := s.gateway.Status(ctx, a.ProviderOrderID)
 		switch {
 		case serr == nil:
-			return s.process(ctx, a, st, evidence{source: "status", st: st, raw: st.Raw})
+			if err := s.process(ctx, a, st, evidence{source: "status", st: st, raw: st.Raw}); err != nil {
+				return err
+			}
+			// Still open with no page the payer could have seen: it can never be paid from here.
+			if fresh, err := s.repo.AttemptForTarget(ctx, a); err == nil && fresh.RedirectURL == nil &&
+				(fresh.Status == model.AttemptPending || fresh.Status == model.AttemptFailed) {
+				return s.abandon(ctx, fresh)
+			}
+			return nil
 		case errors.Is(serr, ErrGatewayNotFound):
 			return s.abandon(ctx, a)
 		}
@@ -257,10 +265,12 @@ func (s *PaymentService) reconcile(ctx context.Context, a model.PaymentAttempt) 
 	if a.LastCheckedAt != nil && s.now().Sub(*a.LastCheckedAt) < reconcileInterval {
 		return nil
 	}
-	if err := s.repo.MarkChecked(ctx, a.TenantID, a.ID, s.now()); err != nil {
-		return err
-	}
 	st, err := s.gateway.Status(ctx, a.ProviderOrderID)
+	if err == nil || errors.Is(err, ErrGatewayNotFound) {
+		if merr := s.repo.MarkChecked(ctx, a.TenantID, a.ID, s.now()); merr != nil {
+			return merr
+		}
+	}
 	if errors.Is(err, ErrGatewayNotFound) {
 		if s.now().Before(a.ExpiresAt) {
 			return nil
@@ -317,6 +327,10 @@ type evidence struct {
 // process applies one verified provider status to an attempt in a single transaction and stores the evidence.
 // A zero status is evidence that changed nothing.
 func (s *PaymentService) process(ctx context.Context, a model.PaymentAttempt, st ProviderStatus, events ...evidence) error {
+	return s.processWith(ctx, a, st, gatewayCancelReason, events...)
+}
+
+func (s *PaymentService) processWith(ctx context.Context, a model.PaymentAttempt, st ProviderStatus, cancelReason string, events ...evidence) error {
 	name, err := s.repo.TenantName(ctx, a.TenantID)
 	if err != nil {
 		return err
@@ -329,7 +343,7 @@ func (s *PaymentService) process(ctx context.Context, a model.PaymentAttempt, st
 		}
 		outcome := "ignored"
 		if st.TransactionStatus != "" {
-			if outcome, err = s.apply(ctx, tx, scope, attempt, st); err != nil {
+			if outcome, err = s.apply(ctx, tx, scope, attempt, st, cancelReason); err != nil {
 				return err
 			}
 		}
@@ -373,10 +387,10 @@ func classifyProvider(st ProviderStatus) string {
 		}
 		return kindSuccess
 	case "capture":
-		if st.FraudStatus == "accept" {
-			return kindSuccess
+		if st.FraudStatus == "challenge" {
+			return kindPending
 		}
-		return kindPending
+		return kindSuccess
 	case "pending", "authorize":
 		return kindPending
 	case "deny", "failure":
@@ -390,7 +404,7 @@ func classifyProvider(st ProviderStatus) string {
 }
 
 // apply never downgrades: paid, held and cancelled are final, and only a success can leave failed.
-func (s *PaymentService) apply(ctx context.Context, tx pgx.Tx, scope HostScope, a model.PaymentAttempt, st ProviderStatus) (string, error) {
+func (s *PaymentService) apply(ctx context.Context, tx pgx.Tx, scope HostScope, a model.PaymentAttempt, st ProviderStatus, cancelReason string) (string, error) {
 	open := a.Status == model.AttemptPending || a.Status == model.AttemptFailed
 	switch classifyProvider(st) {
 	case kindSuccess:
@@ -401,7 +415,7 @@ func (s *PaymentService) apply(ctx context.Context, tx pgx.Tx, scope HostScope, 
 		}
 	case kindCancel:
 		if open {
-			return "applied", s.cancelTx(ctx, tx, scope, a)
+			return "applied", s.cancelTx(ctx, tx, scope, a, cancelReason)
 		}
 	case kindEvidence:
 		return "evidence", nil
@@ -411,7 +425,7 @@ func (s *PaymentService) apply(ctx context.Context, tx pgx.Tx, scope HostScope, 
 
 const gatewayCancelReason = "Pembayaran Midtrans kedaluwarsa atau dibatalkan."
 
-func (s *PaymentService) cancelTx(ctx context.Context, tx pgx.Tx, scope HostScope, a model.PaymentAttempt) error {
+func (s *PaymentService) cancelTx(ctx context.Context, tx pgx.Tx, scope HostScope, a model.PaymentAttempt, reason string) error {
 	if a.OrderID != nil {
 		order, err := s.orders.repo.LockTx(ctx, tx, a.TenantID, *a.OrderID)
 		if err != nil {
@@ -422,14 +436,14 @@ func (s *PaymentService) cancelTx(ctx context.Context, tx pgx.Tx, scope HostScop
 			if err != nil {
 				return err
 			}
-			if err := s.repo.CancelOrderTx(ctx, tx, a.TenantID, order.ID, gatewayCancelReason); err != nil {
+			if err := s.repo.CancelOrderTx(ctx, tx, a.TenantID, order.ID, reason); err != nil {
 				return err
 			}
 			cancelled, err := s.orders.repo.FindTx(ctx, tx, a.TenantID, order.ID)
 			if err != nil {
 				return err
 			}
-			if err := s.orders.notify(ctx, tx, scope, cancelled, contact, TemplateOrderCancelled, gatewayCancelReason); err != nil {
+			if err := s.orders.notify(ctx, tx, scope, cancelled, contact, TemplateOrderCancelled, reason); err != nil {
 				return err
 			}
 		}
@@ -443,14 +457,14 @@ func (s *PaymentService) cancelTx(ctx context.Context, tx pgx.Tx, scope HostScop
 			if err != nil {
 				return err
 			}
-			if err := s.repo.RejectTopupTx(ctx, tx, a.TenantID, topup.ID, gatewayCancelReason); err != nil {
+			if err := s.repo.RejectTopupTx(ctx, tx, a.TenantID, topup.ID, reason); err != nil {
 				return err
 			}
 			rejected, err := s.topups.repo.FindTx(ctx, tx, a.TenantID, topup.ID)
 			if err != nil {
 				return err
 			}
-			if err := s.topups.notify(ctx, tx, scope, rejected, contact, TemplateTopupRejected, gatewayCancelReason); err != nil {
+			if err := s.topups.notify(ctx, tx, scope, rejected, contact, TemplateTopupRejected, reason); err != nil {
 				return err
 			}
 		}
@@ -617,6 +631,9 @@ func (s *PaymentService) resolve(ctx context.Context, scope HostScope, principal
 		if err := s.repo.ResolveExceptionTx(ctx, tx, tenantID, id, target, by, reason); err != nil {
 			return err
 		}
+		if err := s.closeTargetTx(ctx, tx, scope, x, by, reason); err != nil {
+			return err
+		}
 		out, err = s.repo.FindExceptionTx(ctx, tx, tenantID, id)
 		return err
 	})
@@ -631,4 +648,153 @@ func truncateRunes(s string, n int) string {
 		return s
 	}
 	return string([]rune(s)[:n])
+}
+
+// closeTargetTx cancels (or rejects) the order or top-up a resolved exception belongs to when it is still pending, so
+// a held payment never leaves the student blocked by an unpayable pending row.
+func (s *PaymentService) closeTargetTx(ctx context.Context, tx pgx.Tx, scope HostScope, x model.PaymentException, by uuid.UUID, reason string) error {
+	if x.OrderID != nil {
+		order, err := s.orders.repo.LockTx(ctx, tx, x.TenantID, *x.OrderID)
+		if err != nil || order.Status != model.OrderPending {
+			return err
+		}
+		contact, err := s.orders.repo.LockStudentTx(ctx, tx, x.TenantID, order.UserID)
+		if err != nil {
+			return err
+		}
+		if err := s.orders.repo.CancelTx(ctx, tx, x.TenantID, order.ID, by, reason); err != nil {
+			return err
+		}
+		cancelled, err := s.orders.repo.FindTx(ctx, tx, x.TenantID, order.ID)
+		if err != nil {
+			return err
+		}
+		return s.orders.notify(ctx, tx, scope, cancelled, contact, TemplateOrderCancelled, reason)
+	}
+	topup, err := s.topups.repo.LockTx(ctx, tx, x.TenantID, *x.TopupID)
+	if err != nil || topup.Status != model.TopupPending {
+		return err
+	}
+	contact, err := s.topups.repo.ContactOf(ctx, tx, x.TenantID, topup.UserID)
+	if err != nil {
+		return err
+	}
+	if err := s.topups.repo.RejectTx(ctx, tx, x.TenantID, topup.ID, by, reason); err != nil {
+		return err
+	}
+	rejected, err := s.topups.repo.FindTx(ctx, tx, x.TenantID, topup.ID)
+	if err != nil {
+		return err
+	}
+	return s.topups.notify(ctx, tx, scope, rejected, contact, TemplateTopupRejected, reason)
+}
+
+const studentCancelReason = "Dibatalkan oleh siswa sebelum pembayaran selesai."
+
+// CancelOwnOrder lets a student abandon their own pending gateway order that was not paid. The provider is asked
+// first, outside any lock, so a payment that already succeeded confirms instead; a later settlement of an
+// abandoned order becomes a late_success exception.
+func (s *PaymentService) CancelOwnOrder(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) (model.Order, error) {
+	tenantID, err := walletTenant(scope, principal)
+	if err != nil {
+		return model.Order{}, err
+	}
+	order, err := s.orders.Order(ctx, scope, principal, id)
+	if err != nil {
+		return model.Order{}, err
+	}
+	if principal.Role != model.RoleStudent {
+		return model.Order{}, ErrOrderForbidden
+	}
+	if order.PaymentMethod != model.PaymentGateway {
+		return model.Order{}, ErrOrderState
+	}
+	if order.Status == model.OrderPending {
+		a, err := s.repo.AttemptForOrder(ctx, tenantID, id)
+		if err != nil {
+			return model.Order{}, err
+		}
+		if err := s.abandonOwn(ctx, a); err != nil {
+			return model.Order{}, err
+		}
+		if order, err = s.orders.repo.Find(ctx, tenantID, id); err != nil {
+			return model.Order{}, err
+		}
+	}
+	if order.Status != model.OrderCancelled {
+		return model.Order{}, ErrOrderState
+	}
+	return order, nil
+}
+
+// CancelOwnTopup is the same for a student's pending gateway top-up.
+func (s *PaymentService) CancelOwnTopup(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) (model.Topup, error) {
+	tenantID, err := walletTenant(scope, principal)
+	if err != nil {
+		return model.Topup{}, err
+	}
+	topup, err := s.topups.Topup(ctx, scope, principal, id)
+	if err != nil {
+		return model.Topup{}, err
+	}
+	if principal.Role != model.RoleStudent {
+		return model.Topup{}, ErrTopupForbidden
+	}
+	if topup.Method != model.TopupGateway {
+		return model.Topup{}, ErrTopupState
+	}
+	if topup.Status == model.TopupPending {
+		a, err := s.repo.AttemptForTopup(ctx, tenantID, id)
+		if err != nil {
+			return model.Topup{}, err
+		}
+		if err := s.abandonOwn(ctx, a); err != nil {
+			return model.Topup{}, err
+		}
+		if topup, err = s.topups.repo.Find(ctx, tenantID, id); err != nil {
+			return model.Topup{}, err
+		}
+	}
+	if topup.Status != model.TopupRejected {
+		return model.Topup{}, ErrTopupState
+	}
+	return topup, nil
+}
+
+func (s *PaymentService) abandonOwn(ctx context.Context, a model.PaymentAttempt) error {
+	if s.Available() {
+		a.LastCheckedAt = nil
+		if err := s.reconcile(ctx, a); err != nil {
+			return err
+		}
+		fresh, err := s.repo.AttemptForTarget(ctx, a)
+		if err != nil {
+			return err
+		}
+		a = fresh
+	}
+	if a.Status != model.AttemptPending && a.Status != model.AttemptFailed {
+		return nil
+	}
+	return s.processWith(ctx, a, ProviderStatus{OrderID: a.ProviderOrderID, TransactionStatus: "cancel"}, studentCancelReason)
+}
+
+// SweepExpired settles pending gateway attempts that passed their expiry through the Status API, outside any lock,
+// so an order nobody reads still frees the one-pending-per-product slot. It returns how many it looked at.
+func (s *PaymentService) SweepExpired(ctx context.Context, limit int) (int, error) {
+	if !s.Available() {
+		return 0, nil
+	}
+	due, err := s.repo.ExpiredOpenAttempts(ctx, s.now(), limit)
+	if err != nil {
+		return 0, err
+	}
+	var firstErr error
+	for _, a := range due {
+		a.LastCheckedAt = nil
+		if err := s.reconcile(ctx, a); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return len(due), firstErr
 }

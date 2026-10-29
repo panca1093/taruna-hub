@@ -33,6 +33,8 @@ const (
 	CodeOrderPending Code = "order_pending"
 	// CodeGatewayError: the payment provider could not be reached or refused; retry with the same key or start over.
 	CodeGatewayError Code = "gateway_error"
+	// CodeGatewayManaged: staff tried to confirm or approve a Midtrans payment that only the provider can confirm.
+	CodeGatewayManaged Code = "gateway_managed"
 )
 
 // Envelope is the single response shape for every failing request.

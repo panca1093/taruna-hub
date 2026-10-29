@@ -450,7 +450,7 @@ For every slice, use this verification loop:
 
 ### P14 — Gateway orders and top-ups
 
-**Status:** in progress — built and proven against a fake gateway and the real adapter against a local fake server (migration 000021, [docs/payments-gateway.md](../docs/payments-gateway.md)). Open: the live Midtrans sandbox run and a browser demo (see boxes). Not built: a screen for held top-up exceptions, a "continue payment" button, a background sweeper (see the doc) · **Size:** L · **Depends:** P13, P15
+**Status:** in progress — built and proven against a fake gateway and the real adapter against a local fake server (migration 000021, [docs/payments-gateway.md](../docs/payments-gateway.md)). Open: the live Midtrans sandbox run and a browser demo (see boxes). Not built: a screen for held top-up exceptions and a "continue payment" button (see the doc) · **Size:** L · **Depends:** P13, P15
 
 **Outcome:** Verified Midtrans success confirms purchases or credits top-ups exactly once across tenants.
 

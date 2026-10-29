@@ -95,6 +95,15 @@ export default function StudentWalletPage() {
     setReloadKey((key) => key + 1);
   };
 
+  const cancelTopup = async (topupId: string) => {
+    try {
+      await api.topups.cancel(topupId);
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      toast.danger(t.cancelTopupFailed, { description: errorText(err, t.loadErrorDescription) });
+    }
+  };
+
   const openModal = () => {
     setModalOpen(true);
     api.orders
@@ -226,7 +235,14 @@ export default function StudentWalletPage() {
                         <p className="text-xs text-danger">{t.rejectReason(topup.reject_reason)}</p>
                       )}
                     </div>
-                    <TopupStatusBadge status={topup.status} />
+                    <span className="inline-flex items-center gap-2">
+                      <TopupStatusBadge status={topup.status} />
+                      {topup.method === "gateway" && topup.status === "pending" && (
+                        <Button size="sm" variant="ghost" onPress={() => cancelTopup(topup.id)}>
+                          {t.cancelTopup}
+                        </Button>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>

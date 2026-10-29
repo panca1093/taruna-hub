@@ -20,6 +20,8 @@ const id = {
   retry: "Coba lagi",
   loadMore: "Muat lebih banyak",
   loadingMore: "Memuat…",
+  cancelOrder: "Batalkan",
+  cancelFailed: "Pesanan tidak bisa dibatalkan",
   paymentModeLabel: {
     gateway: "Gateway",
     manual: "Transfer Manual",
@@ -44,6 +46,8 @@ const en: typeof id = {
   retry: "Try again",
   loadMore: "Load more",
   loadingMore: "Loading…",
+  cancelOrder: "Cancel",
+  cancelFailed: "The order could not be cancelled",
   paymentModeLabel: {
     gateway: "Gateway",
     manual: "Bank Transfer",

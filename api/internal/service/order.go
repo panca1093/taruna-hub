@@ -27,6 +27,7 @@ var (
 	ErrOrderPending             = errors.New("a pending order for this product already exists")
 	ErrBankTransferUnavailable  = errors.New("bank transfer account is not configured")
 	ErrEnrollmentSourceRequired = errors.New("enrollment grant needs a source")
+	ErrGatewayManaged           = errors.New("a gateway payment is confirmed by the provider, not by staff")
 )
 
 // Order field reasons; the transport turns each into the copy its screens show.
@@ -297,6 +298,9 @@ func (s *OrderService) review(ctx context.Context, scope HostScope, principal mo
 			}
 			out = order
 			return nil
+		}
+		if target == model.OrderConfirmed && order.PaymentMethod == model.PaymentGateway {
+			return ErrGatewayManaged
 		}
 		contact, err := s.repo.LockStudentTx(ctx, tx, tenantID, order.UserID)
 		if err != nil {

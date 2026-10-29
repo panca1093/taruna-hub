@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	gatewayManaged      = "Pembayaran Midtrans dikonfirmasi otomatis oleh Midtrans dan tidak bisa dikonfirmasi manual. Batalkan jika tidak ingin menunggu."
 	gatewayMissing      = "Pembayaran Midtrans belum tersedia."
 	gatewayFailed       = "Midtrans tidak dapat dihubungi. Coba lagi dengan permintaan yang sama; jangan membuat pesanan baru."
 	gatewayCancelled    = "Pembayaran tidak dapat dibuka dan dibatalkan. Silakan coba lagi."
@@ -199,6 +200,18 @@ func gatewayError(err error) error {
 	switch {
 	case errors.Is(err, service.ErrGatewayUnavailable):
 		return httpx.Unavailable(gatewayMissing)
+	case errors.Is(err, service.ErrGatewayManaged):
+		return httpx.New(http.StatusConflict, httpx.CodeGatewayManaged, gatewayManaged)
+	case errors.Is(err, service.ErrOrderState):
+		return httpx.Conflict(orderStateRule)
+	case errors.Is(err, service.ErrTopupState):
+		return httpx.Conflict(topupStateRule)
+	case errors.Is(err, service.ErrOrderNotFound):
+		return httpx.NotFound(orderNotFound)
+	case errors.Is(err, service.ErrTopupNotFound):
+		return httpx.NotFound(topupNotFound)
+	case errors.Is(err, service.ErrOrderForbidden), errors.Is(err, service.ErrTopupForbidden):
+		return httpx.Forbidden(roleDenied)
 	case errors.Is(err, service.ErrGatewayAmbiguous):
 		return httpx.BadGateway(gatewayFailed)
 	case errors.Is(err, service.ErrPaymentCreateFailed):
@@ -213,4 +226,37 @@ func gatewayError(err error) error {
 		return httpx.Conflict(exceptionStateRule)
 	}
 	return err
+}
+
+// CancelMyOrder and CancelMyTopup let a student abandon their own unpaid gateway payment.
+func (h *Handler) CancelMyOrder(c echo.Context) error {
+	scope, principal, ok := walletCaller(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	id, err := orderID(c)
+	if err != nil {
+		return err
+	}
+	order, err := h.payments.CancelOwnOrder(c.Request().Context(), scope, principal, id)
+	if err != nil {
+		return gatewayError(err)
+	}
+	return c.JSON(http.StatusOK, orderResponseOf(order))
+}
+
+func (h *Handler) CancelMyTopup(c echo.Context) error {
+	scope, principal, ok := walletCaller(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	id, err := topupID(c)
+	if err != nil {
+		return err
+	}
+	topup, err := h.payments.CancelOwnTopup(c.Request().Context(), scope, principal, id)
+	if err != nil {
+		return gatewayError(err)
+	}
+	return c.JSON(http.StatusOK, topupResponseOf(topup))
 }

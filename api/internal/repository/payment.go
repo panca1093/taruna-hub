@@ -81,12 +81,13 @@ func (r *PaymentRepository) LockAttemptTx(ctx context.Context, tx pgx.Tx, tenant
 	return scanPayment(tx.QueryRow(ctx, `SELECT `+paymentColumns+` FROM payment_attempts WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, id))
 }
 
-func (r *PaymentRepository) SetRedirect(ctx context.Context, tenantID, id uuid.UUID, redirectURL string) error {
+// SetRedirect also restarts the expiry clock: the provider counts it from when the page was created.
+func (r *PaymentRepository) SetRedirect(ctx context.Context, tenantID, id uuid.UUID, redirectURL string, expiresAt time.Time) error {
 	if tenantID == uuid.Nil {
 		return ErrScopeRequired
 	}
-	_, err := r.db.Exec(ctx, `UPDATE payment_attempts SET redirect_url = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
-		tenantID, id, redirectURL)
+	_, err := r.db.Exec(ctx, `UPDATE payment_attempts SET redirect_url = $3, expires_at = $4, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
+		tenantID, id, redirectURL, expiresAt)
 	return err
 }
 
@@ -294,4 +295,33 @@ func (r *PaymentRepository) ListExceptions(ctx context.Context, tenantID uuid.UU
 		out = append(out, x)
 	}
 	return out, total, rows.Err()
+}
+
+// AttemptForTarget re-reads an attempt by id.
+func (r *PaymentRepository) AttemptForTarget(ctx context.Context, a model.PaymentAttempt) (model.PaymentAttempt, error) {
+	if a.TenantID == uuid.Nil {
+		return model.PaymentAttempt{}, ErrScopeRequired
+	}
+	return scanPayment(r.db.QueryRow(ctx, `SELECT `+paymentColumns+` FROM payment_attempts WHERE tenant_id = $1 AND id = $2`, a.TenantID, a.ID))
+}
+
+// ExpiredOpenAttempts lists open attempts past their expiry, least recently checked first so a transient failure
+// cannot starve the rest. It spans tenants because the worker sweeps the deployment, then acts per attempt's tenant.
+func (r *PaymentRepository) ExpiredOpenAttempts(ctx context.Context, now time.Time, limit int) ([]model.PaymentAttempt, error) {
+	rows, err := r.db.Query(ctx, `SELECT `+paymentColumns+` FROM payment_attempts
+		 WHERE status IN ('pending', 'failed') AND expires_at < $1
+		 ORDER BY last_checked_at NULLS FIRST, expires_at LIMIT $2`, now, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list expired attempts: %w", err)
+	}
+	defer rows.Close()
+	out := []model.PaymentAttempt{}
+	for rows.Next() {
+		a, err := scanPayment(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }

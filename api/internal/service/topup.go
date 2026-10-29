@@ -191,6 +191,9 @@ func (s *TopupService) review(ctx context.Context, scope HostScope, principal mo
 			out = request
 			return nil
 		}
+		if target == model.TopupApproved && request.Method == model.TopupGateway {
+			return ErrGatewayManaged
+		}
 		contact, err := s.repo.ContactOf(ctx, tx, tenantID, request.UserID)
 		if err != nil {
 			return topupError(err)

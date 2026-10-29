@@ -150,6 +150,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	// Checkout belongs to the student who pays; reviewing is staff work (D02: role-only, Operator included).
 	v1.POST("/orders", h.Checkout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/orders", h.MyOrders, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.POST("/orders/:id/cancel", h.CancelMyOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/orders/:id", h.MyOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/enrollments", h.MyEnrollments, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/payments/gateway", h.GatewayMethod, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
@@ -165,6 +166,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	// A top-up belongs to the student who asks; reviewing is staff work (D02: role-only, Operator included).
 	v1.POST("/topups", h.CreateTopup, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/topups", h.MyTopups, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.POST("/topups/:id/cancel", h.CancelMyTopup, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/topups/:id", h.MyTopup, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/admin/topups", h.StaffTopups, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/topups/:id", h.StaffTopup, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
