@@ -36,6 +36,7 @@ type Handler struct {
 	itemPackages  *service.ItemPackageService
 	kecermatan    *service.KecermatanService
 	kecRuntime    *service.KecermatanRuntimeService
+	topups        *service.TopupService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
@@ -61,6 +62,13 @@ func New(logger *slog.Logger, health *HealthHandler, auth *service.AuthService, 
 		secureCookies: opts.SecureCookies,
 		allowedOrigin: opts.AllowedOrigin,
 	}
+}
+
+// WithTopups attaches the top-up service. It is a separate step so the long constructor, which every fixture
+// calls, stays as it was.
+func (h *Handler) WithTopups(s *service.TopupService) *Handler {
+	h.topups = s
+	return h
 }
 
 func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
@@ -139,6 +147,15 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.GET("/admin/orders/:id", h.StaffOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/admin/orders/:id/confirm", h.ConfirmOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/admin/orders/:id/cancel", h.CancelOrder, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+
+	// A top-up belongs to the student who asks; reviewing is staff work (D02: role-only, Operator included).
+	v1.POST("/topups", h.CreateTopup, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/topups", h.MyTopups, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/topups/:id", h.MyTopup, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/admin/topups", h.StaffTopups, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.GET("/admin/topups/:id", h.StaffTopup, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/admin/topups/:id/approve", h.ApproveTopup, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/admin/topups/:id/reject", h.RejectTopup, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 
 	// The runtime is the student's own: every session route checks ownership in the service, and the exam routes
 	// are authenticated requests, so an active attempt keeps its login session alive (D13).

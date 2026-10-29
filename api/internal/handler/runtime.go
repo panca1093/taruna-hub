@@ -31,6 +31,7 @@ const (
 	extensionReason   = "Alasan wajib diisi, maksimal 500 karakter."
 	extensionTotal    = "Total tambahan waktu sesi maksimal 28800 detik."
 	weightRule        = "Bobot harus lebih dari 0, maksimal 1000, dengan dua desimal."
+	minTopupRule      = "Minimum top-up harus rupiah penuh, minimal Rp1."
 )
 
 const maxAnswerBody = 8 << 10
@@ -492,6 +493,8 @@ func runtimeReason(reason string) string {
 		return extensionTotal
 	case service.ReasonWeight:
 		return weightRule
+	case service.ReasonMinTopup:
+		return minTopupRule
 	case service.ReasonResultQuery:
 		return resultQueryRule
 	}
