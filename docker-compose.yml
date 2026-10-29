@@ -74,8 +74,13 @@ services:
       PORT: "8081"
       DATABASE_URL: postgres://tryout:tryout@postgres:5432/tryout?sslmode=disable
       REDIS_URL: redis://redis:6379/0
+      TENANT_SLUG: ${TENANT_SLUG:-taruna}
       S3_ENDPOINT: minio:9000
       S3_PUBLIC_ENDPOINT: localhost:${MINIO_PORT:-9002}
+      S3_ACCESS_KEY: tryout
+      S3_SECRET_KEY: tryout123
+      S3_BUCKET: tryout-assets
+      S3_USE_SSL: "false"
       APP_URL: http://localhost:${WEB_PORT:-3000}
       CORS_ORIGINS: http://localhost:${WEB_PORT:-3000}
     ports:
