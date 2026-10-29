@@ -4198,8 +4198,9 @@ export interface paths {
          * Save the settings
          * @description Admin only. Each weight is greater than 0, at most 1000, with at most two decimals. A session freezes the
          *     weights when its attempt starts, so saving never changes a session already started or a stored result.
-         *     `min_topup` is whole rupiah of at least 1 (digits with an optional `.00`); a top-up request already made
-         *     keeps the minimum it was checked against.
+         *     `min_topup` is optional: absent or empty keeps the current minimum. Otherwise it is whole rupiah of at
+         *     least 1 (digits with an optional `.00`); a top-up request already made keeps the minimum it was checked
+         *     against.
          */
         put: {
             parameters: {
@@ -4210,11 +4211,11 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["Settings"];
+                    "application/json": components["schemas"]["SettingsUpdate"];
                 };
             };
             responses: {
-                /** @description The saved weights */
+                /** @description The saved settings */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -6475,6 +6476,18 @@ export interface components {
             min_topup: string;
             scoring_weights: {
                 /** @description Points of a correctly answered easy question. */
+                easy: number;
+                medium: number;
+                hard: number;
+            };
+        };
+        SettingsUpdate: {
+            /**
+             * @description Whole rupiah. Absent or empty keeps the current minimum.
+             * @example 10000
+             */
+            min_topup?: string;
+            scoring_weights: {
                 easy: number;
                 medium: number;
                 hard: number;

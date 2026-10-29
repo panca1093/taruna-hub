@@ -32,7 +32,9 @@ Student only. In one transaction the server locks the student's `users` row (the
 looks the `idempotency_key` up (same key, amount and proof replays the original with `200`; anything else is
 `409`), checks the amount against the minimum, finalizes the proof with `AssetService.FinalizeTx` (a missing,
 foreign, wrongly typed or reused proof is one `422` on `proof_asset_id`) and inserts a `pending` request. A
-proof that already backs an order is refused too. Nothing is credited.
+proof that already backs an order is refused too, and an order refuses a proof that backs a top-up. Checkout and
+top-up create both hold the student's `users` row lock first, so a concurrent order and top-up on one proof
+cannot both win. Nothing is credited.
 
 ## Review
 
@@ -47,6 +49,9 @@ Two concurrent approvals serialize on the request lock: the second finds `approv
 so the wallet is credited once; the ledger's unique source key is the second guard. Repeating a review on a
 request already in that state answers `200` and changes nothing; the opposite review is `409`. Any failure,
 including the job insert, rolls back the status, the credit and the notifications together.
+
+A notification enqueue failure rolls back the whole approval (status, credit and notifications), the same
+all-or-nothing pattern as P13 order review; the reviewer simply retries.
 
 ## Visibility
 
@@ -80,4 +85,3 @@ ledger reference.
 - No limit on how many requests a student may keep pending; staff see them all.
 - Create does not refuse when the bank account is not configured (checkout answers `503`); the page shows
   "unavailable" because the account lookup fails.
-- A proof already used by an order is refused in SQL, but there is no dedicated test for that branch.

@@ -1054,9 +1054,12 @@ func (s *RuntimeService) UpdateSettings(ctx context.Context, scope HostScope, pr
 			fields["weights."+name] = ReasonWeight
 		}
 	}
-	minimum, ok := parseWholeRupiah(in.MinTopup)
-	if !ok {
-		fields["min_topup"] = ReasonMinTopup
+	minimum := ""
+	if in.MinTopup != "" {
+		var ok bool
+		if minimum, ok = parseWholeRupiah(in.MinTopup); !ok {
+			fields["min_topup"] = ReasonMinTopup
+		}
 	}
 	if len(fields) > 0 {
 		return model.Settings{}, &InputError{Fields: fields}
@@ -1064,5 +1067,9 @@ func (s *RuntimeService) UpdateSettings(ctx context.Context, scope HostScope, pr
 	if err := s.repo.SetSettings(ctx, tenantID, principal.UserID, in.Weights, minimum); err != nil {
 		return model.Settings{}, runtimeError(err)
 	}
-	return model.Settings{Weights: in.Weights, MinTopup: minimum}, nil
+	current, err := s.repo.MinTopup(ctx, s.db, tenantID)
+	if err != nil {
+		return model.Settings{}, runtimeError(err)
+	}
+	return model.Settings{Weights: in.Weights, MinTopup: current}, nil
 }

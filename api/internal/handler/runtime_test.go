@@ -434,15 +434,19 @@ func TestRuntimeSettingsEndpoint(t *testing.T) {
 	if got := decodeInto[settingsBody](t, f.call(http.MethodGet, "/api/v1/admin/settings", nil, f.tokenAdminA)); got.ScoringWeights != (weightsBody{Easy: 1.5, Medium: 2, Hard: 4}) || got.MinTopup != "25000.00" {
 		t.Errorf("settings after save = %+v", got)
 	}
+	keep := f.call(http.MethodPut, "/api/v1/admin/settings", settingsBody{ScoringWeights: weightsBody{Easy: 1.5, Medium: 2, Hard: 4}}, f.tokenAdminA)
+	if keep.Code != http.StatusOK || decodeInto[settingsBody](t, keep).MinTopup != "25000.00" {
+		t.Errorf("save without min_topup: status = %d body = %s, want 200 keeping 25000.00", keep.Code, keep.Body.String())
+	}
 	for name, body := range map[string]settingsBody{
-		"zero":             {ScoringWeights: weightsBody{Easy: 0, Medium: 2, Hard: 3}, MinTopup: "10000"},
-		"negative":         {ScoringWeights: weightsBody{Easy: 1, Medium: -2, Hard: 3}, MinTopup: "10000"},
-		"huge":             {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 1001}, MinTopup: "10000"},
-		"3 decimal":        {ScoringWeights: weightsBody{Easy: 1.234, Medium: 2, Hard: 3}, MinTopup: "10000"},
-		"no minimum":       {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 3}},
-		"zero minimum":     {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 3}, MinTopup: "0"},
-		"fraction minimum": {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 3}, MinTopup: "10000.50"},
-		"negative minimum": {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 3}, MinTopup: "-10000"},
+		"zero":              {ScoringWeights: weightsBody{Easy: 0, Medium: 2, Hard: 3}, MinTopup: "10000"},
+		"negative":          {ScoringWeights: weightsBody{Easy: 1, Medium: -2, Hard: 3}, MinTopup: "10000"},
+		"huge":              {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 1001}, MinTopup: "10000"},
+		"3 decimal":         {ScoringWeights: weightsBody{Easy: 1.234, Medium: 2, Hard: 3}, MinTopup: "10000"},
+		"malformed minimum": {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 3}, MinTopup: "abc"},
+		"zero minimum":      {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 3}, MinTopup: "0"},
+		"fraction minimum":  {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 3}, MinTopup: "10000.50"},
+		"negative minimum":  {ScoringWeights: weightsBody{Easy: 1, Medium: 2, Hard: 3}, MinTopup: "-10000"},
 	} {
 		if rec := f.call(http.MethodPut, "/api/v1/admin/settings", body, f.tokenAdminA); rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s weight: status = %d, want 422", name, rec.Code)

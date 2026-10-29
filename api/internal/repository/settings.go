@@ -12,17 +12,17 @@ import (
 )
 
 // SetSettings upserts the tenant's settings; sessions already started keep the weights they froze, and a
-// top-up request already made keeps the minimum it was checked against.
+// top-up request already made keeps the minimum it was checked against. An empty minTopup keeps the current one.
 func (r *RuntimeRepository) SetSettings(ctx context.Context, tenantID, updatedBy uuid.UUID, w model.Weights, minTopup string) error {
 	if tenantID == uuid.Nil {
 		return ErrScopeRequired
 	}
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO tenant_settings (tenant_id, weight_easy, weight_medium, weight_hard, min_topup, updated_by, updated_at)
-		VALUES ($1, $2, $3, $4, $5::numeric, $6, now())
+		VALUES ($1, $2, $3, $4, COALESCE(NULLIF($5, '')::numeric, 10000), $6, now())
 		ON CONFLICT (tenant_id)
 		DO UPDATE SET weight_easy = EXCLUDED.weight_easy, weight_medium = EXCLUDED.weight_medium,
-		              weight_hard = EXCLUDED.weight_hard, min_topup = EXCLUDED.min_topup,
+		              weight_hard = EXCLUDED.weight_hard, min_topup = COALESCE(NULLIF($5, '')::numeric, tenant_settings.min_topup),
 		              updated_by = EXCLUDED.updated_by, updated_at = now()`,
 		tenantID, w.Easy, w.Medium, w.Hard, minTopup, updatedBy)
 	if err != nil {

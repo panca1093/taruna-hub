@@ -3106,8 +3106,9 @@ paths:
       description: |
         Admin only. Each weight is greater than 0, at most 1000, with at most two decimals. A session freezes the
         weights when its attempt starts, so saving never changes a session already started or a stored result.
-        `min_topup` is whole rupiah of at least 1 (digits with an optional `.00`); a top-up request already made
-        keeps the minimum it was checked against.
+        `min_topup` is optional: absent or empty keeps the current minimum. Otherwise it is whole rupiah of at
+        least 1 (digits with an optional `.00`); a top-up request already made keeps the minimum it was checked
+        against.
       security:
         - bearerAuth: []
       requestBody:
@@ -3115,10 +3116,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/Settings"
+              $ref: "#/components/schemas/SettingsUpdate"
       responses:
         "200":
-          description: The saved weights
+          description: The saved settings
           content:
             application/json:
               schema:
@@ -5763,6 +5764,27 @@ components:
             easy:
               type: number
               description: Points of a correctly answered easy question.
+            medium:
+              type: number
+            hard:
+              type: number
+
+    SettingsUpdate:
+      type: object
+      additionalProperties: false
+      required: [scoring_weights]
+      properties:
+        min_topup:
+          type: string
+          description: Whole rupiah. Absent or empty keeps the current minimum.
+          example: "10000"
+        scoring_weights:
+          type: object
+          additionalProperties: false
+          required: [easy, medium, hard]
+          properties:
+            easy:
+              type: number
             medium:
               type: number
             hard:
