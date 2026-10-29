@@ -49,6 +49,23 @@ const id = {
   cancelConfirm: "Batalkan Pesanan",
   back: "Kembali",
   detailCancelReason: "Alasan pembatalan",
+  needsReview: "Perlu tinjauan",
+  exceptionKind: {
+    late_success: "Pembayaran Midtrans diterima setelah pesanan dibatalkan atau kedaluwarsa. Akses tidak dibuka dan tidak ada refund otomatis.",
+    amount_mismatch: "Jumlah yang dibayar di Midtrans berbeda dari total pesanan. Pesanan tidak dikonfirmasi otomatis.",
+    unexpected_state: "Pembayaran Midtrans diterima untuk pesanan yang sudah dikonfirmasi dengan cara lain.",
+  } as Record<string, string>,
+  exceptionPaid: (amount: string) => `Dibayar di Midtrans: ${amount}`,
+  creditAction: "Kreditkan ke saldo",
+  refundAction: "Tandai sudah direfund",
+  creditConfirm: "Kreditkan Sekarang",
+  refundConfirm: "Tandai Sudah Direfund",
+  creditReasonLabel: "Alasan kredit",
+  creditReasonHint: "Dicatat di riwayat saldo siswa. Kredit hanya dilakukan sekali dan tidak membuka akses.",
+  refundReasonLabel: "Alasan / catatan refund",
+  refundReasonHint: "Catat bagaimana dana dikembalikan di luar sistem. Tidak ada saldo yang berubah.",
+  exceptionCredited: "Pembayaran dikreditkan ke saldo siswa",
+  exceptionRefunded: "Pembayaran ditandai sudah direfund",
 };
 
 const en: typeof id = {
@@ -98,6 +115,23 @@ const en: typeof id = {
   cancelConfirm: "Cancel Order",
   back: "Back",
   detailCancelReason: "Cancellation reason",
+  needsReview: "Needs review",
+  exceptionKind: {
+    late_success: "A Midtrans payment arrived after the order was cancelled or expired. Access stays closed and nothing is refunded automatically.",
+    amount_mismatch: "The amount paid at Midtrans differs from the order total. The order was not confirmed automatically.",
+    unexpected_state: "A Midtrans payment arrived for an order that was already confirmed another way.",
+  },
+  exceptionPaid: (amount: string) => `Paid at Midtrans: ${amount}`,
+  creditAction: "Credit to wallet",
+  refundAction: "Mark as refunded",
+  creditConfirm: "Credit Now",
+  refundConfirm: "Mark Refunded",
+  creditReasonLabel: "Credit reason",
+  creditReasonHint: "Recorded in the student's wallet history. Credits once and does not open access.",
+  refundReasonLabel: "Refund reason / note",
+  refundReasonHint: "Note how the money was returned outside the system. No wallet balance changes.",
+  exceptionCredited: "Payment credited to the student's wallet",
+  exceptionRefunded: "Payment marked as refunded",
 };
 
 export function useOrdersT() {

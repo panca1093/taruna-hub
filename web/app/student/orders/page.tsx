@@ -39,6 +39,25 @@ export default function StudentOrdersPage() {
     };
   }, [reloadKey]);
 
+  // Coming back from Midtrans lands here: poll the pending gateway orders until the server confirms or cancels them.
+  useEffect(() => {
+    const pending = (orders ?? []).filter((o) => o.payment_method === "gateway" && o.status === "pending");
+    if (pending.length === 0) return;
+    const timer = setInterval(() => {
+      pending.forEach((o) =>
+        api.orders
+          .get(o.id)
+          .then((fresh) => {
+            if (fresh.status !== o.status) {
+              setOrders((prev) => (prev ?? []).map((row) => (row.id === fresh.id ? fresh : row)));
+            }
+          })
+          .catch(() => {}),
+      );
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [orders]);
+
   const retry = () => {
     setOrders(null);
     setLoadFailed(false);

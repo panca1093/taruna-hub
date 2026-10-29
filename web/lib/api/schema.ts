@@ -2355,7 +2355,14 @@ export interface paths {
          *     tryouts on the order. The client sends `expected_price`, the price its page showed, and the server price must
          *     equal it.
          *
-         *     `payment_method` is `wallet` or `manual` (the gateway arrives with P14). A `wallet` order is debited,
+         *     `payment_method` is `wallet`, `manual` or `gateway`. A `gateway` order (Midtrans, whole-rupiah price only)
+         *     is created `pending`, and the response carries `redirect_url`, the Midtrans payment page. Nothing is
+         *     granted until Midtrans' confirmed success arrives (webhook or status read); the return URL alone grants
+         *     nothing. The server calls Midtrans after committing, so if that call is ambiguous the answer is `502`
+         *     `gateway_error`: retry with the same `idempotency_key`, which reuses the same Midtrans order id. If the
+         *     page can never be opened the order is cancelled and `502` says so. `503` when the gateway is not
+         *     configured. A pending gateway order is cancelled when Midtrans reports expiry (24 hours) or cancellation.
+         *     A `wallet` order is debited,
          *     confirmed, granted and queued for notification in one transaction: if the balance is too low it answers
          *     `422` with code `insufficient_balance` and nothing is written. A `manual` order needs `proof_asset_id`, an
          *     unused `payment_proof` asset the caller uploaded through `POST /api/v1/assets`; it is finalized with the
@@ -2422,6 +2429,15 @@ export interface paths {
                 };
                 /** @description `validation_failed` with `fields`, or `insufficient_balance` when the wallet cannot pay the price. */
                 422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Midtrans could not be reached or refused (`gateway_error`); see the description. */
+                502: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2561,6 +2577,265 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/gateway": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether Midtrans is offered
+         * @description Student only. `200` when the Midtrans keys are configured, `503` otherwise; checkout and top-up with
+         *     method `gateway` answer `503` in the same case.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The gateway is available */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            provider: "midtrans";
+                        };
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/midtrans/notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Midtrans payment notification (provider only)
+         * @description Called by Midtrans, with no session and no tenant host. The only credential is `signature_key`, the
+         *     SHA512 of `order_id + status_code + gross_amount + server_key`; a wrong one answers `403` and nothing is
+         *     stored. The tenant and the order or top-up come from the stored provider reference, never from the
+         *     request. A reference this system never issued answers `200` so the provider stops retrying.
+         *
+         *     Before anything moves, the server asks Midtrans' Status API for the truth and applies that, so a forged
+         *     or stale body cannot confirm anything. If the provider cannot be reached the answer is `5xx` and Midtrans
+         *     retries. Replays and reordered `pending`/`settlement` notifications produce one confirmation or credit
+         *     and never downgrade a final state. A success for a cancelled or expired order or top-up, with a wrong
+         *     amount, or on an order already confirmed some other way is held as a payment exception for staff.
+         *     `refund` and `chargeback` notifications are stored as evidence only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        order_id: string;
+                        status_code: string;
+                        gross_amount: string;
+                        transaction_status: string;
+                        fraud_status?: string;
+                        transaction_id?: string;
+                        signature_key: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Accepted (including a reference this system does not know) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["ValidationFailed"];
+                403: components["responses"]["Forbidden"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/payment-exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gateway payments held for review
+         * @description Admin and Operator. A held exception is a provider success the system refused to apply by itself (D07):
+         *     a late success for a cancelled order or top-up, a wrong amount, or a payment on an order already
+         *     confirmed another way. `status` narrows to `held`, `credited` or `refunded`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "held" | "credited" | "refunded";
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The exceptions, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PaymentExceptionList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/payment-exceptions/{id}/credit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Credit a held payment to the student's wallet
+         * @description Admin and Operator. Credits the paid amount once (ledger source `payment_exception`, actor staff with the
+         *     reason) and resolves the exception. Repeating it, or running it concurrently, changes nothing more. It does
+         *     not reopen access. `409` when the exception was already marked refunded.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PaymentExceptionResolveRequest"];
+                };
+            };
+            responses: {
+                /** @description The resolved exception */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PaymentException"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/payment-exceptions/{id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a held payment as refunded outside the system
+         * @description Admin and Operator. Records who returned the money and why; nothing is sent to Midtrans and no wallet money
+         *     moves. `409` when the exception was already credited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PaymentExceptionResolveRequest"];
+                };
+            };
+            responses: {
+                /** @description The resolved exception */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PaymentException"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -6299,7 +6574,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -6316,7 +6591,7 @@ export interface components {
             /** @description The price the page showed, as the same decimal string `Product.price` uses. */
             expected_price: string;
             /** @enum {string} */
-            payment_method: "manual" | "wallet";
+            payment_method: "manual" | "wallet" | "gateway";
             idempotency_key: string;
             /**
              * Format: uuid
@@ -6342,7 +6617,18 @@ export interface components {
             /** @enum {string} */
             status: "pending" | "confirmed" | "cancelled";
             /** @enum {string} */
-            payment_method: "manual" | "wallet";
+            payment_method: "manual" | "wallet" | "gateway";
+            /** @description The Midtrans payment page of a `gateway` order that is still pending; otherwise null. */
+            redirect_url: string | null;
+            /** @description A held payment exception on this order (staff review); null when none is held. */
+            payment_exception: {
+                /** Format: uuid */
+                id: string;
+                /** @example 100000.00 */
+                paid_amount: string;
+                /** @enum {string} */
+                kind: "late_success" | "amount_mismatch" | "unexpected_state";
+            } | null;
             /** Format: uuid */
             student_id: string;
             student_name: string;
@@ -6380,20 +6666,62 @@ export interface components {
             orders: components["schemas"]["Order"][];
             total: number;
         };
+        PaymentExceptionResolveRequest: {
+            reason: string;
+        };
+        PaymentException: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "late_success" | "amount_mismatch" | "unexpected_state";
+            /** @enum {string} */
+            status: "held" | "credited" | "refunded";
+            /** Format: uuid */
+            student_id: string;
+            student_name: string;
+            /** Format: uuid */
+            order_id: string | null;
+            order_code: string | null;
+            /** Format: uuid */
+            topup_id: string | null;
+            topup_code: string | null;
+            /**
+             * @description What Midtrans reports as paid, a canonical decimal string; this is what a credit adds.
+             * @example 100000.00
+             */
+            paid_amount: string;
+            /** @description Staff's reason once resolved; empty while held. */
+            reason: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            resolved_at: string | null;
+        };
+        PaymentExceptionList: {
+            exceptions: components["schemas"]["PaymentException"][];
+            total: number;
+        };
         TopupCreateRequest: {
+            /**
+             * @description Defaults to `manual`. A `gateway` top-up pays through Midtrans and refuses `proof_asset_id`.
+             * @enum {string}
+             */
+            method?: "manual" | "gateway";
             /** @description Whole rupiah, at least the tenant minimum. The server validates it; this pattern is only the shape. */
             amount: string;
             idempotency_key: string;
             /**
              * Format: uuid
-             * @description An unused `payment_proof` asset the caller uploaded.
+             * @description Required for `manual` and refused for `gateway`. An unused `payment_proof` asset the caller uploaded.
              */
-            proof_asset_id: string;
+            proof_asset_id?: string;
         };
         TopupRejectRequest: {
             reason: string;
         };
         Topup: {
+            /** @description The Midtrans payment page of a `gateway` top-up that is still pending; otherwise null. */
+            redirect_url: string | null;
             /** Format: uuid */
             id: string;
             /**
@@ -6403,11 +6731,8 @@ export interface components {
             code: string;
             /** @enum {string} */
             status: "pending" | "approved" | "rejected";
-            /**
-             * @description Only `manual` exists until P14 adds the gateway.
-             * @enum {string}
-             */
-            method: "manual";
+            /** @enum {string} */
+            method: "manual" | "gateway";
             /** Format: uuid */
             student_id: string;
             student_name: string;

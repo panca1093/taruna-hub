@@ -3,7 +3,7 @@
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button, Card, Chip } from "@heroui/react";
-import { CheckCircle2, CloudOff, Copy, FileUp, ShieldCheck, Wallet } from "lucide-react";
+import { CheckCircle2, CloudOff, Copy, CreditCard, FileUp, ShieldCheck, Wallet } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -22,8 +22,7 @@ import { formatIDR, isLessMoney, subtractMoney } from "@/lib/format-money";
 import { useUser } from "@/lib/session-context";
 import { useCheckoutT } from "@/lib/i18n/dict/checkout";
 
-// The gateway joins in P14; until then only these two are offered.
-type PaymentMethod = "manual" | "wallet";
+type PaymentMethod = "manual" | "gateway" | "wallet";
 type LoadState = "loading" | "ready" | "missing" | "failed";
 
 const newKey = () => crypto.randomUUID();
@@ -38,10 +37,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
   const [balance, setBalance] = useState<string | null>(null);
   const [bank, setBank] = useState<BankTransfer | null>(null);
   const [bankFailed, setBankFailed] = useState(false);
+  const [gatewayOk, setGatewayOk] = useState(false);
   const [method, setMethod] = useState<PaymentMethod>("manual");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [redirecting, setRedirecting] = useState(false);
   const [order, setOrder] = useState<Order | null>(null);
   const [balanceAfter, setBalanceAfter] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -68,6 +69,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
       .get()
       .then((wallet) => {
         if (!cancelled) setBalance(wallet.balance);
+      })
+      .catch(() => {});
+    api.orders
+      .gateway()
+      .then(() => {
+        if (!cancelled) setGatewayOk(true);
       })
       .catch(() => {});
     api.orders
@@ -224,6 +231,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
       if (created.payment_method === "wallet") {
         setBalanceAfter(await api.wallet.get().then((wallet) => wallet.balance).catch(() => null));
       }
+      if (created.payment_method === "gateway" && created.redirect_url) {
+        // Leaving for Midtrans: the order stays pending until the server hears back from the provider.
+        setRedirecting(true);
+        window.location.assign(created.redirect_url);
+        return;
+      }
       setOrder(created);
     } catch (err) {
       if (err instanceof ApiError && err.fields?.proof_asset_id) proofRef.current = null;
@@ -237,6 +250,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
             ? t.priceChanged
             : err instanceof ApiError && err.code === "order_pending"
               ? t.orderPending
+              : err instanceof ApiError && err.code === "gateway_error"
+                ? t.gatewayFailed
               : err instanceof ApiError && err.code === "insufficient_balance"
             ? t.insufficientBalance
             : errorText(err, t.submitFailed),
@@ -291,10 +306,11 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
             }}
             className="flex flex-col gap-5"
           >
-            <div className="grid grid-cols-2 gap-2">
+            <div className={cn("grid gap-2", gatewayOk ? "grid-cols-3" : "grid-cols-2")}>
               {(
                 [
                   { id: "manual", label: t.paymentMethodManual, icon: ShieldCheck },
+                  ...(gatewayOk ? [{ id: "gateway", label: t.paymentMethodGateway, icon: CreditCard } as const] : []),
                   { id: "wallet", label: t.paymentMethodWallet, icon: Wallet },
                 ] as const
               ).map((m) => (
@@ -377,6 +393,16 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
               </>
             )}
 
+            {method === "gateway" && (
+              <Card className="gap-3 p-5">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="size-4 text-accent" />
+                  <p className="text-sm font-semibold text-foreground">{t.paymentMethodGateway}</p>
+                </div>
+                <p className="text-xs text-muted">{t.gatewayDesc}</p>
+              </Card>
+            )}
+
             {method === "wallet" && (
               <Card className="gap-3 p-5">
                 <div className="flex items-center gap-2">
@@ -407,9 +433,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
               variant="primary"
               size="lg"
               fullWidth
-              isDisabled={submitting || (method === "manual" ? !file || !bank : balance === null || short)}
+              isDisabled={submitting || redirecting || (method === "manual" ? !file || !bank : method === "wallet" ? balance === null || short : false)}
             >
-              {submitting ? t.submitting : method === "manual" ? t.submitManual : t.submitWallet}
+              {submitting || redirecting ? t.submitting : method === "manual" ? t.submitManual : method === "gateway" ? t.submitGateway : t.submitWallet}
             </Button>
             <p className="text-center text-xs text-muted">
               {t.termsAgreementPrefix}{" "}

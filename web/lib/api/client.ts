@@ -157,6 +157,7 @@ export type OrderList = components["schemas"]["OrderList"];
 export type Enrollment = components["schemas"]["Enrollment"];
 export type EnrollmentList = components["schemas"]["EnrollmentList"];
 export type BankTransfer = components["schemas"]["BankTransfer"];
+export type PaymentException = components["schemas"]["PaymentException"];
 export type CheckoutBody = components["schemas"]["CheckoutRequest"];
 export type Topup = components["schemas"]["Topup"];
 export type TopupList = components["schemas"]["TopupList"];
@@ -271,6 +272,9 @@ const productPath = (id: string) => `/api/v1/products/${id}` as keyof paths;
 
 const adminOrderPath = (id: string) => `/api/v1/admin/orders/${id}` as keyof paths;
 
+const orderPath = (id: string) => `/api/v1/orders/${id}` as keyof paths;
+const topupPath = (id: string) => `/api/v1/topups/${id}` as keyof paths;
+const exceptionPath = (id: string) => `/api/v1/admin/payment-exceptions/${id}` as keyof paths;
 const adminTopupPath = (id: string) => `/api/v1/admin/topups/${id}` as keyof paths;
 
 const sessionPath = (id: string) => `/api/v1/my/tryout-sessions/${id}` as keyof paths;
@@ -503,6 +507,10 @@ export const api = {
       authed<OrderList>(`/api/v1/orders${queryOf(filters)}` as keyof paths),
     enrollments: () => authed<EnrollmentList>("/api/v1/enrollments"),
     bankTransfer: () => authed<BankTransfer>("/api/v1/payments/bank-transfer"),
+    /** Reading a pending gateway order also asks Midtrans for its state, so this is the page's poll. */
+    get: (id: string) => authed<Order>(orderPath(id)),
+    /** Resolves when Midtrans is configured; a 503 means the gateway method is not offered. */
+    gateway: () => authed<{ provider: "midtrans" }>("/api/v1/payments/gateway"),
   },
 
   /** Staff review of every order of the tenant. */
@@ -514,9 +522,18 @@ export const api = {
       mutate<Order>("POST", `${adminOrderPath(id)}/cancel` as keyof paths, { reason }),
   },
 
+  /** Staff resolution of a gateway payment held for review (D07): credit the wallet once or mark it refunded. */
+  paymentExceptions: {
+    credit: (id: string, reason: string) =>
+      mutate<PaymentException>("POST", `${exceptionPath(id)}/credit` as keyof paths, { reason }),
+    refund: (id: string, reason: string) =>
+      mutate<PaymentException>("POST", `${exceptionPath(id)}/refund` as keyof paths, { reason }),
+  },
+
   /** The signed-in student's own manual top-up requests; the list also carries the tenant minimum. */
   topups: {
     create: (body: TopupBody) => mutate<Topup>("POST", "/api/v1/topups", body),
+    get: (id: string) => authed<Topup>(topupPath(id)),
     list: (filters: Pick<TopupFilters, "limit" | "offset"> = {}) =>
       authed<TopupList>(`/api/v1/topups${queryOf(filters)}` as keyof paths),
   },

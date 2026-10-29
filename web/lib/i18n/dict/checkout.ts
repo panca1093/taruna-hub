@@ -57,6 +57,7 @@ const id = {
   alreadyOwned: "Kamu sudah memiliki tryout ini dan aksesnya masih aktif.",
   priceChanged: "Harga paket ini baru saja berubah. Periksa harga terbaru di ringkasan pesanan, lalu coba lagi.",
   orderPending: "Kamu masih punya pesanan untuk paket ini yang menunggu konfirmasi admin.",
+  gatewayFailed: "Midtrans tidak dapat dihubungi. Tekan tombol lagi untuk melanjutkan pesanan yang sama; jangan membuat pesanan baru.",
 };
 
 const en: typeof id = {
@@ -114,6 +115,7 @@ const en: typeof id = {
   alreadyOwned: "You already own this tryout and its access is still active.",
   priceChanged: "This package's price just changed. Check the new price in the order summary, then try again.",
   orderPending: "You already have an order for this package awaiting admin confirmation.",
+  gatewayFailed: "Midtrans could not be reached. Press the button again to continue the same order; do not create a new one.",
 };
 
 export function useCheckoutT() {
