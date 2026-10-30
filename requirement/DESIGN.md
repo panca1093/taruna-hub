@@ -106,6 +106,8 @@ Observed type scale at a 16px root:
 | Shell page title | 15px / inherited 1.5 | Inter 600, truncated |
 | Modal title / large button | 16px / 24px (`text-base`) | Modal 600; button 500 |
 | KPI value | 24px / 32px (`text-2xl`) | Geist 600, tight tracking |
+| Tryout question / options (exam runtime) | 18px (`text-lg`) question, 16px (`text-base`) options | Inter 400; larger than dashboard body on client request |
+| Kecermatan items (exam runtime) | Reference 20px (`text-xl`); soal 24px, 30px at `sm`; answer keys 24px | Geist Mono 800; images 28px / 36px |
 | Landing hero title | 36px / 40px; 48px / 48px at `sm` | Geist 600, tight tracking |
 
 Guidelines:

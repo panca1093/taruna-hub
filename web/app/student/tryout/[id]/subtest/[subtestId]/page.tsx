@@ -319,7 +319,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
               </span>
             </div>
 
-            <div className="text-[15px] leading-relaxed text-foreground">
+            <div className="text-lg leading-relaxed text-foreground">
               <LatexText text={question.content} />
             </div>
 
@@ -332,7 +332,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                       key={opt.id}
                       onClick={() => setAnswer(question.id, [opt.id])}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors",
+                        "flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left text-base transition-colors",
                         selected
                           ? "border-accent bg-accent-soft text-accent-soft-foreground"
                           : "border-border text-foreground hover:border-accent/40 hover:bg-surface-secondary",
@@ -359,7 +359,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                       key={opt.id}
                       onClick={() => toggleMulti(opt.id)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors",
+                        "flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left text-base transition-colors",
                         selected
                           ? "border-accent bg-accent-soft text-accent-soft-foreground"
                           : "border-border text-foreground hover:border-accent/40 hover:bg-surface-secondary",
@@ -385,7 +385,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                   maxLength={500}
                   onChange={(e) => setAnswer(question.id, [e.target.value])}
                   placeholder={t.answerPlaceholder}
-                  className="w-full rounded-lg border border-border bg-field px-4 py-3 text-sm text-field-foreground outline-none focus:border-accent"
+                  className="w-full rounded-lg border border-border bg-field px-4 py-3 text-base text-field-foreground outline-none focus:border-accent"
                 />
               )}
             </div>

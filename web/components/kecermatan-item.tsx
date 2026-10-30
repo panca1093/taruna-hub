@@ -7,7 +7,15 @@ import { cn } from "@/lib/cn";
 const TEXT_KINDS = new Set(["char", "number", "symbol"]);
 
 /** One reference item as a student sees it: text kinds read as one string, other kinds draw each element. */
-export function KecermatanItem({ elements, className }: { elements: KecermatanRuntimeElement[]; className?: string }) {
+export function KecermatanItem({
+  elements,
+  className,
+  elementClassName = "size-5 text-base",
+}: {
+  elements: KecermatanRuntimeElement[];
+  className?: string;
+  elementClassName?: string;
+}) {
   if (elements.every((element) => TEXT_KINDS.has(element.kind))) {
     const text = elements.map((element) => element.value).join(elements[0]?.kind === "symbol" ? " " : "");
     return <span className={cn("font-mono tracking-tight text-foreground", className)}>{text}</span>;
@@ -15,7 +23,7 @@ export function KecermatanItem({ elements, className }: { elements: KecermatanRu
   return (
     <span className={cn("inline-flex flex-wrap items-center justify-center gap-1", className)}>
       {elements.map((element, index) => (
-        <ItemElementView key={`${element.kind}:${element.value}:${index}`} element={{ ...element, asset_id: element.asset_id ?? undefined }} className="size-5 text-base" />
+        <ItemElementView key={`${element.kind}:${element.value}:${index}`} element={{ ...element, asset_id: element.asset_id ?? undefined }} className={elementClassName} />
       ))}
     </span>
   );
