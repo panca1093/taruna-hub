@@ -51,6 +51,17 @@ type programsResponse struct {
 	Programs []programResponse `json:"programs"`
 }
 
+type publicProgramResponse struct {
+	ID          uuid.UUID `json:"id"`
+	Code        string    `json:"code"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+}
+
+type publicProgramsResponse struct {
+	Programs []publicProgramResponse `json:"programs"`
+}
+
 type createProgramRequest struct {
 	Code        string                 `json:"code"`
 	Name        string                 `json:"name"`
@@ -98,6 +109,22 @@ func (h *Handler) ListPrograms(c echo.Context) error {
 	body := programsResponse{Programs: make([]programResponse, 0, len(trees))}
 	for _, tree := range trees {
 		body.Programs = append(body.Programs, programResponseOf(tree))
+	}
+	return c.JSON(http.StatusOK, body)
+}
+
+func (h *Handler) CatalogPrograms(c echo.Context) error {
+	scope, ok := hostScope(c)
+	if !ok {
+		return httpx.NotFound(productCatalogMissing)
+	}
+	programs, err := h.curriculum.PublicPrograms(c.Request().Context(), scope)
+	if err != nil {
+		return curriculumError(err)
+	}
+	body := publicProgramsResponse{Programs: make([]publicProgramResponse, 0, len(programs))}
+	for _, p := range programs {
+		body.Programs = append(body.Programs, publicProgramResponse{ID: p.ID, Code: p.Code, Name: p.Name, Description: p.Description})
 	}
 	return c.JSON(http.StatusOK, body)
 }

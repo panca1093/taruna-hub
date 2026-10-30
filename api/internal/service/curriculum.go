@@ -96,6 +96,19 @@ func (s *CurriculumService) List(ctx context.Context, scope HostScope, principal
 	return trees, nil
 }
 
+// PublicPrograms is what the landing lists to anonymous visitors: the programs alone, no subject tree.
+func (s *CurriculumService) PublicPrograms(ctx context.Context, scope HostScope) ([]model.Program, error) {
+	tenantID, err := publicTenant(scope)
+	if err != nil {
+		return nil, err
+	}
+	programs, err := s.repo.Programs(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("list public programs: %w", err)
+	}
+	return programs, nil
+}
+
 func (s *CurriculumService) Create(ctx context.Context, scope HostScope, principal model.Principal, input ProgramInput) (model.ProgramTree, error) {
 	tenantID, err := curriculumTenant(scope, principal)
 	if err != nil {

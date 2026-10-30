@@ -15,13 +15,9 @@ const id = {
   statScoreDiscussion: "skor & pembahasan",
 
   programsEyebrow: "Program Diklat Taruna Eduka",
-  programsHeading: "Berikut daftar diklat yang telah tersedia",
-  diklatPrograms: [
-    { title: "Diklat TNI", description: "Program AKMIL, Bintara TNI, Tamtama TNI, AAU, AAL, dan AAD." },
-    { title: "Diklat POLRI", description: "Program AKPOL, Bintara POLRI, Tamtama POLRI, dan SIPSS." },
-    { title: "Diklat Kedinasan", description: "Program kedinasan paling lengkap: STAN, IPDN, STMKG, STIN, dan lainnya." },
-  ],
+  programsHeading: "Berikut daftar program yang telah tersedia",
   diklatCta: "Daftar Sekarang →",
+  programsEmpty: "Program sedang disiapkan. Silakan cek lagi nanti.",
 
   valuePropsEyebrow: "Keunggulan kami",
   valuePropsHeading: "Satu aplikasi dengan banyak manfaat untuk siswa.",
@@ -102,12 +98,8 @@ const en: typeof id = {
 
   programsEyebrow: "Taruna Eduka Training Programs",
   programsHeading: "Here are the training programs currently available",
-  diklatPrograms: [
-    { title: "TNI Training", description: "AKMIL, TNI NCO, TNI Enlisted, AAU, AAL, and AAD programs." },
-    { title: "POLRI Training", description: "AKPOL, POLRI NCO, POLRI Enlisted, and SIPSS programs." },
-    { title: "Civil Service Training", description: "The most complete civil service programs: STAN, IPDN, STMKG, STIN, and more." },
-  ],
   diklatCta: "Register Now →",
+  programsEmpty: "Programs are being prepared. Please check back later.",
 
   valuePropsEyebrow: "Our advantages",
   valuePropsHeading: "One app, many benefits for students.",
