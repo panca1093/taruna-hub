@@ -62,6 +62,13 @@ func (r *CurriculumRepository) List(ctx context.Context, tenantID uuid.UUID) ([]
 	return trees, nil
 }
 
+func (r *CurriculumRepository) Programs(ctx context.Context, tenantID uuid.UUID) ([]model.Program, error) {
+	if tenantID == uuid.Nil {
+		return nil, ErrScopeRequired
+	}
+	return r.programs(ctx, r.db, tenantID)
+}
+
 // FindTreeTx is the locked read the service diffs a replace against; the lock serializes writers.
 func (r *CurriculumRepository) FindTreeTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, forUpdate bool) (model.ProgramTree, error) {
 	return r.findTree(ctx, tx, tenantID, id, forUpdate)

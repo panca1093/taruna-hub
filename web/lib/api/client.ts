@@ -26,6 +26,8 @@ export type ProductList = components["schemas"]["ProductList"];
 export type PublicProduct = components["schemas"]["PublicProduct"];
 export type PublicProductList = components["schemas"]["PublicProductList"];
 export type CatalogSummary = components["schemas"]["CatalogSummary"];
+export type PublicProgram = components["schemas"]["PublicProgram"];
+export type PublicProgramList = components["schemas"]["PublicProgramList"];
 export type Wallet = components["schemas"]["Wallet"];
 export type WalletEntry = components["schemas"]["WalletEntry"];
 export type WalletEntryList = components["schemas"]["WalletEntryList"];
@@ -481,6 +483,7 @@ export const api = {
       request<PublicProductList>(`/api/v1/catalog/products${queryOf(filters)}` as keyof paths),
     product: (id: string) => request<PublicProduct>(catalogProductPath(id)),
     summary: () => request<CatalogSummary>("/api/v1/catalog/summary"),
+    programs: () => request<PublicProgramList>("/api/v1/catalog/programs"),
   },
 
   /** The signed-in student's own wallet and ledger; staff routes live under `students`. */

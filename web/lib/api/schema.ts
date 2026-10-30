@@ -2000,6 +2000,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/programs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's programs for the landing page
+         * @description Unauthenticated and scoped to the configured tenant. Every program in its stored order, without
+         *     subjects or chapters; the same set `CatalogSummary.programs` counts.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The programs */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublicProgramList"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wallet": {
         parameters: {
             query?: never;
@@ -6547,6 +6588,16 @@ export interface components {
             programs: number;
             products: number;
             tryouts: number;
+        };
+        PublicProgram: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            description: string;
+        };
+        PublicProgramList: {
+            programs: components["schemas"]["PublicProgram"][];
         };
         Wallet: {
             /**

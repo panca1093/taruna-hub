@@ -138,6 +138,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.GET("/catalog/products", h.CatalogProducts, httpx.NoStore())
 	v1.GET("/catalog/products/:id", h.CatalogProduct, httpx.NoStore())
 	v1.GET("/catalog/summary", h.CatalogSummary, httpx.NoStore())
+	v1.GET("/catalog/programs", h.CatalogPrograms, httpx.NoStore())
 
 	// A wallet belongs to one student, so only that student reaches /wallet (D02: role-only).
 	v1.GET("/wallet", h.Wallet, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))

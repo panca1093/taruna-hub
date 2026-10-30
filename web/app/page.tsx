@@ -17,17 +17,11 @@ import {
 import { PublicNav } from "@/components/public-nav";
 import { HeroExamPreview } from "@/components/marketing/hero-exam-preview";
 import { LinkButton } from "@/components/ui/link-button";
-import { api, type CatalogSummary, type PublicProduct } from "@/lib/api/client";
+import { api, type CatalogSummary, type PublicProduct, type PublicProgram } from "@/lib/api/client";
 import { formatIDR } from "@/lib/format-money";
 import { useLandingT } from "@/lib/i18n/dict/landing";
 
 const valuePropIcons = [Sparkles, Timer, Award, FileDown, BarChart3, BadgePercent];
-
-const diklatMeta = [
-  { no: "01", href: "/catalog" },
-  { no: "02", href: "/catalog?program=AKPOL" },
-  { no: "03", href: "/catalog?program=CASN" },
-];
 
 const stepIcons = [ShoppingCart, ClipboardCheck, FileSearch];
 
@@ -35,6 +29,7 @@ export default function HomePage() {
   const t = useLandingT();
   const [featured, setFeatured] = useState<PublicProduct[]>([]);
   const [summary, setSummary] = useState<CatalogSummary | null>(null);
+  const [programs, setPrograms] = useState<PublicProgram[] | null>(null);
 
   // The landing reads only the public catalog; a failure leaves the numbers empty, never invented.
   useEffect(() => {
@@ -54,6 +49,14 @@ export default function HomePage() {
       })
       .catch(() => {
         if (!cancelled) setSummary(null);
+      });
+    api.catalog
+      .programs()
+      .then((list) => {
+        if (!cancelled) setPrograms(list.programs);
+      })
+      .catch(() => {
+        if (!cancelled) setPrograms([]);
       });
     return () => {
       cancelled = true;
@@ -103,29 +106,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Programs */}
-      <section id="program" className="mx-auto max-w-6xl px-5 py-16">
-        <p className="text-sm font-medium text-muted">{t.programsEyebrow}</p>
-        <h2 className="font-display mt-1 text-2xl font-semibold tracking-tight text-foreground">{t.programsHeading}</h2>
-        <div className="mt-8 grid gap-5 sm:grid-cols-3">
-          {diklatMeta.map((meta, i) => {
-            const copy = t.diklatPrograms[i];
-            return (
-              <Link key={meta.no} href={meta.href}>
-                <Card className="group h-full gap-3 p-5 transition-shadow hover:shadow-overlay">
-                  <span className="font-mono inline-flex size-10 items-center justify-center rounded-full bg-gradient-ring text-sm font-semibold text-white">
-                    {meta.no}
-                  </span>
-                  <p className="text-[15px] font-semibold text-foreground">{copy.title}</p>
-                  <p className="text-sm leading-relaxed text-muted">{copy.description}</p>
-                  <span className="mt-auto text-sm font-medium text-accent group-hover:underline">{t.diklatCta}</span>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
       {/* Value props */}
       <section className="bg-surface-secondary/60">
         <div className="mx-auto max-w-6xl px-5 py-16">
@@ -148,6 +128,30 @@ export default function HomePage() {
             })}
           </div>
         </div>
+      </section>
+
+      {/* Programs */}
+      <section id="program" className="mx-auto max-w-6xl px-5 py-16">
+        <p className="text-sm font-medium text-muted">{t.programsEyebrow}</p>
+        <h2 className="font-display mt-1 text-2xl font-semibold tracking-tight text-foreground">{t.programsHeading}</h2>
+        {programs?.length === 0 ? (
+          <p className="mt-8 text-sm text-muted">{t.programsEmpty}</p>
+        ) : (
+          <div className="mt-8 grid gap-5 sm:grid-cols-3">
+            {(programs ?? []).map((program, i) => (
+              <Link key={program.id} href={`/catalog?program=${encodeURIComponent(program.code)}`}>
+                <Card className="group h-full gap-3 p-5 transition-shadow hover:shadow-overlay">
+                  <span className="font-mono inline-flex size-10 items-center justify-center rounded-full bg-gradient-ring text-sm font-semibold text-white">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <p className="text-[15px] font-semibold text-foreground">{program.name}</p>
+                  {program.description && <p className="text-sm leading-relaxed text-muted">{program.description}</p>}
+                  <span className="mt-auto text-sm font-medium text-accent group-hover:underline">{t.diklatCta}</span>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Featured products */}

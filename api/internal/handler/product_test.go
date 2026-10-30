@@ -239,6 +239,7 @@ func TestProductResponsesAreNoStore(t *testing.T) {
 		{"catalog list", getWithToken(e, host, "/api/v1/catalog/products", "")},
 		{"catalog detail", getWithToken(e, host, "/api/v1/catalog/products/"+created.ID.String(), "")},
 		{"catalog summary", getWithToken(e, host, "/api/v1/catalog/summary", "")},
+		{"catalog programs", getWithToken(e, host, "/api/v1/catalog/programs", "")},
 	}
 	for _, tc := range cases {
 		if got := tc.rec.Header().Get("Cache-Control"); got != "no-store" {
@@ -384,7 +385,7 @@ func TestCatalogIsPublicAndTenantResolved(t *testing.T) {
 		{"missing tenant", f.host(f.missingSlug)},
 		{"inactive tenant", f.host(f.inactive.Slug)},
 	} {
-		for _, path := range []string{"/api/v1/catalog/products", "/api/v1/catalog/summary"} {
+		for _, path := range []string{"/api/v1/catalog/products", "/api/v1/catalog/summary", "/api/v1/catalog/programs"} {
 			rec := getWithToken(e, tc.host, path, "")
 			if rec.Code != http.StatusNotFound {
 				t.Errorf("%s %s: status = %d body = %s, want 404", tc.name, path, rec.Code, rec.Body.String())
@@ -513,5 +514,34 @@ func TestCatalogSummaryCountsOnlyVisible(t *testing.T) {
 	}
 	if summary.Tryouts != 2 {
 		t.Errorf("tryouts = %d, want the two published open tryouts and not the draft", summary.Tryouts)
+	}
+}
+
+func TestCatalogProgramsIsPublicAndFlat(t *testing.T) {
+	f := newAuthFixture(t, false)
+	e := f.echo(t)
+	tenant := f.active[0]
+	host := f.host(tenant.Slug)
+	admin := curriculumToken(t, f, tenant, model.RoleAdmin)
+
+	program := questionCurriculum(t, e, host, admin)
+
+	rec := getWithToken(e, host, "/api/v1/catalog/programs", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("anonymous programs: status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"subjects"`) {
+		t.Errorf("public programs carry the subject tree: %s", rec.Body.String())
+	}
+	var body publicProgramsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body %s is not a program list: %v", rec.Body.String(), err)
+	}
+	if len(body.Programs) != 1 {
+		t.Fatalf("programs = %d, want 1", len(body.Programs))
+	}
+	got := body.Programs[0]
+	if got.ID != program.ID || got.Code != program.Code || got.Name != program.Name || got.Description != program.Description {
+		t.Errorf("program = %+v, want the created %s", got, program.Code)
 	}
 }

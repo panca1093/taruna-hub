@@ -1523,6 +1523,23 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/catalog/programs:
+    get:
+      tags: [catalog]
+      summary: The tenant's programs for the landing page
+      description: |
+        Unauthenticated and scoped to the configured tenant. Every program in its stored order, without
+        subjects or chapters; the same set `CatalogSummary.programs` counts.
+      responses:
+        "200":
+          description: The programs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicProgramList"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/wallet:
     get:
       tags: [wallet]
@@ -5514,6 +5531,31 @@ components:
           type: integer
         tryouts:
           type: integer
+
+    PublicProgram:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, description]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+
+    PublicProgramList:
+      type: object
+      additionalProperties: false
+      required: [programs]
+      properties:
+        programs:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicProgram"
 
     Wallet:
       type: object
