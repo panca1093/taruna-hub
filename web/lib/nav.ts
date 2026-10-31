@@ -14,9 +14,7 @@ import {
   School,
   Settings,
   ShieldCheck,
-  User,
   Users,
-  Wallet,
 } from "lucide-react";
 import type { Role } from "./types";
 
@@ -25,36 +23,70 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  /** Match the href exactly instead of by prefix (dashboard roots). */
+  exact?: boolean;
+  /** Extra path prefixes that keep this item highlighted, e.g. the exam runtime under a hub. */
+  also?: string[];
+}
+
+export interface NavGroup {
+  id: string;
+  items: NavItem[];
 }
 
 export const studentNav: NavItem[] = [
-  { href: "/student", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/student", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/student/tryouts", label: "Tryout", icon: ClipboardList, also: ["/student/tryout", "/student/kecermatan"] },
   { href: "/catalog", label: "Katalog", icon: BookOpen },
-  { href: "/student/tryouts", label: "Tryout Saya", icon: ClipboardList },
-  { href: "/student/orders", label: "Riwayat Pesanan", icon: Receipt },
-  { href: "/student/wallet", label: "Saldo", icon: Wallet },
-  { href: "/student/profile", label: "Profil", icon: User },
 ];
 
-export const dashboardNav: NavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/programs", label: "Program", icon: School, adminOnly: true },
-  { href: "/admin/questions", label: "Bank Soal", icon: FileQuestion },
-  { href: "/admin/tryouts", label: "Tryout", icon: ClipboardList },
-  { href: "/admin/kecermatan", label: "Tes Kecermatan", icon: Gauge },
-  { href: "/admin/item-packages", label: "Paket Item", icon: Shapes },
-  { href: "/admin/products", label: "Produk", icon: Package },
-  { href: "/admin/orders", label: "Pesanan", icon: BarChart3 },
-  { href: "/admin/topups", label: "Top-up", icon: Banknote },
-  { href: "/admin/students", label: "Siswa", icon: Users },
-  { href: "/admin/results", label: "Hasil", icon: BarChart3 },
-  { href: "/admin/kecermatan-results", label: "Hasil Kecermatan", icon: BarChart3 },
-  { href: "/admin/monitoring", label: "Monitoring", icon: Activity },
-  { href: "/admin/users", label: "Akun Pengguna", icon: ShieldCheck, adminOnly: true },
-  { href: "/admin/settings", label: "Pengaturan", icon: Settings, adminOnly: true },
+// Group ids double as dictionary keys ("group:<id>") in lib/i18n/dict/nav.ts.
+const adminGroups: NavGroup[] = [
+  { id: "overview", items: [{ href: "/admin", label: "Ringkasan", icon: LayoutDashboard, exact: true }] },
+  {
+    id: "operations",
+    items: [
+      { href: "/admin/monitoring", label: "Monitoring", icon: Activity },
+      { href: "/admin/students", label: "Siswa", icon: Users },
+      { href: "/admin/results", label: "Hasil", icon: BarChart3 },
+      { href: "/admin/kecermatan-results", label: "Hasil Kecermatan", icon: BarChart3 },
+    ],
+  },
+  {
+    id: "content",
+    items: [
+      { href: "/admin/tryouts", label: "Tryout", icon: ClipboardList },
+      { href: "/admin/kecermatan", label: "Tes Kecermatan", icon: Gauge },
+      { href: "/admin/item-packages", label: "Paket Item", icon: Shapes },
+      { href: "/admin/questions", label: "Bank Soal", icon: FileQuestion },
+      { href: "/admin/products", label: "Produk", icon: Package },
+      { href: "/admin/programs", label: "Program", icon: School, adminOnly: true },
+    ],
+  },
+  {
+    id: "finance",
+    items: [
+      { href: "/admin/orders", label: "Pesanan", icon: Receipt },
+      { href: "/admin/topups", label: "Top-up", icon: Banknote },
+    ],
+  },
+  {
+    id: "system",
+    items: [
+      { href: "/admin/users", label: "Akun Pengguna", icon: ShieldCheck, adminOnly: true },
+      { href: "/admin/settings", label: "Pengaturan", icon: Settings, adminOnly: true },
+    ],
+  },
 ];
 
-export const navForRole = (role: Role): NavItem[] => {
-  if (role === "student") return studentNav;
-  return dashboardNav.filter((item) => !item.adminOnly || role === "admin");
+export const navGroupsForRole = (role: Role): NavGroup[] => {
+  if (role === "student") return [{ id: "student", items: studentNav }];
+  return adminGroups
+    .map((group) => ({ ...group, items: group.items.filter((item) => !item.adminOnly || role === "admin") }))
+    .filter((group) => group.items.length > 0);
 };
+
+export function isNavActive(item: NavItem, pathname: string): boolean {
+  if (item.exact) return pathname === item.href;
+  return [item.href, ...(item.also ?? [])].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
