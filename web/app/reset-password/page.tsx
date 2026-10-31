@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Button, Card } from "@heroui/react";
-import { CheckCircle2 } from "lucide-react";
+import { Button, Spinner } from "@heroui/react";
+import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 import { AuthLayout } from "@/components/auth-layout";
-import { TextInput } from "@/components/ui/form";
+import { PasswordInput } from "@/components/password-input";
 import { ApiError, api, errorText } from "@/lib/api/client";
 import { useAuthT } from "@/lib/i18n/dict/auth";
 
@@ -54,55 +54,33 @@ export default function ResetPasswordPage() {
 
   return (
     <AuthLayout>
-          {done ? (
-            <Card className="items-center gap-3 p-6 text-center">
-              <CheckCircle2 className="size-8 text-accent" />
-              <h1 className="font-display text-xl font-semibold tracking-tight text-foreground">{t.resetDoneTitle}</h1>
-              <p className="text-sm text-muted">{t.resetDoneDescription}</p>
-              <Link href="/login" className="mt-2 text-sm font-medium text-accent hover:underline">
-                {t.backToLogin}
-              </Link>
-            </Card>
-          ) : (
-            <>
-              <h1 className="auth-title">{t.resetTitle}</h1>
-              <p className="auth-subtitle">{t.resetSubtitle}</p>
-
-              <div className="mt-8">
-                <form onSubmit={handleSubmit} className="auth-fields">
-                  <TextInput
-                    label={t.newPasswordLabel}
-                    type="password"
-                    placeholder={t.registerPasswordPlaceholder}
-                    required
-                    error={fields.password}
-                    value={password}
-                    onChange={edit(setPassword)}
-                  />
-                  <TextInput
-                    label={t.confirmPasswordLabel}
-                    type="password"
-                    placeholder={t.passwordPlaceholder}
-                    required
-                    error={fields.confirm}
-                    value={confirm}
-                    onChange={edit(setConfirm)}
-                  />
-                  {error && (
-                    <p role="alert" className="text-sm text-danger">
-                      {error}{" "}
-                      <Link href="/forgot-password" className="font-medium underline">
-                        {t.requestNewLink}
-                      </Link>
-                    </p>
-                  )}
-                  <Button type="submit" variant="primary" fullWidth className="auth-submit" isDisabled={pending}>
-                    {t.submitNewPassword}
-                  </Button>
-                </form>
-              </div>
-            </>
-          )}
+      {done ? (
+        <div className="auth-done">
+          <span aria-hidden="true"><CheckCircle2 className="size-6" /></span>
+          <h1 className="auth-title">{t.resetDoneTitle}</h1>
+          <p>{t.resetDoneDescription}</p>
+          <Link href="/login">{t.backToLogin}</Link>
+        </div>
+      ) : (
+        <>
+          <Link href="/login" className="auth-back"><ArrowLeft className="size-4" />{t.backToLogin}</Link>
+          <h1 className="auth-title">{t.resetTitle}</h1>
+          <p className="auth-subtitle">{t.resetSubtitle}</p>
+          <form onSubmit={handleSubmit} className="auth-fields" aria-busy={pending}>
+            <PasswordInput label={t.newPasswordLabel} name="new-password" autoComplete="new-password" placeholder={t.registerPasswordPlaceholder} required error={fields.password} value={password} onChange={edit(setPassword)} />
+            <PasswordInput label={t.confirmPasswordLabel} name="confirm-password" autoComplete="new-password" placeholder={t.passwordPlaceholder} required error={fields.confirm} value={confirm} onChange={edit(setConfirm)} />
+            {error && (
+              <p role="alert" className="auth-error">
+                {error}{" "}
+                <Link href="/forgot-password" className="font-medium underline">{t.requestNewLink}</Link>
+              </p>
+            )}
+            <Button type="submit" variant="primary" fullWidth className="auth-submit" isDisabled={pending}>
+              {pending && <Spinner size="sm" />}{t.submitNewPassword}{!pending && <ArrowRight className="size-4" />}
+            </Button>
+          </form>
+        </>
+      )}
     </AuthLayout>
   );
 }
