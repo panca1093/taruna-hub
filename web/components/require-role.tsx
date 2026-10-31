@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
 import { ShieldAlert, WifiOff } from "lucide-react";
 import { AppShell } from "./app-shell";
 import { EmptyState } from "./empty-state";
+import { safeReturnPath, withReturn } from "@/lib/return-intent";
 import { useSession } from "@/lib/session-context";
 import { useRequireRoleT } from "@/lib/i18n/dict/require-role";
 import type { Role } from "@/lib/types";
@@ -23,12 +24,16 @@ export function RequireRole({
 }) {
   const { status, role, retry } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const t = useRequireRoleT();
   const staffOnly = !roles.includes("student");
 
   useEffect(() => {
-    if (status === "anonymous") router.replace(staffOnly ? "/portal" : "/login");
-  }, [status, staffOnly, router]);
+    if (status !== "anonymous") return;
+    if (staffOnly) return router.replace("/portal");
+    const here = safeReturnPath(pathname + window.location.search, "student");
+    router.replace(withReturn("/login", here));
+  }, [status, staffOnly, router, pathname]);
 
   if (status === "unavailable") {
     return (
