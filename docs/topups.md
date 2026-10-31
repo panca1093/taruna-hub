@@ -63,9 +63,13 @@ the request code.
 
 ## Web
 
-- Student `/student/wallet`: a "Top up saldo" button on the balance card opens a modal (amount, destination
-  account from `/payments/bank-transfer`, proof upload) and a "Permintaan top up" list shows status and
-  rejection reason. The proof upload and the retry key follow checkout: one key per amount/proof choice.
+- Student `/student/wallet` keeps the balance, ledger and "Permintaan top up" list; each top-up row opens its
+  status page. "Top up saldo" (also "Isi saldo" in the header `WalletPopover`) navigates to
+  `/student/wallet/topup`: amount (minimum from the server), method (manual, or gateway when available),
+  destination account from `/payments/bank-transfer` and proof upload. The proof is uploaded before create and
+  one key covers one amount/method/proof choice, so a retry or double submit makes one top-up. After create the
+  page replaces itself with `/student/wallet/topups/:id`, which shows pending/approved/rejected (with reason),
+  continues a gateway payment via `redirect_url`, cancels a pending gateway top-up, and polls while pending.
 - Admin `/admin/topups` (Admin and Operator): the Orders page pattern, with a status filter and a detail modal
   with the proof, Approve, and Reject with a reason.
 - Admin `/admin/settings`: the minimum top-up field next to the scoring weights.

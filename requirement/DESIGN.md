@@ -200,7 +200,7 @@ Reuse [AppShell](../web/components/app-shell.tsx) for authenticated operational 
 | Sidebar logo row | 56px high; 14px horizontal inset |
 | Sidebar navigation | 8px container inset; items 10px horizontal / 8px vertical; 18px icons; inactive `sidebar-muted`, hover/active `sidebar-active` |
 | Selected navigation | `sidebar-active` background, `sidebar-foreground` text, 2px `sidebar-accent` left indicator, `aria-current="page"` |
-| Student navigation | Exactly three items: Dashboard `/student`, Tryout `/student/tryouts` (also active on `/student/tryout/*` and `/student/kecermatan/*`), Katalog `/catalog` |
+| Student navigation | Exactly three items: Dashboard `/student`, Tryout `/student/tryouts` (also active on `/student/tryout/*` and `/student/kecermatan/*`), Katalog `/catalog`, as a flat list with no group header or tree connector |
 | Student mobile | No drawer. A fixed bottom bar (`sidebar` surface, 56px) shows the same three destinations; main gets 96px bottom padding below `lg` |
 | Admin navigation | Groups: Ringkasan (single link), Operasional (Monitoring, Siswa, Hasil, Hasil Kecermatan), Konten (Tryout, Tes Kecermatan, Paket Item, Bank Soal, Produk, Program), Keuangan (Pesanan, Top-up), Sistem (Akun Pengguna, Pengaturan). Role guards (`adminOnly`) are unchanged; a group with no visible child is hidden |
 | Admin groups | Collapsible header button (`aria-expanded`, `aria-controls`); the group holding the active page opens automatically on navigation; the user may close it afterwards |
@@ -417,6 +417,31 @@ The illustration reuses `CountdownRing` decoratively. Its 224px region contains 
 Registration opens `/verify-email` after the server establishes the session. The code field is one accessible numeric six-digit input with paste/autofill support. Wrong/expired codes, pending verification, resend errors and session restoration are distinct from success. Verification remains optional (D01): skip opens `/student`, where a non-blocking reminder links back to verification. No prototype codes or simulated success belong in the application.
 
 The student overview reuses `AppShell` at the full available width beside the sidebar, without a centered maximum-width cap; retain the shell's 16px mobile and 24px desktop horizontal padding. Order, with 24px separation: heading row (greeting, "Lihat katalog" outline button); two large practice cards (Tryout on `peach`, Tes kecermatan on `accent-soft`, 24/32px padding, 3xl radius, each with one primary action; the Kecermatan card shows the server's `attempts_remaining` for the featured test); one compact stats strip (owned tryouts, Kecermatan quota summed from the tests list, completed tryouts, average score) divided by `separator`; then a two-thirds / one-third row with "Latihan saya" (owned tryouts with access end, Kecermatan tests with available attempts) and "Hasil terakhir" (latest completed tryout scores plus the note that tryout and Kecermatan results are separate). Module grids have 20px gaps. A `null` average renders "—"; `0` renders as a real score. Balance is not on the dashboard; it lives behind the header wallet trigger. New accounts show the promo variants of both cards, real empty states for both lists and the three-step guide; the shell-level `EmailVerifyBanner` carries the unverified reminder inside the same content boundary. Login and register both land on this page, so geometry is identical and only data differs. Loading uses placeholders that mirror the layout (never zeros), errors offer retry, and data is keyed to the signed-in user so account switches never show stale values. `StatCard compact` is unchanged and unused here.
+
+### 7.4b Student workspace flows
+
+Built 2026-10-31 from the [workspace handoff](../docs/handoffs/2026-10-31-student-workspace/HANDOFF.md). The prototype there is a visual reference only.
+
+- **Return intent.** A protected student page sends an anonymous user to `/login?next=<path>`. `next` is carried through register and verify-email. [`lib/return-intent.ts`](../web/lib/return-intent.ts) accepts only same-origin paths under `/student`, `/checkout` or `/catalog`, checked against the role of the user who signed in. Staff always land on their home.
+- **Practice hub.** `/student/tryouts` has two tabs, Tryout and Tes kecermatan. They use `role="tablist"`, an accent underline and a count pill, and the tab is local state rather than part of the URL.
+- **Readiness.** A tryout subtest starts from `/subtest/:id/start` and a Kecermatan test from its `/attempt` step. Each is a full page with the rules and a required "siap" checkbox. Submit confirmation and the next-subtest transition are full-page states, not dialogs, and the timer stays visible.
+- **Exam frame.** Show the question first and the "Navigasi soal" card beside it; below `lg` the navigator stacks under the question.
+  - The timer is a `font-mono` pill with `role="timer"`, on `accent-soft`. It switches to `danger-soft` near the deadline.
+  - Before the server clock syncs it shows `--:--`, never a placeholder duration.
+- **Save state.** An answer reads as saved only after the server ACK.
+  - Pending or offline answers say they are not yet saved, with an offline banner (`warning-soft`, `role="alert"`).
+  - Kecermatan answers are write-once. When retries are exhausted, a persistent banner offers a manual resend. On a 409 the server's value wins and the page refetches.
+- **Attempt addressing.** Tryout and Kecermatan results, and tryout review, are addressed by `?attempt=<session_id>`.
+  - A foreign or unknown id shows an unavailable state, and an unfinished attempt a not-ready state.
+  - Held explanations show a held state, and keys are never requested before `explanations_released`.
+- **Payment method selector.** A radiogroup of full-width rows: radio dot, icon, title and one-line description. The selected row uses `border-accent bg-accent-soft`. An unavailable method is disabled with an explanation, or not rendered when the gateway reports 503.
+- **Order and top-up status pages.** `/student/orders/:id` and `/student/wallet/topups/:id` share one layout.
+  - A status banner (soft semantic tint, icon, title and one sentence) sits above the detail and summary cards.
+  - Held payment exceptions show a `warning-soft` notice with no refund promise. Access actions appear only for the server's final status.
+  - Pending entities poll every 5s and stop on unmount, and every pending page has a manual refresh.
+- **Wallet.** The header trigger opens `WalletPopover`, a modal showing the exact balance, recent entries and links. Top-up never happens inside it: "Isi saldo" navigates to `/student/wallet/topup`, which replaces itself with the status page after creation.
+  - Amounts are whole-rupiah digit strings, and the minimum always comes from the server.
+- **Idempotency in the UI.** Keep one key per logical purchase or top-up, replaced only when the payload changes or after a definite failure. An unknown create outcome locks the inputs and retries with the same key.
 
 ### 7.5 Specify data states before connecting the API
 

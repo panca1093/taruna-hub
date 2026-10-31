@@ -109,8 +109,8 @@ function NavLinks({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?:
   return (
     <nav aria-label={shellT.mainNavigation} className="flex flex-col gap-1 px-2">
       {groups.map((group, index) => {
-        const single = group.items.length === 1;
-        if (collapsed || single) {
+        const flat = group.items.length === 1 || role === "student";
+        if (collapsed || flat) {
           return (
             <div key={group.id} className={cn("flex flex-col gap-0.5", collapsed && index > 0 && "mt-1 border-t border-sidebar-border pt-1")}>
               {group.items.map((item) => (
