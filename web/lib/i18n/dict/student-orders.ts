@@ -21,6 +21,7 @@ const id = {
   loadMore: "Muat lebih banyak",
   loadingMore: "Memuat…",
   cancelOrder: "Batalkan",
+  heldBadge: "Pembayaran ditinjau",
   cancelFailed: "Pesanan tidak bisa dibatalkan",
   paymentModeLabel: {
     gateway: "Gateway",
@@ -47,6 +48,7 @@ const en: typeof id = {
   loadMore: "Load more",
   loadingMore: "Loading…",
   cancelOrder: "Cancel",
+  heldBadge: "Payment under review",
   cancelFailed: "The order could not be cancelled",
   paymentModeLabel: {
     gateway: "Gateway",

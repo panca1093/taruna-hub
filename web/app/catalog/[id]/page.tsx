@@ -193,7 +193,7 @@ function ProductDetail({ product }: { product: PublicProduct }) {
         </div>
 
         <div className="lg:sticky lg:top-20 lg:h-fit">
-          <Card className="gap-4 p-5">
+          <Card className="gap-4 rounded-2xl p-5">
             <div className="flex items-baseline gap-2">
               <span className="font-display text-2xl font-semibold text-foreground">{formatIDR(product.price)}</span>
               {product.original_price && (

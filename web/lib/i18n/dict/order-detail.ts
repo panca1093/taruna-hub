@@ -1,0 +1,128 @@
+"use client";
+
+import { useLocale } from "@/lib/i18n/locale-context";
+
+const id = {
+  title: "Detail pesanan",
+  crumbOrders: "Riwayat pesanan",
+  loading: "Memuat pesanan…",
+  notFoundTitle: "Pesanan tidak ditemukan",
+  notFoundDescription: "Pesanan ini tidak ada di akunmu.",
+  loadErrorTitle: "Pesanan gagal dimuat",
+  loadErrorDescription: "Periksa koneksi lalu coba lagi.",
+  retry: "Coba lagi",
+  backToOrders: "Riwayat pesanan",
+  refresh: "Periksa status",
+  refreshing: "Memeriksa…",
+  refreshFailed: "Status terbaru belum bisa diambil. Yang tampil adalah data terakhir yang berhasil dimuat.",
+  pendingManualTitle: "Menunggu verifikasi pembayaran",
+  pendingManualBody: "Bukti transfermu sudah kami terima. Admin akan memeriksanya; akses terbuka setelah pesanan terkonfirmasi.",
+  pendingGatewayTitle: "Menunggu pembayaran",
+  pendingGatewayBody:
+    "Selesaikan pembayaran di halaman Midtrans. Status di sini berubah setelah server kami menerima konfirmasi dari penyedia pembayaran.",
+  pendingGatewayNoLink: "Halaman pembayaran belum tersedia. Periksa status sebentar lagi; jika tetap kosong, batalkan pesanan lalu buat ulang.",
+  confirmedTitle: "Pembayaran terkonfirmasi",
+  confirmedBodyTryout: "Aksesmu sudah terbuka.",
+  confirmedBodyKecermatan: (n: number) => `${n} kesempatan mengerjakan sudah ditambahkan ke akunmu.`,
+  cancelledTitle: "Pesanan dibatalkan",
+  cancelledBody: "Pesanan ini tidak membuka akses.",
+  cancelReason: (reason: string) => `Alasan: ${reason}`,
+  heldTitle: "Pembayaran sedang ditinjau",
+  held: {
+    late_success: (amount: string) =>
+      `Pembayaran ${amount} diterima setelah pesanan ini dibatalkan atau kedaluwarsa. Admin sedang meninjaunya; akses tidak dibuka otomatis.`,
+    amount_mismatch: (amount: string) =>
+      `Jumlah yang diterima (${amount}) berbeda dari tagihan. Admin sedang meninjaunya; akses belum dibuka.`,
+    unexpected_state: (amount: string) =>
+      `Pembayaran ${amount} diterima untuk pesanan yang sudah diproses dengan cara lain. Admin sedang meninjaunya.`,
+  },
+  heldContact: "Hubungi admin bila kamu butuh informasi lebih lanjut.",
+  continuePayment: "Lanjutkan pembayaran",
+  cancelOrder: "Batalkan pesanan",
+  cancelConfirmTitle: "Batalkan pesanan ini?",
+  cancelConfirmBody: "Pesanan akan dibatalkan. Jika pembayaran ternyata sudah masuk, server akan menolak pembatalan.",
+  cancelConfirmYes: "Ya, batalkan",
+  cancelConfirmNo: "Tidak",
+  cancelling: "Membatalkan…",
+  cancelFailed: "Pesanan tidak bisa dibatalkan",
+  openKecermatan: "Buka tes kecermatan",
+  openTryouts: "Buka tryout saya",
+  backToCatalog: "Kembali ke katalog",
+  summaryCode: "Kode pesanan",
+  summaryProduct: "Produk",
+  summaryAmount: "Nominal",
+  summaryMethod: "Metode",
+  summaryStatus: "Status pesanan",
+  summaryCreated: "Dibuat",
+  summaryConfirmed: "Dikonfirmasi",
+  summaryCancelled: "Dibatalkan",
+  itemsTitle: (n: number) => `${n} tryout dalam pesanan`,
+  attempts: (n: number) => `${n} kesempatan mengerjakan`,
+  proofSent: "Bukti transfer terkirim",
+  methodLabel: { manual: "Transfer manual", wallet: "Saldo", gateway: "Pembayaran online" } as Record<string, string>,
+};
+
+const en: typeof id = {
+  title: "Order details",
+  crumbOrders: "Order history",
+  loading: "Loading order…",
+  notFoundTitle: "Order not found",
+  notFoundDescription: "This order is not in your account.",
+  loadErrorTitle: "The order could not be loaded",
+  loadErrorDescription: "Check your connection and try again.",
+  retry: "Try again",
+  backToOrders: "Order history",
+  refresh: "Check status",
+  refreshing: "Checking…",
+  refreshFailed: "The latest status could not be fetched. What you see is the last data that loaded.",
+  pendingManualTitle: "Waiting for payment verification",
+  pendingManualBody: "We received your transfer proof. An admin will review it; access opens once the order is confirmed.",
+  pendingGatewayTitle: "Waiting for payment",
+  pendingGatewayBody:
+    "Finish paying on the Midtrans page. The status here changes once our server receives confirmation from the payment provider.",
+  pendingGatewayNoLink: "The payment page is not available yet. Check the status again shortly; if it stays empty, cancel the order and create a new one.",
+  confirmedTitle: "Payment confirmed",
+  confirmedBodyTryout: "Your access is open.",
+  confirmedBodyKecermatan: (n: number) => `${n} attempts have been added to your account.`,
+  cancelledTitle: "Order cancelled",
+  cancelledBody: "This order does not open any access.",
+  cancelReason: (reason: string) => `Reason: ${reason}`,
+  heldTitle: "Payment under review",
+  held: {
+    late_success: (amount: string) =>
+      `A payment of ${amount} arrived after this order was cancelled or expired. An admin is reviewing it; access is not opened automatically.`,
+    amount_mismatch: (amount: string) =>
+      `The amount received (${amount}) differs from the invoice. An admin is reviewing it; access is not open yet.`,
+    unexpected_state: (amount: string) =>
+      `A payment of ${amount} arrived for an order that was already handled another way. An admin is reviewing it.`,
+  },
+  heldContact: "Contact an admin if you need more information.",
+  continuePayment: "Continue payment",
+  cancelOrder: "Cancel order",
+  cancelConfirmTitle: "Cancel this order?",
+  cancelConfirmBody: "The order will be cancelled. If a payment has already arrived, the server will refuse the cancellation.",
+  cancelConfirmYes: "Yes, cancel",
+  cancelConfirmNo: "No",
+  cancelling: "Cancelling…",
+  cancelFailed: "The order could not be cancelled",
+  openKecermatan: "Open the kecermatan test",
+  openTryouts: "Open my tryouts",
+  backToCatalog: "Back to the catalog",
+  summaryCode: "Order code",
+  summaryProduct: "Product",
+  summaryAmount: "Amount",
+  summaryMethod: "Method",
+  summaryStatus: "Order status",
+  summaryCreated: "Created",
+  summaryConfirmed: "Confirmed",
+  summaryCancelled: "Cancelled",
+  itemsTitle: (n: number) => `${n} tryouts in this order`,
+  attempts: (n: number) => `${n} attempts`,
+  proofSent: "Transfer proof sent",
+  methodLabel: { manual: "Manual transfer", wallet: "Balance", gateway: "Online payment" } as Record<string, string>,
+};
+
+export function useOrderDetailT() {
+  const { locale } = useLocale();
+  return locale === "en" ? en : id;
+}
