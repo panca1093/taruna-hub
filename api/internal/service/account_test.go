@@ -824,3 +824,144 @@ func TestLogoutWithTheReplacedTokenEndsTheSession(t *testing.T) {
 		t.Errorf("refresh after logout with the replaced token: err = %v, want ErrUnauthenticated", err)
 	}
 }
+
+func wantInputReason(t *testing.T, name string, err error, field, reason string) {
+	t.Helper()
+	var input *InputError
+	if !errors.As(err, &input) || input.Fields[field] != reason {
+		t.Errorf("%s: err = %v, want an InputError with %s = %s", name, err, field, reason)
+	}
+}
+
+func TestUpdateProfileTrimsNormalizesAndClearsPhone(t *testing.T) {
+	h := newAccountHarness(t)
+	tenant := h.tenant()
+	scope := h.scope(tenant)
+	ctx := context.Background()
+	tokens := h.register(scope, uniqueEmail("profile"), "")
+	p := h.principal(scope, tokens)
+
+	for _, name := range []string{"", "   ", strings.Repeat("a", maxNameRunes+1)} {
+		_, err := h.account.UpdateProfile(ctx, scope, p, name, "")
+		wantInputReason(t, fmt.Sprintf("name %q", name), err, "name", ReasonInvalid)
+	}
+	_, err := h.account.UpdateProfile(ctx, scope, p, "Budi", "12")
+	wantInputReason(t, "bad phone", err, "phone", ReasonInvalid)
+
+	phone := uniqueLocalPhone()
+	got, err := h.account.UpdateProfile(ctx, scope, p, "  Budi Baru ", phone[:4]+"-"+phone[4:])
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got.Name != "Budi Baru" || got.Phone == nil || *got.Phone != "+62"+phone[1:] || got.SessionID != p.SessionID {
+		t.Errorf("updated principal = %+v, want trimmed name, E.164 phone and the same session", got)
+	}
+	if live := h.principal(scope, tokens); live.Name != "Budi Baru" {
+		t.Errorf("live principal name = %q, want the new name", live.Name)
+	}
+
+	cleared, err := h.account.UpdateProfile(ctx, scope, p, "Budi Baru", "  ")
+	if err != nil || cleared.Phone != nil {
+		t.Errorf("clearing the phone of an account with an email: phone = %v, err = %v; want nil, nil", cleared.Phone, err)
+	}
+}
+
+func TestUpdateProfileCannotClearTheOnlyIdentifier(t *testing.T) {
+	h := newAccountHarness(t)
+	tenant := h.tenant()
+	scope := h.scope(tenant)
+	phone := "+62" + uniqueLocalPhone()[1:]
+	user, err := repository.NewUserRepository(h.pool).Create(context.Background(), model.User{
+		TenantID: &tenant.ID, Name: "Phone Only", Phone: &phone, PasswordHash: h.hashed(authPassword), Role: model.RoleStudent,
+	})
+	if err != nil {
+		t.Fatalf("create phone-only user: %v", err)
+	}
+	h.mu.Lock()
+	h.ownedUsr = append(h.ownedUsr, user.ID)
+	h.mu.Unlock()
+	p := h.principal(scope, h.login(scope, phone, authPassword))
+
+	_, err = h.account.UpdateProfile(context.Background(), scope, p, "Phone Only", "")
+	wantInputReason(t, "clearing the only identifier", err, "phone", ReasonPhoneRequired)
+}
+
+func TestUpdateProfilePhoneIsUniquePerTenant(t *testing.T) {
+	h := newAccountHarness(t)
+	tenant, other := h.tenant(), h.tenant()
+	ctx := context.Background()
+	phone := uniqueLocalPhone()
+	h.register(h.scope(tenant), uniqueEmail("holder"), phone)
+	mine := h.principal(h.scope(tenant), h.register(h.scope(tenant), uniqueEmail("mine"), ""))
+
+	if _, err := h.account.UpdateProfile(ctx, h.scope(tenant), mine, "Budi", phone); !errors.Is(err, ErrPhoneTaken) {
+		t.Errorf("a phone another account holds: err = %v, want ErrPhoneTaken", err)
+	}
+	owner := h.principal(h.scope(tenant), h.login(h.scope(tenant), "+62"+phone[1:], authPassword))
+	if _, err := h.account.UpdateProfile(ctx, h.scope(tenant), owner, "Budi Lagi", phone); err != nil {
+		t.Errorf("saving the phone the account already holds: err = %v, want nil", err)
+	}
+	foreign := h.principal(h.scope(other), h.register(h.scope(other), uniqueEmail("foreign"), ""))
+	if _, err := h.account.UpdateProfile(ctx, h.scope(other), foreign, "Budi", phone); err != nil {
+		t.Errorf("the same phone in another tenant: err = %v, want nil", err)
+	}
+}
+
+func TestChangePasswordRevokesOtherSessionsButKeepsTheCurrentOne(t *testing.T) {
+	h := newAccountHarness(t)
+	tenant := h.tenant()
+	scope := h.scope(tenant)
+	ctx := context.Background()
+	user := h.user(&tenant.ID, model.RoleStudent, authPassword)
+	current := h.login(scope, *user.Email, authPassword)
+	other := h.login(scope, *user.Email, authPassword)
+	p := h.principal(scope, current)
+
+	wantInputReason(t, "wrong current", h.account.ChangePassword(ctx, scope, p, "not-the-password", "brand-new-horse"), "current_password", ReasonWrongPassword)
+	wantInputReason(t, "weak new", h.account.ChangePassword(ctx, scope, p, authPassword, "short"), "new_password", ReasonPassword)
+	if _, err := h.authenticate(scope, other.AccessToken); err != nil {
+		t.Fatalf("a rejected change revoked a session: %v", err)
+	}
+
+	if err := h.account.ChangePassword(ctx, scope, p, authPassword, "brand-new-horse"); err != nil {
+		t.Fatalf("change: %v", err)
+	}
+	if _, err := h.authenticate(scope, current.AccessToken); err != nil {
+		t.Errorf("the caller's own session after the change: %v, want it alive", err)
+	}
+	if _, err := h.auth.Refresh(ctx, scope, current.RefreshToken); err != nil {
+		t.Errorf("the caller's own refresh token after the change: %v, want it to work", err)
+	}
+	if _, err := h.authenticate(scope, other.AccessToken); !errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("another session's access token after the change: err = %v, want ErrUnauthenticated", err)
+	}
+	if _, err := h.auth.Refresh(ctx, scope, other.RefreshToken); !errors.Is(err, ErrUnauthenticated) {
+		t.Errorf("another session's refresh token after the change: err = %v, want ErrUnauthenticated", err)
+	}
+	if _, err := h.auth.Login(ctx, scope, *user.Email, authPassword); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("login with the old password: err = %v, want ErrInvalidCredentials", err)
+	}
+	h.login(scope, *user.Email, "brand-new-horse")
+
+	var verified *time.Time
+	if err := h.pool.QueryRow(ctx, `SELECT email_verified_at FROM users WHERE id = $1`, user.ID).Scan(&verified); err != nil || verified != nil {
+		t.Errorf("email_verified_at after a password change = %v, %v; want it untouched (nil)", verified, err)
+	}
+}
+
+func TestChangePasswordIsThrottled(t *testing.T) {
+	h := newAccountHarness(t)
+	tenant := h.tenant()
+	scope := h.scope(tenant)
+	user := h.user(&tenant.ID, model.RoleStudent, authPassword)
+	p := h.principal(scope, h.login(scope, *user.Email, authPassword))
+
+	var limited *ThrottleError
+	for range loginThrottle.limit + 1 {
+		err := h.account.ChangePassword(context.Background(), scope, p, "wrong-guess-1", "brand-new-horse")
+		if errors.As(err, &limited) {
+			return
+		}
+	}
+	t.Errorf("%d wrong current passwords were never throttled", loginThrottle.limit+1)
+}

@@ -77,6 +77,16 @@ func (r *SessionRepository) RevokeAllForUserTx(ctx context.Context, tx pgx.Tx, u
 	return nil
 }
 
+// RevokeOthersForUserTx ends every live session of one account except the one the caller keeps.
+func (r *SessionRepository) RevokeOthersForUserTx(ctx context.Context, tx pgx.Tx, userID, keep uuid.UUID, at time.Time) error {
+	if _, err := tx.Exec(ctx,
+		`UPDATE auth_sessions SET revoked_at = $3 WHERE user_id = $1 AND id <> $2 AND revoked_at IS NULL`,
+		userID, keep, at); err != nil {
+		return fmt.Errorf("revoke other user sessions: %w", err)
+	}
+	return nil
+}
+
 // Scoped by tenant so a token stolen for another tenant can never end a session here.
 func (r *SessionRepository) RevokeByRefreshHash(ctx context.Context, hash []byte, tenantID *uuid.UUID, at time.Time) (bool, error) {
 	tag, err := r.db.Exec(ctx,
