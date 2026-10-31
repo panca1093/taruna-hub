@@ -2,16 +2,14 @@
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertDialog, Button } from "@heroui/react";
-import { AlertTriangle, ChevronLeft, ChevronRight, CloudOff, Maximize, Send } from "lucide-react";
-import { CountdownRing } from "@/components/countdown-ring";
+import { Button, Card, toast } from "@heroui/react";
+import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, Clock, CloudOff, Maximize, WifiOff } from "lucide-react";
 import { LatexText } from "@/components/latex";
 import { QuestionTypeBadge } from "@/components/status-badge";
 import { LanguageToggle } from "@/components/language-toggle";
-import { api, ApiError, type RuntimeSubtest } from "@/lib/api/client";
-import { useCommonT } from "@/lib/i18n/dict/common";
+import { api, ApiError, type RuntimeSubtest, type StudentTryout } from "@/lib/api/client";
 import { useTryoutSubtestT } from "@/lib/i18n/dict/tryout-subtest";
-import { useAnswerSync, useServerClock, useViolationReporter, type InitialAnswer } from "@/lib/tryout-session";
+import { useAnswerSync, useOnline, useServerClock, useViolationReporter, type InitialAnswer } from "@/lib/tryout-session";
 import { cn } from "@/lib/cn";
 
 const RESYNC_MS = 120_000;
@@ -20,6 +18,7 @@ const FLUSH_WAIT_MS = 4_000;
 interface Loaded {
   title: string;
   sessionId: string;
+  overview: StudentTryout;
   data: RuntimeSubtest;
   initial: InitialAnswer[];
 }
@@ -28,7 +27,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
   const { id, subtestId } = use(params);
   const router = useRouter();
   const t = useTryoutSubtestT();
-  const commonT = useCommonT();
+  const online = useOnline();
 
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
@@ -37,27 +36,48 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
   const [remaining, setRemaining] = useState<number | null>(null);
   const [fullscreenWarning, setFullscreenWarning] = useState<"left" | "refused" | null>(null);
   const [screenshotWarning, setScreenshotWarning] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [deadline, setDeadline] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const submittedRef = useRef(false);
+  const pendingRef = useRef(0);
   const expiringRef = useRef(false);
   const clock = useServerClock();
 
+  // Where to go once this subtest is over: this attempt's own result, the next subtest's start page, or the detail.
   const leave = useCallback(
-    (completed: boolean) => {
+    async (finishedSessionId: string | null) => {
       if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-      router.replace(completed ? `/student/tryout/${id}/result` : `/student/tryout/${id}`);
+      try {
+        const overview = await api.runtime.overview(id);
+        const done = finishedSessionId
+          ? overview.attempts.find((a) => a.session_id === finishedSessionId && a.status === "completed")
+          : undefined;
+        if (done) {
+          router.replace(`/student/tryout/${id}/result?attempt=${done.session_id}`);
+          return;
+        }
+        const statusOf = (subtest: string) => overview.current?.subtests.find((p) => p.subtest_id === subtest)?.status ?? "pending";
+        const next = overview.current ? overview.subtests.find((st) => statusOf(st.id) === "pending") : undefined;
+        if (next) {
+          const after = statusOf(subtestId) === "submitted" ? `?after=${subtestId}` : "";
+          router.replace(`/student/tryout/${id}/subtest/${next.id}/start${after}`);
+          return;
+        }
+      } catch {
+        // The detail page re-reads the same session and shows where things stand.
+      }
+      router.replace(`/student/tryout/${id}`);
     },
-    [id, router],
+    [id, subtestId, router],
   );
 
   // The server closed this subtest (deadline, or submitted elsewhere): the overview shows where things stand.
   const handleClosed = useCallback(() => {
     if (submittedRef.current) return;
     submittedRef.current = true;
-    leave(false);
+    void leave(null);
   }, [leave]);
 
   useEffect(() => {
@@ -73,6 +93,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
         setDeadline(data.subtest.deadline_at ? new Date(data.subtest.deadline_at).getTime() : null);
         setLoaded({
           title: overview.title,
+          overview,
           sessionId,
           data,
           initial: data.questions.map((q) => ({ id: q.id, answer: q.answer, seq: q.seq })),
@@ -82,7 +103,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
         if (cancelled) return;
         if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
           submittedRef.current = true;
-          leave(false);
+          void leave(null);
           return;
         }
         setFailed(true);
@@ -111,21 +132,29 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
     loadAnswer,
   );
 
+  useEffect(() => {
+    pendingRef.current = pendingCount;
+  }, [pendingCount]);
+
   const doSubmit = useCallback(async () => {
     if (!sessionId || submittedRef.current) return;
     submittedRef.current = true;
+    setSubmitting(true);
     try {
+      await waitIdle(FLUSH_WAIT_MS);
       const session = await api.runtime.submitSubtest(sessionId, subtestId);
-      leave(session.status === "completed");
+      void leave(session.status === "completed" ? session.id : null);
     } catch (err) {
-      if (err instanceof ApiError && err.status >= 400 && err.status < 500) {
-        leave(false);
+      if (err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 401 && err.status !== 429) {
+        void leave(null);
         return;
       }
+      // An unknown response may still have submitted: a retry on the same session answers 409 if it did.
       submittedRef.current = false;
-      setFailed(true);
+      setSubmitting(false);
+      toast.danger(t.submitFailed);
     }
-  }, [sessionId, subtestId, leave]);
+  }, [sessionId, subtestId, leave, waitIdle, t.submitFailed]);
 
   // At zero the server decides: it settles on its own at the cutoff, so flush what is pending, then read the result.
   const settleExpired = useCallback(async () => {
@@ -138,14 +167,14 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
       const part = session.subtests.find((p) => p.subtest_id === subtestId);
       if (!part || part.status !== "running") {
         submittedRef.current = true;
-        leave(session.status === "completed");
+        void leave(session.status === "completed" ? session.id : null);
         return;
       }
       if (part.deadline_at) setDeadline(new Date(part.deadline_at).getTime());
     } catch (err) {
       if (err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 401 && err.status !== 429) {
         submittedRef.current = true;
-        leave(false);
+        void leave(null);
       }
     } finally {
       expiringRef.current = false;
@@ -243,7 +272,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background p-6 text-center">
         <CloudOff className="size-8 text-muted" />
         <p className="text-sm font-medium text-foreground">{t.loadErrorTitle}</p>
-        <p className="text-xs text-muted">{t.loadErrorDescription}</p>
+        <p className="max-w-sm text-xs text-muted">{t.loadErrorDescription}</p>
         <Button
           variant="primary"
           size="sm"
@@ -268,170 +297,253 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
   const subtest = loaded.data.subtest;
   const question = questions[Math.min(index, questions.length - 1)];
   const answered = questions.filter((q) => (answers[q.id]?.length ?? 0) > 0);
+  const blankCount = questions.length - answered.length;
   const given = answers[question.id] ?? [];
+  const isLast = index === questions.length - 1;
+  const subtests = loaded.overview.subtests;
+  const position = subtests.findIndex((st) => st.id === subtestId) + 1;
+  const statusOf = (id: string) =>
+    id === subtestId ? "running" : (loaded.overview.current?.subtests.find((p) => p.subtest_id === id)?.status ?? "pending");
 
   const toggleMulti = (optionId: string) => {
     setAnswer(question.id, given.includes(optionId) ? given.filter((o) => o !== optionId) : [...given, optionId]);
   };
 
-  const minutes = remaining !== null ? Math.floor(remaining / 60) : 0;
-  const seconds = remaining !== null ? remaining % 60 : 0;
+  // Leaving mid-subtest is allowed, but never while an answer is still unsent: it would only be re-sent on return.
+  const handleBack = async () => {
+    await waitIdle(FLUSH_WAIT_MS);
+    if (pendingRef.current > 0) {
+      toast.warning(t.backBlocked(pendingRef.current));
+      return;
+    }
+    submittedRef.current = true;
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    router.push(`/student/tryout/${id}`);
+  };
+
+  const timeText =
+    remaining === null
+      ? "––:––"
+      : `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
   const urgent = remaining !== null && remaining <= 60;
-  const percentLeft = remaining !== null ? Math.min(100, (remaining / subtest.duration_seconds) * 100) : 100;
+  const answerStatus = states[question.id] === "pending" ? "pending" : given.length > 0 ? "saved" : null;
+
+  const optionClass = (selected: boolean) =>
+    cn(
+      "flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+      selected
+        ? "border-accent bg-accent-soft text-accent-soft-foreground"
+        : "border-border text-foreground hover:border-accent/40 hover:bg-surface-secondary",
+    );
+  const letterBadge = (i: number) => (
+    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary font-mono text-xs font-medium text-muted">
+      {String.fromCharCode(65 + i)}
+    </span>
+  );
 
   return (
-    <div
-      ref={(node) => {
-        containerRef.current = node;
-        setPortalContainer(node);
-      }}
-      className="fixed inset-0 z-50 flex flex-col bg-background"
-    >
-      <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border px-5">
+    <div ref={containerRef} className="fixed inset-0 z-50 flex flex-col bg-background">
+      <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 lg:px-6">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{subtest.name}</p>
-          <p className="truncate text-xs text-muted">{loaded.title}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{loaded.title}</p>
+          <p className="truncate text-xs text-muted">
+            {subtest.name} · {t.subtestPosition(position, subtests.length)}
+          </p>
         </div>
         <div className="flex items-center gap-3">
-          {pendingCount > 0 && <span className="text-xs text-warning">{t.pendingCount(pendingCount)}</span>}
-          <CountdownRing value={percentLeft} size={40} strokeWidth={4} urgent={urgent} animate={false}>
-            <span className={cn("font-mono text-[11px] font-semibold", urgent ? "text-danger" : "text-foreground")}>
-              {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
-            </span>
-          </CountdownRing>
+          {pendingCount > 0 && <span className="hidden text-xs text-warning sm:inline">{t.pendingCount(pendingCount)}</span>}
           <LanguageToggle />
-          <Button variant="primary" size="sm" onPress={() => setConfirmOpen(true)}>
-            <Send className="size-3.5" /> {t.submitButton}
-          </Button>
+          <div
+            role="timer"
+            aria-label={t.timeLeft}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-xl px-3 py-1.5 font-mono text-lg font-semibold",
+              urgent ? "bg-danger-soft text-danger-soft-foreground" : "bg-accent-soft text-accent-soft-foreground",
+            )}
+          >
+            <Clock className="size-4" /> {timeText}
+          </div>
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <main className="flex flex-1 flex-col overflow-y-auto">
-          <div className="mx-auto w-full max-w-2xl flex-1 px-5 py-8">
-            <div className="mb-4 flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">{t.questionProgress(index + 1, questions.length)}</span>
-              <span className="flex items-center gap-2">
-                <span className={cn("text-xs", states[question.id] === "pending" ? "text-warning" : "text-muted")}>
-                  {states[question.id] === "pending" ? t.answerPending : t.answerSaved}
-                </span>
-                <QuestionTypeBadge type={question.type} />
-              </span>
+      {!online && (
+        <div role="alert" className="flex shrink-0 items-start gap-2.5 border-b border-warning/30 bg-warning-soft px-4 py-2.5 text-sm text-warning-soft-foreground lg:px-6">
+          <WifiOff className="mt-0.5 size-4 shrink-0" />
+          <p>
+            <strong className="font-semibold">{t.offlineTitle}.</strong> {t.offlineBody(pendingCount)}
+          </p>
+        </div>
+      )}
+
+      {confirming ? (
+        <main className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-10">
+          <Card className="w-full max-w-xl gap-0 p-8 text-center">
+            <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-warning-soft text-warning-soft-foreground">
+              <AlertTriangle className="size-5" />
+            </span>
+            <h1 className="font-display mt-4 text-2xl font-semibold text-foreground">{t.confirmHeading}</h1>
+            <p className="mt-2 text-sm text-muted">{t.confirmBody(answered.length, blankCount)}</p>
+            {pendingCount > 0 && <p className="mt-3 text-sm font-medium text-warning">{t.confirmPendingWarning(pendingCount)}</p>}
+            {!online && <p className="mt-3 text-sm font-medium text-warning">{t.confirmOfflineWarning}</p>}
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+              <Button variant="secondary" isDisabled={submitting} onPress={() => setConfirming(false)}>
+                {t.keepWorking}
+              </Button>
+              <Button variant="primary" isDisabled={submitting} onPress={() => void doSubmit()}>
+                {submitting ? t.submitting : t.confirmYes}
+              </Button>
+            </div>
+          </Card>
+        </main>
+      ) : (
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 lg:grid-cols-3 lg:px-6">
+            <div className="space-y-4 lg:col-span-2">
+              <Card className="gap-0 p-6">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium text-muted">{t.questionProgress(index + 1, questions.length)}</span>
+                  <QuestionTypeBadge type={question.type} />
+                </div>
+
+                <div className="text-lg leading-relaxed text-foreground">
+                  <LatexText text={question.content} />
+                </div>
+
+                <div className="mt-6 space-y-2.5">
+                  {(question.type === "pg" || question.type === "benar_salah") &&
+                    question.options.map((opt, i) => {
+                      const selected = given[0] === opt.id;
+                      return (
+                        <button key={opt.id} aria-pressed={selected} onClick={() => setAnswer(question.id, [opt.id])} className={optionClass(selected)}>
+                          <span
+                            className={cn(
+                              "flex size-4 shrink-0 items-center justify-center rounded-full border-2",
+                              selected ? "border-accent" : "border-border",
+                            )}
+                          >
+                            {selected && <span className="size-2 rounded-full bg-accent" />}
+                          </span>
+                          {letterBadge(i)}
+                          <LatexText text={opt.label} />
+                        </button>
+                      );
+                    })}
+
+                  {question.type === "pg_multi" &&
+                    question.options.map((opt, i) => {
+                      const selected = given.includes(opt.id);
+                      return (
+                        <button key={opt.id} aria-pressed={selected} onClick={() => toggleMulti(opt.id)} className={optionClass(selected)}>
+                          <span
+                            className={cn(
+                              "flex size-4 shrink-0 items-center justify-center rounded-sm border-2",
+                              selected ? "border-accent bg-accent" : "border-border",
+                            )}
+                          >
+                            {selected && <span className="size-2 rounded-xs bg-white" />}
+                          </span>
+                          {letterBadge(i)}
+                          <LatexText text={opt.label} />
+                        </button>
+                      );
+                    })}
+
+                  {question.type === "isian" && (
+                    <input
+                      type="text"
+                      value={given[0] ?? ""}
+                      maxLength={500}
+                      onChange={(e) => setAnswer(question.id, [e.target.value])}
+                      placeholder={t.answerPlaceholder}
+                      aria-label={t.answerPlaceholder}
+                      className="w-full rounded-lg border border-border bg-field px-4 py-3 text-base text-field-foreground outline-none focus:border-accent"
+                    />
+                  )}
+                </div>
+
+                <p
+                  role="status"
+                  className={cn("mt-5 min-h-4 text-xs", answerStatus === "pending" ? "font-medium text-warning" : "text-success")}
+                >
+                  {answerStatus === "pending" ? t.answerPending : answerStatus === "saved" ? t.answerSaved : ""}
+                </p>
+              </Card>
+
+              <div className="flex items-center justify-between gap-3">
+                <Button variant="secondary" isDisabled={index === 0} onPress={() => setIndex((i) => i - 1)}>
+                  <ChevronLeft className="size-4" /> {t.previousButton}
+                </Button>
+                {isLast ? (
+                  <Button variant="primary" onPress={() => setConfirming(true)}>
+                    {t.finishButton} <ArrowRight className="size-4" />
+                  </Button>
+                ) : (
+                  <Button variant="secondary" onPress={() => setIndex((i) => i + 1)}>
+                    {t.nextButton} <ChevronRight className="size-4" />
+                  </Button>
+                )}
+              </div>
             </div>
 
-            <div className="text-lg leading-relaxed text-foreground">
-              <LatexText text={question.content} />
-            </div>
-
-            <div className="mt-6 space-y-2.5">
-              {(question.type === "pg" || question.type === "benar_salah") &&
-                question.options.map((opt) => {
-                  const selected = given[0] === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      onClick={() => setAnswer(question.id, [opt.id])}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left text-base transition-colors",
-                        selected
-                          ? "border-accent bg-accent-soft text-accent-soft-foreground"
-                          : "border-border text-foreground hover:border-accent/40 hover:bg-surface-secondary",
-                      )}
-                    >
-                      <span
+            <aside className="lg:col-span-1">
+              <Card className="gap-0 p-6 lg:sticky lg:top-6">
+                <h2 className="font-display text-lg font-semibold text-foreground">{t.navTitle}</h2>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {questions.map((q, i) => {
+                    const isAnswered = (answers[q.id]?.length ?? 0) > 0;
+                    const isCurrent = i === index;
+                    const isPending = states[q.id] === "pending";
+                    return (
+                      <button
+                        key={q.id}
+                        onClick={() => setIndex(i)}
+                        aria-label={t.questionNumberLabel(i + 1)}
+                        aria-current={isCurrent ? "true" : undefined}
                         className={cn(
-                          "flex size-4 shrink-0 items-center justify-center rounded-full border-2",
-                          selected ? "border-accent" : "border-border",
+                          "flex size-9 items-center justify-center rounded-md font-mono text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+                          isCurrent
+                            ? "bg-gradient-ring text-white"
+                            : isAnswered
+                              ? "bg-accent-soft text-accent-soft-foreground"
+                              : "bg-surface-secondary text-muted",
+                          isPending && "ring-2 ring-warning",
                         )}
                       >
-                        {selected && <span className="size-2 rounded-full bg-accent" />}
-                      </span>
-                      <LatexText text={opt.label} />
-                    </button>
-                  );
-                })}
+                        {i + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-4 text-xs text-muted">{t.answeredBlank(answered.length, blankCount)}</p>
+                {pendingCount > 0 && <p className="mt-1 text-xs font-medium text-warning">{t.pendingCount(pendingCount)}</p>}
+                <Button variant="secondary" className="mt-4 w-full" onPress={() => setConfirming(true)}>
+                  {t.submitButton} <ArrowRight className="size-4" />
+                </Button>
 
-              {question.type === "pg_multi" &&
-                question.options.map((opt) => {
-                  const selected = given.includes(opt.id);
-                  return (
-                    <button
-                      key={opt.id}
-                      onClick={() => toggleMulti(opt.id)}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left text-base transition-colors",
-                        selected
-                          ? "border-accent bg-accent-soft text-accent-soft-foreground"
-                          : "border-border text-foreground hover:border-accent/40 hover:bg-surface-secondary",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "flex size-4 shrink-0 items-center justify-center rounded-[5px] border-2",
-                          selected ? "border-accent bg-accent" : "border-border",
-                        )}
-                      >
-                        {selected && <span className="size-2 rounded-[1px] bg-white" />}
-                      </span>
-                      <LatexText text={opt.label} />
-                    </button>
-                  );
-                })}
-
-              {question.type === "isian" && (
-                <input
-                  type="text"
-                  value={given[0] ?? ""}
-                  maxLength={500}
-                  onChange={(e) => setAnswer(question.id, [e.target.value])}
-                  placeholder={t.answerPlaceholder}
-                  className="w-full rounded-lg border border-border bg-field px-4 py-3 text-base text-field-foreground outline-none focus:border-accent"
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="sticky bottom-0 flex items-center justify-between border-t border-border bg-surface/90 px-5 py-3 backdrop-blur-sm">
-            <Button variant="ghost" size="sm" isDisabled={index === 0} onPress={() => setIndex((i) => i - 1)}>
-              <ChevronLeft className="size-3.5" /> {t.previousButton}
-            </Button>
-            <Button variant="ghost" size="sm" isDisabled={index === questions.length - 1} onPress={() => setIndex((i) => i + 1)}>
-              {t.nextButton} <ChevronRight className="size-3.5" />
-            </Button>
+                <ul className="mt-5 space-y-2 border-t border-border pt-4 text-sm">
+                  {subtests.map((st) => {
+                    const status = statusOf(st.id);
+                    return (
+                      <li key={st.id} className="flex items-center justify-between gap-3">
+                        <span className={cn("truncate", status === "running" ? "font-semibold text-foreground" : "text-muted")}>{st.name}</span>
+                        <span className={cn("shrink-0 text-xs", status === "running" ? "font-semibold text-accent" : "text-muted")}>
+                          {status === "running" ? t.statusRunning : status === "submitted" ? t.statusSubmitted : t.statusPending}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <Button variant="ghost" size="sm" className="mt-3 justify-start px-0" onPress={() => void handleBack()}>
+                  {t.backToDetail} <ArrowRight className="size-3.5" />
+                </Button>
+              </Card>
+            </aside>
           </div>
         </main>
-
-        <aside className="hidden w-56 shrink-0 overflow-y-auto border-l border-border p-4 lg:block">
-          <p className="mb-3 text-xs font-medium text-muted">{t.answeredCount(answered.length, questions.length)}</p>
-          <div className="grid grid-cols-5 gap-2">
-            {questions.map((q, i) => {
-              const isAnswered = (answers[q.id]?.length ?? 0) > 0;
-              const isCurrent = i === index;
-              const isPending = states[q.id] === "pending";
-              return (
-                <button
-                  key={q.id}
-                  onClick={() => setIndex(i)}
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-md font-mono text-xs font-medium transition-colors",
-                    isCurrent
-                      ? "bg-gradient-ring text-white"
-                      : isAnswered
-                        ? "bg-accent-soft text-accent-soft-foreground"
-                        : "bg-surface-secondary text-muted",
-                    isPending && "ring-2 ring-warning",
-                  )}
-                >
-                  {i + 1}
-                </button>
-              );
-            })}
-          </div>
-        </aside>
-      </div>
+      )}
 
       {screenshotWarning && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-backdrop p-5">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-backdrop p-5">
           <div className="w-full max-w-sm rounded-xl bg-surface p-6 text-center shadow-overlay">
             <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-danger-soft text-danger-soft-foreground">
               <AlertTriangle className="size-5" />
@@ -446,7 +558,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
       )}
 
       {fullscreenWarning && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-backdrop p-5">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-backdrop p-5">
           <div className="w-full max-w-sm rounded-xl bg-surface p-6 text-center shadow-overlay">
             <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-danger-soft text-danger-soft-foreground">
               <AlertTriangle className="size-5" />
@@ -464,33 +576,6 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
           </div>
         </div>
       )}
-
-      <AlertDialog isOpen={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialog.Backdrop UNSTABLE_portalContainer={portalContainer ?? undefined}>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog>
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="warning">
-                  <AlertTriangle className="size-5" />
-                </AlertDialog.Icon>
-                <AlertDialog.Heading>{t.confirmSubmitTitle}</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body>
-                {t.confirmSubmitBody(answered.length, questions.length)}
-                {pendingCount > 0 && <span className="mt-2 block text-warning">{t.confirmPendingWarning(pendingCount)}</span>}
-              </AlertDialog.Body>
-              <AlertDialog.Footer>
-                <Button variant="ghost" onPress={() => setConfirmOpen(false)}>
-                  {commonT.cancel}
-                </Button>
-                <Button variant="primary" onPress={() => void doSubmit()}>
-                  {t.confirmSubmitYes}
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
     </div>
   );
 }
