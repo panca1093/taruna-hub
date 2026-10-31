@@ -92,6 +92,30 @@ func (r *UserRepository) ReplacePasswordTx(ctx context.Context, tx pgx.Tx, tenan
 	return tag.RowsAffected() > 0, nil
 }
 
+// UpdateProfile rewrites the two fields a person owns; a nil phone clears it. The unique index decides a
+// phone another account holds, and the email-or-phone check is the caller's to avoid.
+func (r *UserRepository) UpdateProfile(ctx context.Context, tenantID, id uuid.UUID, name string, phone *string) (model.User, error) {
+	if tenantID == uuid.Nil {
+		return model.User{}, ErrScopeRequired
+	}
+	row := r.db.QueryRow(ctx,
+		`UPDATE users SET name = $3, phone = $4 WHERE tenant_id = $1 AND id = $2 RETURNING `+userColumns,
+		tenantID, id, name, phone)
+	return scanUser(row)
+}
+
+// SetPasswordTx is ReplacePasswordTx without the inbox proof: a signed-in change says nothing about the email.
+func (r *UserRepository) SetPasswordTx(ctx context.Context, tx pgx.Tx, tenantID *uuid.UUID, id uuid.UUID, current, next string) (bool, error) {
+	tag, err := tx.Exec(ctx,
+		`UPDATE users SET password_hash = $4
+		  WHERE id = $1 AND tenant_id IS NOT DISTINCT FROM $2 AND password_hash = $3`,
+		id, tenantID, current, next)
+	if err != nil {
+		return false, fmt.Errorf("set password: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
 // FindEmailCodeForUpdateTx locks the account row, so concurrent guesses are counted one at a time.
 func (r *UserRepository) FindEmailCodeForUpdateTx(ctx context.Context, tx pgx.Tx, tenantID *uuid.UUID, id uuid.UUID) (model.EmailCode, error) {
 	var code model.EmailCode

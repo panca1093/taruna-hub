@@ -108,6 +108,8 @@ export interface ElementUpload {
 type GraceBody = components["schemas"]["GraceRequest"];
 type LoginBody = components["schemas"]["LoginRequest"];
 type RegisterBody = components["schemas"]["RegisterRequest"];
+type UpdateProfileBody = components["schemas"]["UpdateProfileRequest"];
+type ChangePasswordBody = components["schemas"]["ChangePasswordRequest"];
 type CreateProgramBody = components["schemas"]["CreateProgramRequest"];
 type UpdateProgramBody = components["schemas"]["UpdateProgramRequest"];
 type CreateQuestionBody = components["schemas"]["CreateQuestionRequest"];
@@ -436,6 +438,8 @@ export const api = {
     accessToken = null;
   },
   me: () => authed<ApiUser>("/api/v1/me"),
+  updateProfile: (body: UpdateProfileBody) => mutate<ApiUser>("PATCH", "/api/v1/me", body),
+  changePassword: (body: ChangePasswordBody) => mutate<void>("POST", "/api/v1/me/password", body),
   forgotPassword: (email: string) => post<void>("/api/v1/auth/password/forgot", { email }),
   resetPassword: (token: string, password: string) =>
     post<void>("/api/v1/auth/password/reset", { token, password }),

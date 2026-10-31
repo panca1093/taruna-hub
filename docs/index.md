@@ -20,3 +20,11 @@ decisions behind them stay in `requirement/` (PRD, ARCHITECTURE, PLAN), and the 
 | Tryout runtime: sessions, deadlines, scoring and the result | P16 | [tryout-runtime.md](tryout-runtime.md) |
 | Kecermatan item packages: symbol, image, emoji and shape pools in frozen revisions | P09 | [item-packages.md](item-packages.md) |
 | Kecermatan attempts: credits, server-timed kolom, answers, versioned scoring and results | P18 | [kecermatan-runtime.md](kecermatan-runtime.md) |
+
+## Design handoff — proposal only
+
+[Student workspace redesign, 31 October 2026](handoffs/2026-10-31-student-workspace/HANDOFF.md) includes a portable prototype, missing-flow audit, implementation plan and acceptance criteria. This is a proposal package; its demo flows are not evidence that the redesign or payment integrations are implemented.
+
+The handoff also includes an [admin/operator design proposal](handoffs/2026-10-31-student-workspace/ADMIN-PROPOSAL.md), separate from the student implementation plan. A separate local admin prototype now demonstrates three review journeys; production admin screens have not been rebuilt.
+
+The owner selected a [shared warm rose palette](handoffs/2026-10-31-student-workspace/PALETTE-DECISION.md) for student and admin workspaces on 31 October 2026. This replaces the previous blue default; existing blue admin previews remain historical flow references pending restyling.

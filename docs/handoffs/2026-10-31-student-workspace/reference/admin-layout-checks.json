@@ -1,0 +1,380 @@
+[
+  {
+    "route": "/dashboard",
+    "main": 320,
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/monitoring",
+    "main": 320,
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/monitoring/SES-104",
+    "main": 320,
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/monitoring/SES-104/extend",
+    "main": 320,
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/kecermatan/edit",
+    "main": 320,
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/kecermatan/preview",
+    "main": 320,
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/orders",
+    "main": 320,
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/orders/TE-1048",
+    "main": 320,
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/orders/TE-1048/confirm",
+    "main": 320,
+    "scroll": 320,
+    "width": 320
+  },
+  {
+    "route": "/dashboard",
+    "main": 390,
+    "scroll": 390,
+    "width": 390
+  },
+  {
+    "route": "/monitoring",
+    "main": 390,
+    "scroll": 390,
+    "width": 390
+  },
+  {
+    "route": "/monitoring/SES-104",
+    "main": 390,
+    "scroll": 390,
+    "width": 390
+  },
+  {
+    "route": "/monitoring/SES-104/extend",
+    "main": 390,
+    "scroll": 390,
+    "width": 390
+  },
+  {
+    "route": "/kecermatan/edit",
+    "main": 390,
+    "scroll": 390,
+    "width": 390
+  },
+  {
+    "route": "/kecermatan/preview",
+    "main": 390,
+    "scroll": 390,
+    "width": 390
+  },
+  {
+    "route": "/orders",
+    "main": 390,
+    "scroll": 390,
+    "width": 390
+  },
+  {
+    "route": "/orders/TE-1048",
+    "main": 390,
+    "scroll": 390,
+    "width": 390
+  },
+  {
+    "route": "/orders/TE-1048/confirm",
+    "main": 390,
+    "scroll": 390,
+    "width": 390
+  },
+  {
+    "route": "/dashboard",
+    "main": 692,
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/monitoring",
+    "main": 692,
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/monitoring/SES-104",
+    "main": 692,
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/monitoring/SES-104/extend",
+    "main": 692,
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/kecermatan/edit",
+    "main": 692,
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/kecermatan/preview",
+    "main": 692,
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/orders",
+    "main": 692,
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/orders/TE-1048",
+    "main": 692,
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/orders/TE-1048/confirm",
+    "main": 692,
+    "scroll": 768,
+    "width": 768
+  },
+  {
+    "route": "/dashboard",
+    "main": 804,
+    "scroll": 1024,
+    "width": 1024
+  },
+  {
+    "route": "/monitoring",
+    "main": 804,
+    "scroll": 1024,
+    "width": 1024
+  },
+  {
+    "route": "/monitoring/SES-104",
+    "main": 804,
+    "scroll": 1024,
+    "width": 1024
+  },
+  {
+    "route": "/monitoring/SES-104/extend",
+    "main": 804,
+    "scroll": 1024,
+    "width": 1024
+  },
+  {
+    "route": "/kecermatan/edit",
+    "main": 804,
+    "scroll": 1024,
+    "width": 1024
+  },
+  {
+    "route": "/kecermatan/preview",
+    "main": 804,
+    "scroll": 1024,
+    "width": 1024
+  },
+  {
+    "route": "/orders",
+    "main": 804,
+    "scroll": 1024,
+    "width": 1024
+  },
+  {
+    "route": "/orders/TE-1048",
+    "main": 804,
+    "scroll": 1024,
+    "width": 1024
+  },
+  {
+    "route": "/orders/TE-1048/confirm",
+    "main": 804,
+    "scroll": 1024,
+    "width": 1024
+  },
+  {
+    "route": "/dashboard",
+    "main": 1192,
+    "scroll": 1440,
+    "width": 1440
+  },
+  {
+    "route": "/monitoring",
+    "main": 1192,
+    "scroll": 1440,
+    "width": 1440
+  },
+  {
+    "route": "/monitoring/SES-104",
+    "main": 1192,
+    "scroll": 1440,
+    "width": 1440
+  },
+  {
+    "route": "/monitoring/SES-104/extend",
+    "main": 1192,
+    "scroll": 1440,
+    "width": 1440
+  },
+  {
+    "route": "/kecermatan/edit",
+    "main": 1192,
+    "scroll": 1440,
+    "width": 1440
+  },
+  {
+    "route": "/kecermatan/preview",
+    "main": 1192,
+    "scroll": 1440,
+    "width": 1440
+  },
+  {
+    "route": "/orders",
+    "main": 1192,
+    "scroll": 1440,
+    "width": 1440
+  },
+  {
+    "route": "/orders/TE-1048",
+    "main": 1192,
+    "scroll": 1440,
+    "width": 1440
+  },
+  {
+    "route": "/orders/TE-1048/confirm",
+    "main": 1192,
+    "scroll": 1440,
+    "width": 1440
+  },
+  {
+    "route": "/dashboard",
+    "main": 1672,
+    "scroll": 1920,
+    "width": 1920
+  },
+  {
+    "route": "/monitoring",
+    "main": 1672,
+    "scroll": 1920,
+    "width": 1920
+  },
+  {
+    "route": "/monitoring/SES-104",
+    "main": 1672,
+    "scroll": 1920,
+    "width": 1920
+  },
+  {
+    "route": "/monitoring/SES-104/extend",
+    "main": 1672,
+    "scroll": 1920,
+    "width": 1920
+  },
+  {
+    "route": "/kecermatan/edit",
+    "main": 1672,
+    "scroll": 1920,
+    "width": 1920
+  },
+  {
+    "route": "/kecermatan/preview",
+    "main": 1672,
+    "scroll": 1920,
+    "width": 1920
+  },
+  {
+    "route": "/orders",
+    "main": 1672,
+    "scroll": 1920,
+    "width": 1920
+  },
+  {
+    "route": "/orders/TE-1048",
+    "main": 1672,
+    "scroll": 1920,
+    "width": 1920
+  },
+  {
+    "route": "/orders/TE-1048/confirm",
+    "main": 1672,
+    "scroll": 1920,
+    "width": 1920
+  },
+  {
+    "route": "/dashboard",
+    "main": 2312,
+    "scroll": 2560,
+    "width": 2560
+  },
+  {
+    "route": "/monitoring",
+    "main": 2312,
+    "scroll": 2560,
+    "width": 2560
+  },
+  {
+    "route": "/monitoring/SES-104",
+    "main": 2312,
+    "scroll": 2560,
+    "width": 2560
+  },
+  {
+    "route": "/monitoring/SES-104/extend",
+    "main": 2312,
+    "scroll": 2560,
+    "width": 2560
+  },
+  {
+    "route": "/kecermatan/edit",
+    "main": 2312,
+    "scroll": 2560,
+    "width": 2560
+  },
+  {
+    "route": "/kecermatan/preview",
+    "main": 2312,
+    "scroll": 2560,
+    "width": 2560
+  },
+  {
+    "route": "/orders",
+    "main": 2312,
+    "scroll": 2560,
+    "width": 2560
+  },
+  {
+    "route": "/orders/TE-1048",
+    "main": 2312,
+    "scroll": 2560,
+    "width": 2560
+  },
+  {
+    "route": "/orders/TE-1048/confirm",
+    "main": 2312,
+    "scroll": 2560,
+    "width": 2560
+  }
+]

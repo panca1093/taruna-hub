@@ -38,8 +38,10 @@ var (
 
 // Field reasons an InputError reports; the transport turns them into user-facing copy.
 const (
-	ReasonInvalid  = "invalid"
-	ReasonPassword = "password_rule"
+	ReasonInvalid       = "invalid"
+	ReasonPassword      = "password_rule"
+	ReasonWrongPassword = "wrong_password"
+	ReasonPhoneRequired = "phone_required"
 )
 
 // InputError names each field that failed a format rule.
@@ -214,6 +216,90 @@ func (s *AccountService) Register(ctx context.Context, scope HostScope, in Regis
 		slog.String("tenant_id", tenantID.String()),
 	)
 	return tokens, nil
+}
+
+// UpdateProfile changes the caller's own name and phone; an empty phone clears it. The unique
+// constraint decides a duplicate, so saving the phone the account already holds is not a conflict.
+func (s *AccountService) UpdateProfile(ctx context.Context, scope HostScope, p model.Principal, rawName, rawPhone string) (model.Principal, error) {
+	fields := map[string]string{}
+	name := strings.TrimSpace(rawName)
+	if name == "" || utf8.RuneCountInString(name) > maxNameRunes {
+		fields["name"] = ReasonInvalid
+	}
+	var phone *string
+	if strings.TrimSpace(rawPhone) != "" {
+		normalized, ok := NormalizePhone(rawPhone)
+		if !ok {
+			fields["phone"] = ReasonInvalid
+		}
+		phone = &normalized
+	} else if p.Email == nil {
+		fields["phone"] = ReasonPhoneRequired
+	}
+	if len(fields) > 0 {
+		return model.Principal{}, &InputError{Fields: fields}
+	}
+
+	user, err := s.Users.UpdateProfile(ctx, scope.Tenant.ID, p.UserID, name, phone)
+	switch {
+	case errors.Is(err, repository.ErrDuplicatePhone):
+		return model.Principal{}, ErrPhoneTaken
+	case errors.Is(err, repository.ErrNotFound):
+		return model.Principal{}, ErrUnauthenticated
+	case err != nil:
+		return model.Principal{}, fmt.Errorf("update profile: %w", err)
+	}
+	s.Logger.Info("profile updated", slog.String("user_id", user.ID.String()))
+	return principalFor(user, p.SessionID), nil
+}
+
+// ChangePassword needs the current password and ends every other session of the account, so a
+// stolen session does not outlive the change. The caller's own session stays signed in. Wrong
+// guesses share the login budget's size, counted under their own key so they never lock the login.
+func (s *AccountService) ChangePassword(ctx context.Context, scope HostScope, p model.Principal, current, next string) error {
+	if !validPassword(next) {
+		return &InputError{Fields: map[string]string{"new_password": ReasonPassword}}
+	}
+	key := throttleKey(loginThrottle, scopeTenantLabel(scope), "password-change:"+p.UserID.String())
+	if err := hitThrottle(ctx, s.Throttles, loginThrottle, key, s.now()); err != nil {
+		return err
+	}
+	user, err := s.Auth.userInScope(ctx, scope, p.UserID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return ErrUnauthenticated
+	}
+	if err != nil {
+		return fmt.Errorf("find user for password change: %w", err)
+	}
+	wrong := &InputError{Fields: map[string]string{"current_password": ReasonWrongPassword}}
+	if len(current) > maxPasswordBytes || s.Auth.compare([]byte(user.PasswordHash), []byte(current)) != nil {
+		return wrong
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(next), s.cost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	now := s.now()
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		replaced, err := s.Users.SetPasswordTx(ctx, tx, user.TenantID, user.ID, user.PasswordHash, string(hash))
+		if err != nil {
+			return err
+		}
+		if !replaced {
+			// A racing change already moved the hash this request verified against.
+			return wrong
+		}
+		return s.Sessions.RevokeOthersForUserTx(ctx, tx, user.ID, p.SessionID, now)
+	})
+	if err != nil {
+		return err
+	}
+	if err := s.Throttles.Clear(ctx, key, loginThrottle.window, now); err != nil {
+		s.Logger.Error("clear password change throttle", slog.String("error", err.Error()))
+	}
+	s.Logger.Info("password changed", slog.String("user_id", user.ID.String()))
+	return nil
 }
 
 // ResendEmailCode replaces the caller's code; it shares the per-email budget with Register.

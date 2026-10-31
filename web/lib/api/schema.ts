@@ -660,6 +660,100 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Change the signed-in user's own name and phone
+         * @description Students only: an admin or operator answers `403`, and staff profile changes stay with an
+         *     admin. A student may change only the name and the phone; the email is changed by an admin. The
+         *     caller is the principal, so no id travels in the path or body, and unknown fields are
+         *     refused with `422` and `fields.body`.
+         *
+         *     `name` is trimmed and must be 1 to 100 characters. `phone` is optional and normalized to
+         *     E.164 exactly as on register; an empty phone clears it, which is refused with `422` and
+         *     `fields.phone` when the account has no email, since an account must keep one of the two.
+         *     A phone another account holds in this tenant answers `409` with `fields.phone`; saving the
+         *     phone the account already holds is not a conflict.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateProfileRequest"];
+                };
+            };
+            responses: {
+                /** @description The updated caller */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["User"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the signed-in user's password
+         * @description Open to every authenticated user, staff included. Requires the current password and ends every other session of the account, so their access
+         *     and refresh tokens stop working; the caller's own session stays signed in. A wrong current
+         *     password answers `422` with `fields.current_password` and never `401`, so the session is
+         *     not mistaken for expired. `new_password` follows the register and reset rule (8 characters
+         *     to 72 bytes) and a bad one answers `422` with `fields.new_password`. Changing the password
+         *     does not verify the email.
+         *
+         *     Attempts count against a budget of 10 per 15 minutes per account, kept apart from the login
+         *     budget, and a success clears it. Past it this answers `429`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ChangePasswordRequest"];
+                };
+            };
+            responses: {
+                /** @description The password is changed and every other session is ended */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                401: components["responses"]["Unauthorized"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+                429: components["responses"]["TooManyRequests"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -6054,6 +6148,24 @@ export interface components {
              * @description 8 characters to 72 bytes.
              */
             password: string;
+        };
+        UpdateProfileRequest: {
+            /** @example Budi Santoso */
+            name: string;
+            /**
+             * @description Optional. Same forms as on register, stored as E.164. Empty clears it.
+             * @example 0812-3456-7890
+             */
+            phone?: string;
+        };
+        ChangePasswordRequest: {
+            /** Format: password */
+            current_password: string;
+            /**
+             * Format: password
+             * @description 8 characters to 72 bytes.
+             */
+            new_password: string;
         };
         User: {
             /** Format: uuid */

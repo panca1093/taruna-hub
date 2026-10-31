@@ -432,6 +432,79 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      tags: [auth]
+      summary: Change the signed-in user's own name and phone
+      description: |
+        Students only: an admin or operator answers `403`, and staff profile changes stay with an
+        admin. A student may change only the name and the phone; the email is changed by an admin. The
+        caller is the principal, so no id travels in the path or body, and unknown fields are
+        refused with `422` and `fields.body`.
+
+        `name` is trimmed and must be 1 to 100 characters. `phone` is optional and normalized to
+        E.164 exactly as on register; an empty phone clears it, which is refused with `422` and
+        `fields.phone` when the account has no email, since an account must keep one of the two.
+        A phone another account holds in this tenant answers `409` with `fields.phone`; saving the
+        phone the account already holds is not a conflict.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: The updated caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/me/password:
+    post:
+      tags: [auth]
+      summary: Change the signed-in user's password
+      description: |
+        Open to every authenticated user, staff included. Requires the current password and ends every other session of the account, so their access
+        and refresh tokens stop working; the caller's own session stays signed in. A wrong current
+        password answers `422` with `fields.current_password` and never `401`, so the session is
+        not mistaken for expired. `new_password` follows the register and reset rule (8 characters
+        to 72 bytes) and a bad one answers `422` with `fields.new_password`. Changing the password
+        does not verify the email.
+
+        Attempts count against a budget of 10 per 15 minutes per account, kept apart from the login
+        budget, and a success clears it. Past it this answers `429`.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: The password is changed and every other session is ended
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/my/dashboard:
     get:
@@ -4463,6 +4536,34 @@ components:
           type: string
           description: The value after `#token=` in the emailed link.
         password:
+          type: string
+          format: password
+          minLength: 8
+          description: 8 characters to 72 bytes.
+
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: Budi Santoso
+        phone:
+          type: string
+          description: Optional. Same forms as on register, stored as E.164. Empty clears it.
+          example: 0812-3456-7890
+
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          format: password
+        new_password:
           type: string
           format: password
           minLength: 8

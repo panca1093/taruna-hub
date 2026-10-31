@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApiError, api } from "./api/client";
 
 /**
@@ -250,5 +250,23 @@ export function useViolationReporter(sessionId: string | null, subtestId: string
       send(1);
     },
     [sessionId, subtestId],
+  );
+}
+
+const subscribeOnline = (notify: () => void) => {
+  window.addEventListener("online", notify);
+  window.addEventListener("offline", notify);
+  return () => {
+    window.removeEventListener("online", notify);
+    window.removeEventListener("offline", notify);
+  };
+};
+
+/** Browser connectivity hint, only used to warn. Whether an answer is saved is decided by the server ACK, never by this. */
+export function useOnline(): boolean {
+  return useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
   );
 }

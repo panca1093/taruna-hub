@@ -259,3 +259,131 @@ func TestRefreshRotatesTheCookie(t *testing.T) {
 		t.Errorf("refresh with the current cookie: status = %d, want 200 and another rotation", next.Code)
 	}
 }
+
+func sendJSON(e http.Handler, method, host, path string, body any, headers map[string]string) *httptest.ResponseRecorder {
+	var buf bytes.Buffer
+	if body != nil {
+		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+			panic(err)
+		}
+	}
+	req := httptest.NewRequest(method, path, &buf)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Host = host
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	return serve(e, req)
+}
+
+func TestUpdateMeOverHTTP(t *testing.T) {
+	f := newAuthFixture(t, false)
+	e := f.echo(t)
+	host := f.host(f.active[0].Slug)
+	mine := f.newUser(t, model.RoleStudent, authTestPassword)
+	victim := f.newUser(t, model.RoleStudent, authTestPassword)
+	token := decodeTokenResponse(t, postJSON(e, host, "/api/v1/auth/login", credentials(*mine.Email), nil)).AccessToken
+	bearer := map[string]string{echo.HeaderAuthorization: "Bearer " + token}
+	phone := "0812" + strconv.Itoa(10000000+int(uuid.New().ID()%89999999))
+
+	wantError(t, "no token", sendJSON(e, http.MethodPatch, host, "/api/v1/me", map[string]string{"name": "X", "phone": ""}, nil),
+		http.StatusUnauthorized, httpx.CodeUnauthorized)
+	wantError(t, "unknown field", sendJSON(e, http.MethodPatch, host, "/api/v1/me", map[string]string{"name": "X", "phone": "", "email": "a@b.co"}, bearer),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "body")
+	wantError(t, "blank name", sendJSON(e, http.MethodPatch, host, "/api/v1/me", map[string]string{"name": " ", "phone": ""}, bearer),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "name")
+	wantError(t, "bad phone", sendJSON(e, http.MethodPatch, host, "/api/v1/me", map[string]string{"name": "X", "phone": "12"}, bearer),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "phone")
+
+	rec := sendJSON(e, http.MethodPatch, host, "/api/v1/me", map[string]string{"name": " Nama Baru ", "phone": phone}, bearer)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update: status = %d body = %s, want 200", rec.Code, rec.Body.String())
+	}
+	var got userResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ID != mine.ID || got.Name != "Nama Baru" || got.Phone == nil || *got.Phone != "+62"+phone[1:] || *got.Email != *mine.Email {
+		t.Errorf("updated user = %+v, want the caller with the new name and phone", got)
+	}
+	if me := getWithToken(e, host, "/api/v1/me", token); !strings.Contains(me.Body.String(), `"name":"Nama Baru"`) {
+		t.Errorf("me after the update = %s, want the new name", me.Body.String())
+	}
+
+	other := f.newUser(t, model.RoleStudent, authTestPassword)
+	otherToken := decodeTokenResponse(t, postJSON(e, host, "/api/v1/auth/login", credentials(*other.Email), nil)).AccessToken
+	wantError(t, "phone taken", sendJSON(e, http.MethodPatch, host, "/api/v1/me", map[string]string{"name": "Z", "phone": phone}, map[string]string{echo.HeaderAuthorization: "Bearer " + otherToken}),
+		http.StatusConflict, httpx.CodeConflict, "phone")
+
+	// The path and body name no user, so the only account that can change is the caller's.
+	var victimName string
+	if err := f.pool.QueryRow(context.Background(), `SELECT name FROM users WHERE id = $1`, victim.ID).Scan(&victimName); err != nil || victimName != victim.Name {
+		t.Errorf("another user's name = %q, %v; want it unchanged", victimName, err)
+	}
+	wantError(t, "id in the body", sendJSON(e, http.MethodPatch, host, "/api/v1/me", map[string]any{"id": victim.ID, "name": "Hijack", "phone": ""}, bearer),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "body")
+}
+
+func TestUpdateMeIsStudentOnly(t *testing.T) {
+	f := newAuthFixture(t, false)
+	e := f.echo(t)
+	host := f.host(f.active[0].Slug)
+	for _, role := range []model.Role{model.RoleAdmin, model.RoleOperator} {
+		user := f.newUser(t, role, authTestPassword)
+		token := decodeTokenResponse(t, postJSON(e, host, "/api/v1/auth/login", credentials(*user.Email), nil)).AccessToken
+		bearer := map[string]string{echo.HeaderAuthorization: "Bearer " + token}
+		wantError(t, string(role), sendJSON(e, http.MethodPatch, host, "/api/v1/me", map[string]string{"name": "Renamed", "phone": ""}, bearer),
+			http.StatusForbidden, httpx.CodeForbidden)
+		var name string
+		if err := f.pool.QueryRow(context.Background(), `SELECT name FROM users WHERE id = $1`, user.ID).Scan(&name); err != nil || name != user.Name {
+			t.Errorf("%s name = %q, %v; want it unchanged", role, name, err)
+		}
+	}
+}
+
+func TestChangePasswordOverHTTP(t *testing.T) {
+	f := newAuthFixture(t, false)
+	e := f.echo(t)
+	host := f.host(f.active[0].Slug)
+	user := f.newUser(t, model.RoleStudent, authTestPassword)
+	current := decodeTokenResponse(t, postJSON(e, host, "/api/v1/auth/login", credentials(*user.Email), nil))
+	other := postJSON(e, host, "/api/v1/auth/login", credentials(*user.Email), nil)
+	otherTokens := decodeTokenResponse(t, other)
+	bearer := map[string]string{echo.HeaderAuthorization: "Bearer " + current.AccessToken}
+	body := func(cur, next string) map[string]string {
+		return map[string]string{"current_password": cur, "new_password": next}
+	}
+
+	wantError(t, "no token", postJSON(e, host, "/api/v1/me/password", body(authTestPassword, "brand-new-horse"), nil),
+		http.StatusUnauthorized, httpx.CodeUnauthorized)
+	wantError(t, "unknown field", postJSON(e, host, "/api/v1/me/password", map[string]string{"current_password": authTestPassword, "new_password": "brand-new-horse", "user_id": victimID()}, bearer),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "body")
+	wantError(t, "missing fields", postJSON(e, host, "/api/v1/me/password", map[string]string{}, bearer),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "current_password", "new_password")
+	wantError(t, "wrong current", postJSON(e, host, "/api/v1/me/password", body("wrong-password-1", "brand-new-horse"), bearer),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "current_password")
+	wantError(t, "weak new", postJSON(e, host, "/api/v1/me/password", body(authTestPassword, "short"), bearer),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "new_password")
+	if me := getWithToken(e, host, "/api/v1/me", current.AccessToken); me.Code != http.StatusOK {
+		t.Fatalf("the session after rejected changes: status = %d, want 200", me.Code)
+	}
+
+	if rec := postJSON(e, host, "/api/v1/me/password", body(authTestPassword, "brand-new-horse"), bearer); rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("change: status = %d body = %q, want 204 and no body", rec.Code, rec.Body.String())
+	}
+	if me := getWithToken(e, host, "/api/v1/me", current.AccessToken); me.Code != http.StatusOK {
+		t.Errorf("the caller's session after the change: status = %d, want 200", me.Code)
+	}
+	if me := getWithToken(e, host, "/api/v1/me", otherTokens.AccessToken); me.Code != http.StatusUnauthorized {
+		t.Errorf("another session after the change: status = %d, want 401", me.Code)
+	}
+	cookie := cookieNamed(other.Result().Cookies(), refreshCookieName)
+	if rec := postWithCookie(e, host, "/api/v1/auth/refresh", cookie, devOrigins[0]); rec.Code != http.StatusUnauthorized {
+		t.Errorf("refreshing another session: status = %d, want 401", rec.Code)
+	}
+	if rec := postJSON(e, host, "/api/v1/auth/login", map[string]string{"identifier": *user.Email, "password": "brand-new-horse"}, nil); rec.Code != http.StatusOK {
+		t.Errorf("login with the new password: status = %d, want 200", rec.Code)
+	}
+}
+
+func victimID() string { return uuid.NewString() }

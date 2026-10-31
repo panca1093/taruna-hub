@@ -1,21 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Spinner, toast } from "@heroui/react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { AuthLayout } from "@/components/auth-layout";
 import { PasswordInput } from "@/components/password-input";
 import { TextInput } from "@/components/ui/form";
+import { safeReturnPath, withReturn } from "@/lib/return-intent";
 import { useSession } from "@/lib/session-context";
 import { ApiError, errorText } from "@/lib/api/client";
 import { useAuthT } from "@/lib/i18n/dict/auth";
 
 const registerFields = ["name", "email", "phone", "password"];
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const next = safeReturnPath(useSearchParams().get("next"), "student");
   const { register } = useSession();
   const t = useAuthT();
   const [name, setName] = useState("");
@@ -38,7 +40,7 @@ export default function RegisterPage() {
     try {
       await register({ name, email, phone: phone.trim() || undefined, password });
       toast.success(t.toastAccountCreatedTitle, { description: t.toastAccountCreatedDescription });
-      router.push("/verify-email");
+      router.push(withReturn("/verify-email", next));
     } catch (err) {
       if (err instanceof ApiError && err.fields) {
         setFields(err.fields);
@@ -51,7 +53,7 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout variant="register">
-      <Link href="/login" className="auth-back"><ArrowLeft className="size-4" />{t.backToLogin}</Link>
+      <Link href={withReturn("/login", next)} className="auth-back"><ArrowLeft className="size-4" />{t.backToLogin}</Link>
       <h1 className="auth-title">{t.registerTitle}</h1>
       <p className="auth-subtitle">{t.registerSubtitle}</p>
       <form onSubmit={handleSubmit} className="auth-fields" aria-busy={pending}>
@@ -67,7 +69,11 @@ export default function RegisterPage() {
           {pending && <Spinner size="sm" />}{pending ? t.creatingAccount : t.submitRegister}{!pending && <ArrowRight className="size-4" />}
         </Button>
       </form>
-      <p className="auth-secondary">{t.haveAccount}{" "}<Link href="/login">{t.loginLink}</Link></p>
+      <p className="auth-secondary">{t.haveAccount}{" "}<Link href={withReturn("/login", next)}>{t.loginLink}</Link></p>
     </AuthLayout>
   );
+}
+
+export default function RegisterPage() {
+  return <Suspense><RegisterForm /></Suspense>;
 }

@@ -1,62 +1,70 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Accordion, Button, Card, Chip } from "@heroui/react";
-import { CheckCircle2, ChevronDown, Clock, CloudOff, Trophy, XCircle } from "lucide-react";
+import { Suspense, use, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Button, Card } from "@heroui/react";
+import { ArrowRight, Clock, CloudOff, Lock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { CountdownRing } from "@/components/countdown-ring";
 import { EmptyState } from "@/components/empty-state";
-import { LatexText } from "@/components/latex";
 import { LinkButton } from "@/components/ui/link-button";
-import { api, ApiError, type ReviewQuestion, type StudentTryout, type TryoutResultDetail, type TryoutReview } from "@/lib/api/client";
+import { api, ApiError, type StudentTryout, type TryoutResultDetail } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
+import { useLocale } from "@/lib/i18n/locale-context";
 import { useTryoutResultT } from "@/lib/i18n/dict/tryout-result";
 
-export default function ResultPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+type LoadState = "loading" | "ready" | "failed" | "unavailable" | "notReady";
+
+function ResultContent({ tryoutId, attemptParam }: { tryoutId: string; attemptParam: string | null }) {
   const router = useRouter();
   const t = useTryoutResultT();
+  const { locale } = useLocale();
+  const formatDate = (iso: string) =>
+    new Intl.DateTimeFormat(locale === "id" ? "id-ID" : "en-US", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(
+      new Date(iso),
+    );
   const [overview, setOverview] = useState<StudentTryout | null>(null);
   const [result, setResult] = useState<TryoutResultDetail | null>(null);
-  const [review, setReview] = useState<TryoutReview | null>(null);
-  const [reviewFailed, setReviewFailed] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [state, setState] = useState<LoadState>("loading");
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    api.runtime
-      .overview(id)
-      .then(async (loaded) => {
-        const latest = loaded.attempts.find((a) => a.status === "completed");
-        if (!latest) {
-          if (!cancelled) router.replace(`/student/tryout/${id}`);
+    const load = async () => {
+      const loaded = await api.runtime.overview(tryoutId);
+      const sessionId = attemptParam ?? loaded.attempts.find((a) => a.status === "completed")?.session_id ?? null;
+      if (!sessionId) return { loaded, res: null };
+      const res = await api.runtime.result(sessionId);
+      return { loaded, res };
+    };
+    load()
+      .then(({ loaded, res }) => {
+        if (cancelled) return;
+        if (!res) {
+          router.replace(`/student/tryout/${tryoutId}`);
           return;
         }
-        const res = await api.runtime.result(latest.session_id);
-        if (cancelled) return;
+        // A session of another tryout is never shown under this tryout's URL.
+        if (res.tryout_id !== tryoutId) {
+          setState("unavailable");
+          return;
+        }
         setOverview(loaded);
         setResult(res);
-        if (!res.explanations_released) return;
-        try {
-          const loadedReview = await api.runtime.review(latest.session_id);
-          if (!cancelled) setReview(loadedReview);
-        } catch {
-          if (!cancelled) setReviewFailed(true);
-        }
+        setState("ready");
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        if (err instanceof ApiError && err.status === 404) router.replace(`/student/tryout/${id}`);
-        else setFailed(true);
+        if (err instanceof ApiError && err.status === 409 && err.code === "result_not_ready") setState("notReady");
+        else if (err instanceof ApiError && (err.status === 404 || err.status === 403)) setState("unavailable");
+        else setState("failed");
       });
     return () => {
       cancelled = true;
     };
-  }, [id, router, reloadKey]);
+  }, [tryoutId, attemptParam, router, reloadKey]);
 
-  if (failed) {
+  if (state === "failed") {
     return (
       <AppShell title={t.pageTitle}>
         <EmptyState
@@ -68,7 +76,7 @@ export default function ResultPage({ params }: { params: Promise<{ id: string }>
               variant="primary"
               size="sm"
               onPress={() => {
-                setFailed(false);
+                setState("loading");
                 setReloadKey((key) => key + 1);
               }}
             >
@@ -79,145 +87,173 @@ export default function ResultPage({ params }: { params: Promise<{ id: string }>
       </AppShell>
     );
   }
-  if (!result || !overview) {
+  if (state === "unavailable" || state === "notReady") {
     return (
       <AppShell title={t.pageTitle}>
-        <p className="text-sm text-muted">{t.loadingResult}</p>
+        <EmptyState
+          icon={Lock}
+          title={state === "notReady" ? t.notReadyTitle : t.unavailableTitle}
+          description={state === "notReady" ? t.notReadyDescription : t.unavailableDescription}
+          action={
+            <LinkButton href={`/student/tryout/${tryoutId}`} variant="secondary" size="sm">
+              {t.toDetail}
+            </LinkButton>
+          }
+        />
+      </AppShell>
+    );
+  }
+  if (state === "loading" || !result || !overview) {
+    return (
+      <AppShell title={t.pageTitle}>
+        <p className="py-14 text-center text-sm text-muted">{t.loadingResult}</p>
       </AppShell>
     );
   }
 
+  const correct = result.subtests.reduce((sum, s) => sum + s.correct_count, 0);
+  const total = result.subtests.reduce((sum, s) => sum + s.question_count, 0);
+  const completed = overview.attempts.filter((a) => a.status === "completed");
+  const reviewHref = `/student/tryout/${tryoutId}/review?attempt=${result.session_id}`;
+
   return (
     <AppShell title={t.pageTitle} description={overview.title}>
-      <div className="mx-auto max-w-3xl space-y-6">
-        <Card className="flex-col items-center gap-4 p-8 text-center sm:flex-row sm:text-left">
-          <CountdownRing value={result.score} size={110} strokeWidth={9} animate>
-            <div className="text-center">
-              <p className="font-display text-2xl font-semibold text-foreground">{result.score}</p>
-              <p className="text-[10px] text-muted">/ 100</p>
-            </div>
-          </CountdownRing>
-          <div className="flex-1">
-            <p className="text-sm font-medium text-muted">{t.yourTotalScore}</p>
-            <p className="font-display mt-0.5 text-xl font-semibold text-foreground">{overview.title}</p>
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent-soft-foreground">
-              <Trophy className="size-3.5" />
-              {t.rankLabel(result.ranking.rank, result.ranking.participant_count)}
-            </div>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">{t.heading(result.attempt_number)}</h1>
+            <p className="mt-1 text-sm text-muted">{t.headingMeta(overview.title, formatDate(result.completed_at))}</p>
           </div>
+          {result.explanations_released ? (
+            <LinkButton href={reviewHref} variant="primary" size="md">
+              {t.viewReview} <ArrowRight className="size-4" />
+            </LinkButton>
+          ) : (
+            <Button variant="secondary" isDisabled>
+              <Clock className="size-4" /> {t.reviewHeld}
+            </Button>
+          )}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-4">
+          <section className="flex flex-col items-center justify-center rounded-2xl bg-accent-soft p-6 text-center text-accent-soft-foreground lg:row-span-2">
+            <p className="text-sm">{t.scoreLabel}</p>
+            <p className="font-display mt-2 text-6xl font-semibold text-foreground">{result.score}</p>
+            <p className="mt-1 text-xs">{t.scoreOutOf}</p>
+          </section>
+          <Card className="gap-0 p-5">
+            <p className="font-display text-3xl font-semibold text-foreground">{correct}</p>
+            <p className="text-xs text-muted">{t.statCorrect}</p>
+          </Card>
+          <Card className="gap-0 p-5">
+            <p className="font-display text-3xl font-semibold text-foreground">{total}</p>
+            <p className="text-xs text-muted">{t.statQuestions}</p>
+          </Card>
+          <Card className="gap-0 p-5">
+            <p className="font-display text-3xl font-semibold text-foreground">
+              {t.rankValue(result.ranking.rank, result.ranking.participant_count)}
+            </p>
+            <p className="text-xs text-muted">{t.statRank}</p>
+            <p className="mt-1 text-xs text-muted">{t.rankNote(result.ranking.average_score, result.ranking.attempts_counted)}</p>
+          </Card>
+          <Card className="gap-0 p-5 lg:col-span-3">
+            {result.explanations_released ? (
+              <>
+                <h2 className="font-display text-lg font-semibold text-foreground">{t.learnTitle}</h2>
+                <p className="mt-1 text-sm text-muted">{t.learnBody}</p>
+              </>
+            ) : (
+              <div className="flex items-start gap-3">
+                <Clock className="mt-0.5 size-4 shrink-0 text-muted" />
+                <div>
+                  <h2 className="font-display text-lg font-semibold text-foreground">{t.heldTitle}</h2>
+                  <p className="mt-1 text-sm text-muted">{t.heldBody}</p>
+                  {result.explanation_release_at && (
+                    <p className="mt-1 text-sm font-medium text-foreground">{t.heldUntil(formatDate(result.explanation_release_at))}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        <Card className="gap-0 p-6">
+          <h2 className="font-display text-lg font-semibold text-foreground">{t.subtestScoresTitle}</h2>
+          <ul className="mt-4 space-y-4">
+            {result.subtests.map((s) => (
+              <li key={s.subtest_id}>
+                <div className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="text-foreground">{s.name}</span>
+                  <span className="shrink-0 font-semibold text-foreground">
+                    {s.score} / 100 <span className="ml-2 text-xs font-normal text-muted">{t.correctCount(s.correct_count, s.question_count)}</span>
+                  </span>
+                </div>
+                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-secondary" role="presentation">
+                  <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, s.score))}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
         </Card>
 
-        <div>
-          <p className="mb-3 text-sm font-semibold text-foreground">{t.subtestScoresTitle}</p>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {result.subtests.map((s) => (
-              <Card key={s.subtest_id} className="gap-2 p-4">
-                <p className="line-clamp-1 text-xs font-medium text-muted">{s.name}</p>
-                <p className="font-display text-xl font-semibold text-foreground">{s.score}</p>
-                <p className="text-xs text-muted">{t.correctCount(s.correct_count, s.question_count)}</p>
-              </Card>
-            ))}
-          </div>
-        </div>
+        {completed.length > 0 && (
+          <Card className="gap-0 p-6">
+            <h2 className="font-display text-lg font-semibold text-foreground">{t.historyTitle}</h2>
+            <ul className="mt-3 divide-y divide-border">
+              {completed.map((attempt) => {
+                const isCurrent = attempt.session_id === result.session_id;
+                return (
+                  <li key={attempt.session_id}>
+                    <Link
+                      href={`/student/tryout/${tryoutId}/result?attempt=${attempt.session_id}`}
+                      aria-current={isCurrent ? "page" : undefined}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-lg px-2 py-3.5 transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+                        isCurrent && "bg-accent-soft",
+                      )}
+                    >
+                      <span>
+                        <span className="block text-sm font-medium text-foreground">
+                          {t.attemptLabel(attempt.attempt_number)}
+                          {isCurrent && <span className="ml-2 text-xs font-normal text-muted">{t.currentAttempt}</span>}
+                        </span>
+                        {attempt.completed_at && <span className="block text-xs text-muted">{formatDate(attempt.completed_at)}</span>}
+                      </span>
+                      <span className="flex items-center gap-3">
+                        <span className="font-display text-xl font-semibold text-foreground">{attempt.score ?? "–"}</span>
+                        <ArrowRight className="size-4 text-muted" />
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        )}
 
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-foreground">{t.attemptHistoryTitle}</p>
-          <LinkButton href={`/student/tryout/${id}`} variant="ghost" size="sm">
-            {t.viewAllAttempts}
+        <div className="flex flex-wrap gap-3">
+          <LinkButton href={`/student/tryout/${tryoutId}`} variant="secondary" size="md">
+            {t.historyAndRetry} <ArrowRight className="size-4" />
+          </LinkButton>
+          <LinkButton href="/student" variant="secondary" size="md">
+            {t.backToDashboard}
           </LinkButton>
         </div>
-
-        {!result.explanations_released ? (
-          <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-secondary p-4 text-sm text-muted">
-            <Clock className="mt-0.5 size-4 shrink-0" />
-            <p>
-              {t.explanationWithheldPrefix}{" "}
-              {result.explanation_release_at && (
-                <strong className="text-foreground">{formatDate(result.explanation_release_at)}</strong>
-              )}
-              . {t.explanationWithheldSuffix}
-            </p>
-          </div>
-        ) : reviewFailed ? (
-          <p className="text-sm text-muted">{t.reviewErrorTitle}</p>
-        ) : !review ? (
-          <p className="text-sm text-muted">{t.loadingReview}</p>
-        ) : (
-          <div>
-            <p className="mb-3 text-sm font-semibold text-foreground">{t.explanationsTitle}</p>
-            <Accordion className="flex flex-col gap-3" allowsMultipleExpanded>
-              {review.subtests.map((st) => (
-                <Accordion.Item key={st.subtest_id} id={st.subtest_id} className="rounded-xl border border-border bg-surface px-4">
-                  <Accordion.Heading>
-                    <Accordion.Trigger className="flex w-full items-center justify-between gap-3 py-3.5 text-left">
-                      <span className="text-sm font-medium text-foreground">{st.name}</span>
-                      <span className="flex items-center gap-2 text-xs text-muted">
-                        {t.correctCount(st.correct_count, st.question_count)}
-                        <Accordion.Indicator>
-                          <ChevronDown className="size-4" />
-                        </Accordion.Indicator>
-                      </span>
-                    </Accordion.Trigger>
-                  </Accordion.Heading>
-                  <Accordion.Panel>
-                    <Accordion.Body className="flex flex-col gap-4 border-t border-border pb-4 pt-4">
-                      {st.questions.map((q, i) => (
-                        <ReviewItem key={q.id} q={q} index={i} t={t} />
-                      ))}
-                    </Accordion.Body>
-                  </Accordion.Panel>
-                </Accordion.Item>
-              ))}
-            </Accordion>
-          </div>
-        )}
       </div>
     </AppShell>
   );
 }
 
-const formatDate = (iso: string) =>
-  new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(
-    new Date(iso),
-  );
+function ResultRoute({ tryoutId }: { tryoutId: string }) {
+  const attempt = useSearchParams().get("attempt");
+  return <ResultContent key={attempt ?? "latest"} tryoutId={tryoutId} attemptParam={attempt} />;
+}
 
-function ReviewItem({ q, index, t }: { q: ReviewQuestion; index: number; t: ReturnType<typeof useTryoutResultT> }) {
-  const labelOf = (value: string) => q.options.find((o) => o.id === value)?.label ?? value;
-  const pointsOf = (value: string) => q.options.find((o) => o.id === value)?.points;
-  const weightedPoints = q.option_weighted && q.answer.length ? pointsOf(q.answer[0]) : null;
+export default function ResultPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   return (
-    <div className="space-y-2 border-b border-border pb-4 last:border-b-0 last:pb-0">
-      <div className="flex items-start gap-2.5">
-        <span
-          className={cn(
-            "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full",
-            q.is_correct ? "bg-success-soft text-success-soft-foreground" : "bg-danger-soft text-danger-soft-foreground",
-          )}
-        >
-          {q.is_correct ? <CheckCircle2 className="size-3.5" /> : <XCircle className="size-3.5" />}
-        </span>
-        <div className="min-w-0 flex-1 text-sm text-foreground">
-          <span className="text-muted">{index + 1}. </span>
-          <LatexText text={q.content} />
-        </div>
-      </div>
-      <div className="ml-7.5 flex flex-wrap gap-2 text-xs">
-        <Chip
-          size="sm"
-          className={cn(q.is_correct ? "bg-success-soft text-success-soft-foreground" : "bg-danger-soft text-danger-soft-foreground", "font-medium")}
-        >
-          {t.yourAnswerPrefix} {q.answer.length ? q.answer.map(labelOf).join(", ") : t.emptyAnswer}
-          {weightedPoints != null ? ` ${t.pointsSuffix(weightedPoints)}` : ""}
-        </Chip>
-        {!q.is_correct && !q.option_weighted && q.correct.length > 0 && (
-          <Chip size="sm" className="bg-success-soft text-success-soft-foreground font-medium">
-            {t.correctAnswerPrefix} {q.correct.map(labelOf).join(", ")}
-          </Chip>
-        )}
-      </div>
-      <p className="ml-7.5 text-xs leading-relaxed text-muted">
-        <LatexText text={q.explanation} />
-      </p>
-    </div>
+    <Suspense fallback={null}>
+      <ResultRoute tryoutId={id} />
+    </Suspense>
   );
 }

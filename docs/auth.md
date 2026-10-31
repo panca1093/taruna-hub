@@ -81,6 +81,37 @@ Links last 30 minutes, and asking twice leaves both valid until one of them is u
 Codes and links travel only as sealed notification params with an expiry equal to their own, so a
 message that would arrive dead is expired instead of sent.
 
+## Self-service profile and password
+
+| Route | Answer |
+|---|---|
+| `PATCH /me` | `200` and the updated user; body `{name, phone}`; students only, staff get `403` |
+| `POST /me/password` | `204`; body `{current_password, new_password}` |
+
+`PATCH /me` is student-only (`RequireRole(student)`): an admin or operator gets `403` and their row
+is untouched, since the owner decision of 2026-10-31 covers students. `POST /me/password` takes any
+authenticated principal. Neither names a user: the account is always the caller's, and unknown body
+fields are refused with `422 fields.body`. A student changes only the name and the phone; the email
+is read-only and changes stay with an admin.
+
+`name` is trimmed and 1 to 100 characters. `phone` is optional and goes through the same
+`NormalizePhone` as register. Uniqueness is left to the `(tenant, phone)` unique index, so saving the
+phone the account already holds is fine and a phone another account holds is `409` with
+`fields.phone`. An empty phone clears it only when the account has an email (`users_email_or_phone`
+would otherwise reject it), and that case is `422 fields.phone` rather than a database error. The
+web app refreshes the header name through `reloadUser` after a save.
+
+The password change needs the current password. A wrong one is `422 fields.current_password`, never
+`401`, so the web app does not mistake it for an expired session. `new_password` follows the register
+and reset rule. The hash is swapped with a compare-and-set on the hash that was verified, and in the
+same transaction every other live session of the user gets `revoked_at`; the caller's own session
+(`principal.SessionID`) stays. Their access tokens die on the next request and their refresh tokens
+are refused, because the middleware and refresh both read the session row. Unlike a reset, a change
+does not mark the email verified.
+
+Wrong guesses are throttled with the login budget (10 / 15 minutes) under their own key, per user, so
+guessing against a stolen session cannot lock the owner's login. A success clears it.
+
 ## Throttles
 
 Fixed-window counters in Redis (`REDIS_URL`), keyed by a SHA-256 of rule, host scope and normalized
@@ -94,6 +125,7 @@ while it is unreachable, login, signup and forgot-password answer `500` rather t
 | Login, per identifier and host | 10 attempts / 15 minutes; a success or a password reset clears it |
 | Email codes, per email and tenant | 5 / hour across register and resend, and 60 seconds between resends |
 | Forgot password, per email and host | 3 / 15 minutes, counted for unknown emails too |
+| Password change, per user | 10 attempts / 15 minutes (login's size, separate key); a success clears it |
 
 A login lockout keyed on the identifier lets someone who knows an address lock its owner out for 15
 minutes; the reset link still works and clears it.

@@ -25,6 +25,8 @@ const (
 	noEmail           = "Akun ini tidak memiliki email."
 	codeInvalid       = "Kode salah atau sudah kedaluwarsa."
 	resetInvalid      = "Tautan tidak valid atau sudah kedaluwarsa."
+	wrongPassword     = "Kata sandi saat ini salah."
+	phoneRequired     = "Nomor HP wajib diisi karena akun ini tidak memiliki email."
 	tooManyRequests   = "Terlalu banyak percobaan. Coba lagi nanti."
 )
 
@@ -158,8 +160,13 @@ func accountError(c echo.Context, err error) error {
 		fields := make(map[string]string, len(input.Fields))
 		for name, reason := range input.Fields {
 			fields[name] = invalidFormat
-			if reason == service.ReasonPassword {
+			switch reason {
+			case service.ReasonPassword:
 				fields[name] = passwordRule
+			case service.ReasonWrongPassword:
+				fields[name] = wrongPassword
+			case service.ReasonPhoneRequired:
+				fields[name] = phoneRequired
 			}
 		}
 		return httpx.Validation(incomplete, fields)
@@ -169,6 +176,8 @@ func accountError(c echo.Context, err error) error {
 		return httpx.Conflict(alreadyRegistered).WithFields(map[string]string{"email": emailTaken})
 	case errors.Is(err, service.ErrPhoneTaken):
 		return httpx.Conflict(alreadyRegistered).WithFields(map[string]string{"phone": phoneTaken})
+	case errors.Is(err, service.ErrUnauthenticated):
+		return httpx.Unauthorized(sessionInvalid)
 	case errors.Is(err, service.ErrAlreadyVerified):
 		return httpx.Conflict(alreadyVerified)
 	case errors.Is(err, service.ErrNoEmail):
