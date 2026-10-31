@@ -5,6 +5,8 @@ import { useLocale } from "@/lib/i18n/locale-context";
 const id = {
   pageTitle: "Permintaan Top-up",
   topupCount: (n: number) => `${n} permintaan`,
+  pageDescription: "Periksa bukti transfer sebelum saldo ditambahkan.",
+  shownOf: (n: number, total: number) => `Menampilkan ${n} dari ${total} permintaan`,
   tabAll: "Semua",
   tabPending: "Menunggu",
   tabApproved: "Disetujui",
@@ -45,6 +47,8 @@ const id = {
 const en: typeof id = {
   pageTitle: "Top-up Requests",
   topupCount: (n: number) => `${n} requests`,
+  pageDescription: "Check the transfer proof before the balance is credited.",
+  shownOf: (n: number, total: number) => `Showing ${n} of ${total} requests`,
   tabAll: "All",
   tabPending: "Pending",
   tabApproved: "Approved",

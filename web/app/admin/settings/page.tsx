@@ -1,13 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card, toast } from "@heroui/react";
-import { Banknote, CreditCard, Scale } from "lucide-react";
+import { Button, toast } from "@heroui/react";
+import { Banknote, CreditCard, Scale, type LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Icon } from "@/components/icon";
+import { LoadingNote } from "@/components/admin-detail";
+import { Panel } from "@/components/page-blocks";
 import { RequireRole } from "@/components/require-role";
 import { TextInput } from "@/components/ui/form";
 import { api, ApiError, errorText } from "@/lib/api/client";
 import { useSettingsT } from "@/lib/i18n/dict/settings";
+
+function SectionTitle({ icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="grid size-9.5 shrink-0 place-items-center rounded-control bg-peach text-accent">
+        <Icon icon={icon} size="sm" />
+      </span>
+      <p className="font-display text-heading-sm text-foreground">{children}</p>
+    </div>
+  );
+}
 
 type Weights = { easy: string; medium: string; hard: string; minTopup: string };
 
@@ -79,37 +93,31 @@ export default function SettingsPage() {
   return (
     <RequireRole roles={["admin"]} title={t.pageTitle} deniedMessage={t.deniedMessage}>
       <AppShell title={t.pageTitle} description={t.pageDescription}>
-        <div className="mx-auto max-w-2xl space-y-6">
-          <Card className="gap-4 p-5">
-            <div className="flex items-center gap-2">
-              <CreditCard className="size-4 text-accent" />
-              <p className="text-sm font-semibold text-foreground">{t.paymentModelTitle}</p>
-            </div>
-            <p className="text-xs text-muted">{t.paymentModelDescription}</p>
+        <div className="mx-auto max-w-3xl space-y-6">
+          <Panel className="flex flex-col gap-4">
+            <SectionTitle icon={CreditCard}>{t.paymentModelTitle}</SectionTitle>
+            <p className="text-caption text-muted">{t.paymentModelDescription}</p>
             <div className="grid gap-3 sm:grid-cols-3">
               {paymentOptions.map((opt) => (
-                <div key={opt.title} className="rounded-lg border border-border p-3.5">
-                  <p className="text-sm font-medium text-foreground">{opt.title}</p>
-                  <p className="mt-1 text-xs text-muted">{opt.desc}</p>
+                <div key={opt.title} className="rounded-tile border border-border bg-background p-4">
+                  <p className="text-small font-medium text-foreground">{opt.title}</p>
+                  <p className="mt-1 text-label text-muted">{opt.desc}</p>
                 </div>
               ))}
             </div>
-          </Card>
+          </Panel>
 
-          <Card className="gap-4 p-5">
+          <Panel className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Scale className="size-4 text-accent" />
-                <p className="text-sm font-semibold text-foreground">{t.scoringWeightTitle}</p>
-              </div>
+              <SectionTitle icon={Scale}>{t.scoringWeightTitle}</SectionTitle>
               <Button variant="primary" size="sm" onPress={save} isDisabled={!dirty || saving}>
                 {saving ? t.saving : t.save}
               </Button>
             </div>
-            <p className="text-xs text-muted">{t.scoringWeightDescription}</p>
+            <p className="text-caption text-muted">{t.scoringWeightDescription}</p>
             {loadFailed ? (
               <div className="py-4 text-center">
-                <p className="text-sm text-muted">{t.loadErrorDescription}</p>
+                <p className="text-small text-muted">{t.loadErrorDescription}</p>
                 <Button
                   variant="primary"
                   size="sm"
@@ -123,7 +131,7 @@ export default function SettingsPage() {
                 </Button>
               </div>
             ) : weights === null ? (
-              <p className="py-4 text-center text-sm text-muted">{t.loading}</p>
+              <LoadingNote>{t.loading}</LoadingNote>
             ) : (
               <div className="grid gap-4 sm:grid-cols-3">
                 <TextInput
@@ -155,14 +163,11 @@ export default function SettingsPage() {
                 />
               </div>
             )}
-          </Card>
+          </Panel>
 
-          <Card className="gap-4 p-5">
-            <div className="flex items-center gap-2">
-              <Banknote className="size-4 text-accent" />
-              <p className="text-sm font-semibold text-foreground">{t.minTopupTitle}</p>
-            </div>
-            <p className="text-xs text-muted">{t.minTopupDescription}</p>
+          <Panel className="flex flex-col gap-4">
+            <SectionTitle icon={Banknote}>{t.minTopupTitle}</SectionTitle>
+            <p className="text-caption text-muted">{t.minTopupDescription}</p>
             {weights !== null && (
               <div className="max-w-xs">
                 <TextInput
@@ -177,7 +182,7 @@ export default function SettingsPage() {
                 />
               </div>
             )}
-          </Card>
+          </Panel>
         </div>
       </AppShell>
     </RequireRole>
