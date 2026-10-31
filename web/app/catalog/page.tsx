@@ -3,11 +3,14 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Button, Card, Chip } from "@heroui/react";
-import { PackageSearch } from "lucide-react";
+import { Button } from "@heroui/react";
+import { ArrowRight, BookOpen, Grid2x2, Layers, PackageSearch, Search } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PublicNav } from "@/components/public-nav";
 import { EmptyState } from "@/components/empty-state";
+import { FilterPills } from "@/components/filter-pills";
+import { Icon } from "@/components/icon";
+import { CardKicker } from "@/components/page-blocks";
 import { SelectInput, TextInput } from "@/components/ui/form";
 import { useSession } from "@/lib/session-context";
 import { useCatalogT } from "@/lib/i18n/dict/catalog";
@@ -91,81 +94,73 @@ function CatalogContent() {
     setReloadKey((key) => key + 1);
   };
 
-  const renderCard = (product: PublicProduct) => (
-    <Link key={product.id} href={`/catalog/${product.id}`}>
-      <Card className="group h-full gap-0 overflow-hidden rounded-2xl p-0 transition-shadow hover:shadow-overlay">
-        <div className="relative h-32 w-full bg-gradient-ring">
-          <div className="absolute top-3 left-3 flex gap-1.5">
-            <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
-              {product.program_code}
-            </Chip>
-            <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
-              {product.type === "bundle"
-                ? t.bundleSize(product.tryouts.length)
-                : product.type === "kecermatan"
-                  ? t.typeKecermatan
-                  : t.typeIndividual}
-            </Chip>
-            {product.discount_percent !== null && (
-              <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
-                {t.discountChip(product.discount_percent)}
-              </Chip>
-            )}
-          </div>
-        </div>
-        <div className="space-y-2.5 p-4">
-          <p className="line-clamp-1 text-sm font-semibold text-foreground">{product.title}</p>
-          <p className="line-clamp-2 text-xs text-muted">{product.description}</p>
-          <div className="flex items-baseline gap-2 pt-1">
-            <span className="font-display text-base font-semibold text-foreground">{formatIDR(product.price)}</span>
+  const renderCard = (product: PublicProduct) => {
+    const kind = product.type === "kecermatan" ? "kecermatan" : product.type === "bundle" ? "bundle" : "individual";
+    const symbol = {
+      individual: { glyph: BookOpen, tone: "bg-accent-soft text-accent" },
+      bundle: { glyph: Layers, tone: "bg-peach text-accent" },
+      kecermatan: { glyph: Grid2x2, tone: "bg-success-soft text-success-soft-foreground" },
+    }[kind];
+    const typeLabel =
+      kind === "bundle" ? t.bundleSize(product.tryouts.length) : kind === "kecermatan" ? t.typeKecermatan : t.typeIndividual;
+    return (
+      <Link
+        key={product.id}
+        href={`/catalog/${product.id}`}
+        className="group flex min-h-70 flex-col rounded-card border border-border bg-surface p-6 outline-none transition-colors hover:border-accent focus-visible:ring-2 focus-visible:ring-focus"
+      >
+        <span className={cn("mb-6 grid size-13 shrink-0 place-items-center rounded-control", symbol.tone)}>
+          <Icon icon={symbol.glyph} size="md" />
+        </span>
+        <CardKicker className="mb-3">
+          {product.program_code} · {typeLabel}
+        </CardKicker>
+        <h3 className="font-display mb-2.5 line-clamp-2 text-title text-foreground">{product.title}</h3>
+        <p className="mb-6 line-clamp-2 text-caption text-muted">{product.description}</p>
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-3.5 pt-4">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="font-display text-title text-foreground">{formatIDR(product.price)}</span>
             {product.original_price && (
-              <span className="text-xs text-muted line-through">{formatIDR(product.original_price)}</span>
+              <span className="text-label text-muted line-through">{formatIDR(product.original_price)}</span>
+            )}
+            {product.discount_percent !== null && (
+              <span className="rounded-chip bg-success-soft px-2 py-0.5 text-nano text-success-soft-foreground">
+                {t.discountChip(product.discount_percent)}
+              </span>
             )}
           </div>
+          <span className="inline-flex items-center gap-1.5 text-label font-medium text-accent group-hover:underline">
+            {t.viewDetail}
+            <Icon icon={ArrowRight} size="xs" />
+          </span>
         </div>
-      </Card>
-    </Link>
-  );
+      </Link>
+    );
+  };
 
-  const tabs: { key: TypeFilter; label: string }[] = [
-    { key: "all", label: t.filterAllType },
-    { key: "individual", label: t.typeIndividual },
-    { key: "bundle", label: t.typeBundle },
-    { key: "kecermatan", label: t.sectionPsychometric },
+  const tabs = [
+    { id: "all", label: t.filterAllType },
+    { id: "individual", label: t.typeIndividual },
+    { id: "bundle", label: t.typeBundle },
+    { id: "kecermatan", label: t.sectionPsychometric },
   ];
 
   const body = (
     <>
-      <div className="flex flex-col gap-3 border-b border-border sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <div className="flex gap-6">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              aria-pressed={type === tab.key}
-              onClick={() => setType(tab.key)}
-              className={cn(
-                "relative flex-1 pb-3 text-sm font-medium whitespace-nowrap transition-colors sm:flex-none",
-                type === tab.key ? "text-foreground" : "text-muted hover:text-foreground",
-              )}
-            >
-              {tab.label}
-              {type === tab.key && (
-                <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gradient-ring" aria-hidden />
-              )}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-center sm:pb-2.5">
-          <div className="sm:w-52">
+      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <FilterPills options={tabs} value={type} onChange={(id) => setType(id as TypeFilter)} ariaLabel={t.filterAllType} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative sm:w-56">
+            <Icon icon={Search} size="xs" className="pointer-events-none absolute top-1/2 left-3.5 z-10 -translate-y-1/2 text-muted" />
             <TextInput
               aria-label={t.searchLabel}
               placeholder={t.searchPlaceholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              inputClassName="pl-9"
             />
           </div>
-          <div className="sm:w-52">
+          <div className="sm:w-56">
             <SelectInput
               options={[{ id: "all", label: t.filterAllProgram }, ...programs]}
               selectedKey={programCode}
@@ -188,15 +183,15 @@ function CatalogContent() {
           }
         />
       ) : rows === null ? (
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="h-64 animate-pulse rounded-xl border border-border bg-surface-secondary" />
+            <div key={index} className="h-70 animate-pulse rounded-card border border-border bg-surface" />
           ))}
         </div>
       ) : unknownProgram || rows.length === 0 ? (
         <EmptyState className="mt-10" icon={PackageSearch} title={t.emptyTitle} description={t.emptyDescription} />
       ) : (
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{rows.map(renderCard)}</div>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{rows.map(renderCard)}</div>
       )}
     </>
   );
@@ -213,10 +208,10 @@ function CatalogContent() {
     <div className="min-h-dvh bg-background">
       <PublicNav />
       <div className="mx-auto max-w-6xl px-5 py-12">
-        <p className="text-sm font-medium text-muted">{t.publicEyebrow}</p>
-        <h1 className="font-display mt-1 text-3xl font-semibold tracking-tight text-foreground">{t.publicHeading}</h1>
-        <p className="mt-2 max-w-xl text-sm text-muted">{t.description}</p>
-        <div className="mt-8">{body}</div>
+        <p className="text-small text-muted">{t.publicEyebrow}</p>
+        <h1 className="font-display mt-1 text-display-sm md:text-display text-foreground">{t.publicHeading}</h1>
+        <p className="mt-2 mb-7 max-w-prose text-small text-muted">{t.description}</p>
+        {body}
       </div>
     </div>
   );

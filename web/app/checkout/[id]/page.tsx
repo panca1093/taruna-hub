@@ -3,10 +3,13 @@
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, Card, toast } from "@heroui/react";
-import { CloudOff, Copy, CreditCard, FileUp, Receipt, TriangleAlert, Wallet } from "lucide-react";
+import { Button, toast } from "@heroui/react";
+import type { LucideIcon } from "lucide-react";
+import { ArrowRight, CloudOff, Copy, FileUp, LayoutGrid, Receipt, TriangleAlert, Wallet } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/icon";
+import { NoteBox, Panel } from "@/components/page-blocks";
 import { LinkButton } from "@/components/ui/link-button";
 import { cn } from "@/lib/cn";
 import {
@@ -111,9 +114,9 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
     return (
       <AppShell title={t.pageTitle} maxWidth="max-w-5xl">
         {view === "loading" ? (
-          <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-            <div className="h-72 animate-pulse rounded-2xl border border-border bg-surface-secondary" />
-            <div className="h-56 animate-pulse rounded-2xl border border-border bg-surface-secondary" />
+          <div className="grid gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)]">
+            <div className="h-72 animate-pulse rounded-card border border-border bg-surface" />
+            <div className="h-56 animate-pulse rounded-card border border-border bg-surface" />
           </div>
         ) : (
           <EmptyState
@@ -296,16 +299,19 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
     product.type === "kecermatan" ? t.typeKecermatan : product.type === "bundle" ? t.typeBundle : t.typeIndividual;
 
   return (
-    <AppShell title={t.pageTitle} description={product.title} maxWidth="max-w-5xl">
-      <nav className="mb-4 text-xs text-muted">
-        <Link href={`/catalog/${product.id}`} className="hover:text-foreground hover:underline">
-          {t.backToProduct}
-        </Link>
-      </nav>
-
+    <AppShell
+      title={t.pageTitle}
+      description={product.title}
+      maxWidth="max-w-5xl"
+      breadcrumb={[
+        { label: t.crumbCatalog, href: "/catalog" },
+        { label: product.title, href: `/catalog/${product.id}` },
+        { label: t.crumbCheckout },
+      ]}
+    >
       {priceNotice && (
-        <div className="mb-4 flex items-start gap-3 rounded-xl border border-border bg-warning-soft p-4 text-sm text-warning-soft-foreground" role="alert">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+        <div className="mb-5 flex items-start gap-3 rounded-tile border border-border bg-warning-soft p-4 text-small text-warning-soft-foreground" role="alert">
+          <Icon icon={TriangleAlert} size="sm" className="mt-0.5" />
           <div>
             <p className="font-semibold">{t.priceChangedTitle}</p>
             <p className="mt-0.5">{t.priceChangedBody(formatIDR(priceNotice.from), formatIDR(priceNotice.to))}</p>
@@ -318,11 +324,11 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
           e.preventDefault();
           void submit();
         }}
-        className="grid gap-6 lg:grid-cols-[1.6fr_1fr]"
+        className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)]"
       >
-        <Card className="h-fit gap-4 rounded-2xl p-5 sm:p-6">
-          <h2 className="font-display text-lg font-semibold text-foreground">{t.methodTitle}</h2>
-          <div role="radiogroup" aria-label={t.methodTitle} className="flex flex-col gap-3">
+        <Panel className="flex flex-col gap-3">
+          <h2 className="font-display text-heading-sm">{t.methodTitle}</h2>
+          <div role="radiogroup" aria-label={t.methodTitle} className="flex flex-col gap-2.5">
             <MethodOption
               selected={activeMethod === "wallet"}
               disabled={locked}
@@ -336,7 +342,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
                 selected={activeMethod === "gateway"}
                 disabled={locked}
                 onSelect={() => choose("gateway")}
-                icon={CreditCard}
+                icon={LayoutGrid}
                 title={t.methodGateway}
                 description={t.methodGatewayDesc}
               />
@@ -354,41 +360,41 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
           </div>
 
           {activeMethod === "wallet" && (
-            <div className="rounded-xl border border-border bg-surface-secondary p-4 text-sm">
+            <div className="rounded-control border border-border bg-background p-4 text-small">
               <div className="flex items-center justify-between">
                 <span className="text-muted">{t.walletBalanceLabel}</span>
                 <span className="font-mono font-semibold text-foreground">{balance === null ? "—" : formatIDR(balance)}</span>
               </div>
               {balance === null ? (
-                <p className="mt-2 text-xs text-danger">{t.balanceUnknown}</p>
+                <p className="mt-2 text-caption text-danger">{t.balanceUnknown}</p>
               ) : short ? (
-                <p className="mt-2 text-xs text-danger">
+                <p className="mt-2 text-caption text-danger">
                   {t.insufficientBalance}{" "}
                   <Link href="/student/wallet" className="font-medium underline">
                     {t.topUpLink}
                   </Link>
                 </p>
               ) : (
-                <p className="mt-2 text-xs text-muted">{t.remainingBalance(formatIDR(subtractMoney(balance, product.price)))}</p>
+                <p className="mt-2 text-caption text-muted">{t.remainingBalance(formatIDR(subtractMoney(balance, product.price)))}</p>
               )}
             </div>
           )}
 
           {activeMethod === "gateway" && (
-            <div className="rounded-xl border border-border bg-surface-secondary p-4 text-sm text-muted">{t.gatewayDesc}</div>
+            <div className="rounded-control border border-border bg-background p-4 text-small text-muted">{t.gatewayDesc}</div>
           )}
 
           {activeMethod === "manual" && manualOk && (
             <div className="flex flex-col gap-4">
-              <div className="rounded-xl border border-border bg-surface-secondary p-4">
-                <p className="text-sm font-semibold text-foreground">{t.bankTitle}</p>
-                <p className="mt-1 text-xs text-muted">{t.bankDesc(formatIDR(product.price))}</p>
+              <div className="rounded-control border border-border bg-background p-4">
+                <p className="text-small font-semibold text-foreground">{t.bankTitle}</p>
+                <p className="mt-1 text-caption text-muted">{t.bankDesc(formatIDR(product.price))}</p>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs text-muted">
+                    <p className="text-caption text-muted">
                       {bank.bank_name} · {t.bankHolder(bank.account_holder)}
                     </p>
-                    <p className="font-mono text-base font-semibold break-all text-foreground">{bank.account_number}</p>
+                    <p className="font-mono text-title font-semibold break-all text-foreground">{bank.account_number}</p>
                   </div>
                   <Button
                     type="button"
@@ -400,13 +406,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
                       void navigator.clipboard?.writeText(bank.account_number).then(() => toast.success(t.copied));
                     }}
                   >
-                    <Copy className="size-4" />
+                    <Icon icon={Copy} size="sm" />
                   </Button>
                 </div>
               </div>
 
               <div>
-                <p className="text-sm font-semibold text-foreground">{t.proofTitle}</p>
+                <p className="text-small font-semibold text-foreground">{t.proofTitle}</p>
                 <input
                   ref={fileRef}
                   type="file"
@@ -421,14 +427,14 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
                   type="button"
                   disabled={locked}
                   onClick={() => fileRef.current?.click()}
-                  className="mt-2 flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-border py-8 text-center transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-60"
+                  className="mt-2 flex w-full flex-col items-center gap-2 rounded-tile border border-dashed border-border py-8 text-center transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-60"
                 >
-                  <FileUp className="size-5 text-muted" />
-                  <span className="text-sm font-medium break-all text-foreground">{file?.name ?? t.uploadPrompt}</span>
-                  <span className="text-xs text-muted">{file ? t.uploadChange : t.uploadHint}</span>
+                  <Icon icon={FileUp} size="md" className="text-rose" />
+                  <span className="text-small font-medium break-all text-foreground">{file?.name ?? t.uploadPrompt}</span>
+                  <span className="text-caption text-muted">{file ? t.uploadChange : t.uploadHint}</span>
                 </button>
                 {fileError !== "" && (
-                  <p className="mt-2 text-sm text-danger" role="alert">
+                  <p className="mt-2 text-small text-danger" role="alert">
                     {fileError}
                   </p>
                 )}
@@ -437,76 +443,74 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
           )}
 
           {activeMethod === "manual" && bankState === "off" && (
-            <p className="text-sm text-danger">{t.methodManualUnavailable}</p>
+            <p className="text-small text-danger">{t.methodManualUnavailable}</p>
           )}
 
-          <p className="rounded-xl bg-surface-secondary px-4 py-3 text-xs text-muted">{t.accessNote}</p>
-        </Card>
+          <NoteBox>{t.accessNote}</NoteBox>
+        </Panel>
 
-        <div className="flex flex-col gap-4 lg:sticky lg:top-6 lg:h-fit">
-          <Card className="gap-3 rounded-2xl p-5 sm:p-6">
-            <h2 className="font-display text-lg font-semibold text-foreground">{t.summaryTitle}</h2>
-            <div>
-              <p className="text-sm font-semibold text-foreground">{product.title}</p>
-              <p className="text-xs text-muted">
-                {product.program_name} · {typeLabel}
-              </p>
-            </div>
-            {product.type === "bundle" && <p className="text-xs text-muted">{t.includedTryouts(product.tryouts.length)}</p>}
-            {product.type === "kecermatan" && product.included_attempts !== null && (
-              <p className="text-xs text-muted">{t.includedAttempts(product.included_attempts)}</p>
-            )}
-            {product.active_until && (
-              <p className="text-xs text-muted">{t.validUntil(new Date(product.active_until).toLocaleDateString())}</p>
-            )}
-            <div className="space-y-1.5 border-t border-border pt-3 text-sm">
-              {product.original_price && (
-                <>
-                  <div className="flex justify-between text-muted">
-                    <span>{t.normalPrice}</span>
-                    <span className="line-through">{formatIDR(product.original_price)}</span>
-                  </div>
-                  <div className="flex justify-between text-muted">
-                    <span>{t.discount}</span>
-                    <span className="text-success">-{formatIDR(subtractMoney(product.original_price, product.price))}</span>
-                  </div>
-                </>
-              )}
-              <div className="flex justify-between border-t border-border pt-2 text-base font-semibold text-foreground">
-                <span>{t.total}</span>
-                <span>{formatIDR(product.price)}</span>
-              </div>
-            </div>
-
-            {problem && (
-              <div className="rounded-lg border border-border bg-danger-soft p-3 text-sm text-danger-soft-foreground" role="alert">
-                <p>{problem.text}</p>
-                {problem.href && (
-                  <Link href={problem.href} className="mt-1 inline-block font-medium underline">
-                    {problem.hrefLabel}
-                  </Link>
-                )}
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              fullWidth
-              isDisabled={submitting || redirecting || (!unresolved && (walletBlocked || manualBlocked))}
-            >
-              {submitLabel}
-            </Button>
-            <p className="text-center text-xs text-muted">
-              {t.termsAgreementPrefix}{" "}
-              <Link href="#" className="text-accent hover:underline">
-                {t.termsLink}
-              </Link>
-              .
+        <Panel as="aside" className="flex flex-col gap-3 lg:sticky lg:top-6">
+          <h2 className="font-display text-heading-sm">{t.summaryTitle}</h2>
+          <div>
+            <p className="text-caption font-semibold text-foreground">{product.title}</p>
+            <p className="text-label text-muted">
+              {product.program_name} · {typeLabel}
             </p>
-          </Card>
-        </div>
+          </div>
+          {product.type === "bundle" && <p className="text-label text-muted">{t.includedTryouts(product.tryouts.length)}</p>}
+          {product.type === "kecermatan" && product.included_attempts !== null && (
+            <p className="text-label text-muted">{t.includedAttempts(product.included_attempts)}</p>
+          )}
+          {product.active_until && (
+            <p className="text-label text-muted">{t.validUntil(new Date(product.active_until).toLocaleDateString())}</p>
+          )}
+          <div className="space-y-1 border-t border-border pt-2 text-caption">
+            {product.original_price && (
+              <>
+                <div className="flex justify-between gap-5 py-1.5 text-muted">
+                  <span>{t.normalPrice}</span>
+                  <span className="line-through">{formatIDR(product.original_price)}</span>
+                </div>
+                <div className="flex justify-between gap-5 py-1.5 text-muted">
+                  <span>{t.discount}</span>
+                  <span className="text-success">-{formatIDR(subtractMoney(product.original_price, product.price))}</span>
+                </div>
+              </>
+            )}
+            <div className="font-display flex justify-between gap-5 border-t border-border pt-3 text-title text-foreground">
+              <span>{t.total}</span>
+              <span>{formatIDR(product.price)}</span>
+            </div>
+          </div>
+
+          {problem && (
+            <div className="rounded-control bg-danger-soft p-3 text-small text-danger-soft-foreground" role="alert">
+              <p>{problem.text}</p>
+              {problem.href && (
+                <Link href={problem.href} className="mt-1 inline-block font-medium underline">
+                  {problem.hrefLabel}
+                </Link>
+              )}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            variant="primary"
+            fullWidth
+            isDisabled={submitting || redirecting || (!unresolved && (walletBlocked || manualBlocked))}
+          >
+            {submitLabel}
+            <Icon icon={ArrowRight} size="xs" />
+          </Button>
+          <p className="text-center text-label text-muted">
+            {t.termsAgreementPrefix}{" "}
+            <Link href="#" className="text-accent hover:underline">
+              {t.termsLink}
+            </Link>
+            .
+          </p>
+        </Panel>
       </form>
     </AppShell>
   );
@@ -516,14 +520,14 @@ function MethodOption({
   selected,
   disabled,
   onSelect,
-  icon: Icon,
+  icon: Glyph,
   title,
   description,
 }: {
   selected: boolean;
   disabled: boolean;
   onSelect: () => void;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   title: string;
   description: string;
 }) {
@@ -535,23 +539,23 @@ function MethodOption({
       disabled={disabled}
       onClick={onSelect}
       className={cn(
-        "flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
-        selected ? "border-accent bg-accent-soft" : "border-border hover:border-accent",
+        "flex items-center gap-3 rounded-tile border bg-surface p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+        selected ? "border-accent ring-1 ring-accent" : "border-border hover:border-accent",
       )}
     >
       <span
         className={cn(
-          "inline-flex size-4 shrink-0 items-center justify-center rounded-full border",
+          "inline-flex size-4.5 shrink-0 items-center justify-center rounded-full border",
           selected ? "border-accent" : "border-border",
         )}
         aria-hidden
       >
         {selected && <span className="size-2 rounded-full bg-accent" />}
       </span>
-      <Icon className="size-5 shrink-0 text-muted" />
+      <Icon icon={Glyph} size="md" className="text-accent" />
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-foreground">{title}</span>
-        <span className="block text-xs text-muted">{description}</span>
+        <span className="block text-caption font-semibold text-foreground">{title}</span>
+        <span className="mt-1 block text-label text-muted">{description}</span>
       </span>
     </button>
   );

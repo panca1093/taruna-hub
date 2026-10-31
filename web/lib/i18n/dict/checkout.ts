@@ -3,8 +3,9 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
-  pageTitle: "Selesaikan pembayaran",
-  backToProduct: "Kembali ke produk",
+  pageTitle: "Selesaikan pembayaran.",
+  crumbCatalog: "Katalog",
+  crumbCheckout: "Pembayaran",
   methodTitle: "Metode pembayaran",
   methodWallet: "Saldo akun",
   methodWalletAvailable: (balance: string) => `Tersedia ${balance}`,
@@ -76,8 +77,9 @@ const id = {
 };
 
 const en: typeof id = {
-  pageTitle: "Complete your payment",
-  backToProduct: "Back to product",
+  pageTitle: "Complete your payment.",
+  crumbCatalog: "Catalog",
+  crumbCheckout: "Payment",
   methodTitle: "Payment method",
   methodWallet: "Account balance",
   methodWalletAvailable: (balance: string) => `${balance} available`,
