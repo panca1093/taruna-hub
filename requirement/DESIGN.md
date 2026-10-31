@@ -8,13 +8,13 @@ This document describes the visual language already implemented in `web/` and ho
 
 ## 1. Visual direction
 
-The mockup combines a cool neutral workspace, compact controls, quiet cards, and an indigo–violet gradient. Its signature element is the countdown/progress ring. Operational pages use restrained color so status, numbers, and actions are easy to scan.
+The workspace combines a warm cream canvas, plum ink, compact controls, quiet cards and a rose accent (owner decision 2026-10-31, handoff `PALETTE-DECISION.md`). Student, admin and auth share these tokens; a dark plum sidebar anchors both shells. Its signature element is the countdown/progress ring, now plum to rose. Operational pages use restrained color so status, numbers, and actions are easy to scan.
 
 Guidelines:
 
-- Use neutral surfaces for the shell, cards, forms, and tables. Let hierarchy come from position, spacing, type, and contrast.
-- Use indigo for the main action, links, selected navigation, and active progress. Use violet as the supporting gradient endpoint.
-- Reserve green, amber, and red for meaningful state. Pair every status color with a readable label.
+- Use warm neutral surfaces for the shell, cards, forms, and tables. Let hierarchy come from position, spacing, type, and contrast.
+- Use the plum/rose `accent` for the main action, links, selected navigation, and active progress. `accent-2` is the lighter rose ring endpoint.
+- Reserve green, amber, and red for meaningful state. Pair every status color with a readable label. Rose is identity, never a status color.
 - Keep dashboards task focused: what is happening, what needs attention, and where to act.
 - Keep the stronger gradients, background grid, and large display typography of the landing page in marketing contexts. Dashboard cards do not need hero decoration.
 - Reuse the current components before introducing another visual pattern.
@@ -23,31 +23,38 @@ Guidelines:
 
 ### 2.1 Canonical tokens
 
-[app/globals.css](../web/app/globals.css) is the project source of truth. OKLCH values below are exact source values; hexadecimal values are approximate sRGB references sampled from the rendered browser. Use semantic tokens in code rather than copying hex values. Out-of-gamut colors may be clipped in sRGB.
+[app/globals.css](../web/app/globals.css) is the project source of truth. OKLCH values below are exact source values; hexadecimal values are the handoff palette references they were converted from (`warm` / `dark plum` notes mark derived in-between tones). Use semantic tokens in code rather than copying hex values. Out-of-gamut colors may be clipped in sRGB.
 
 | Token | Light: OKLCH → hex | Dark: OKLCH → hex | Role |
 | --- | --- | --- | --- |
-| `background` | `0.9812 0.0025 258` → `#F8F9FA` | `0.1791 0.0075 264` → `#101115` | Page canvas |
-| `foreground` | `0.2242 0.019 267` → `#181B25` | `0.9481 0.0025 258` → `#EDEEEF` | Main text |
-| `surface` | `1 0 0` → `#FFFFFF` | `0.2242 0.0075 264` → `#1A1C1F` | Cards, sidebar |
-| `surface-secondary` | `0.965 0.0035 258` → `#F2F3F6` | `0.2603 0.0075 264` → `#222428` | Table headers, hover, secondary areas |
-| `surface-tertiary` | `0.9425 0.0045 258` → `#EAECEF` | `0.2965 0.0075 264` → `#2B2D31` | Stronger neutral inset |
-| `overlay` | `1 0 0` → `#FFFFFF` | `0.2413 0.0075 264` → `#1E2023` | Popovers and dialogs |
-| `muted` | `0.535 0.017 264` → `#686D77` | `0.635 0.012 258` → `#868B92` | Supporting text |
-| `default` | `0.945 0.004 258` → `#EBEDEF` | `0.2965 0.0065 264` → `#2B2D30` | Neutral controls and tracks |
-| `accent` | `0.549 0.2116 265.6` → `#3562EA` | `0.652 0.199 265.6` → `#5586FF` | Primary action and links |
-| `accent-2` | `0.596 0.196 293.7` → `#885FE6` | `0.688 0.183 293.7` → `#A27FFF` | Gradient endpoint |
-| `accent-foreground` | `0.99 0 0` → `#FCFCFC` | `0.1 0 0` → `#030303` | Text on solid accent |
+| `background` | `0.964 0.007 53.4` → #F7F2EF | `0.219 0.011 312` → #1C191E | Page canvas |
+| `foreground` | `0.333 0.021 342.4` → #3E3239 | `0.955 0.012 342.6` → #F6EDF2 | Main text |
+| `surface` | `0.995 0.005 78.3` → #FFFDFA | `0.268 0.014 310.8` → #28242B | Cards, header, forms |
+| `surface-secondary` | `0.974 0.006 60` → warm off-white | `0.3 0.015 312` → dark plum | Table headers, hover, secondary areas |
+| `surface-tertiary` | `0.945 0.009 30` → warm inset | `0.33 0.017 314` → dark plum inset | Stronger neutral inset |
+| `overlay` | `0.995 0.005 78.3` → #FFFDFA | `0.285 0.014 311` → dark plum | Popovers and dialogs |
+| `muted` | `0.533 0.026 341.9` → #786771 | `0.753 0.021 335.8` → #B8AAB4 | Supporting text |
+| `default` | `0.94 0.01 10` → warm neutral | `0.34 0.018 320` → dark plum neutral | Neutral controls and tracks |
+| `accent` | `0.442 0.063 341.6` → #6B455D | `0.819 0.056 346.8` → #E0B6CB | Primary action and links (plum in light, pale rose in dark) |
+| `accent-2` | `0.643 0.058 346.7` → #A87F94 | `0.715 0.07 341.1` → #C292B0 | Lighter rose ring endpoint |
+| `accent-foreground` | `0.985 0.005 78` → cream | `0.2 0.02 335` → dark plum | Text on solid accent |
 | `success` | `0.6534 0.1567 156.7` → `#00AC67` | Inherits light value → `#00AC67` | Completed / confirmed |
 | `success-foreground` | `0.2242 0.019 267` → `#181B25` | Inherits light value → `#181B25` | Text on solid success |
 | `warning` | `0.7723 0.1585 73.7` → `#F0A31B` | `0.8022 0.1451 76.6` → `#F3B040` | Pending / attention |
 | `warning-foreground` | `0.2242 0.019 267` → `#181B25` | `0.16 0.01 267` → `#0B0D12` | Text on solid warning |
 | `danger` | `0.58 0.2116 20.6` → `#DB2740` | `0.671 0.1988 22.5` → `#F8555A` | Error / destructive / urgent |
 | `danger-foreground` | `0.99 0 0` → `#FCFCFC` | `0.1 0 0` → `#030303` | Text on solid danger |
-| `border` | `0.9091 0.0055 258` → `#DFE1E5` | `0.2965 0.0075 264` → `#2B2D31` | Component boundaries |
-| `separator` | `0.928 0.0045 258` → `#E5E7EA` | `0.2684 0.0075 264` → `#24262A` | Quieter separators |
+| `border` | `0.91 0.009 8.6` → #E7DFE0 | `0.363 0.022 326` → #443A44 | Component boundaries |
+| `separator` | `0.925 0.008 8` → warm hairline | `0.32 0.02 324` → dark hairline | Quieter separators |
+| `peach` | `0.878 0.031 54.7` → #E8D2C4 | `0.409 0.037 344` → #59424F | Warm tint of the primary practice card |
+| `sidebar` | `0.286 0.018 333.8` → #30272E | `0.188 0.009 317.7` → #151216 | Dark plum rail (student and admin) |
+| `sidebar-foreground` | `0.904 0.013 345.5` → #E6DCE1 | `0.929 0.014 336.2` → #EEE4EB | Text and icons on the rail |
+| `sidebar-muted` | mix of foreground 62% / sidebar | same formula | Inactive rail items, tree connector |
+| `sidebar-active` | foreground 13% over transparent | same formula | Selected / hovered rail item |
+| `sidebar-accent` | `0.819 0.056 346.8` | `0.819 0.056 346.8` | Active indicator and focus ring on the rail |
+| `sidebar-border` | foreground 14% over transparent | same formula | Rail dividers |
 
-Each numeric triplet is wrapped in `oklch(...)` in CSS. Do not infer a separate dark success color: the project currently leaves both success tokens inherited.
+Each numeric triplet is wrapped in `oklch(...)` in CSS. Success, warning and danger keep their green, amber and red meaning in both themes. Do not infer a separate dark success color: the project currently leaves both success tokens inherited.
 
 ### 2.2 Aliases and derived colors
 
@@ -56,11 +63,12 @@ Each numeric triplet is wrapped in `oklch(...)` in CSS. Do not infer a separate 
 | `surface-foreground`, `overlay-foreground`, `default-foreground`, `segment-foreground` | Alias `foreground` | Text on the corresponding surface |
 | `surface-secondary-foreground`, `surface-tertiary-foreground` | Alias `foreground` | Secondary surface text |
 | `field-background` | Light `surface`; dark `surface-secondary` | Inputs |
+| `.palette-classic` | Scoped class restoring the pre-rose indigo values for `background`, `surface*`, `accent*`, `ring-*`, `border`, `separator`, `muted` | Opt-out for surfaces that must not be rebranded (public landing). Not used by the workspace |
 | `field-foreground`, `field-placeholder`, `field-border` | `foreground`, `muted`, `border` | Field content and chrome |
 | `segment` | Light white; dark `surface-tertiary` | Segmented controls |
 | `focus`, `link` | Alias `accent` | Focus indication and links |
-| `ring-start`, `ring-end` | Same values as `accent`, `accent-2` | Gradient identity |
-| `backdrop` | Light `oklch(0.2 0.01 267 / 45%)`; dark `oklch(0 0 0 / 65%)` | Modal / drawer dimming |
+| `ring-start`, `ring-end` | Same values as `accent`, `accent-2` (plum to rose) | Gradient identity |
+| `backdrop` | Light `oklch(0.2 0.02 335 / 45%)`; dark `oklch(0 0 0 / 65%)` | Modal / drawer dimming |
 | `bg-gradient-ring`, `text-gradient` | `linear-gradient(135deg, var(--ring-start), var(--ring-end))` | Supporting brand emphasis |
 | `bg-grid` | 1px `border` lines every 32px | Landing background |
 | Text selection | Accent at 30% mixed with transparent | Selected text |
@@ -173,7 +181,7 @@ Project CSS explicitly tightens `.button` to 6px and `.chip` to 4.5px. Order fil
 
 | Breakpoint | Width | Current behavior |
 | --- | --- | --- |
-| Base | Below 640px | One-column KPI stack; mobile navigation drawer |
+| Base | Below 640px | One-column KPI stack; student bottom navigation bar, admin drawer |
 | `sm` | 640px | Two-column KPI grid; shell description shown |
 | `md` | 768px | Compact desktop button heights; public navigation links shown |
 | `lg` | 1024px | Persistent sidebar; four KPI columns; dashboard insight columns |
@@ -183,24 +191,31 @@ These are CSS viewport widths, not device classifications. Test intermediate wid
 
 ### 5.2 Shell specification
 
-Reuse [AppShell](../web/components/app-shell.tsx) for authenticated operational and student pages.
+Reuse [AppShell](../web/components/app-shell.tsx) for authenticated operational and student pages. Navigation lives in [lib/nav.ts](../web/lib/nav.ts); labels come from `lib/i18n/dict/nav.ts`, shell strings from `dict/shell.ts`.
 
-| Region | Observed specification |
+| Region | Specification |
 | --- | --- |
-| Expanded sidebar | 256px, sticky, viewport height, `surface`, right border |
-| Collapsed sidebar | 68px; icon navigation |
+| Expanded sidebar | 256px, sticky, viewport height, `sidebar` surface, no border; logo sits on a `surface` plate |
+| Collapsed sidebar | 68px; icon navigation with `title` and `aria-label` on every item; groups flatten to icons separated by a hairline |
 | Sidebar logo row | 56px high; 14px horizontal inset |
-| Sidebar navigation | 8px container inset; items 10px horizontal / 8px vertical; 18px icons |
-| Selected navigation | Accent soft background/text plus a 2px gradient left indicator |
-| Mobile drawer | Left placement; 288px set on `Drawer.Dialog` (measured); closes after navigation |
+| Sidebar navigation | 8px container inset; items 10px horizontal / 8px vertical; 18px icons; inactive `sidebar-muted`, hover/active `sidebar-active` |
+| Selected navigation | `sidebar-active` background, `sidebar-foreground` text, 2px `sidebar-accent` left indicator, `aria-current="page"` |
+| Student navigation | Exactly three items: Dashboard `/student`, Tryout `/student/tryouts` (also active on `/student/tryout/*` and `/student/kecermatan/*`), Katalog `/catalog` |
+| Student mobile | No drawer. A fixed bottom bar (`sidebar` surface, 56px) shows the same three destinations; main gets 96px bottom padding below `lg` |
+| Admin navigation | Groups: Ringkasan (single link), Operasional (Monitoring, Siswa, Hasil, Hasil Kecermatan), Konten (Tryout, Tes Kecermatan, Paket Item, Bank Soal, Produk, Program), Keuangan (Pesanan, Top-up), Sistem (Akun Pengguna, Pengaturan). Role guards (`adminOnly`) are unchanged; a group with no visible child is hidden |
+| Admin groups | Collapsible header button (`aria-expanded`, `aria-controls`); the group holding the active page opens automatically on navigation; the user may close it afterwards |
+| Group tree connector | Children hang off a dashed vertical line with a dashed branch to each child, like a file tree. Drawn with `border-dashed` in `sidebar-muted/60` on `li::before` (vertical, half height on the last child) and `li::after` (branch). Never solid |
+| Admin mobile | Left drawer, 288px set on `Drawer.Dialog`, `sidebar` surface, closes after navigation |
 | Header | Sticky; 56px; `z-30`; `surface/85`, blur, bottom border |
 | Header padding | 16px base; 24px at `lg` |
+| Header content | Title and description, page `actions`, student quick-wallet trigger, account menu. Below `lg` a student sees the logo, an admin sees the menu button |
 | Main padding | 16px horizontal / 24px vertical; 24px / 32px at `lg` |
-| Student dashboard | Uses the available content width with the main padding above |
-| Admin overview | Uses the available content width |
+| Content width | Full available width at 1920 and 2560px. No wrapper imposes a maximum; pages opt in with the `maxWidth` prop |
 | Focused builder | Existing tryout builder uses `max-w-3xl` = 768px |
 
-The header holds title, optional description, page actions, language, and theme controls. Use its `actions` slot for a page-wide primary action. Keep account controls in the sidebar/user menu.
+Quick wallet: `WalletTrigger` in `app-shell.tsx` is a link to `/student/wallet` showing a wallet icon and "Saldo". It is the single mount point for the wallet popover.
+
+Account menu (header, every role): avatar, name and role open a HeroUI `Dropdown` (arrow keys, type-ahead, Escape closes and returns focus to the trigger). Students get Profil `/student/profile`, Riwayat pesanan `/student/orders`, Saldo dan transaksi `/student/wallet`; all roles get Tema and Bahasa (the existing theme and locale state, shown with their current value) and Keluar (danger, existing logout flow and redirect). The header no longer carries separate theme and language buttons.
 
 Guidelines:
 
@@ -209,7 +224,7 @@ Guidelines:
 - Use one-column cards on small screens; keep reading order equal to DOM order.
 - For dense tables, preserve necessary columns with internal scrolling or use a deliberate mobile list representation. Do not squeeze six columns into unreadable cells.
 - Let legends and action groups wrap or stack. Ensure drawers and dialogs fit the viewport with safe edge spacing.
-- A collapsed sidebar still needs accessible names and discoverable labels for icon-only items.
+- A collapsed sidebar still needs accessible names and discoverable labels for icon-only items (`title` plus `aria-label`).
 
 The shell's main column carries `min-w-0` and `DataTable`'s scroll region is `relative`, so wide tables (including absolutely positioned descendants) scroll inside the table. All shell routes were measured without page-level overflow at 320/390/768/1024/1440px. Treat page-level horizontal scrolling as a failed responsive acceptance check.
 
@@ -401,7 +416,7 @@ The illustration reuses `CountdownRing` decoratively. Its 224px region contains 
 
 Registration opens `/verify-email` after the server establishes the session. The code field is one accessible numeric six-digit input with paste/autofill support. Wrong/expired codes, pending verification, resend errors and session restoration are distinct from success. Verification remains optional (D01): skip opens `/student`, where a non-blocking reminder links back to verification. No prototype codes or simulated success belong in the application.
 
-The student overview reuses `AppShell` at the full available width beside the sidebar, without a centered maximum-width cap; retain the shell's 16px mobile and 24px desktop horizontal padding. Use 24px separation between heading, compact statistics, welcome panel and activity modules; module grids have 20px gaps. Cards use 20px padding (24px for larger modules), with the welcome panel using 24/32px. `StatCard compact` is opt-in and leaves other dashboard cards unchanged. The verification reminder is inside the same content-width boundary as these modules. New accounts show real empty states; populated accounts retain owned tryouts and latest completed results. Loading uses placeholders, errors offer retry, a missing average is `—`, and zero is a measured score. Counts, average and exact wallet balance come from the authenticated summary endpoint; tryout metrics exclude kecermatan, which remains visible in owned-content links.
+The student overview reuses `AppShell` at the full available width beside the sidebar, without a centered maximum-width cap; retain the shell's 16px mobile and 24px desktop horizontal padding. Order, with 24px separation: heading row (greeting, "Lihat katalog" outline button); two large practice cards (Tryout on `peach`, Tes kecermatan on `accent-soft`, 24/32px padding, 3xl radius, each with one primary action; the Kecermatan card shows the server's `attempts_remaining` for the featured test); one compact stats strip (owned tryouts, Kecermatan quota summed from the tests list, completed tryouts, average score) divided by `separator`; then a two-thirds / one-third row with "Latihan saya" (owned tryouts with access end, Kecermatan tests with available attempts) and "Hasil terakhir" (latest completed tryout scores plus the note that tryout and Kecermatan results are separate). Module grids have 20px gaps. A `null` average renders "—"; `0` renders as a real score. Balance is not on the dashboard; it lives behind the header wallet trigger. New accounts show the promo variants of both cards, real empty states for both lists and the three-step guide; the shell-level `EmailVerifyBanner` carries the unverified reminder inside the same content boundary. Login and register both land on this page, so geometry is identical and only data differs. Loading uses placeholders that mirror the layout (never zeros), errors offer retry, and data is keyed to the signed-in user so account switches never show stale values. `StatCard compact` is unchanged and unused here.
 
 ### 7.5 Specify data states before connecting the API
 

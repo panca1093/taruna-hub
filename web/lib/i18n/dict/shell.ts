@@ -7,6 +7,21 @@ const id = {
   expand: "Perluas navigasi",
   openNavigation: "Buka navigasi",
   navigation: "Navigasi akun",
+  mainNavigation: "Navigasi utama",
+  wallet: "Saldo",
+  walletLabel: "Buka saldo dan transaksi",
+  accountMenu: "Menu akun",
+  accountPages: "Halaman akun",
+  profile: "Profil",
+  orders: "Riwayat pesanan",
+  walletTransactions: "Saldo dan transaksi",
+  preferences: "Preferensi",
+  theme: "Tema",
+  themeDark: "Gelap",
+  themeLight: "Terang",
+  language: "Bahasa",
+  languageName: "Indonesia",
+  toggleGroup: (name: string) => `Buka atau tutup grup ${name}`,
 };
 
 const en: typeof id = {
@@ -14,6 +29,21 @@ const en: typeof id = {
   expand: "Expand navigation",
   openNavigation: "Open navigation",
   navigation: "Account navigation",
+  mainNavigation: "Main navigation",
+  wallet: "Balance",
+  walletLabel: "Open balance and transactions",
+  accountMenu: "Account menu",
+  accountPages: "Account pages",
+  profile: "Profile",
+  orders: "Order history",
+  walletTransactions: "Balance and transactions",
+  preferences: "Preferences",
+  theme: "Theme",
+  themeDark: "Dark",
+  themeLight: "Light",
+  language: "Language",
+  languageName: "English",
+  toggleGroup: (name: string) => `Toggle ${name} group`,
 };
 
 export function useShellT() {
