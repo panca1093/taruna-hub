@@ -144,10 +144,7 @@ function KolomScreen({
               <p className="text-caption text-muted">
                 {t.soalProgress(soalIndex + 1, kolom.soal.length)} · {t.chooseMissingLabel}
               </p>
-              <div
-                className="mt-6 grid gap-2.5 sm:flex sm:flex-wrap sm:justify-center sm:gap-3"
-                style={{ gridTemplateColumns: `repeat(${Math.min(kolom.reference.length, 5)}, minmax(0, 1fr))` }}
-              >
+              <div className="mt-6 flex flex-wrap justify-center gap-2.5 sm:gap-3">
                 {kolom.reference.map((item) => (
                   <button
                     key={item.label}
@@ -155,7 +152,7 @@ function KolomScreen({
                     disabled={timeUp}
                     aria-label={t.answerAria(item.label)}
                     onClick={() => onAnswer(soal.number, item.label)}
-                    className="flex h-14 items-center justify-center rounded-tile border border-border bg-surface font-mono text-2xl font-extrabold text-foreground outline-none transition-colors hover:border-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 sm:h-16 sm:w-25"
+                    className="flex h-14 w-24 items-center justify-center rounded-tile border border-border bg-surface font-mono text-2xl font-extrabold text-foreground outline-none transition-colors hover:border-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 sm:h-16 sm:w-25"
                   >
                     {item.label}
                   </button>
