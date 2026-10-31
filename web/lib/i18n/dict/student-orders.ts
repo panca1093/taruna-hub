@@ -4,6 +4,7 @@ import { useLocale } from "@/lib/i18n/locale-context";
 import type { PaymentMode } from "@/lib/types";
 
 const id = {
+  crumbDashboard: "Dashboard",
   title: "Riwayat Pesanan",
   description: "Semua transaksi pembelian paket tryoutmu",
   emptyTitle: "Belum ada pesanan",
@@ -31,6 +32,7 @@ const id = {
 };
 
 const en: typeof id = {
+  crumbDashboard: "Dashboard",
   title: "Order History",
   description: "All your tryout package purchase transactions",
   emptyTitle: "No orders yet",

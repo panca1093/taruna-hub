@@ -3,6 +3,8 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
+  popoverRecentHint: "Semua transaksi tercatat di riwayat.",
+  breadcrumbDashboard: "Dashboard",
   popoverTrigger: "Saldo",
   popoverTitle: "Saldo akun",
   popoverDescription: "Untuk pembelian tryout dan kuota tes kecermatan.",
@@ -91,6 +93,8 @@ const id = {
 };
 
 const en: typeof id = {
+  popoverRecentHint: "Every transaction is recorded in the history.",
+  breadcrumbDashboard: "Dashboard",
   popoverTrigger: "Balance",
   popoverTitle: "Account balance",
   popoverDescription: "For tryout purchases and Kecermatan test quota.",

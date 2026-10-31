@@ -3,6 +3,7 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
+  crumbDashboard: "Dashboard",
   title: "Saldo",
   description: "Saldo tersimpan dan riwayat pemakaiannya",
   balanceLabel: "Saldo saat ini",
@@ -46,6 +47,7 @@ const id = {
 };
 
 const en: typeof id = {
+  crumbDashboard: "Dashboard",
   title: "Balance",
   description: "Your stored balance and how it has been used",
   balanceLabel: "Current balance",

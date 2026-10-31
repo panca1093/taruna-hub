@@ -1,9 +1,11 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { Button, Card, toast } from "@heroui/react";
-import { CheckCircle2, Clock, CloudOff, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
+import { Button, toast } from "@heroui/react";
+import { ArrowRight, Check, Clock, CloudOff, RefreshCw, ShieldAlert, X } from "lucide-react";
+import { Icon } from "@/components/icon";
+import { NoteBox, Panel } from "@/components/page-blocks";
+import { Breadcrumb } from "@/components/page-heading";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { OrderStatusBadge } from "@/components/status-badge";
@@ -95,7 +97,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     return (
       <AppShell title={t.title} maxWidth="max-w-5xl">
         {view === "loading" ? (
-          <div role="status" aria-label={t.loading} className="h-72 animate-pulse rounded-xl border border-border bg-surface-secondary" />
+          <div role="status" aria-label={t.loading} className="h-72 animate-pulse rounded-card border border-border bg-surface-secondary" />
         ) : (
           <EmptyState
             icon={CloudOff}
@@ -103,13 +105,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             description={view === "missing" ? t.notFoundDescription : t.loadErrorDescription}
             action={
               view === "missing" ? (
-                <LinkButton href="/student/orders" variant="primary" size="sm">
+                <LinkButton href="/student/orders" variant="primary">
                   {t.backToOrders}
                 </LinkButton>
               ) : (
                 <Button
                   variant="primary"
-                  size="sm"
                   onPress={() => {
                     setState("loading");
                     setReloadKey((key) => key + 1);
@@ -131,30 +132,32 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   const held = order.payment_exception;
 
   return (
-    <AppShell title={t.title} description={order.code} maxWidth="max-w-5xl">
-      <nav className="mb-4 text-xs text-muted">
-        <Link href="/student/orders" className="hover:text-foreground hover:underline">
-          {t.crumbOrders}
-        </Link>
-      </nav>
+    <AppShell maxWidth="max-w-5xl">
+      <Breadcrumb
+        items={[
+          { label: t.crumbDashboard, href: "/student" },
+          { label: t.crumbOrders, href: "/student/orders" },
+          { label: order.code },
+        ]}
+      />
 
-      <div className={cn("flex items-start gap-4 rounded-2xl p-5 sm:p-6", banner.className)} role="status" aria-live="polite">
-        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-foreground">
-          <banner.icon className="size-5" />
+      <div className={cn("flex items-center gap-4 rounded-menu p-5 sm:p-6", banner.className)} role="status" aria-live="polite">
+        <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-surface text-foreground">
+          <Icon icon={banner.icon} size="md" />
         </span>
         <div className="min-w-0">
-          <h2 className="font-display text-xl font-semibold text-foreground">{banner.title}</h2>
-          <p className="mt-1 text-sm text-muted">{banner.body}</p>
+          <h1 className="font-display text-hero text-balance">{banner.title}</h1>
+          <p className="mt-2 text-caption text-muted">{banner.body}</p>
           {order.status === "cancelled" && order.cancel_reason !== "" && (
-            <p className="mt-1 text-sm text-muted">{t.cancelReason(order.cancel_reason)}</p>
+            <p className="mt-1 text-caption text-muted">{t.cancelReason(order.cancel_reason)}</p>
           )}
         </div>
       </div>
 
       {held && (
-        <div className="mt-4 flex items-start gap-3 rounded-xl border border-border bg-warning-soft p-4 text-warning-soft-foreground" role="status">
-          <ShieldAlert className="mt-0.5 size-5 shrink-0" />
-          <div className="text-sm">
+        <div className="mt-4 flex items-start gap-3 rounded-tile bg-warning-soft p-4 text-warning-soft-foreground" role="status">
+          <Icon icon={ShieldAlert} size="md" className="mt-0.5" />
+          <div className="text-caption">
             <p className="font-semibold">{t.heldTitle}</p>
             <p className="mt-1">{t.held[held.kind](formatIDR(held.paid_amount))}</p>
             <p className="mt-1">{t.heldContact}</p>
@@ -162,21 +165,21 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {refreshFailed && <p className="mt-4 text-sm text-danger">{t.refreshFailed}</p>}
+      {refreshFailed && <p className="mt-4 text-small text-danger">{t.refreshFailed}</p>}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <Card className="h-fit gap-4 p-5 sm:p-6">
+      <div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)] lg:items-start">
+        <Panel className="space-y-5">
           <div>
-            <p className="text-xs font-medium text-muted uppercase">{t.summaryProduct}</p>
-            <p className="font-display mt-1 text-lg font-semibold text-foreground">{order.product_title}</p>
+            <p className="text-label text-muted">{t.summaryProduct}</p>
+            <h2 className="mt-2 font-display text-heading">{order.product_title}</h2>
             {kecermatan && order.included_attempts !== null && (
-              <p className="mt-1 text-sm text-muted">{t.attempts(order.included_attempts)}</p>
+              <p className="mt-1 text-caption text-muted">{t.attempts(order.included_attempts)}</p>
             )}
           </div>
           {order.items.length > 0 && (
-            <div className="border-t border-border pt-4">
-              <p className="text-xs font-medium text-muted uppercase">{t.itemsTitle(order.items.length)}</p>
-              <ul className="mt-2 space-y-1 text-sm text-foreground">
+            <div className="border-t border-border pt-5">
+              <p className="text-label text-muted">{t.itemsTitle(order.items.length)}</p>
+              <ul className="mt-2 space-y-1.5 text-small text-foreground">
                 {order.items.map((item) => (
                   <li key={item.tryout_id}>{item.title}</li>
                 ))}
@@ -188,27 +191,29 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             <LinkButton
               href={kecermatan && order.kecermatan_test_id ? `/student/kecermatan/${order.kecermatan_test_id}` : "/student/tryouts"}
               variant="primary"
-              size="lg"
               className="w-full sm:w-fit"
             >
               {kecermatan ? t.openKecermatan : t.openTryouts}
+              <Icon icon={ArrowRight} size="sm" />
             </LinkButton>
           )}
           {order.status === "cancelled" && !held && (
-            <LinkButton href="/catalog" variant="secondary" size="md" className="w-full sm:w-fit">
+            <LinkButton href="/catalog" variant="secondary" className="w-full sm:w-fit">
               {t.backToCatalog}
+              <Icon icon={ArrowRight} size="sm" />
             </LinkButton>
           )}
 
           {pendingGateway && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
               {order.redirect_url && (
-                <LinkButton href={order.redirect_url} variant="primary" size="lg">
+                <LinkButton href={order.redirect_url} variant="primary">
                   {t.continuePayment}
+                  <Icon icon={ArrowRight} size="sm" />
                 </LinkButton>
               )}
               {confirmingCancel ? (
-                <div className="flex w-full flex-col gap-2 rounded-lg border border-border bg-surface-secondary p-3 text-sm" role="alertdialog" aria-label={t.cancelConfirmTitle}>
+                <div className="flex w-full flex-col gap-2 rounded-tile border border-border bg-background p-4 text-caption" role="alertdialog" aria-label={t.cancelConfirmTitle}>
                   <p className="font-medium text-foreground">{t.cancelConfirmTitle}</p>
                   <p className="text-muted">{t.cancelConfirmBody}</p>
                   <div className="flex gap-2">
@@ -221,30 +226,32 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                 </div>
               ) : (
-                <Button variant="ghost" size="lg" onPress={() => setConfirmingCancel(true)}>
+                <Button variant="ghost" onPress={() => setConfirmingCancel(true)}>
                   {t.cancelOrder}
                 </Button>
               )}
             </div>
           )}
-        </Card>
+        </Panel>
 
-        <Card className="h-fit gap-3 p-5 sm:p-6">
-          <Row label={t.summaryCode} value={<span className="font-mono">{order.code}</span>} />
-          <Row label={t.summaryAmount} value={formatIDR(order.price)} />
-          <Row label={t.summaryMethod} value={t.methodLabel[order.payment_method]} />
-          <Row label={t.summaryStatus} value={<OrderStatusBadge status={order.status} />} />
-          <Row label={t.summaryCreated} value={new Date(order.created_at).toLocaleString()} />
-          {order.confirmed_at && <Row label={t.summaryConfirmed} value={new Date(order.confirmed_at).toLocaleString()} />}
-          {order.cancelled_at && <Row label={t.summaryCancelled} value={new Date(order.cancelled_at).toLocaleString()} />}
-          {order.proof_asset_id && <p className="text-xs text-muted">{t.proofSent}</p>}
+        <Panel as="aside">
+          <p className="font-mono text-label text-muted">{order.code}</p>
+          <p className="mt-3 font-display text-heading">{formatIDR(order.price)}</p>
+          <dl className="mt-3 text-caption">
+            <Row label={t.summaryMethod} value={t.methodLabel[order.payment_method]} />
+            <Row label={t.summaryStatus} value={<OrderStatusBadge status={order.status} />} />
+            <Row label={t.summaryCreated} value={new Date(order.created_at).toLocaleString()} />
+            {order.confirmed_at && <Row label={t.summaryConfirmed} value={new Date(order.confirmed_at).toLocaleString()} />}
+            {order.cancelled_at && <Row label={t.summaryCancelled} value={new Date(order.cancelled_at).toLocaleString()} />}
+          </dl>
+          {order.proof_asset_id && <NoteBox className="mt-3">{t.proofSent}</NoteBox>}
           {order.status === "pending" && (
-            <Button variant="secondary" size="sm" onPress={() => void refresh()} isDisabled={refreshing}>
-              <RefreshCw className={cn("size-3.5", refreshing && "animate-spin motion-reduce:animate-none")} />
+            <Button variant="secondary" fullWidth className="mt-4" onPress={() => void refresh()} isDisabled={refreshing}>
+              <Icon icon={RefreshCw} size="xs" className={cn(refreshing && "animate-spin motion-reduce:animate-none")} />
               {refreshing ? t.refreshing : t.refresh}
             </Button>
           )}
-        </Card>
+        </Panel>
       </div>
     </AppShell>
   );
@@ -252,9 +259,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="text-muted">{label}</span>
-      <span className="text-right font-medium text-foreground">{value}</span>
+    <div className="flex items-center justify-between gap-5 py-3">
+      <dt className="text-muted">{label}</dt>
+      <dd className="text-right font-semibold text-foreground">{value}</dd>
     </div>
   );
 }
@@ -262,8 +269,8 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function bannerOf(order: Order, t: ReturnType<typeof useOrderDetailT>) {
   if (order.status === "confirmed") {
     return {
-      icon: CheckCircle2,
-      className: "bg-success-soft",
+      icon: Check,
+      className: "bg-success-soft text-success-soft-foreground",
       title: t.confirmedTitle,
       body:
         order.product_type === "kecermatan" && order.included_attempts !== null
@@ -272,7 +279,7 @@ function bannerOf(order: Order, t: ReturnType<typeof useOrderDetailT>) {
     };
   }
   if (order.status === "cancelled") {
-    return { icon: XCircle, className: "bg-danger-soft", title: t.cancelledTitle, body: t.cancelledBody };
+    return { icon: X, className: "bg-peach", title: t.cancelledTitle, body: t.cancelledBody };
   }
   if (order.payment_method === "gateway") {
     return {

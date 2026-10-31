@@ -3,6 +3,7 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
+  crumbDashboard: "Dashboard",
   title: "Profil",
   description: "Kelola informasi akunmu",
   accountInfo: "Informasi akun",
@@ -25,6 +26,7 @@ const id = {
 };
 
 const en: typeof id = {
+  crumbDashboard: "Dashboard",
   title: "Profile",
   description: "Manage your account information",
   accountInfo: "Account information",
