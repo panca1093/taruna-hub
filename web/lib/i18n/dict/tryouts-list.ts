@@ -3,12 +3,14 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
-  pageTitle: "Tryout Saya",
-  pageDescription: "Tryout dan tes kecermatan yang kamu miliki",
   heading: "Tryout & kecermatan",
   headingDescription: "Dua jenis latihan. Pilih ruang yang ingin kamu buka.",
   browseCatalog: "Jelajahi katalog",
   tabsLabel: "Jenis latihan",
+  searchLabel: "Cari latihan",
+  searchPlaceholder: "Cari latihan…",
+  noMatchTitle: "Tidak ada latihan yang cocok",
+  noMatchDescription: "Coba kata kunci lain.",
   tabTryout: "Tryout",
   tabKecermatan: "Tes kecermatan",
   emptyTitle: "Belum ada tryout yang aktif",
@@ -40,12 +42,14 @@ const id = {
 };
 
 const en: typeof id = {
-  pageTitle: "My Tryouts",
-  pageDescription: "Tryouts and kecermatan tests you own",
   heading: "Tryouts & kecermatan",
   headingDescription: "Two kinds of practice. Pick the room you want to open.",
   browseCatalog: "Browse catalog",
   tabsLabel: "Practice type",
+  searchLabel: "Search practice",
+  searchPlaceholder: "Search practice…",
+  noMatchTitle: "No matching practice",
+  noMatchDescription: "Try a different keyword.",
   tabTryout: "Tryout",
   tabKecermatan: "Kecermatan test",
   emptyTitle: "No active tryouts yet",

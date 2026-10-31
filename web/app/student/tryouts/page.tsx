@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card, Chip } from "@heroui/react";
-import { Clock, CloudOff, ListChecks, PackageOpen, Sparkles } from "lucide-react";
+import { Button, Input } from "@heroui/react";
+import { ArrowRight, BookOpen, Check, CloudOff, Clock, ListChecks, PackageOpen, Search, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
-import { ProgramBadge } from "@/components/status-badge";
+import { Icon } from "@/components/icon";
+import { UnderlineTabs, tabId, tabPanelId } from "@/components/filter-pills";
+import { TextLink } from "@/components/page-blocks";
+import { ProgramBadge, StatusChip } from "@/components/status-badge";
 import { useTryoutsListT } from "@/lib/i18n/dict/tryouts-list";
 import { api, type AttemptSummary, type Enrollment, type KecermatanStudentTest } from "@/lib/api/client";
-import { cn } from "@/lib/cn";
 import { useHydrated } from "@/lib/use-hydrated";
 
 type TryoutState = "not_started" | "in_progress" | "completed";
@@ -27,6 +29,7 @@ export default function StudentTryoutsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [pickedTab, setPickedTab] = useState<Tab | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +49,13 @@ export default function StudentTryoutsPage() {
   }, [reloadKey]);
 
   const held = enrollments ?? [];
-  const shellProps = { title: t.pageTitle, description: t.pageDescription } as const;
+  const catalogLink = (
+    <LinkButton href="/catalog" variant="outline" size="sm">
+      {t.browseCatalog}
+      <Icon icon={ArrowRight} size="xs" />
+    </LinkButton>
+  );
+  const shellProps = { title: t.heading, description: t.headingDescription, actions: catalogLink } as const;
 
   if (loadFailed || enrollments === null) {
     return (
@@ -70,7 +79,7 @@ export default function StudentTryoutsPage() {
             }
           />
         ) : (
-          <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+          <p className="py-14 text-center text-small text-muted">{t.loading}</p>
         )}
       </AppShell>
     );
@@ -98,50 +107,41 @@ export default function StudentTryoutsPage() {
     { id: "tryout", label: t.tabTryout, count: held.length },
     { id: "kecermatan", label: t.tabKecermatan, count: kecTests.length },
   ];
+  const query = search.trim().toLowerCase();
+  const shownTryouts = held.filter((e) => e.tryout_title.toLowerCase().includes(query));
+  const shownTests = kecTests.filter((test) => test.title.toLowerCase().includes(query));
+  const gridClass = "grid gap-5 sm:grid-cols-2 xl:grid-cols-3";
 
   return (
     <AppShell {...shellProps}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">{t.heading}</h2>
-          <p className="mt-1 text-sm text-muted">{t.headingDescription}</p>
-        </div>
-        <LinkButton href="/catalog" variant="secondary" size="sm">
-          {t.browseCatalog}
-        </LinkButton>
-      </div>
+      <UnderlineTabs
+        options={tabs}
+        value={tab}
+        onChange={(id) => {
+          setPickedTab(id as Tab);
+          setSearch("");
+        }}
+        ariaLabel={t.tabsLabel}
+        idPrefix="tryouts"
+      />
 
-      <div role="tablist" aria-label={t.tabsLabel} className="mt-6 flex gap-2 border-b border-border">
-        {tabs.map((item) => {
-          const active = tab === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              id={`practice-tab-${item.id}`}
-              aria-selected={active}
-              aria-controls={`practice-panel-${item.id}`}
-              onClick={() => setPickedTab(item.id)}
-              className={cn(
-                "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
-                active ? "border-accent text-foreground" : "border-transparent text-muted hover:text-foreground",
-              )}
-            >
-              {item.label}
-              <span className="rounded-full bg-surface-secondary px-2 py-0.5 text-xs text-muted">{item.count}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div role="tabpanel" id={`practice-panel-${tab}`} aria-labelledby={`practice-tab-${tab}`} className="mt-6">
+      <div role="tabpanel" id={tabPanelId("tryouts")} aria-labelledby={tabId("tryouts", tab)}>
+        {(tab === "tryout" ? held.length > 0 : kecTests.length > 0) && (
+          <div className="mb-6 flex">
+            <div className="relative w-full sm:ml-auto sm:w-56">
+              <Icon icon={Search} size="xs" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <Input fullWidth aria-label={t.searchLabel} placeholder={t.searchPlaceholder} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            </div>
+          </div>
+        )}
         {tab === "tryout" ? (
           held.length === 0 ? (
             <TabEmpty title={t.emptyTryoutTabTitle} description={t.emptyTabDescription} cta={t.emptyCta} />
+          ) : shownTryouts.length === 0 ? (
+            <EmptyState icon={Search} title={t.noMatchTitle} description={t.noMatchDescription} />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {held.map((e) => {
+            <div className={gridClass}>
+              {shownTryouts.map((e) => {
                 const own = hydrated ? attempts.filter((a) => a.tryout_id === e.tryout_id) : [];
                 const done = own.filter((a) => a.status === "completed").sort((a, b) => completedTime(b) - completedTime(a));
                 const latest = done[0];
@@ -154,96 +154,114 @@ export default function StudentTryoutsPage() {
                       : "not_started";
 
                 return (
-                  <Card key={e.id} className="gap-0 overflow-hidden p-0">
-                    <div className="h-20 w-full bg-gradient-ring" />
-                    <div className="space-y-3 p-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <ProgramBadge code={e.program_code} />
-                        <Chip
-                          size="sm"
-                          className={`font-medium ${
-                            state === "completed"
-                              ? "bg-success-soft text-success-soft-foreground"
-                              : state === "in_progress"
-                                ? "bg-accent-soft text-accent-soft-foreground"
-                                : "bg-default text-default-foreground"
-                          }`}
-                        >
-                          {state === "completed" ? t.stateCompleted : state === "in_progress" ? t.stateInProgress : t.stateNotStarted}
-                        </Chip>
-                      </div>
-                      <p className="line-clamp-1 text-sm font-semibold text-foreground">{e.tryout_title}</p>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-                        <span className="inline-flex items-center gap-1">
-                          <ListChecks className="size-3.5" /> {t.subtestCount(e.subtest_count)}
+                  <ProductCard
+                    key={e.id}
+                    icon={BookOpen}
+                    tone="peach"
+                    chip={
+                      <StatusChip tone={state === "completed" ? "success" : state === "in_progress" ? "accent" : "neutral"}>
+                        {state === "completed" ? t.stateCompleted : state === "in_progress" ? t.stateInProgress : t.stateNotStarted}
+                      </StatusChip>
+                    }
+                    program={<ProgramBadge code={e.program_code} />}
+                    title={e.tryout_title}
+                    meta={
+                      <>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icon icon={ListChecks} size="xs" /> {t.subtestCount(e.subtest_count)}
                         </span>
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="size-3.5" /> {t.activeUntil(new Date(e.active_until).toLocaleDateString())}
+                        <span className="inline-flex items-center gap-1.5">
+                          <Icon icon={Clock} size="xs" /> {t.activeUntil(new Date(e.active_until).toLocaleDateString())}
                         </span>
-                      </div>
-                      {latest && (
-                        <p className="text-xs text-muted">
-                          {t.attemptsDone(done.length)}
-                          {latest.score !== null && ` · ${t.latestScore(latest.score)}`}
-                        </p>
-                      )}
-                      {state === "completed" && latest ? (
-                        <div className="flex gap-2">
-                          <LinkButton
-                            href={`/student/tryout/${e.tryout_id}/result?attempt=${latest.session_id}`}
-                            variant="secondary"
-                            size="sm"
-                            className="flex-1"
-                          >
-                            {t.ctaViewResult}
-                          </LinkButton>
-                          <LinkButton href={`/student/tryout/${e.tryout_id}`} variant="ghost" size="sm" className="flex-1">
-                            {t.ctaHistory}
-                          </LinkButton>
-                        </div>
+                      </>
+                    }
+                    status={latest ? `${t.attemptsDone(done.length)}${latest.score !== null ? ` · ${t.latestScore(latest.score)}` : ""}` : undefined}
+                    actions={
+                      state === "completed" && latest ? (
+                        <>
+                          <TextLink href={`/student/tryout/${e.tryout_id}/result?attempt=${latest.session_id}`}>{t.ctaViewResult}</TextLink>
+                          <TextLink href={`/student/tryout/${e.tryout_id}`}>{t.ctaHistory}</TextLink>
+                        </>
                       ) : (
-                        <LinkButton href={`/student/tryout/${e.tryout_id}`} variant="primary" size="sm" className="w-full">
-                          {state === "in_progress" ? t.ctaContinue : t.ctaStart}
-                        </LinkButton>
-                      )}
-                    </div>
-                  </Card>
+                        <TextLink href={`/student/tryout/${e.tryout_id}`}>{state === "in_progress" ? t.ctaContinue : t.ctaStart}</TextLink>
+                      )
+                    }
+                  />
                 );
               })}
             </div>
           )
         ) : kecTests.length === 0 ? (
           <TabEmpty title={t.emptyKecermatanTabTitle} description={t.emptyTabDescription} cta={t.emptyCta} />
+        ) : shownTests.length === 0 ? (
+          <EmptyState icon={Search} title={t.noMatchTitle} description={t.noMatchDescription} />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {kecTests.map((test) => {
+          <div className={gridClass}>
+            {shownTests.map((test) => {
               const left = test.attempts_remaining;
 
               return (
-                <Card key={test.test_id} className="gap-0 overflow-hidden p-0">
-                  <div className="h-20 w-full" style={{ background: `linear-gradient(135deg, ${test.cover_from}, ${test.cover_to})` }} />
-                  <div className="space-y-3 p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <ProgramBadge code={test.program_code} />
-                      <Chip size="sm" className={`font-medium ${left > 0 ? "bg-accent-soft text-accent-soft-foreground" : "bg-danger-soft text-danger-soft-foreground"}`}>
-                        {left > 0 ? t.attemptsRemaining(left) : t.quotaExhausted}
-                      </Chip>
-                    </div>
-                    <p className="line-clamp-1 text-sm font-semibold text-foreground">{test.title}</p>
-                    <p className="flex items-center gap-1.5 text-xs text-muted">
-                      <Sparkles className="size-3.5" /> {t.kolomSoalStat(test.kolom_count, test.soal_per_kolom)}
-                    </p>
-                    <LinkButton href={`/student/kecermatan/${test.test_id}`} variant={left > 0 ? "primary" : "secondary"} size="sm" className="w-full">
-                      {left > 0 ? t.ctaWork : t.ctaViewHistory}
-                    </LinkButton>
-                  </div>
-                </Card>
+                <ProductCard
+                  key={test.test_id}
+                  icon={Sparkles}
+                  tone="green"
+                  chip={<StatusChip tone={left > 0 ? "accent" : "danger"}>{left > 0 ? t.attemptsRemaining(left) : t.quotaExhausted}</StatusChip>}
+                  program={<ProgramBadge code={test.program_code} />}
+                  title={test.title}
+                  meta={
+                    <span className="inline-flex items-center gap-1.5">
+                      <Icon icon={Sparkles} size="xs" /> {t.kolomSoalStat(test.kolom_count, test.soal_per_kolom)}
+                    </span>
+                  }
+                  actions={<TextLink href={`/student/kecermatan/${test.test_id}`}>{left > 0 ? t.ctaWork : t.ctaViewHistory}</TextLink>}
+                />
               );
             })}
           </div>
         )}
       </div>
     </AppShell>
+  );
+}
+
+function ProductCard({
+  icon,
+  tone,
+  chip,
+  program,
+  title,
+  meta,
+  status,
+  actions,
+}: {
+  icon: typeof BookOpen;
+  tone: "peach" | "green";
+  chip: React.ReactNode;
+  program: React.ReactNode;
+  title: string;
+  meta: React.ReactNode;
+  status?: string;
+  actions: React.ReactNode;
+}) {
+  return (
+    <article className="flex min-h-64 min-w-0 flex-col rounded-card border border-border bg-surface p-6">
+      <div className="mb-4.5 flex items-start justify-between gap-3">
+        <span className={`grid size-13 shrink-0 place-items-center rounded-control ${tone === "peach" ? "bg-peach text-accent" : "bg-success-soft text-success-soft-foreground"}`}>
+          <Icon icon={icon} size="md" />
+        </span>
+        {chip}
+      </div>
+      <div className="mb-3">{program}</div>
+      <h3 className="mb-2.5 font-display text-title">{title}</h3>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-label text-muted">{meta}</div>
+      {status && (
+        <p className="mt-3 flex items-center gap-1.5 text-micro text-success-soft-foreground">
+          <Icon icon={Check} size="xs" />
+          {status}
+        </p>
+      )}
+      <div className="mt-auto flex flex-wrap items-center justify-end gap-x-4 pt-5">{actions}</div>
+    </article>
   );
 }
 

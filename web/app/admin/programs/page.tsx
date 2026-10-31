@@ -6,6 +6,8 @@ import { CloudOff, Pencil, Plus, School, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
+import { LoadingNote } from "@/components/admin-detail";
+import { Icon } from "@/components/icon";
 import { EmptyState } from "@/components/empty-state";
 import { FormModal } from "@/components/ui/form-modal";
 import { TextInput, TextareaInput } from "@/components/ui/form";
@@ -204,7 +206,7 @@ export default function ProgramsPage() {
   };
 
   const columns: Column<ProgramRow>[] = [
-    { key: "code", header: t.columns.code, render: (r) => <span className="font-mono text-xs font-medium text-accent">{r.code}</span> },
+    { key: "code", header: t.columns.code, render: (r) => <span className="font-mono text-label font-medium text-accent">{r.code}</span> },
     { key: "name", header: t.columns.name, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "description", header: t.columns.description, render: (r) => <span className="text-muted">{r.description}</span> },
     { key: "subjects", header: t.columns.subjectsHeader, render: (r) => <span className="text-muted">{t.columns.subjects(r.subjects.length)}</span> },
@@ -216,10 +218,10 @@ export default function ProgramsPage() {
       render: (r) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="sm" isIconOnly onPress={() => openEdit(r)}>
-            <Pencil className="size-3.5" />
+            <Icon icon={Pencil} size="sm" />
           </Button>
           <Button variant="ghost" size="sm" isIconOnly className="text-danger" onPress={() => handleDelete(r)}>
-            <Trash2 className="size-3.5" />
+            <Icon icon={Trash2} size="sm" />
           </Button>
         </div>
       ),
@@ -233,7 +235,7 @@ export default function ProgramsPage() {
       description={t.description}
       actions={
         <Button variant="primary" size="sm" onPress={openCreate}>
-          <Plus className="size-3.5" /> {t.addProgram}
+          <Icon icon={Plus} size="sm" /> {t.addProgram}
         </Button>
       }
     >
@@ -245,7 +247,7 @@ export default function ProgramsPage() {
           action={<Button variant="primary" size="sm" onPress={retry}>{t.retry}</Button>}
         />
       ) : rows === null ? (
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <LoadingNote>{t.loading}</LoadingNote>
       ) : rows.length === 0 ? (
         <EmptyState icon={School} title={t.emptyTitle} action={<Button variant="primary" size="sm" onPress={openCreate}>{t.addProgram}</Button>} />
       ) : (
@@ -292,8 +294,8 @@ export default function ProgramsPage() {
         />
 
         <div>
-          <p className="mb-1.5 text-[13px] font-medium text-foreground">{t.subjectsHeading}</p>
-          <p className="mb-2 text-xs text-muted">{t.subjectsHelp}</p>
+          <p className="mb-1.5 text-small font-medium text-foreground">{t.subjectsHeading}</p>
+          <p className="mb-2 text-label text-muted">{t.subjectsHelp}</p>
           <div className="flex gap-2">
             <TextInput
               className="flex-1"
@@ -308,28 +310,28 @@ export default function ProgramsPage() {
               }}
             />
             <Button type="button" variant="secondary" onPress={addSubject} isDisabled={!subjectInput.trim()}>
-              <Plus className="size-3.5" /> {t.addSubject}
+              <Icon icon={Plus} size="sm" /> {t.addSubject}
             </Button>
           </div>
           {form.subjects.length > 0 ? (
             <div className="mt-2.5 space-y-2.5">
               {form.subjects.map((s, subjectIndex) => (
-                <div key={s.id ?? `new-subject-${subjectIndex}`} className="rounded-lg border border-border p-3">
+                <div key={s.id ?? `new-subject-${subjectIndex}`} className="rounded-tile border border-border p-3.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-foreground">{s.name}</span>
+                    <span className="text-small font-medium text-foreground">{s.name}</span>
                     <button
                       type="button"
                       onClick={() => removeSubject(subjectIndex)}
                       className="rounded-full p-0.5 text-muted hover:bg-danger-soft hover:text-danger-soft-foreground"
                     >
-                      <X className="size-3.5" />
+                      <Icon icon={X} size="xs" />
                     </button>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {s.chapters.map((c, chapterIndex) => (
                       <span
                         key={c.id ?? `${c.name}-${chapterIndex}`}
-                        className="inline-flex items-center gap-1 rounded-full bg-accent-soft py-1 pr-1.5 pl-2.5 text-xs font-medium text-accent-soft-foreground"
+                        className="inline-flex items-center gap-1 rounded-full bg-accent-soft py-1 pr-1.5 pl-2.5 text-label font-medium text-accent-soft-foreground"
                       >
                         {c.name}
                         <button
@@ -337,7 +339,7 @@ export default function ProgramsPage() {
                           onClick={() => removeChapter(subjectIndex, chapterIndex)}
                           className="rounded-full p-0.5 text-accent-soft-foreground/70 hover:bg-accent/20 hover:text-accent-soft-foreground"
                         >
-                          <X className="size-3" />
+                          <Icon icon={X} size="xs" />
                         </button>
                       </span>
                     ))}
@@ -356,14 +358,14 @@ export default function ProgramsPage() {
                       }}
                     />
                     <Button type="button" variant="ghost" size="sm" onPress={() => addChapter(subjectIndex)} isDisabled={!(chapterInputBySubject[subjectIndex] ?? "").trim()}>
-                      <Plus className="size-3.5" /> {t.addChapter}
+                      <Icon icon={Plus} size="sm" /> {t.addChapter}
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-xs text-muted">{t.noSubjects}</p>
+            <p className="mt-2 text-label text-muted">{t.noSubjects}</p>
           )}
         </div>
       </FormModal>

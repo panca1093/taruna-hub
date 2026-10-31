@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
+import { Icon } from "@/components/icon";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput } from "@/components/ui/form";
 import {
@@ -134,7 +135,7 @@ export default function KecermatanResultsPage() {
     },
     { key: "test", header: t.colTest, render: (r) => r.test_title },
     { key: "attempt", header: t.colAttempt, render: (r) => <span className="text-muted">#{r.attempt_number}</span> },
-    { key: "bsk", header: t.colBsk, render: (r) => <span className="font-mono text-xs">{r.benar_total}/{r.salah_total}/{r.kosong_total}</span> },
+    { key: "bsk", header: t.colBsk, render: (r) => <span className="font-mono text-label">{r.benar_total}/{r.salah_total}/{r.kosong_total}</span> },
     { key: "nilai", header: t.colFinalScore, render: (r) => <span className="font-mono font-semibold text-foreground">{r.scores.nilai_akhir}</span> },
     { key: "completedAt", header: t.colCompleted, render: (r) => formatDateTime(r.completed_at) },
   ];
@@ -160,7 +161,7 @@ export default function KecermatanResultsPage() {
         }
       />
     ) : rows === null ? (
-      <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+      <p className="py-14 text-center text-caption text-muted">{t.loading}</p>
     ) : rows.length === 0 ? (
       <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
     ) : (
@@ -181,7 +182,7 @@ export default function KecermatanResultsPage() {
       description={t.resultCount(total)}
       actions={
         <Button variant="secondary" size="sm" onPress={() => rows && downloadCsv(rows, t)} isDisabled={!rows || rows.length === 0}>
-          <Download className="size-3.5" /> {t.exportCsv}
+          <Icon icon={Download} size="xs" /> {t.exportCsv}
         </Button>
       }
     >
@@ -229,40 +230,40 @@ export default function KecermatanResultsPage() {
             <div className="flex items-center gap-3">
               <GradientAvatar user={{ name: detail.student_name }} size="lg" />
               <div className="flex-1">
-                <p className="text-sm font-semibold text-foreground">{detail.student_name}</p>
-                <p className="text-xs text-muted">
+                <p className="font-display text-title text-foreground">{detail.student_name}</p>
+                <p className="text-label text-muted">
                   {detail.test_title} — {t.attemptLabel(detail.attempt_number)}
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-3 border-t border-border pt-4 text-sm">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-tile border border-border p-5 text-small sm:grid-cols-4">
               <div>
-                <p className="text-xs text-muted">{t.detailSpeed}</p>
-                <p className="font-mono text-base font-semibold text-foreground">{detail.scores.kecepatan}</p>
+                <dt className="mb-1 text-label text-muted">{t.detailSpeed}</dt>
+                <dd className="font-mono text-title font-semibold text-foreground">{detail.scores.kecepatan}</dd>
               </div>
               <div>
-                <p className="text-xs text-muted">{t.detailStamina}</p>
-                <p className="font-mono text-base font-semibold text-foreground">{detail.scores.ketahanan}</p>
+                <dt className="mb-1 text-label text-muted">{t.detailStamina}</dt>
+                <dd className="font-mono text-title font-semibold text-foreground">{detail.scores.ketahanan}</dd>
               </div>
               <div>
-                <p className="text-xs text-muted">{t.detailAccuracy}</p>
-                <p className="font-mono text-base font-semibold text-foreground">{detail.scores.ketelitian}</p>
+                <dt className="mb-1 text-label text-muted">{t.detailAccuracy}</dt>
+                <dd className="font-mono text-title font-semibold text-foreground">{detail.scores.ketelitian}</dd>
               </div>
               <div>
-                <p className="text-xs text-muted">{t.detailFinalScore}</p>
-                <p className="font-mono text-base font-semibold text-accent">{detail.scores.nilai_akhir}</p>
+                <dt className="mb-1 text-label text-muted">{t.detailFinalScore}</dt>
+                <dd className="font-mono text-title font-semibold text-accent">{detail.scores.nilai_akhir}</dd>
               </div>
-            </div>
+            </dl>
             <div>
-              <p className="mb-2 text-[13px] font-medium text-foreground">{t.columnBreakdownTitle}</p>
+              <h3 className="mb-3 font-display text-title">{t.columnBreakdownTitle}</h3>
               {breakdown === null ? (
-                <p className="text-xs text-muted">{t.loading}</p>
+                <p className="text-caption text-muted">{t.loading}</p>
               ) : (
                 <ul className="space-y-2">
                   {breakdown.kolom.map((k) => (
-                    <li key={k.number} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5 text-sm">
+                    <li key={k.number} className="flex items-center justify-between gap-3 rounded-control border border-border px-4 py-3 text-small">
                       <span className="font-medium text-foreground">{t.columnLabel(k.number)}</span>
-                      <span className="flex items-center gap-3 font-mono text-xs text-muted">
+                      <span className="flex items-center gap-3 font-mono text-label text-muted">
                         <span className="text-success">{t.correct(k.benar)}</span>
                         <span className="text-danger">{t.incorrect(k.salah)}</span>
                         <span>{t.blank(k.kosong)}</span>

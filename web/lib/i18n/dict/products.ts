@@ -5,6 +5,7 @@ import { useLocale } from "@/lib/i18n/locale-context";
 const id = {
   pageTitle: "Produk",
   productCount: (n: number) => `${n} produk`,
+  shownOf: (n: number, total: number) => `Menampilkan ${n} dari ${total} produk`,
   addProduct: "Tambah Produk",
   editProduct: "Edit Produk",
   emptyTitle: "Belum ada produk",
@@ -63,6 +64,7 @@ const id = {
 const en: typeof id = {
   pageTitle: "Products",
   productCount: (n: number) => `${n} products`,
+  shownOf: (n: number, total: number) => `Showing ${n} of ${total} products`,
   addProduct: "Add Product",
   editProduct: "Edit Product",
   emptyTitle: "No products yet",

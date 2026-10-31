@@ -159,19 +159,19 @@ export function ImportQuestionsModal({
           <button
             key={format}
             type="button"
-            className="flex items-center gap-3 rounded-lg border border-border bg-surface-secondary px-3 py-2.5 text-left transition-colors hover:border-accent/40"
+            className="flex items-center gap-3 rounded-tile border border-border bg-surface-secondary px-4 py-3 text-left transition-colors hover:border-accent/40"
             onClick={() => void downloadTemplate(format)}
             disabled={downloading !== null}
           >
             <Download className="size-4 shrink-0 text-accent" />
             <div>
-              <p className="text-sm font-medium text-foreground">{t.downloadTemplateTitle}</p>
-              <p className="text-xs text-muted uppercase">{format}</p>
+              <p className="text-small font-medium text-foreground">{t.downloadTemplateTitle}</p>
+              <p className="text-caption text-muted uppercase">{format}</p>
             </div>
           </button>
         ))}
       </div>
-      <p className="-mt-2 text-xs text-muted">{t.downloadTemplateDescription}</p>
+      <p className="-mt-2 text-caption text-muted">{t.downloadTemplateDescription}</p>
 
       <input
         ref={fileRef}
@@ -194,35 +194,35 @@ export function ImportQuestionsModal({
           void chooseFile(e.dataTransfer.files?.[0]);
         }}
         className={cn(
-          "flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-8 text-center transition-colors hover:border-accent/50 hover:bg-accent-soft/30",
+          "flex flex-col items-center gap-2 rounded-tile border border-dashed border-border py-8 text-center transition-colors hover:border-accent/50 hover:bg-accent-soft/30",
           dragging && "border-accent bg-accent-soft/40",
         )}
       >
-        <FileUp className="size-5 text-muted" />
-        <span className="text-sm font-medium text-foreground">{file?.name ?? t.uploadPrompt}</span>
+        <FileUp className="size-5 text-rose" />
+        <span className="text-small font-medium text-foreground">{file?.name ?? t.uploadPrompt}</span>
         {file && !pending && (
-          <span className="flex items-center gap-1.5 text-xs text-muted">
+          <span className="flex items-center gap-1.5 text-caption text-muted">
             <RotateCcw className="size-3" /> {t.replaceFile}
           </span>
         )}
       </button>
 
       {inlineError && (
-        <p className="flex items-start gap-1.5 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger-soft-foreground">
-          <XCircle className="mt-px size-3.5 shrink-0" /> {inlineError}
+        <p className="flex items-start gap-1.5 rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-caption text-danger-soft-foreground">
+          <XCircle className="mt-px size-4 shrink-0" /> {inlineError}
         </p>
       )}
 
-      {pending && !preview && <p className="text-center text-xs text-muted">{t.reading}</p>}
+      {pending && !preview && <p className="text-center text-caption text-muted">{t.reading}</p>}
 
       {preview && (
         <div>
-          <p className="mb-2 flex flex-wrap items-center gap-1.5 text-xs font-medium text-success">
-            <CheckCircle2 className="size-3.5" /> {t.detected(preview.valid, preview.invalid)}
+          <p className="mb-2 flex flex-wrap items-center gap-1.5 text-caption font-medium text-success">
+            <CheckCircle2 className="size-4" /> {t.detected(preview.valid, preview.invalid)}
             <span className="font-normal text-muted">· {t.selected(selected.size)}</span>
           </p>
-          <div className="max-h-72 overflow-auto rounded-lg border border-border">
-            <table className="w-full text-xs">
+          <div className="max-h-72 overflow-auto rounded-tile border border-border">
+            <table className="w-full text-caption">
               <thead className="sticky top-0 bg-surface-secondary text-muted">
                 <tr>
                   <th className="w-8 px-2 py-2" />
@@ -249,11 +249,11 @@ export function ImportQuestionsModal({
                     <td className="px-3 py-2 align-top">
                       {row.valid ? (
                         <span className="flex items-center gap-1 text-success">
-                          <CheckCircle2 className="size-3.5" /> {t.valid}
+                          <CheckCircle2 className="size-4" /> {t.valid}
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 text-danger">
-                          <XCircle className="size-3.5" /> {t.invalid}
+                          <XCircle className="size-4" /> {t.invalid}
                         </span>
                       )}
                     </td>
@@ -270,8 +270,8 @@ export function ImportQuestionsModal({
       )}
 
       {!file && (
-        <p className="flex items-center gap-1.5 text-xs text-muted">
-          <FileSpreadsheet className="size-3.5" /> {t.requiredColumns}
+        <p className="flex items-center gap-1.5 text-caption text-muted">
+          <FileSpreadsheet className="size-4" /> {t.requiredColumns}
         </p>
       )}
     </FormModal>

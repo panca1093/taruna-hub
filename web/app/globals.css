@@ -24,6 +24,91 @@
   --color-sidebar-active: var(--sidebar-active);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-rose: var(--rose);
+
+  --shadow-soft: 0 16px 45px var(--shadow-tint);
+  --shadow-rail: 0 16px 36px var(--shadow-tint-strong);
+  --shadow-menu: 0 20px 70px var(--shadow-tint-strong);
+  --shadow-dialog: 0 32px 100px var(--shadow-tint-strong);
+}
+
+/* Literal-valued design tokens from the handoff prototype (style.css, flow.css).
+   `static` so they are always emitted and usable from plain CSS below. */
+@theme static {
+  /* Type steps. Pair the Geist ones with `font-display`; weight 550 is baked in. */
+  --text-display: 2.25rem;
+  --text-display--line-height: 1.15;
+  --text-display--letter-spacing: -1.3px;
+  --text-display--font-weight: 550;
+  --text-display-sm: 1.875rem;
+  --text-display-sm--line-height: 1.15;
+  --text-display-sm--letter-spacing: -1px;
+  --text-display-sm--font-weight: 550;
+  --text-hero: 1.6875rem;
+  --text-hero--line-height: 1.2;
+  --text-hero--letter-spacing: -0.8px;
+  --text-hero--font-weight: 550;
+  --text-hero-lg: 1.8125rem;
+  --text-hero-lg--line-height: 1.12;
+  --text-hero-lg--letter-spacing: -0.9px;
+  --text-hero-lg--font-weight: 550;
+  --text-heading: 1.25rem;
+  --text-heading--line-height: 1.25;
+  --text-heading--letter-spacing: -0.5px;
+  --text-heading--font-weight: 550;
+  --text-heading-sm: 1.125rem;
+  --text-heading-sm--line-height: 1.25;
+  --text-heading-sm--letter-spacing: -0.3px;
+  --text-heading-sm--font-weight: 550;
+  --text-title: 1.0625rem;
+  --text-title--line-height: 1.35;
+  --text-title--font-weight: 550;
+  --text-metric: 1.3125rem;
+  --text-metric--line-height: 1.2;
+  --text-metric--font-weight: 550;
+  --text-metric-lg: 2.1875rem;
+  --text-metric-lg--line-height: 1.1;
+  --text-metric-lg--letter-spacing: -1px;
+  --text-metric-lg--font-weight: 550;
+  --text-metric-xl: 2.625rem;
+  --text-metric-xl--line-height: 1.1;
+  --text-metric-xl--letter-spacing: -1.5px;
+  --text-metric-xl--font-weight: 550;
+  --text-score: 4.375rem;
+  --text-score--line-height: 0.95;
+  --text-score--letter-spacing: -3px;
+  --text-score--font-weight: 550;
+  --text-brand: 2.125rem;
+  --text-brand--line-height: 1;
+  --text-brand--letter-spacing: -3px;
+  --text-brand--font-weight: 650;
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.5;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.5;
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1.5;
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 1.5;
+  --text-nano: 0.5625rem;
+  --text-nano--line-height: 1.5;
+
+  /* Radii: control 10, tile 16, card 21, hero 23, rail 27 */
+  --radius-chip: 0.4375rem;
+  --radius-control: 0.625rem;
+  --radius-tile: 1rem;
+  --radius-menu: 1.1875rem;
+  --radius-card: 1.3125rem;
+  --radius-hero: 1.4375rem;
+  --radius-rail: 1.6875rem;
+
+  /* Shell geometry */
+  --spacing-inset: 0.875rem;
+  --spacing-rail: 5.5rem;
+  --spacing-rail-open: 14rem;
+  --spacing-rail-admin: 15.5rem;
+  --spacing-topbar: 5.125rem;
 }
 
 :root,
@@ -64,7 +149,7 @@
   --field-border-width: 1px;
 
   --success: oklch(0.6534 0.1567 156.7);
-  --success-foreground: oklch(0.2242 0.019 267);
+  --success-foreground: oklch(0.985 0.005 78);
   --warning: oklch(0.7723 0.1585 73.7);
   --warning-foreground: oklch(0.2242 0.019 267);
   --danger: oklch(0.58 0.2116 20.6);
@@ -90,6 +175,21 @@
   --sidebar-active: color-mix(in oklab, var(--sidebar-foreground) 13%, transparent);
   --sidebar-accent: oklch(0.819 0.056 346.8);
   --sidebar-border: color-mix(in oklab, var(--sidebar-foreground) 14%, transparent);
+  --sidebar-hover: color-mix(in oklab, var(--sidebar-foreground) 6%, transparent);
+  --rail-active-start: oklch(0.599 0.081 345 / 29%);
+  --rail-active-end: oklch(0.599 0.081 345 / 6%);
+
+  /* Prototype accent-soft / green / rose, mapped onto the HeroUI semantic slots */
+  --accent-soft: oklch(0.921 0.016 352);
+  --accent-soft-hover: oklch(0.9 0.02 352);
+  --accent-soft-foreground: var(--accent);
+  --success: oklch(0.495 0.061 163.4);
+  --success-soft: oklch(0.947 0.013 149.2);
+  --success-soft-foreground: var(--success);
+  --rose: oklch(0.633 0.037 359.8);
+  --logo-plate: oklch(0.96 0.015 70);
+  --shadow-tint: oklch(0.333 0.021 342.4 / 3.5%);
+  --shadow-tint-strong: oklch(0.2 0.03 340 / 15%);
 }
 
 .dark,
@@ -140,6 +240,18 @@
   --sidebar: oklch(0.188 0.009 317.7);
   --sidebar-foreground: oklch(0.929 0.014 336.2);
   --sidebar-accent: oklch(0.819 0.056 346.8);
+
+  --accent-soft: oklch(0.339 0.03 330.7);
+  --accent-soft-hover: oklch(0.37 0.034 330.7);
+  --accent-soft-foreground: var(--accent);
+  --success: oklch(0.814 0.064 153.3);
+  --success-foreground: oklch(0.2 0.02 155);
+  --success-soft: oklch(0.336 0.032 156.5);
+  --success-soft-foreground: var(--success);
+  --rose: oklch(0.704 0.048 346.1);
+  --logo-plate: oklch(0.96 0.015 70);
+  --shadow-tint: oklch(0 0 0 / 8%);
+  --shadow-tint-strong: oklch(0 0 0 / 40%);
 }
 
 /* Opt-out scope for surfaces that must keep the pre-rose indigo identity
@@ -176,8 +288,14 @@
   --segment-foreground: var(--foreground);
   --focus: var(--accent);
   --link: var(--accent);
+  --success: oklch(0.6534 0.1567 156.7);
+  --success-foreground: oklch(0.2242 0.0075 264);
+  --success-soft: color-mix(in oklab, var(--success) 15%, transparent);
+  --success-soft-foreground: color-mix(in oklab, var(--success) 80%, var(--foreground) 60%);
   background: var(--background);
   color: var(--foreground);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 .dark .palette-classic,
 [data-theme="dark"] .palette-classic {
@@ -212,19 +330,140 @@
   --segment-foreground: var(--foreground);
   --focus: var(--accent);
   --link: var(--accent);
+  --success: oklch(0.6534 0.1567 156.7);
 }
 
 /* ---------------------------------------------------------------------- */
-/* Component tightening — pill defaults read consumer-app, not ops tool.  */
-/* Unlayered rules outrank HeroUI's layer(components) by cascade-layer    */
-/* precedence, so this is a safe, permanent override (not a specificity   */
-/* hack).                                                                 */
+/* Workspace type base. Headings use Geist at weight 550 with the         */
+/* prototype's tracking; utilities (text-*, font-*) still override these. */
+/* The landing (.palette-classic) keeps its own typography.               */
 /* ---------------------------------------------------------------------- */
 
-.button {
+@layer base {
+  body {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+  h1:not(:where(.palette-classic *)),
+  h2:not(:where(.palette-classic *)),
+  h3:not(:where(.palette-classic *)) {
+    font-family: var(--font-display);
+    font-weight: 550;
+  }
+  h1:not(:where(.palette-classic *)) {
+    font-size: var(--text-display);
+    line-height: 1.15;
+    letter-spacing: -1.3px;
+  }
+  h2:not(:where(.palette-classic *)) {
+    font-size: var(--text-heading);
+    letter-spacing: -0.5px;
+  }
+  h3:not(:where(.palette-classic *)) {
+    font-size: var(--text-title);
+    line-height: 1.35;
+  }
+  /* The prototype draws every icon at stroke 1.65; a stroke-* utility still wins. */
+  svg.lucide:not(:where(.palette-classic *)) {
+    stroke-width: 1.65;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* HeroUI restyle to the prototype's button / field / card / chip anatomy. */
+/* Inside @layer components so callers' utility classes still win. The    */
+/* landing (.palette-classic) opts out and keeps the old HeroUI look.     */
+/* ---------------------------------------------------------------------- */
+
+@layer components {
+  .button:not(:where(.palette-classic *)) {
+    border-radius: var(--radius-control);
+    font-size: var(--text-caption);
+    font-weight: 550;
+    gap: 0.5625rem;
+  }
+  .button:not(.button--icon-only):not(:where(.palette-classic *)) {
+    height: auto;
+    min-height: 2.625rem;
+    padding-inline: 1.0625rem;
+  }
+  .button--sm:not(.button--icon-only):not(:where(.palette-classic *)) {
+    min-height: 2.25rem;
+    padding-inline: 0.8125rem;
+  }
+  .button--lg:not(.button--icon-only):not(:where(.palette-classic *)) {
+    min-height: 3rem;
+    font-size: var(--text-small);
+  }
+  .button--secondary:not(:where(.palette-classic *)) {
+    --button-bg: var(--surface);
+    --button-bg-hover: var(--surface-secondary);
+    --button-bg-pressed: var(--surface-secondary);
+    --button-fg: var(--foreground);
+    border: 1px solid var(--border);
+  }
+  .button--tertiary:not(:where(.palette-classic *)) {
+    --button-bg: var(--surface-secondary);
+    --button-bg-hover: var(--surface-tertiary);
+    --button-bg-pressed: var(--surface-tertiary);
+    --button-fg: var(--foreground);
+  }
+  .button--primary:not(:where(.palette-classic *)):hover {
+    filter: brightness(1.07);
+  }
+
+  .input:not(:where(.palette-classic *)),
+  .select__trigger:not(:where(.palette-classic *)) {
+    min-height: 2.75rem;
+    border-radius: var(--radius-control);
+    box-shadow: none;
+  }
+
+  .chip:not(:where(.palette-classic *)) {
+    border-radius: var(--radius-chip);
+    font-weight: 500;
+  }
+  .chip--sm:not(:where(.palette-classic *)) {
+    padding: 0.25rem 0.5rem;
+    font-size: var(--text-label);
+    line-height: 1.2;
+  }
+  .chip--md:not(:where(.palette-classic *)) {
+    padding: 0.25rem 0.625rem;
+    font-size: var(--text-label);
+  }
+
+  .card:not(:where(.palette-classic *)) {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: none;
+  }
+
+  .modal__dialog:not(:where(.palette-classic *)),
+  .drawer__dialog:not(:where(.palette-classic *)) {
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-dialog);
+  }
+  .modal__dialog:not(:where(.palette-classic *)) {
+    border-radius: var(--radius-hero);
+    padding: 2rem;
+  }
+  .modal__backdrop--blur:not(:where(.palette-classic *)) {
+    backdrop-filter: blur(5px);
+  }
+  .dropdown__popover:not(:where(.palette-classic *)),
+  .popover:not(:where(.palette-classic *)),
+  .select__popover:not(:where(.palette-classic *)) {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-menu);
+    box-shadow: var(--shadow-menu);
+  }
+}
+
+.palette-classic .button {
   border-radius: var(--radius-lg);
 }
-.chip {
+.palette-classic .chip {
   border-radius: var(--radius-md);
 }
 
@@ -243,11 +482,52 @@
   background: linear-gradient(135deg, var(--ring-start), var(--ring-end));
 }
 
+/* Floating-rail geometry and the glowing active-item treatment (prototype .sidebar / .nav-item). */
+@utility h-rail-full {
+  height: calc(100dvh - 2 * var(--spacing-inset));
+}
+
+@utility bg-rail-active {
+  background: linear-gradient(100deg, var(--rail-active-start), var(--rail-active-end));
+}
+
+@utility shadow-rail-glow {
+  box-shadow: 0 0 14px color-mix(in oklab, var(--sidebar-accent) 67%, transparent);
+}
+
+@utility grid-cols-detail {
+  grid-template-columns: minmax(0, 1.5fr) minmax(17.5rem, 0.65fr);
+}
+
+@utility grid-cols-hero-pair {
+  grid-template-columns: minmax(0, 1.28fr) minmax(0, 0.9fr);
+}
+
+@utility grid-cols-wallet {
+  grid-template-columns: minmax(0, 1fr) 17.5rem;
+}
+
+@utility grid-cols-score {
+  grid-template-columns: 15rem minmax(0, 1fr);
+}
+
+@utility max-w-popover {
+  max-width: calc(100vw - 2rem);
+}
+
 @utility bg-grid {
   background-image:
     linear-gradient(to right, var(--border) 1px, transparent 1px),
     linear-gradient(to bottom, var(--border) 1px, transparent 1px);
   background-size: 32px 32px;
+}
+
+/* Dark-theme plate behind the (dark-ink) brand logo, as in the prototype. */
+.dark .logo-plate,
+[data-theme="dark"] .logo-plate {
+  background: var(--logo-plate);
+  padding: 0.3125rem 0.5rem;
+  border-radius: 0.5625rem;
 }
 
 html {
@@ -263,34 +543,34 @@ body {
   background: color-mix(in oklab, var(--accent) 30%, transparent);
 }
 
-.auth-page { min-height: 100dvh; display: flex; flex-direction: column; background: var(--surface); }
-.auth-header { height: 88px; padding: 0 48px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.auth-page { min-height: 100dvh; display: flex; flex-direction: column; background: var(--background); }
+.auth-header { height: 82px; padding: 0 48px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .dark .auth-header > a { padding: 4px 8px; margin-left: -8px; border-radius: var(--radius); background: var(--foreground); }
 .auth-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; flex: 1; width: 100%; max-width: 1600px; margin: 0 auto; padding: 0 24px 24px; }
-.auth-story { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: 32px 40px 24px; border-radius: calc(var(--radius) * 4); background: color-mix(in oklab, var(--accent) 6%, var(--background)); position: relative; isolation: isolate; overflow: hidden; }
+.auth-story { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: 32px 40px 24px; border-radius: var(--radius-hero); background: var(--peach); position: relative; isolation: isolate; overflow: hidden; }
 .auth-story::after { content: ""; position: absolute; inset: 40% -25% -25%; z-index: -1; background: radial-gradient(ellipse, color-mix(in oklab, var(--accent-2) 13%, transparent), transparent 68%); }
 .auth-story-copy { max-width: 520px; }
-.auth-story-copy h2 { font-family: var(--font-display); font-size: clamp(30px, 2.8vw, 40px); font-weight: 600; line-height: 1.15; letter-spacing: -1.3px; text-wrap: balance; }
-.auth-story-copy p { max-width: 440px; margin-top: 18px; font-size: 14px; line-height: 1.75; color: var(--muted); }
+.auth-story-copy h2 { font-family: var(--font-display); font-size: clamp(var(--text-display-sm), 2.8vw, var(--text-display)); font-weight: 550; line-height: 1.15; letter-spacing: -1.3px; text-wrap: balance; }
+.auth-story-copy p { max-width: 440px; margin-top: 18px; font-size: var(--text-small); line-height: 1.75; color: var(--muted); }
 .auth-visual-group { display: grid; justify-items: center; gap: 16px; margin: 28px 0; flex-shrink: 0; }
 .auth-illustration { position: relative; display: grid; place-items: center; width: 224px; height: 224px; }
 .auth-orbit { position: absolute; inset: 0; border: 1px solid color-mix(in oklab, var(--accent) 13%, transparent); border-radius: 50%; }
 .auth-orbit-inner { inset: 6%; animation: auth-orbit-arrive 3.2s cubic-bezier(.16, 1, .3, 1) .2s both; }
 .auth-orbit-inner::after { content: ""; position: absolute; top: 50%; left: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-2); }
-.auth-book { display: grid; place-items: center; width: 80px; height: 80px; color: var(--accent); background: var(--surface); border-radius: calc(var(--radius) * 3); box-shadow: var(--shadow-surface); transform: rotate(-7deg); animation: auth-book-enter 1.2s cubic-bezier(.16, 1, .3, 1) .3s both; }
+.auth-book { display: grid; place-items: center; width: 80px; height: 80px; color: var(--accent); background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-soft); transform: rotate(-7deg); animation: auth-book-enter 1.2s cubic-bezier(.16, 1, .3, 1) .3s both; }
 .auth-spark { position: absolute; color: var(--accent-2); font-size: 24px; animation: auth-enter .8s ease-out .6s both; }
 .auth-spark-one { right: 5%; top: 9%; }
 .auth-spark-two { left: 6%; bottom: 9%; }
 .auth-caption { display: grid; gap: 5px; text-align: center; max-width: 100%; }
-.auth-caption strong { font-family: var(--font-display); font-size: 20px; font-weight: 600; line-height: 1.35; text-wrap: balance; }
-.auth-caption > span { font-size: 12px; color: var(--muted); }
+.auth-caption strong { font-family: var(--font-display); font-size: var(--text-heading); font-weight: 550; line-height: 1.35; letter-spacing: -.5px; text-wrap: balance; }
+.auth-caption > span { font-size: var(--text-caption); color: var(--muted); }
 .auth-feature-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; width: 100%; max-width: 460px; }
-.auth-feature { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px; background: var(--surface); border: 1px solid var(--separator); border-radius: calc(var(--radius) * 2); box-shadow: var(--shadow-surface); animation-delay: .5s; }
+.auth-feature { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px; background: var(--surface); border: 1px solid var(--separator); border-radius: var(--radius-tile); box-shadow: var(--shadow-soft); animation-delay: .5s; }
 .auth-feature:last-child { animation-delay: .65s; }
-.auth-feature > span { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--surface)); border-radius: var(--radius); }
+.auth-feature > span { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; color: var(--accent); background: var(--accent-soft); border-radius: var(--radius-control); }
 .auth-feature strong, .auth-feature small { display: block; line-height: 1.6; }
-.auth-feature strong { font-size: 12px; font-weight: 600; }
-.auth-feature small { font-size: 10px; color: var(--muted); }
+.auth-feature strong { font-size: var(--text-caption); font-weight: 550; }
+.auth-feature small { font-size: var(--text-micro); color: var(--muted); }
 .auth-story-footer { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
 .auth-story-footer p { max-width: 350px; }
 .auth-small-ring { display: block; width: 24px; height: 24px; border: 3px solid color-mix(in oklab, var(--accent) 18%, transparent); border-top-color: var(--ring-start); border-right-color: var(--ring-end); border-radius: 50%; transform: rotate(-25deg); flex-shrink: 0; }
@@ -298,26 +578,26 @@ body {
 .auth-form-wrap { width: 100%; max-width: 380px; margin: auto 0; padding: 12px 0 32px; }
 .auth-back { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-bottom: 24px; color: var(--muted); font-size: 12px; }
 .auth-back:hover { color: var(--foreground); }
-.auth-title { font-family: var(--font-display); font-size: 34px; font-weight: 600; line-height: 1.2; letter-spacing: -1px; }
-.auth-subtitle { margin-top: 12px; margin-bottom: 32px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+.auth-title { font-family: var(--font-display); font-size: var(--text-display); font-weight: 550; line-height: 1.15; letter-spacing: -1.3px; }
+.auth-subtitle { margin-top: 12px; margin-bottom: 32px; color: var(--muted); font-size: var(--text-small); line-height: 1.7; }
 .auth-fields { display: flex; flex-direction: column; gap: 22px; }
-.auth-fields input { min-height: 48px; }
+.auth-fields input { min-height: 44px; border-radius: var(--radius-control); }
 .auth-fields input:not([aria-invalid="true"]):not(:focus) { border-color: color-mix(in oklab, var(--muted) 75%, var(--surface)); }
-.auth-fields label { font-size: 13px; }
+.auth-fields label { font-size: var(--text-caption); }
 .auth-forgot { position: absolute; right: 0; top: 0; z-index: 1; color: var(--accent); font-size: 12px; }
 .auth-forgot:hover { text-decoration: underline; }
-.auth-fields .auth-submit { min-height: 48px; font-size: 14px; }
+.auth-fields .auth-submit { min-height: 44px; font-size: var(--text-small); border-radius: var(--radius-control); }
 .auth-secondary { margin-top: 24px; color: var(--muted); text-align: center; font-size: 13px; }
 .auth-secondary a { color: var(--accent); font-weight: 500; }
 .auth-secondary a:hover { text-decoration: underline; }
 .auth-footer { color: var(--muted); font-size: 11px; text-align: center; }
-.auth-error { padding: 12px; border: 1px solid var(--danger); border-radius: var(--radius); background: var(--surface); color: var(--danger); font-size: 13px; line-height: 1.6; }
+.auth-error { padding: 12px; border: 1px solid var(--danger); border-radius: var(--radius-control); background: var(--surface); color: var(--danger); font-size: var(--text-small); line-height: 1.6; }
 .auth-hint { margin-top: 7px; font-size: 11px; color: var(--muted); }
 .auth-mobile-emblem { display: none; }
-.auth-email-emblem { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 24px; border-radius: calc(var(--radius) * 3); color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--surface)); }
+.auth-email-emblem { display: grid; place-items: center; width: 56px; height: 56px; margin-bottom: 24px; border-radius: var(--radius-tile); color: var(--accent); background: var(--accent-soft); }
 .auth-email-destination { display: grid; gap: 4px; margin-bottom: 28px; font-size: 12px; color: var(--muted); }
 .auth-email-destination strong { font-size: 14px; font-weight: 500; color: var(--foreground); overflow-wrap: anywhere; }
-.auth-fields .auth-code-input { min-height: 64px; padding-left: 1.5em; font-family: var(--font-mono); font-size: 28px; letter-spacing: .5em; text-align: center; }
+.auth-fields .auth-code-input { min-height: 64px; padding-left: 1.5em; font-family: var(--font-mono); font-size: var(--text-metric-lg); letter-spacing: .5em; text-align: center; }
 .auth-resend { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px; margin-top: 20px; font-size: 12px; color: var(--muted); }
 .auth-skip { display: block; padding: 12px; text-align: center; font-size: 12px; color: var(--muted); }
 .auth-back:focus-visible, .auth-secondary a:focus-visible, .auth-forgot:focus-visible, .auth-skip:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: var(--radius); }
@@ -330,6 +610,13 @@ body {
 @keyframes auth-orbit-arrive { from { opacity: 0; transform: rotate(-180deg); } to { opacity: 1; transform: rotate(30deg); } }
 @media (min-width: 1440px) { .auth-story { padding: 40px 48px 28px; } }
 @media (max-width: 1100px) { .auth-story { padding: 32px 28px 24px; } .auth-panel { padding: 28px 24px 16px; } .auth-feature-grid { gap: 8px; } .auth-feature { gap: 8px; padding: 10px; } .auth-feature > span { width: 26px; height: 26px; } .auth-feature strong { font-size: 11px; } }
-@media (max-width: 800px) { .auth-header { height: 80px; padding: 0 28px; } .auth-main { display: flex; padding: 0 24px 24px; } .auth-story { display: none; } .auth-panel { width: 100%; padding: 16px 0; } .auth-form-wrap { max-width: 400px; } .auth-back { margin-bottom: 18px; } .auth-mobile-emblem { display: block; width: 40px; height: 40px; border-width: 5px; margin: 16px 0 24px; } .auth-title { font-size: 32px; } }
-@media (max-width: 480px) { .auth-header { height: 76px; padding: 0 20px; } .auth-panel { padding-top: 0; } .auth-form-wrap { padding-top: 0; } .auth-back { margin-bottom: 12px; } .auth-title { font-size: 30px; } .auth-subtitle { margin-bottom: 28px; } .auth-secondary { font-size: 12px; } }
+@media (max-width: 800px) { .auth-header { height: 80px; padding: 0 28px; } .auth-main { display: flex; padding: 0 24px 24px; } .auth-story { display: none; } .auth-panel { width: 100%; padding: 16px 0; } .auth-form-wrap { max-width: 400px; } .auth-back { margin-bottom: 18px; } .auth-mobile-emblem { display: block; width: 40px; height: 40px; border-width: 5px; margin: 16px 0 24px; } .auth-title { font-size: var(--text-display-sm); } }
+@media (max-width: 480px) { .auth-header { height: 76px; padding: 0 20px; } .auth-panel { padding-top: 0; } .auth-form-wrap { padding-top: 0; } .auth-back { margin-bottom: 12px; } .auth-title { font-size: var(--text-display-sm); } .auth-subtitle { margin-bottom: 28px; } .auth-secondary { font-size: 12px; } }
 @media (prefers-reduced-motion: reduce) { .auth-enter, .auth-book, .auth-orbit-inner, .auth-spark { animation: none; } }
+.auth-done { display: grid; justify-items: start; gap: 12px; padding: 28px; border-radius: var(--radius-hero); background: var(--peach); }
+.auth-done > span { display: grid; place-items: center; width: 48px; height: 48px; border-radius: var(--radius-tile); color: var(--accent); background: var(--surface); }
+.auth-done p { color: var(--muted); font-size: var(--text-small); line-height: 1.7; }
+.auth-done p strong { color: var(--foreground); font-weight: 500; overflow-wrap: anywhere; }
+.auth-done a { margin-top: 4px; color: var(--accent); font-size: var(--text-small); font-weight: 500; }
+.auth-done a:hover, .auth-error a { text-decoration: underline; }
+.auth-done .auth-title { font-size: var(--text-hero); letter-spacing: -.8px; }

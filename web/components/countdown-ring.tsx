@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { motion } from "framer-motion";
+import { Clock } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface CountdownRingProps {
@@ -70,6 +71,26 @@ export function CountdownRing({
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Prototype exam timer: an accent-soft pill with a clock and a Geist time string.
+ * Display only; the caller passes the already-formatted server-derived time.
+ */
+export function ExamTimerPill({ time, urgent = false, className, ...rest }: { time: string; urgent?: boolean; className?: string } & Omit<React.HTMLAttributes<HTMLDivElement>, "children">) {
+  return (
+    <div
+      {...rest}
+      className={cn(
+        "inline-flex min-w-28 items-center justify-center gap-2 rounded-tile px-4 py-2.5 font-display text-heading tabular-nums",
+        urgent ? "bg-danger-soft text-danger" : "bg-accent-soft text-accent",
+        className,
+      )}
+    >
+      <Clock className="size-4.5" aria-hidden />
+      {time}
     </div>
   );
 }

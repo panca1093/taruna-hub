@@ -3,12 +3,14 @@
 import { Suspense, use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button, Card } from "@heroui/react";
-import { CheckCircle2, CloudOff, Gauge, Timer } from "lucide-react";
+import { Button } from "@heroui/react";
+import { ArrowRight, CloudOff } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { CountdownRing } from "@/components/countdown-ring";
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/icon";
 import { KecermatanItem } from "@/components/kecermatan-item";
+import { NoteBox, Panel, SectionHeader } from "@/components/page-blocks";
+import { StatusChip } from "@/components/status-badge";
 import { LinkButton } from "@/components/ui/link-button";
 import { ApiError, api, type KecermatanOverview, type KecermatanReview } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
@@ -102,16 +104,17 @@ function ResultContent({ testId }: { testId: string }) {
 
   const { result } = review;
   const counts = [
-    { label: t.benar, value: result.benar_total, tone: "text-success" },
-    { label: t.salah, value: result.salah_total, tone: "text-danger" },
-    { label: t.kosong, value: result.kosong_total, tone: "text-muted" },
+    { label: t.benar, value: result.benar_total },
+    { label: t.salah, value: result.salah_total },
+    { label: t.kosong, value: result.kosong_total },
   ];
   const scoreCards = [
-    { label: t.scoreKecepatan, value: result.scores.kecepatan, icon: Timer },
-    { label: t.scoreKetahanan, value: result.scores.ketahanan, icon: Gauge },
-    { label: t.scoreKetelitian, value: result.scores.ketelitian, icon: CheckCircle2 },
+    { label: t.scoreKecepatan, value: result.scores.kecepatan },
+    { label: t.scoreKetelitian, value: result.scores.ketelitian },
+    { label: t.scoreKetahanan, value: result.scores.ketahanan },
   ];
   const completedAttempts = overview?.attempts.filter((attempt) => attempt.status === "completed") ?? [];
+  const completedOn = new Date(result.completed_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
   const picked = review.kolom.find((item) => item.number === kolomPick) ?? review.kolom[0];
   const column = picked ? review.columns[picked.source_column - 1] : undefined;
@@ -120,94 +123,102 @@ function ResultContent({ testId }: { testId: string }) {
   const from = page * PAGE_SIZE;
   const to = Math.min(soalTotal, from + PAGE_SIZE);
   const statusLabel = { benar: t.statusBenar, salah: t.statusSalah, kosong: t.statusKosong };
-  const statusTone = {
-    benar: "bg-success-soft text-success-soft-foreground",
-    salah: "bg-danger-soft text-danger-soft-foreground",
-    kosong: "bg-default text-default-foreground",
-  };
+  const statusTone = { benar: "success", salah: "danger", kosong: "neutral" } as const;
+  const statTile = "rounded-tile border border-border bg-surface p-4 sm:p-5.5";
 
   return (
-    <AppShell title={t.heading} description={result.test_title}>
+    <AppShell
+      title={t.heading}
+      description={`${result.test_title} · ${completedOn}`}
+      breadcrumb={[{ label: t.crumbDashboard, href: "/student" }, { label: t.crumbResult }]}
+      actions={
+        <LinkButton href="#pembahasan" variant="primary">
+          {t.reviewCta} <Icon icon={ArrowRight} size="sm" />
+        </LinkButton>
+      }
+    >
       <div className="space-y-6">
-        <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
-          <Card className="items-center justify-center gap-3 p-6 text-center">
-            <CountdownRing value={result.scores.nilai_akhir} size={120} strokeWidth={9} animate>
-              <div className="text-center">
-                <p className="font-display text-3xl font-semibold text-foreground">{result.scores.nilai_akhir}</p>
-                <p className="text-xs text-muted">{t.outOf100}</p>
-              </div>
-            </CountdownRing>
-            <p className="text-sm font-medium text-muted">{t.nilaiAkhirLabel(result.attempt_number)}</p>
-          </Card>
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+        <div className="grid gap-5 sm:gap-7.5 md:grid-cols-score">
+          <Panel tone="peach" radius="hero" className="flex flex-col items-center justify-center text-center">
+            <p className="text-label text-foreground/80">{t.nilaiAkhirLabel(result.attempt_number)}</p>
+            <p className="my-5 font-display text-score tabular-nums">{result.scores.nilai_akhir}</p>
+            <p className="text-label text-foreground/80">{t.outOf100}</p>
+          </Panel>
+          <div className="grid content-start gap-4">
+            <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
               {counts.map((item) => (
-                <Card key={item.label} className="gap-1 p-4">
-                  <p className={cn("font-display text-2xl font-semibold", item.tone)}>{item.value}</p>
-                  <p className="text-xs text-muted">{item.label}</p>
-                </Card>
+                <div key={item.label} className={statTile}>
+                  <p className="font-display text-metric tabular-nums sm:text-hero">{item.value}</p>
+                  <p className="mt-1.5 text-micro text-muted">{item.label}</p>
+                </div>
               ))}
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {scoreCards.map((s) => (
-                <Card key={s.label} className="gap-2 p-4">
-                  <span className="inline-flex size-8 items-center justify-center rounded-lg bg-accent-soft text-accent-soft-foreground">
-                    <s.icon className="size-4" />
-                  </span>
-                  <p className="font-display text-xl font-semibold text-foreground">{s.value}</p>
-                  <p className="text-xs text-muted">{s.label}</p>
-                </Card>
-              ))}
-            </div>
+            <Panel>
+              <h2 className="font-display mb-3 text-heading-sm">{t.insightTitle}</h2>
+              <p className="text-caption leading-loose text-muted">{t.insightBody}</p>
+            </Panel>
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
-          <Card className="gap-3 p-5">
-            <p className="font-display text-lg font-semibold text-foreground">{t.perKolomTitle}</p>
-            <div className="max-h-96 overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-surface text-xs text-muted">
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+          {scoreCards.map((item) => (
+            <div key={item.label} className={statTile}>
+              <p className="font-display text-metric tabular-nums sm:text-hero">{item.value}</p>
+              <p className="mt-1.5 text-micro text-muted">{item.label}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid items-start gap-7 lg:grid-cols-detail">
+          <Panel>
+            <h2 className="font-display mb-3 text-heading-sm">{t.perKolomTitle}</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-80 border-collapse text-caption">
+                <thead>
                   <tr>
-                    <th className="py-2 text-left font-medium">{t.kolomColumn}</th>
-                    <th className="py-2 text-right font-medium">{t.benar}</th>
-                    <th className="py-2 text-right font-medium">{t.salah}</th>
-                    <th className="py-2 text-right font-medium">{t.kosong}</th>
+                    <th className="border-b border-border px-2.5 py-3 text-left text-micro font-medium text-muted">{t.kolomColumn}</th>
+                    <th className="border-b border-border px-2.5 py-3 text-right text-micro font-medium text-muted">{t.benar}</th>
+                    <th className="border-b border-border px-2.5 py-3 text-right text-micro font-medium text-muted">{t.salah}</th>
+                    <th className="border-b border-border px-2.5 py-3 text-right text-micro font-medium text-muted">{t.kosong}</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="tabular-nums">
                   {result.kolom.map((k) => (
-                    <tr key={k.number} className="border-t border-border">
-                      <td className="py-2 font-medium text-foreground">{k.number}</td>
-                      <td className="py-2 text-right font-mono text-success">{k.benar}</td>
-                      <td className="py-2 text-right font-mono text-danger">{k.salah}</td>
-                      <td className="py-2 text-right font-mono text-muted">{k.kosong}</td>
+                    <tr key={k.number}>
+                      <td className="border-b border-border px-2.5 py-3.25 text-left">{k.number}</td>
+                      <td className="border-b border-border px-2.5 py-3.25 text-right">{k.benar}</td>
+                      <td className="border-b border-border px-2.5 py-3.25 text-right">{k.salah}</td>
+                      <td className="border-b border-border px-2.5 py-3.25 text-right">{k.kosong}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </Card>
+          </Panel>
 
-          <Card className="gap-3 p-5">
-            <p className="font-display text-lg font-semibold text-foreground">{t.correctPerKolomTitle}</p>
-            <div className="flex h-32 items-end gap-0.5">
+          <Panel>
+            <h2 className="font-display mb-3 text-heading-sm">{t.correctPerKolomTitle}</h2>
+            <div className="mt-4 flex h-34 items-end gap-1.5 sm:gap-2.5">
               {result.kolom.map((k) => {
                 const total = k.benar + k.salah + k.kosong;
                 return (
-                  <div key={k.number} className="flex h-full min-w-0 flex-1 items-end" title={t.barLabel(k.number, k.benar)}>
-                    <span className="w-full rounded-t-sm bg-accent" style={{ height: `${total > 0 ? Math.max(2, (k.benar / total) * 100) : 2}%` }} />
+                  <div key={k.number} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2 text-micro text-muted tabular-nums" title={t.barLabel(k.number, k.benar)}>
+                    <span>{k.benar}</span>
+                    <span className="flex min-h-0 w-full flex-1 items-end justify-center">
+                      <span className="block min-h-0.5 w-full max-w-9 rounded-t-chip bg-rose" style={{ height: `${total > 0 ? Math.max(2, (k.benar / total) * 100) : 2}%` }} />
+                    </span>
+                    <span>{k.number}</span>
                   </div>
                 );
               })}
             </div>
-            {overview && <p className="rounded-lg bg-surface-secondary p-3 text-xs text-muted">{t.quotaLeft(overview.test.attempts_remaining)}</p>}
-          </Card>
+            {overview && <NoteBox className="mt-5">{t.quotaLeft(overview.test.attempts_remaining)}</NoteBox>}
+          </Panel>
         </div>
 
         {completedAttempts.length > 1 && (
           <div>
-            <p className="mb-2 text-sm font-semibold text-foreground">{t.historyTitle}</p>
+            <p className="mb-3 text-small font-medium">{t.historyTitle}</p>
             <div className="flex flex-wrap gap-2">
               {completedAttempts.map((attempt) => (
                 <Link
@@ -215,10 +226,10 @@ function ResultContent({ testId }: { testId: string }) {
                   href={`/student/kecermatan/${testId}/result?attempt=${attempt.session_id}`}
                   aria-current={attempt.session_id === result.session_id ? "page" : undefined}
                   className={cn(
-                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                    "inline-flex min-h-9 items-center rounded-full border px-3.5 text-label outline-none transition-colors focus-visible:ring-2 focus-visible:ring-focus",
                     attempt.session_id === result.session_id
-                      ? "border-accent bg-accent-soft text-accent-soft-foreground"
-                      : "border-border text-muted hover:bg-surface-secondary",
+                      ? "border-accent bg-accent text-accent-foreground"
+                      : "border-border bg-surface text-muted hover:text-foreground",
                   )}
                 >
                   {t.attemptLabel(attempt.attempt_number)} · {attempt.nilai_akhir}
@@ -229,10 +240,10 @@ function ResultContent({ testId }: { testId: string }) {
         )}
 
         {picked && column && (
-          <section className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="font-display text-lg font-semibold text-foreground">{t.pembahasanTitle}</p>
-              <label className="flex items-center gap-2 text-sm text-muted">
+          <section id="pembahasan" className="scroll-mt-6 space-y-5">
+            <SectionHeader title={t.pembahasanTitle} />
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2.5 text-caption text-muted">
                 {t.chooseKolom}
                 <select
                   value={picked.number}
@@ -240,7 +251,7 @@ function ResultContent({ testId }: { testId: string }) {
                     setKolomPick(Number(event.target.value));
                     setPage(0);
                   }}
-                  className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground"
+                  className="min-h-10 rounded-control border border-border bg-surface px-3 text-small text-foreground outline-none focus-visible:ring-2 focus-visible:ring-focus"
                 >
                   {review.kolom.map((item) => (
                     <option key={item.number} value={item.number}>
@@ -249,64 +260,64 @@ function ResultContent({ testId }: { testId: string }) {
                   ))}
                 </select>
               </label>
+              <span className="rounded-full border border-border bg-surface px-3 py-1.5 text-label text-muted">{t.rangeLabel(from + 1, to, soalTotal)}</span>
             </div>
 
-            <Card className="gap-2 p-4">
-              <p className="text-xs font-medium text-muted">{t.referenceTitle}</p>
+            <Panel tone="canvas" radius="tile">
+              <p className="mb-3 text-label text-muted">{t.referenceTitle}</p>
               <div className="flex flex-wrap gap-2">
                 {column.reference.map((item) => (
-                  <div key={item.label} className="min-w-20 rounded-lg border border-border bg-surface px-2 py-2 text-center">
-                    <p className="text-xs font-semibold text-muted">{item.label}</p>
-                    <KecermatanItem elements={item.elements} className="mt-1 text-lg font-extrabold" elementClassName="size-5" />
+                  <div key={item.label} className="min-w-20 rounded-tile border border-border bg-surface px-2 py-2.5 text-center">
+                    <p className="text-label text-muted">{item.label}</p>
+                    <KecermatanItem elements={item.elements} className="mt-1.5 text-lg font-extrabold" elementClassName="size-5" />
                   </div>
                 ))}
               </div>
-            </Card>
+            </Panel>
 
-            <div className="space-y-3">
+            <Panel>
               {column.soal.slice(from, to).map((soal, offset) => {
                 const index = from + offset;
                 const given = picked.answers[index] ?? null;
                 const status = given === null ? "kosong" : given === soal.missing ? "benar" : "salah";
                 const labelItems = (label: string | null) => column.reference.find((item) => item.label === label)?.elements ?? [];
                 return (
-                  <Card key={index} className="gap-3 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-foreground">{t.soalTitle(index + 1)}</p>
-                      <span className={cn("rounded-md px-2 py-0.5 text-xs font-medium", statusTone[status])}>{statusLabel[status]}</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-muted">{t.shownLabel}</span>
+                  <article key={index} className="border-b border-border py-6 first:pt-0 last:border-0 last:pb-0">
+                    <StatusChip tone={statusTone[status]} className="mb-3">
+                      {statusLabel[status]}
+                    </StatusChip>
+                    <h3 className="text-small font-medium">{t.soalTitle(index + 1)}</h3>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-caption text-muted">
+                      {t.shownLabel}
                       {soal.shown.map((label) => (
-                        <span key={label} className="rounded-md border border-dashed border-border px-2 py-1">
+                        <span key={label} className="rounded-chip border border-dashed border-rose px-2 py-1">
                           <KecermatanItem elements={labelItems(label)} className="text-base font-extrabold" elementClassName="size-5" />
                         </span>
                       ))}
                     </div>
-                    <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                      <p className="flex items-center gap-2 text-muted">
+                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-caption text-muted">
+                      <p className="flex items-center gap-2">
                         {t.yourAnswerLabel}
-                        <span className="font-mono font-semibold text-foreground">{given ?? t.blankAnswer}</span>
+                        <strong className="font-mono font-semibold text-foreground">{given ?? t.blankAnswer}</strong>
                         {given && <KecermatanItem elements={labelItems(given)} className="text-sm" elementClassName="size-4" />}
                       </p>
-                      <p className="flex items-center gap-2 text-muted">
+                      <p className="flex items-center gap-2">
                         {t.correctAnswerLabel}
-                        <span className="font-mono font-semibold text-foreground">{soal.missing}</span>
+                        <strong className="font-mono font-semibold text-foreground">{soal.missing}</strong>
                         <KecermatanItem elements={labelItems(soal.missing)} className="text-sm" elementClassName="size-4" />
                       </p>
                     </div>
-                  </Card>
+                  </article>
                 );
               })}
-            </div>
+            </Panel>
 
             {pageCount > 1 && (
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3.5">
                 <Button size="sm" variant="secondary" isDisabled={page === 0} onPress={() => setPage((current) => current - 1)}>
                   {t.prev}
                 </Button>
-                <span className="text-xs text-muted">{t.rangeLabel(from + 1, to, soalTotal)}</span>
-                <Button size="sm" variant="secondary" isDisabled={page >= pageCount - 1} onPress={() => setPage((current) => current + 1)}>
+                <Button size="sm" variant="primary" isDisabled={page >= pageCount - 1} onPress={() => setPage((current) => current + 1)}>
                   {t.next}
                 </Button>
               </div>
@@ -314,12 +325,12 @@ function ResultContent({ testId }: { testId: string }) {
           </section>
         )}
 
-        <div className="flex flex-wrap gap-3">
-          <LinkButton href={`/student/kecermatan/${testId}`} variant="primary">
-            {t.backToDetail}
+        <div className="flex flex-wrap items-center gap-3.5">
+          <LinkButton href={`/student/kecermatan/${testId}`} variant="secondary">
+            {t.backToDetail} <Icon icon={ArrowRight} size="xs" />
           </LinkButton>
           <LinkButton href="/student" variant="secondary">
-            {t.backToDashboard}
+            {t.backToDashboard} <Icon icon={ArrowRight} size="xs" />
           </LinkButton>
         </div>
       </div>

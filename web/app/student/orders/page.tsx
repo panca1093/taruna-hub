@@ -6,6 +6,7 @@ import { Button, toast } from "@heroui/react";
 import { CloudOff, Receipt } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { Panel } from "@/components/page-blocks";
 import { OrderStatusBadge } from "@/components/status-badge";
 import { api, errorText, type Order } from "@/lib/api/client";
 import { formatIDR } from "@/lib/format-money";
@@ -92,78 +93,69 @@ export default function StudentOrdersPage() {
   };
 
   return (
-    <AppShell title={t.title} description={t.description} maxWidth="max-w-6xl">
+    <AppShell
+      title={t.title}
+      description={t.description}
+      maxWidth="max-w-5xl"
+      breadcrumb={[{ label: t.crumbDashboard, href: "/student" }, { label: t.title }]}
+    >
       {loadFailed ? (
         <EmptyState
           icon={CloudOff}
           title={t.loadErrorTitle}
           description={t.loadErrorDescription}
           action={
-            <Button variant="primary" size="sm" onPress={retry}>
+            <Button variant="primary" onPress={retry}>
               {t.retry}
             </Button>
           }
         />
       ) : orders === null ? (
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <p className="py-14 text-center text-small text-muted">{t.loading}</p>
       ) : orders.length === 0 ? (
         <EmptyState icon={Receipt} title={t.emptyTitle} description={t.emptyDescription} />
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-border bg-surface">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-surface-secondary text-left text-[11px] font-medium tracking-wide text-muted uppercase">
-                    <th className="px-4 py-2.5">{t.colCode}</th>
-                    <th className="px-4 py-2.5">{t.colProduct}</th>
-                    <th className="px-4 py-2.5">{t.colDate}</th>
-                    <th className="px-4 py-2.5">{t.colTotal}</th>
-                    <th className="px-4 py-2.5">{t.colMethod}</th>
-                    <th className="px-4 py-2.5">{t.colStatus}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((o) => (
-                    <tr key={o.id} className="border-b border-border last:border-b-0">
-                      <td className="px-4 py-3 font-mono text-xs">
-                        <Link href={`/student/orders/${o.id}`} className="text-muted hover:text-foreground hover:underline">
-                          {o.code}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-foreground">
-                        <Link href={`/student/orders/${o.id}`} className="font-medium hover:underline">
-                          {o.product_title}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-muted">{new Date(o.created_at).toLocaleDateString()}</td>
-                      <td className="px-4 py-3 font-medium text-foreground">{formatIDR(o.price)}</td>
-                      <td className="px-4 py-3 text-muted">{t.paymentModeLabel[o.payment_method]}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-2">
-                          <OrderStatusBadge status={o.status} />
-                          {o.payment_exception && (
-                            <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning-soft-foreground">
-                              {t.heldBadge}
-                            </span>
-                          )}
-                          {o.payment_method === "gateway" && o.status === "pending" && (
-                            <Button size="sm" variant="ghost" onPress={() => cancelOrder(o.id)}>
-                              {t.cancelOrder}
-                            </Button>
-                          )}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          {moreFailed !== "" && <p className="mt-3 text-center text-sm text-danger">{moreFailed}</p>}
+          <Panel padding="none" className="px-6 py-2 sm:px-7 sm:py-3">
+            <ul>
+              {orders.map((o) => (
+                <li
+                  key={o.id}
+                  className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border py-4 text-caption last:border-b-0"
+                >
+                  <div className="min-w-0 flex-1 basis-56">
+                    <Link
+                      href={`/student/orders/${o.id}`}
+                      className="rounded-chip text-small font-medium text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus"
+                    >
+                      {o.product_title}
+                    </Link>
+                    <p className="mt-1 text-label text-muted">
+                      <span className="font-mono">{o.code}</span> · {new Date(o.created_at).toLocaleDateString()} · {t.paymentModeLabel[o.payment_method]}
+                    </p>
+                  </div>
+                  <span className="inline-flex flex-wrap items-center gap-2">
+                    <OrderStatusBadge status={o.status} />
+                    {o.payment_exception && (
+                      <span className="rounded-chip bg-warning-soft px-2 py-0.5 text-label font-medium text-warning-soft-foreground">
+                        {t.heldBadge}
+                      </span>
+                    )}
+                    {o.payment_method === "gateway" && o.status === "pending" && (
+                      <Button size="sm" variant="ghost" onPress={() => cancelOrder(o.id)}>
+                        {t.cancelOrder}
+                      </Button>
+                    )}
+                  </span>
+                  <strong className="min-w-24 text-right font-display text-heading-sm">{formatIDR(o.price)}</strong>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+          {moreFailed !== "" && <p className="mt-3 text-center text-small text-danger">{moreFailed}</p>}
           {orders.length < total && (
             <div className="mt-4 flex justify-center">
-              <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
+              <Button variant="secondary" onPress={loadMore} isDisabled={loadingMore}>
                 {loadingMore ? t.loadingMore : t.loadMore}
               </Button>
             </div>

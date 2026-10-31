@@ -99,7 +99,18 @@ export default function TryoutsListPage() {
   };
 
   const columns: Column<TryoutSummary>[] = [
-    { key: "title", header: t.columns.title, render: (row) => <span className="font-medium">{row.title}</span> },
+    {
+      key: "title",
+      header: t.columns.title,
+      render: (row) => (
+        <div className="flex items-center gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+            <ClipboardList className="size-4" aria-hidden />
+          </span>
+          <span className="font-semibold">{row.title}</span>
+        </div>
+      ),
+    },
     {
       key: "program",
       header: t.columns.program,
@@ -121,7 +132,7 @@ export default function TryoutsListPage() {
         <div className="flex items-center gap-2">
           <TryoutStatusBadge status={row.status} />
           {row.locked && (
-            <span className="flex items-center gap-1 text-xs text-muted" title={t.lockedHint}>
+            <span className="flex items-center gap-1 text-caption text-muted" title={t.lockedHint}>
               <Lock className="size-3.5" /> <span className="sr-only">{t.lockedLabel}</span>
             </span>
           )}
@@ -141,7 +152,7 @@ export default function TryoutsListPage() {
       render: (row) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <LinkButton href={`/admin/tryouts/${row.id}`} variant="ghost" size="sm" isIconOnly>
-            <Pencil className="size-3.5" />
+            <Pencil className="size-4" />
           </LinkButton>
           <Button
             variant="ghost"
@@ -151,7 +162,7 @@ export default function TryoutsListPage() {
             isDisabled={row.locked}
             onPress={() => setDeleteTarget(row)}
           >
-            <Trash2 className="size-3.5" />
+            <Trash2 className="size-4" />
           </Button>
         </div>
       ),
@@ -165,7 +176,7 @@ export default function TryoutsListPage() {
         description={t.description(total)}
         actions={
           <LinkButton href="/admin/tryouts/new" variant="primary" size="sm">
-            <Plus className="size-3.5" /> {t.createTryout}
+            <Plus className="size-4" /> {t.createTryout}
           </LinkButton>
         }
       >
@@ -177,12 +188,12 @@ export default function TryoutsListPage() {
             action={<Button variant="primary" size="sm" onPress={retry}>{t.retry}</Button>}
           />
         ) : rows === null ? (
-          <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+          <p className="py-14 text-center text-small text-muted">{t.loading}</p>
         ) : rows.length === 0 ? (
           <EmptyState icon={ClipboardList} title={t.emptyTitle} description={t.emptyDescription} />
         ) : (
           <>
-            <DataTable columns={columns} rows={rows} rowKey={(row) => row.id} onRowClick={(row) => router.push(`/admin/tryouts/${row.id}`)} />
+            <DataTable columns={columns} rows={rows} rowKey={(row) => row.id} footer={<span>{t.footerCount(rows.length, total)}</span>} onRowClick={(row) => router.push(`/admin/tryouts/${row.id}`)} />
             {rows.length < total && (
               <div className="mt-4 flex justify-center">
                 <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
@@ -209,7 +220,7 @@ export default function TryoutsListPage() {
             </>
           }
         >
-          <p className="text-sm text-muted">{t.deleteWarning}</p>
+          <p className="text-small text-muted">{t.deleteWarning}</p>
         </FormModal>
       </AppShell>
     </RequireRole>

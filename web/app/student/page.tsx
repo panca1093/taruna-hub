@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Button, Card, Skeleton } from "@heroui/react";
-import type { LucideIcon } from "lucide-react";
+import { Button, Skeleton } from "@heroui/react";
 import { ArrowRight, Award, BookOpen, Clock, CloudOff, PackageOpen, Sparkles, Trophy, TrendingUp, BarChart3 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/icon";
+import { Metric, MetricStrip } from "@/components/metric-strip";
+import { CardKicker, Panel, SectionHeader } from "@/components/page-blocks";
 import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
 import { api, errorText, type AttemptSummary, type Enrollment, type KecermatanStudentTest } from "@/lib/api/client";
@@ -58,104 +60,88 @@ export default function StudentDashboardPage() {
   const featuredTest = data?.kecermatan.find((test) => test.attempts_remaining > 0) ?? data?.kecermatan[0];
   const quota = data?.kecermatan.reduce((sum, test) => sum + test.attempts_remaining, 0) ?? 0;
 
-  return (
-    <AppShell title={t.pageTitle}>
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-2">
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{t.greeting(user.name.split(" ")[0])}</h2>
-            <p className="text-sm text-muted">{t.subtitle}</p>
-          </div>
-          <LinkButton href="/catalog" variant="outline" className="min-h-10">{t.viewCatalog}<ArrowRight className="size-4" /></LinkButton>
-        </div>
+  const tileClass = "grid size-11 shrink-0 place-items-center rounded-control";
+  const rowClass = "flex min-h-21 items-center gap-3.5 rounded-tile border border-border bg-surface px-4.5 py-4 transition-colors hover:border-rose";
 
+  return (
+    <AppShell
+      title={t.greeting(user.name.split(" ")[0])}
+      description={t.subtitle}
+      actions={<LinkButton href="/catalog" variant="outline" className="min-h-10">{t.viewCatalog}<Icon icon={ArrowRight} size="xs" /></LinkButton>}
+    >
+      <div className="space-y-6">
         {error ? (
           <EmptyState icon={CloudOff} title={t.loadErrorTitle} description={error} action={<Button variant="primary" size="sm" onPress={() => { setError("");setLoaded(null);setReloadKey((key) => key + 1); }}>{t.retry}</Button>} />
         ) : !data ? (
           <div role="status" aria-label={t.loading} className="space-y-6">
-            <p className="text-sm text-muted">{t.loading}</p>
-            <div className="grid gap-5 md:grid-cols-2"><Skeleton className="h-64 rounded-3xl" /><Skeleton className="h-64 rounded-3xl" /></div>
-            <Skeleton className="h-20 rounded-2xl" />
-            <div className="grid gap-5 lg:grid-cols-3"><Skeleton className="h-64 rounded-2xl lg:col-span-2" /><Skeleton className="h-64 rounded-2xl" /></div>
+            <p className="text-small text-muted">{t.loading}</p>
+            <div className="grid gap-5 md:grid-cols-2"><Skeleton className="h-66 rounded-hero" /><Skeleton className="h-66 rounded-hero" /></div>
+            <Skeleton className="h-20 rounded-tile" />
+            <div className="grid gap-7 lg:grid-cols-hero-pair"><Skeleton className="h-64 rounded-tile" /><Skeleton className="h-64 rounded-tile" /></div>
           </div>
         ) : (
           <>
             <div className="grid gap-5 md:grid-cols-2">
-              <Card className="min-h-64 justify-between gap-8 rounded-3xl border-0 bg-peach p-6 shadow-none sm:p-8">
-                <div className="space-y-3">
-                  <span className="inline-flex items-center gap-2 text-xs font-medium text-foreground/80"><BookOpen className="size-4" aria-hidden />{t.tryoutKicker}</span>
-                  <h3 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{featuredTryout ? featuredTryout.tryout_title : t.tryoutPromoTitle}</h3>
-                  <p className="max-w-md text-sm leading-relaxed text-foreground/75">{featuredTryout ? t.tryoutOwnedDescription : t.tryoutPromoDescription}</p>
+              <Panel tone="peach" radius="hero" as="section" padding="lg" className="flex min-h-66 flex-col">
+                <CardKicker icon={BookOpen} className="mb-7">{t.tryoutKicker}</CardKicker>
+                <h2 className="mb-2.5 max-w-md font-display text-hero-lg">{featuredTryout ? featuredTryout.tryout_title : t.tryoutPromoTitle}</h2>
+                <p className="max-w-md text-small text-foreground/80">{featuredTryout ? t.tryoutOwnedDescription : t.tryoutPromoDescription}</p>
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-6">
+                  <span className="flex items-center gap-2 text-label text-foreground/80">{featuredTryout && <><Icon icon={Clock} size="sm" />{t.subtestCount(featuredTryout.subtest_count)}</>}</span>
+                  <LinkButton href={featuredTryout ? `/student/tryout/${featuredTryout.tryout_id}` : "/catalog"} variant="primary" className="min-h-10">{featuredTryout ? t.openTryout : t.viewCatalog}<Icon icon={ArrowRight} size="xs" /></LinkButton>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="inline-flex items-center gap-2 text-xs text-foreground/75">{featuredTryout && <><Clock className="size-4" aria-hidden />{t.subtestCount(featuredTryout.subtest_count)}</>}</span>
-                  <LinkButton href={featuredTryout ? `/student/tryout/${featuredTryout.tryout_id}` : "/catalog"} variant="primary" className="min-h-10">{featuredTryout ? t.openTryout : t.viewCatalog}<ArrowRight className="size-4" /></LinkButton>
-                </div>
-              </Card>
-              <Card className="min-h-64 justify-between gap-8 rounded-3xl border-0 bg-accent-soft p-6 shadow-none sm:p-8">
-                <div className="space-y-3">
-                  <span className="inline-flex items-center gap-2 text-xs font-medium text-foreground/80"><Sparkles className="size-4" aria-hidden />{t.kecermatanKicker}</span>
-                  <h3 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{featuredTest ? featuredTest.title : t.kecermatanPromoTitle}</h3>
-                  <p className="max-w-md text-sm leading-relaxed text-foreground/75">{t.kecermatanPromoDescription}</p>
-                </div>
-                <div className="flex flex-wrap items-end justify-between gap-3">
+              </Panel>
+              <Panel tone="soft" radius="hero" as="section" padding="lg" className="flex min-h-66 flex-col">
+                <CardKicker icon={Sparkles} className="mb-7">{t.kecermatanKicker}</CardKicker>
+                <h2 className="mb-2.5 max-w-md font-display text-hero-lg">{featuredTest ? featuredTest.title : t.kecermatanPromoTitle}</h2>
+                <p className="max-w-md text-small text-foreground/80">{t.kecermatanPromoDescription}</p>
+                <div className="mt-auto flex flex-wrap items-end justify-between gap-3 pt-6">
                   {featuredTest ? (
-                    <p className="flex items-baseline gap-2"><span className="font-display text-4xl font-semibold tabular-nums text-accent">{featuredTest.attempts_remaining}</span><span className="text-xs text-foreground/75">{t.attemptsLeft}</span></p>
+                    <p className="flex items-baseline gap-1.5"><span className="font-display text-metric-lg tabular-nums text-accent">{featuredTest.attempts_remaining}</span><span className="text-label text-foreground/80">{t.attemptsLeft}</span></p>
                   ) : <span />}
-                  <LinkButton href={featuredTest ? `/student/kecermatan/${featuredTest.test_id}` : "/catalog"} variant="primary" className="min-h-10">{featuredTest ? t.openTest : t.viewCatalog}<ArrowRight className="size-4" /></LinkButton>
+                  <LinkButton href={featuredTest ? `/student/kecermatan/${featuredTest.test_id}` : "/catalog"} variant="primary" className="min-h-10">{featuredTest ? t.openTest : t.viewCatalog}<Icon icon={ArrowRight} size="xs" /></LinkButton>
                 </div>
-              </Card>
+              </Panel>
             </div>
 
-            <Card className="rounded-2xl border border-separator p-0 shadow-none">
-              <dl className="grid grid-cols-2 divide-separator lg:grid-cols-4 lg:divide-x">
-                {([
-                  [t.ownedTryouts, String(data.summary.owned_tryouts), BookOpen],
-                  [t.attemptsQuota, String(quota), Sparkles],
-                  [t.completedTryouts, String(data.summary.completed_tryouts), Trophy],
-                  [t.averageScore, data.summary.average_score === null ? "—" : formatScore(data.summary.average_score), TrendingUp],
-                ] as [string, string, LucideIcon][]).map(([label, value, StatIcon]) => {
-                  return (
-                    <div key={label} className="flex items-center gap-3 p-4 sm:p-5">
-                      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted"><StatIcon className="size-4.5" aria-hidden /></span>
-                      <div className="min-w-0"><dd className="font-display text-xl font-semibold tabular-nums text-foreground">{value}</dd><dt className="text-xs text-muted">{label}</dt></div>
-                    </div>
-                  );
-                })}
-              </dl>
-            </Card>
+            <MetricStrip>
+              <Metric icon={BookOpen} value={String(data.summary.owned_tryouts)} label={t.ownedTryouts} />
+              <Metric icon={Sparkles} value={String(quota)} label={t.attemptsQuota} />
+              <Metric icon={Trophy} value={String(data.summary.completed_tryouts)} label={t.completedTryouts} />
+              <Metric icon={TrendingUp} value={data.summary.average_score === null ? "—" : formatScore(data.summary.average_score)} label={t.averageScore} />
+            </MetricStrip>
 
-            <div className="grid gap-5 lg:grid-cols-3">
-              <section className="space-y-4 lg:col-span-2" aria-labelledby="practice-heading">
-                <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="practice-heading" className="text-base font-semibold">{t.myPractice}</h3>{hasContent && <Link href="/student/tryouts" className="text-xs font-medium text-accent hover:underline">{t.viewAll}</Link>}</div>
+            <div className="grid gap-7 lg:grid-cols-hero-pair lg:gap-9">
+              <section>
+                <SectionHeader title={t.myPractice} href={hasContent ? "/student/tryouts" : undefined} linkLabel={t.viewAll} />
                 {!hasContent ? <EmptyState icon={PackageOpen} title={t.emptyTitle} description={t.emptyTryoutsDescription} action={<LinkButton href="/catalog" variant="ghost" size="sm">{t.viewCatalog}</LinkButton>} /> : (
-                  <ul className="space-y-3">
+                  <ul className="grid gap-2.5">
                     {data.enrollments.slice(0, 3).map((enrollment) => (
-                      <li key={enrollment.id}><Link href={`/student/tryout/${enrollment.tryout_id}`} className="flex min-h-16 items-center gap-3 rounded-2xl border border-separator bg-surface p-3 transition-colors hover:bg-surface-secondary"><span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-peach text-foreground"><BookOpen className="size-4.5" aria-hidden /></span><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{enrollment.tryout_title}</p><p className="mt-1 text-xs text-muted">{t.accessUntil(formatDate(enrollment.active_until))}</p></div><ArrowRight className="size-4 shrink-0 text-muted" aria-hidden /></Link></li>
+                      <li key={enrollment.id}><Link href={`/student/tryout/${enrollment.tryout_id}`} className={rowClass}><span className={`${tileClass} bg-peach text-accent`}><Icon icon={BookOpen} size="md" /></span><div className="min-w-0 flex-1"><p className="break-words text-caption font-medium">{enrollment.tryout_title}</p><p className="mt-1 text-label text-muted">{t.accessUntil(formatDate(enrollment.active_until))}</p></div><Icon icon={ArrowRight} size="sm" className="text-muted" /></Link></li>
                     ))}
                     {data.kecermatan.slice(0, Math.max(1, 4 - Math.min(3, data.enrollments.length))).map((test) => (
-                      <li key={test.test_id}><Link href={`/student/kecermatan/${test.test_id}`} className="flex min-h-16 items-center gap-3 rounded-2xl border border-separator bg-surface p-3 transition-colors hover:bg-surface-secondary"><span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Sparkles className="size-4.5" aria-hidden /></span><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{test.title}</p><p className="mt-1 text-xs text-muted">{t.attemptsAvailable(test.attempts_remaining)}</p></div><ArrowRight className="size-4 shrink-0 text-muted" aria-hidden /></Link></li>
+                      <li key={test.test_id}><Link href={`/student/kecermatan/${test.test_id}`} className={rowClass}><span className={`${tileClass} bg-success-soft text-success-soft-foreground`}><Icon icon={Sparkles} size="md" /></span><div className="min-w-0 flex-1"><p className="break-words text-caption font-medium">{test.title}</p><p className="mt-1 text-label text-muted">{t.attemptsAvailable(test.attempts_remaining)}</p></div><Icon icon={ArrowRight} size="sm" className="text-muted" /></Link></li>
                     ))}
                   </ul>
                 )}
               </section>
-              <section className="space-y-4" aria-labelledby="results-heading">
-                <h3 id="results-heading" className="text-base font-semibold">{t.latestResults}</h3>
+              <section>
+                <SectionHeader title={t.latestResults} />
                 {recent.length === 0 ? <EmptyState icon={Award} title={t.noResults} description={t.noResultsDescription} /> : (
-                  <ul className="divide-y divide-separator rounded-2xl border border-separator bg-surface">
+                  <ul>
                     {recent.map((attempt) => {
                       const enrollment = enrollmentByTryout.get(attempt.tryout_id);
-                      return <li key={attempt.session_id}><Link href={`/student/tryout/${attempt.tryout_id}/result?attempt=${attempt.session_id}`} className="flex items-center gap-4 p-4 transition-colors hover:bg-surface-secondary"><span className="min-w-12 font-display text-2xl font-semibold text-foreground tabular-nums">{formatScore(attempt.score!)}</span><div className="min-w-0 flex-1">{enrollment && <ProgramBadge code={enrollment.program_code} />}<p className="mt-1 break-words text-sm font-medium">{enrollment?.tryout_title ?? t.genericTryout}</p><p className="mt-1 text-xs text-muted">{t.attempt(attempt.attempt_number)}{attempt.completed_at && <> · {formatDate(attempt.completed_at)}</>}</p></div><ArrowRight className="size-4 shrink-0 text-muted" aria-hidden /></Link></li>;
+                      return <li key={attempt.session_id}><Link href={`/student/tryout/${attempt.tryout_id}/result?attempt=${attempt.session_id}`} className="flex items-center gap-3 border-b border-border py-4 transition-colors hover:text-accent"><span className="min-w-12 font-display text-heading tabular-nums">{formatScore(attempt.score!)}</span><div className="min-w-0 flex-1">{enrollment && <ProgramBadge code={enrollment.program_code} />}<p className="mt-1 break-words text-label font-medium">{enrollment?.tryout_title ?? t.genericTryout}</p><p className="mt-1 text-micro text-muted">{t.attempt(attempt.attempt_number)}{attempt.completed_at && <> · {formatDate(attempt.completed_at)}</>}</p></div><Icon icon={ArrowRight} size="xs" className="text-muted" /></Link></li>;
                     })}
                   </ul>
                 )}
-                {recent.length > 0 && <p className="flex items-start gap-2 text-xs leading-relaxed text-muted"><BarChart3 className="mt-0.5 size-4 shrink-0" aria-hidden />{t.separateResultsNote}</p>}
+                {recent.length > 0 && <p className="mt-5 flex items-start gap-2.5 text-label leading-relaxed text-muted"><Icon icon={BarChart3} size="sm" className="mt-0.5 text-rose" />{t.separateResultsNote}</p>}
               </section>
             </div>
 
-            {!hasContent && <Card className="gap-5 rounded-2xl border border-separator p-5 shadow-none sm:p-6"><h3 className="text-sm font-semibold">{t.nextSteps}</h3><div className="grid gap-6 sm:grid-cols-3">{[
+            {!hasContent && <Panel tone="plain" radius="tile"><h2 className="mb-5 font-display text-heading-sm">{t.nextSteps}</h2><div className="grid gap-6 sm:grid-cols-3">{[
               [t.stepChoose, t.stepChooseDescription], [t.stepPractice, t.stepPracticeDescription], [t.stepReview, t.stepReviewDescription],
-            ].map(([title, description], index) => <div key={title}><span className="mb-3 flex size-6 items-center justify-center rounded-full border border-border text-xs text-muted">{index + 1}</span><p className="text-xs font-medium">{title}</p><p className="mt-2 text-xs leading-relaxed text-muted">{description}</p></div>)}</div></Card>}
+            ].map(([title, description], index) => <div key={title}><span className="mb-3 grid size-6 place-items-center rounded-full border border-border text-label text-muted">{index + 1}</span><p className="text-caption font-medium">{title}</p><p className="mt-2 text-label leading-relaxed text-muted">{description}</p></div>)}</div></Panel>}
           </>
         )}
       </div>

@@ -4,6 +4,8 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   pageTitle: "Detail Tes Kecermatan",
+  crumbDashboard: "Dashboard",
+  crumbKecermatan: "Tes kecermatan",
   loading: "Memuat tes…",
   loadErrorTitle: "Tes gagal dimuat",
   loadErrorDescription: "Periksa koneksi lalu coba lagi.",
@@ -23,7 +25,7 @@ const id = {
   howStep5: "Jeda singkat muncul sebelum kolom berikutnya.",
   quotaNote: "Kuota diperlukan untuk memulai dan baru berkurang setelah tes selesai. Tes ini tidak memakai peringkat atau pengawasan fullscreen.",
   summaryTitle: "Akses latihan",
-  attemptsRemaining: (n: number) => `${n} kesempatan tersisa`,
+  attemptsLeftUnit: "kesempatan tersisa",
   attemptsUsed: (used: number, purchased: number) => `${used} dari ${purchased} kesempatan sudah dipakai`,
   inProgressNote: "Ada tes yang sedang berjalan. Waktunya tetap berjalan di server.",
   ctaContinue: "Lanjutkan Tes",
@@ -40,6 +42,8 @@ const id = {
 
 const en: typeof id = {
   pageTitle: "Kecermatan Test Detail",
+  crumbDashboard: "Dashboard",
+  crumbKecermatan: "Kecermatan test",
   loading: "Loading test…",
   loadErrorTitle: "The test could not be loaded",
   loadErrorDescription: "Check the connection and try again.",
@@ -59,7 +63,7 @@ const en: typeof id = {
   howStep5: "A short pause appears before the next kolom.",
   quotaNote: "An attempt is needed to start and is only used once the test finishes. This test has no ranking or fullscreen proctoring.",
   summaryTitle: "Practice access",
-  attemptsRemaining: (n: number) => `${n} attempts left`,
+  attemptsLeftUnit: "attempts left",
   attemptsUsed: (used: number, purchased: number) => `${used} of ${purchased} attempts used`,
   inProgressNote: "A test is in progress. Its clock keeps running on the server.",
   ctaContinue: "Continue Test",

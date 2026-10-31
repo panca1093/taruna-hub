@@ -3,6 +3,7 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
+  crumbDashboard: "Dashboard",
   title: "Detail pesanan",
   crumbOrders: "Riwayat pesanan",
   loading: "Memuat pesanan…",
@@ -48,7 +49,6 @@ const id = {
   openKecermatan: "Buka tes kecermatan",
   openTryouts: "Buka tryout saya",
   backToCatalog: "Kembali ke katalog",
-  summaryCode: "Kode pesanan",
   summaryProduct: "Produk",
   summaryAmount: "Nominal",
   summaryMethod: "Metode",
@@ -63,6 +63,7 @@ const id = {
 };
 
 const en: typeof id = {
+  crumbDashboard: "Dashboard",
   title: "Order details",
   crumbOrders: "Order history",
   loading: "Loading order…",
@@ -108,7 +109,6 @@ const en: typeof id = {
   openKecermatan: "Open the kecermatan test",
   openTryouts: "Open my tryouts",
   backToCatalog: "Back to the catalog",
-  summaryCode: "Order code",
   summaryProduct: "Product",
   summaryAmount: "Amount",
   summaryMethod: "Method",

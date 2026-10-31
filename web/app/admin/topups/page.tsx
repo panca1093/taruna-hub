@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Button, toast } from "@heroui/react";
-import { Banknote, CheckCircle2, ChevronRight, CloudOff, FileImage, XCircle } from "lucide-react";
+import { Banknote, CheckCircle2, ChevronRight, CloudOff, XCircle } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { TopupStatusBadge } from "@/components/status-badge";
+import { DetailAmount, DetailGrid, DetailItem, LoadingNote, ProofButton } from "@/components/admin-detail";
+import { FilterPills } from "@/components/filter-pills";
+import { Icon } from "@/components/icon";
 import { FormModal } from "@/components/ui/form-modal";
 import { TextareaInput } from "@/components/ui/form";
-import { cn } from "@/lib/cn";
 import { api, ApiError, errorText, type Topup } from "@/lib/api/client";
 import { formatIDR } from "@/lib/format-money";
 import { useTopupsT } from "@/lib/i18n/dict/topups";
@@ -138,7 +140,7 @@ export default function TopupsPage() {
   };
 
   const columns: Column<Topup>[] = [
-    { key: "code", header: t.colCode, render: (x) => <span className="font-mono text-xs text-muted">{x.code}</span> },
+    { key: "code", header: t.colCode, render: (x) => <span className="font-mono text-label text-muted">{x.code}</span> },
     { key: "student", header: t.colStudent, render: (x) => x.student_name },
     { key: "amount", header: t.colAmount, render: (x) => formatIDR(x.amount) },
     { key: "date", header: t.colDate, render: (x) => new Date(x.created_at).toLocaleString() },
@@ -148,26 +150,19 @@ export default function TopupsPage() {
       header: "",
       headerClassName: "text-right",
       className: "text-right",
-      render: () => <ChevronRight className="ml-auto size-4 text-muted" />,
+      render: () => <Icon icon={ChevronRight} size="xs" className="ml-auto text-muted" />,
     },
   ];
 
   return (
-    <AppShell title={t.pageTitle} description={rows === null ? undefined : t.topupCount(total)}>
-      <div className="mb-4 flex flex-wrap gap-2">
-        {tabs.map((item) => (
-          <button
-            key={item.key}
-            onClick={() => switchTab(item.key)}
-            className={cn(
-              "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-              tab === item.key ? "border-accent bg-accent text-accent-foreground" : "border-border text-muted hover:border-accent/40 hover:text-foreground",
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+    <AppShell title={t.pageTitle} description={t.pageDescription}>
+      <FilterPills
+        className="mb-5"
+        ariaLabel={t.pageTitle}
+        options={tabs.map((item) => ({ id: item.key, label: item.label }))}
+        value={tab}
+        onChange={(id) => switchTab(id as Tab)}
+      />
 
       {loadFailed ? (
         <EmptyState
@@ -181,27 +176,32 @@ export default function TopupsPage() {
           }
         />
       ) : rows === null ? (
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <LoadingNote>{t.loading}</LoadingNote>
       ) : rows.length === 0 ? (
         <EmptyState icon={Banknote} title={t.emptyTitle} />
       ) : (
-        <>
-          <DataTable columns={columns} rows={rows} rowKey={(x) => x.id} onRowClick={setDetail} />
-          {rows.length < total && (
-            <div className="mt-4 flex justify-center">
-              <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
-                {loadingMore ? t.loadingMore : t.loadMore}
-              </Button>
-            </div>
-          )}
-        </>
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(x) => x.id}
+          onRowClick={setDetail}
+          footer={
+            <>
+              <span>{t.shownOf(rows.length, total)}</span>
+              {rows.length < total && (
+                <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
+                  {loadingMore ? t.loadingMore : t.loadMore}
+                </Button>
+              )}
+            </>
+          }
+        />
       )}
 
       <FormModal
         isOpen={!!detail}
         onOpenChange={(open) => !open && closeDetail()}
         title={detail?.code ?? ""}
-        description={detail ? formatIDR(detail.amount) : undefined}
         footer={
           detail?.status === "pending" ? (
             rejecting ? (
@@ -210,17 +210,17 @@ export default function TopupsPage() {
                   {t.back}
                 </Button>
                 <Button variant="danger" isDisabled={busy || reason.trim() === ""} onPress={() => reject(detail)}>
-                  <XCircle className="size-3.5" /> {t.rejectConfirm}
+                  <Icon icon={XCircle} size="sm" /> {t.rejectConfirm}
                 </Button>
               </>
             ) : (
               <>
                 <Button variant="danger" isDisabled={busy} onPress={() => setRejecting(true)}>
-                  <XCircle className="size-3.5" /> {t.reject}
+                  <Icon icon={XCircle} size="sm" /> {t.reject}
                 </Button>
                 {detail.method !== "gateway" && (
                   <Button variant="primary" isDisabled={busy} onPress={() => approve(detail)}>
-                    <CheckCircle2 className="size-3.5" /> {t.approve}
+                    <Icon icon={CheckCircle2} size="sm" /> {t.approve}
                   </Button>
                 )}
               </>
@@ -234,40 +234,22 @@ export default function TopupsPage() {
       >
         {detail && (
           <>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-muted">{t.detailStudent}</p>
-                <p className="font-medium text-foreground">{detail.student_name}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted">{t.detailAmount}</p>
-                <p className="font-medium text-foreground">{formatIDR(detail.amount)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted">{t.detailStatus}</p>
+            <DetailAmount>{formatIDR(detail.amount)}</DetailAmount>
+            <DetailGrid>
+              <DetailItem label={t.detailStudent}>{detail.student_name}</DetailItem>
+              <DetailItem label={t.detailStatus}>
                 <TopupStatusBadge status={detail.status} />
-              </div>
+              </DetailItem>
               {detail.status === "rejected" && (
-                <div className="col-span-2">
-                  <p className="text-xs text-muted">{t.detailRejectReason}</p>
-                  <p className="font-medium text-foreground">{detail.reject_reason}</p>
-                </div>
+                <DetailItem label={t.detailRejectReason} wide>
+                  {detail.reject_reason}
+                </DetailItem>
               )}
-            </div>
+            </DetailGrid>
             {detail.proof_asset_id ? (
-              <button
-                type="button"
-                onClick={() => detail.proof_asset_id && openProof(detail.proof_asset_id)}
-                className="flex items-center gap-3 rounded-lg border border-dashed border-border p-4 text-left transition-colors hover:border-accent/50"
-              >
-                <FileImage className="size-8 shrink-0 text-muted" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">{t.proofOpen}</p>
-                  <p className="text-xs text-muted">{t.proofUploadedBy}</p>
-                </div>
-              </button>
+              <ProofButton title={t.proofOpen} hint={t.proofUploadedBy} onPress={() => detail.proof_asset_id && openProof(detail.proof_asset_id)} />
             ) : (
-              <p className="text-xs text-muted">{t.proofNotUploaded}</p>
+              <p className="text-label text-muted">{t.proofNotUploaded}</p>
             )}
             {rejecting && (
               <TextareaInput

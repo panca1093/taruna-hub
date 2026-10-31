@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Chip, toast } from "@heroui/react";
-import { AlertTriangle, CloudOff, Radio, RefreshCw } from "lucide-react";
+import { Button, toast } from "@heroui/react";
+import { AlertTriangle, ArrowRight, CloudOff, Radio, RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
+import { Icon } from "@/components/icon";
+import { StatusChip } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
 import { TextInput, TextareaInput } from "@/components/ui/form";
 import { api, ApiError, errorText, type ActiveSession, type ViolationTimeline } from "@/lib/api/client";
@@ -123,11 +125,13 @@ export default function MonitoringPage() {
       render: (s) => (
         <div className="flex items-center gap-2.5">
           <GradientAvatar user={{ name: s.student_name }} size="sm" />
-          <span className="font-medium text-foreground">{s.student_name}</span>
+          <div className="min-w-0">
+            <p className="font-medium text-foreground">{s.student_name}</p>
+            <p className="text-label text-muted">{s.tryout_title}</p>
+          </div>
         </div>
       ),
     },
-    { key: "tryout", header: t.colTryout, render: (s) => s.tryout_title },
     { key: "subtest", header: t.colActiveSubtest, render: (s) => s.subtest?.name ?? "—" },
     { key: "started", header: t.colStarted, render: (s) => elapsedLabel(s.started_at, t) },
     {
@@ -135,11 +139,13 @@ export default function MonitoringPage() {
       header: t.colViolations,
       render: (s) =>
         s.violation_count > 0 ? (
-          <Chip size="sm" className="bg-danger-soft text-danger-soft-foreground gap-1 font-medium">
-            <AlertTriangle className="size-3" /> {s.violation_count}
-          </Chip>
+          <StatusChip tone="danger" dot>
+            {s.violation_count}
+          </StatusChip>
         ) : (
-          <span className="text-muted">0</span>
+          <StatusChip tone="neutral" dot>
+            0
+          </StatusChip>
         ),
     },
     {
@@ -148,8 +154,9 @@ export default function MonitoringPage() {
       headerClassName: "text-right",
       className: "text-right",
       render: (s) => (
-        <Button variant="ghost" size="sm" onPress={() => openDetail(s)}>
+        <Button variant="ghost" size="sm" className="text-accent" onPress={() => openDetail(s)}>
           {t.viewDetail}
+          <Icon icon={ArrowRight} size="xs" />
         </Button>
       ),
     },
@@ -161,8 +168,8 @@ export default function MonitoringPage() {
       description={t.pageDescription}
       actions={
         lastSync && (
-          <span className="flex items-center gap-1.5 text-xs text-muted">
-            <RefreshCw className="size-3" /> {t.updatedAt(formatDateTime(lastSync.toISOString()))}
+          <span className="flex items-center gap-2 text-label text-muted">
+            <Icon icon={RefreshCw} size="xs" /> {t.updatedAt(formatDateTime(lastSync.toISOString()))}
           </span>
         )
       }
@@ -179,25 +186,33 @@ export default function MonitoringPage() {
           }
         />
       ) : sessions === null ? (
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <p className="py-14 text-center text-caption text-muted">{t.loading}</p>
       ) : (
         <>
-          <div className="mb-4 flex items-center gap-2 text-sm text-foreground">
-            <span className="relative inline-flex size-2.5">
+          <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-border bg-surface px-4 py-3 text-caption text-foreground">
+            <span className="relative inline-flex size-2.5 shrink-0">
               <span className="absolute inline-flex size-full animate-ping rounded-full motion-reduce:animate-none bg-accent opacity-60" />
               <span className="relative inline-flex size-2.5 rounded-full bg-accent" />
             </span>
-            <Radio className="size-4 text-muted" />
             {t.liveSessionsBanner(total)}
-            {loadFailed && <span className="text-xs text-warning">{t.refreshFailed}</span>}
+            {loadFailed && <span className="text-label text-warning">{t.refreshFailed}</span>}
           </div>
 
           {sessions.length === 0 ? (
             <EmptyState icon={Radio} title={t.emptyTitle} description={t.emptyDescription} />
           ) : (
-            <DataTable columns={columns} rows={sessions} rowKey={(s) => s.session_id} />
+            <DataTable
+              columns={columns}
+              rows={sessions}
+              rowKey={(s) => s.session_id}
+              footer={
+                <>
+                  <span>{lastSync ? t.updatedAt(formatDateTime(lastSync.toISOString())) : ""}</span>
+                  {total > sessions.length && <span>{t.showingOf(sessions.length, total)}</span>}
+                </>
+              }
+            />
           )}
-          {total > sessions.length && <p className="mt-3 text-xs text-muted">{t.showingOf(sessions.length, total)}</p>}
         </>
       )}
 
@@ -219,35 +234,38 @@ export default function MonitoringPage() {
       >
         {detail && (
           <>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-tile border border-border p-5 text-small">
               <div>
-                <p className="text-xs text-muted">{t.startedAt}</p>
-                <p className="font-medium text-foreground">{formatDateTime(detail.started_at)}</p>
+                <dt className="mb-1 text-label text-muted">{t.startedAt}</dt>
+                <dd className="font-medium text-foreground">{formatDateTime(detail.started_at)}</dd>
               </div>
               <div>
-                <p className="text-xs text-muted">{t.activeSubtest}</p>
-                <p className="font-medium text-foreground">{detail.subtest?.name ?? "—"}</p>
+                <dt className="mb-1 text-label text-muted">{t.activeSubtest}</dt>
+                <dd className="font-medium text-foreground">{detail.subtest?.name ?? "—"}</dd>
               </div>
-            </div>
+            </dl>
             <div>
               {timelineFailed ? (
-                <p className="text-sm text-danger">{t.timelineError}</p>
+                <p className="text-caption text-danger">{t.timelineError}</p>
               ) : timeline === null ? (
-                <p className="text-sm text-muted">{t.loading}</p>
+                <p className="text-caption text-muted">{t.loading}</p>
               ) : (
                 <>
-                  <p className="mb-2 text-[13px] font-medium text-foreground">{t.violationHistoryTitle(timeline.total)}</p>
+                  <h3 className="mb-3 font-display text-title">{t.violationHistoryTitle(timeline.total)}</h3>
                   {timeline.violations.length === 0 ? (
-                    <p className="text-sm text-muted">{t.noViolations}</p>
+                    <p className="text-caption text-muted">{t.noViolations}</p>
                   ) : (
-                    <ul className="space-y-2">
+                    <ul>
                       {timeline.violations.map((v) => (
-                        <li key={v.id} className="flex items-center gap-2.5 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-sm">
-                          <AlertTriangle className="size-3.5 shrink-0 text-danger" />
-                          <span className="text-danger-soft-foreground">
-                            {v.type === "screenshot_attempt" ? t.violationScreenshot : t.violationFullscreenExit}
-                          </span>
-                          <span className="ml-auto text-xs text-muted">{formatDateTime(v.occurred_at)}</span>
+                        <li key={v.id} className="relative flex items-baseline gap-3 py-3 not-last:after:absolute not-last:after:top-7 not-last:after:-bottom-3 not-last:after:left-1 not-last:after:w-px not-last:after:bg-border">
+                          <span className="z-10 size-2 shrink-0 rounded-full bg-danger" aria-hidden />
+                          <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3">
+                            <span className="flex items-center gap-2 text-small font-medium text-foreground">
+                              <Icon icon={AlertTriangle} size="xs" className="text-danger" />
+                              {v.type === "screenshot_attempt" ? t.violationScreenshot : t.violationFullscreenExit}
+                            </span>
+                            <time className="text-label text-muted">{formatDateTime(v.occurred_at)}</time>
+                          </div>
                         </li>
                       ))}
                     </ul>

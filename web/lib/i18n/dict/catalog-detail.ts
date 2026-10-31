@@ -4,6 +4,14 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   catalogCrumb: "Katalog",
+  productLabel: "Produk latihan",
+  minutes: (n: number) => `${n} menit`,
+  factSubtests: "Subtes",
+  factQuestions: "Soal",
+  factDuration: "Durasi total",
+  factKolom: "Kolom",
+  factSoalPerKolom: "Soal / kolom",
+  factKolomDuration: "Durasi / kolom",
   backToCatalog: "Kembali ke katalog",
   chipKecermatan: "Tes Kecermatan",
   chipIndividual: "Individual",
@@ -49,6 +57,14 @@ const id = {
 
 const en: typeof id = {
   catalogCrumb: "Catalog",
+  productLabel: "Practice product",
+  minutes: (n: number) => `${n} min`,
+  factSubtests: "Subtests",
+  factQuestions: "Questions",
+  factDuration: "Total duration",
+  factKolom: "Columns",
+  factSoalPerKolom: "Questions / column",
+  factKolomDuration: "Duration / column",
   backToCatalog: "Back to catalog",
   chipKecermatan: "Kecermatan Test",
   chipIndividual: "Individual",

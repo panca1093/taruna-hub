@@ -29,8 +29,8 @@ export function FormModal({
         <Modal.Container size={isWide ? "lg" : size} scroll="inside">
           <Modal.Dialog style={isWide ? { maxWidth: "64rem" } : undefined}>
             <Modal.Header>
-              <Modal.Heading className="text-base font-semibold text-foreground">{title}</Modal.Heading>
-              {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+              <Modal.Heading className="font-display text-hero text-foreground">{title}</Modal.Heading>
+              {description && <p className="mt-2 text-caption leading-relaxed text-muted">{description}</p>}
             </Modal.Header>
             <Modal.Body className="flex flex-col gap-4">{children}</Modal.Body>
             {footer && <Modal.Footer>{footer}</Modal.Footer>}

@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
-import { CloudOff, Copy, FileUp } from "lucide-react";
+import { ArrowRight, CloudOff, Copy, FileUp, LayoutGrid, Receipt } from "lucide-react";
+import { Icon } from "@/components/icon";
+import { NoteBox, Panel } from "@/components/page-blocks";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { TextInput } from "@/components/ui/form";
@@ -123,23 +125,17 @@ export default function StudentTopupPage() {
     }
   };
 
-  const crumbs = (
-    <nav aria-label={t.breadcrumbLabel} className="text-xs text-muted">
-      <Link href="/student/wallet" className="hover:text-foreground">
-        {t.breadcrumbBalance}
-      </Link>
-    </nav>
-  );
+  const crumbs = [{ label: t.breadcrumbDashboard, href: "/student" }, { label: t.breadcrumbBalance }];
 
   if (loadFailed) {
     return (
-      <AppShell title={t.topupTitle} description={t.topupDescription} maxWidth="max-w-5xl">
+      <AppShell title={t.topupTitle} description={t.topupDescription} maxWidth="max-w-5xl" breadcrumb={crumbs}>
         <EmptyState
           icon={CloudOff}
           title={t.loadErrorTitle}
           description={t.loadErrorDescription}
           action={
-            <Button variant="primary" size="sm" onPress={() => {
+            <Button variant="primary" onPress={() => {
                 setLoadFailed(false);
                 setReloadKey((key) => key + 1);
               }}>
@@ -157,11 +153,11 @@ export default function StudentTopupPage() {
   ];
 
   return (
-    <AppShell title={t.topupTitle} description={t.topupDescription} maxWidth="max-w-5xl" actions={crumbs}>
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem] lg:items-start">
-        <div className="space-y-8 rounded-xl border border-border bg-surface p-5 sm:p-6">
+    <AppShell title={t.topupTitle} description={t.topupDescription} maxWidth="max-w-5xl" breadcrumb={crumbs}>
+      <div className="grid gap-7 lg:grid-cols-detail lg:items-start">
+        <Panel className="space-y-8">
           <section className="space-y-4">
-            <h2 className="text-base font-semibold text-foreground">{t.amountSection}</h2>
+            <h2 className="font-display text-heading-sm">{t.amountSection}</h2>
             <div className="grid grid-cols-3 gap-2">
               {PRESETS.map((preset) => {
                 const tooLow = minTopup !== null && isLessMoney(preset, minTopup);
@@ -176,10 +172,10 @@ export default function StudentTopupPage() {
                       changed();
                     }}
                     className={cn(
-                      "rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors disabled:opacity-50",
+                      "rounded-control border px-3 py-3 text-small font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50",
                       amount === preset
                         ? "border-accent bg-accent-soft text-accent-soft-foreground"
-                        : "border-border text-foreground hover:border-accent/40",
+                        : "border-border bg-surface text-foreground hover:border-accent/40",
                     )}
                   >
                     {formatIDR(preset)}
@@ -189,7 +185,6 @@ export default function StudentTopupPage() {
             </div>
             <TextInput
               label={t.amountOther}
-              description={minTopup === null ? undefined : t.amountMinimum(minText)}
               inputMode="numeric"
               autoComplete="off"
               value={amount}
@@ -200,23 +195,24 @@ export default function StudentTopupPage() {
                 changed();
               }}
             />
+            {minTopup !== null && <NoteBox>{t.amountMinimum(minText)}</NoteBox>}
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold text-foreground">{t.methodSection}</h2>
+            <h2 className="font-display text-heading-sm">{t.methodSection}</h2>
             <div role="radiogroup" aria-label={t.methodSection} className="space-y-2">
               {methods.map((m) => (
                 <label
                   key={m.id}
                   className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors focus-within:ring-2 focus-within:ring-focus",
-                    method === m.id ? "border-accent bg-accent-soft/40" : "border-border hover:border-accent/40",
+                    "flex cursor-pointer items-center gap-3 rounded-tile border bg-surface p-4 transition-colors focus-within:ring-2 focus-within:ring-focus",
+                    method === m.id ? "border-accent ring-1 ring-accent" : "border-border hover:border-accent/40",
                   )}
                 >
                   <input
                     type="radio"
                     name="method"
-                    className="mt-1 accent-accent"
+                    className="size-4 accent-accent"
                     checked={method === m.id}
                     disabled={locked}
                     onChange={() => {
@@ -224,9 +220,10 @@ export default function StudentTopupPage() {
                       changed();
                     }}
                   />
+                  <Icon icon={m.id === "gateway" ? LayoutGrid : Receipt} className="text-accent" />
                   <span>
-                    <span className="block text-sm font-medium text-foreground">{m.label}</span>
-                    <span className="block text-xs text-muted">{m.hint}</span>
+                    <span className="block text-caption font-semibold text-foreground">{m.label}</span>
+                    <span className="mt-1 block text-label text-muted">{m.hint}</span>
                   </span>
                 </label>
               ))}
@@ -235,14 +232,14 @@ export default function StudentTopupPage() {
             {method === "manual" && (
               <div className="space-y-5 pt-2">
                 <div className="space-y-2">
-                  <p className="text-sm font-semibold text-foreground">{t.bankTitle}</p>
+                  <p className="text-small font-semibold text-foreground">{t.bankTitle}</p>
                   {bank ? (
-                    <div className="flex items-center justify-between rounded-lg border border-border bg-surface-secondary px-3.5 py-3">
+                    <div className="flex items-center justify-between rounded-control border border-border bg-background px-4 py-3">
                       <div>
-                        <p className="text-xs text-muted">
+                        <p className="text-label text-muted">
                           {t.bankHolder(bank.bank_name, bank.account_holder)}
                         </p>
-                        <p className="font-mono text-sm font-medium text-foreground">{bank.account_number}</p>
+                        <p className="mt-1 font-mono text-small font-medium text-foreground">{bank.account_number}</p>
                       </div>
                       <Button
                         type="button"
@@ -252,17 +249,17 @@ export default function StudentTopupPage() {
                         aria-label={t.copyAccount}
                         onPress={() => navigator.clipboard?.writeText(bank.account_number)}
                       >
-                        <Copy className="size-3.5" />
+                        <Icon icon={Copy} size="xs" />
                       </Button>
                     </div>
                   ) : (
-                    <p className={cn("text-xs", bankFailed ? "text-danger" : "text-muted")}>
+                    <p className={cn("text-label", bankFailed ? "text-danger" : "text-muted")}>
                       {bankFailed ? t.bankUnavailable : t.loadingBank}
                     </p>
                   )}
                 </div>
                 <div className="space-y-2">
-                  <p className="text-sm font-semibold text-foreground">{t.proofTitle}</p>
+                  <p className="text-small font-semibold text-foreground">{t.proofTitle}</p>
                   <input
                     ref={fileRef}
                     type="file"
@@ -278,23 +275,23 @@ export default function StudentTopupPage() {
                     type="button"
                     disabled={locked}
                     onClick={() => fileRef.current?.click()}
-                    className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-border py-6 text-center transition-colors hover:border-accent/50 hover:bg-accent-soft/30"
+                    className="flex w-full flex-col items-center gap-2 rounded-tile border border-dashed border-border py-6 text-center transition-colors hover:border-accent/50 hover:bg-accent-soft/30"
                   >
-                    <FileUp className="size-5 text-muted" />
-                    <span className="text-sm font-medium text-foreground">{file?.name ?? t.uploadPrompt}</span>
-                    <span className="text-xs text-muted">{t.uploadHint}</span>
+                    <Icon icon={FileUp} className="text-rose" />
+                    <span className="text-small font-medium text-foreground">{file?.name ?? t.uploadPrompt}</span>
+                    <span className="text-label text-muted">{t.uploadHint}</span>
                   </button>
-                  {fieldErrors.proof_asset_id && <p className="text-xs text-danger">{fieldErrors.proof_asset_id}</p>}
+                  {fieldErrors.proof_asset_id && <p className="text-label text-danger">{fieldErrors.proof_asset_id}</p>}
                 </div>
               </div>
             )}
-            <p className="rounded-lg bg-surface-secondary px-4 py-3 text-xs text-muted">{t.creditNote}</p>
+            <NoteBox>{t.creditNote}</NoteBox>
           </section>
-        </div>
+        </Panel>
 
-        <aside className="space-y-4 rounded-xl border border-border bg-surface p-5 lg:sticky lg:top-6">
-          <h2 className="text-base font-semibold text-foreground">{t.summaryTitle}</h2>
-          <div className="space-y-2 text-sm">
+        <Panel as="aside" className="space-y-4 lg:sticky lg:top-6">
+          <h2 className="font-display text-heading-sm">{t.summaryTitle}</h2>
+          <div className="space-y-2 text-caption">
             <p className="text-muted">{t.summaryLine}</p>
             <div className="flex justify-between gap-3">
               <span className="text-muted">{t.summaryAmount}</span>
@@ -302,11 +299,11 @@ export default function StudentTopupPage() {
             </div>
           </div>
           <div className="flex justify-between gap-3 border-t border-border pt-3">
-            <span className="font-semibold text-foreground">{t.summaryTotal}</span>
-            <span className="font-display text-lg font-semibold text-foreground">{amountValid ? formatIDR(amount) : "—"}</span>
+            <span className="text-title font-semibold text-foreground">{t.summaryTotal}</span>
+            <span className="font-display text-title text-foreground">{amountValid ? formatIDR(amount) : "—"}</span>
           </div>
           {submitError !== "" && (
-            <p role="alert" className="text-sm text-danger">
+            <p role="alert" className="text-small text-danger">
               {submitError}
               {unresolved && (
                 <Link href="/student/wallet" className="mt-1 block font-medium underline">
@@ -317,8 +314,9 @@ export default function StudentTopupPage() {
           )}
           <Button variant="primary" fullWidth isDisabled={!canSubmit || submitting} onPress={submit}>
             {submitting ? t.submitting : unresolved ? t.submitRetryUnknown : method === "gateway" ? t.continuePay : t.submitManual}
+            <Icon icon={ArrowRight} size="sm" />
           </Button>
-        </aside>
+        </Panel>
       </div>
     </AppShell>
   );

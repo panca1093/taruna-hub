@@ -84,12 +84,12 @@ export function KecermatanPreviewModal({
         onChange={(e) => setKolom(e.target.value)}
       />
       {error && (
-        <p className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger-soft-foreground">{error}</p>
+        <p className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-caption text-danger-soft-foreground">{error}</p>
       )}
       {preview && (
         <div className="max-h-80 space-y-3 overflow-auto">
-          <div className="rounded-lg border border-border p-3">
-            <p className="mb-2 text-xs font-medium text-muted">{t.preview.referenceHeading}</p>
+          <div className="rounded-tile border border-border bg-surface-secondary p-4">
+            <p className="mb-3 text-caption font-medium text-muted">{t.preview.referenceHeading}</p>
             <div className="flex flex-wrap gap-2">
               {preview.reference.map((item) => (
                 <ItemGroup key={item.label} label={item.label} elements={item.elements} />
@@ -97,8 +97,8 @@ export function KecermatanPreviewModal({
             </div>
           </div>
           {preview.soal.map((soal, at) => (
-            <div key={at} className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-xs font-medium text-muted">
+            <div key={at} className="rounded-tile bg-accent-soft p-4">
+              <p className="mb-3 text-caption font-medium text-muted">
                 {t.preview.soalHeading(at + 1)} · {t.preview.missingLabel(soal.missing)}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -117,8 +117,8 @@ export function KecermatanPreviewModal({
 
 function ItemGroup({ label, elements }: { label: string; elements: KecermatanPreview["reference"][number]["elements"] }) {
   return (
-    <div className="flex items-center gap-1 rounded-md bg-surface-secondary px-2 py-1">
-      <span className="text-xs font-medium text-muted">{label}</span>
+    <div className="flex items-center gap-1.5 rounded-control border border-border bg-surface px-2.5 py-1.5">
+      <span className="text-label font-semibold text-accent">{label}</span>
       {elements.map((el, i) => (
         <ItemElementView key={i} element={el} className="size-6 text-xl" />
       ))}

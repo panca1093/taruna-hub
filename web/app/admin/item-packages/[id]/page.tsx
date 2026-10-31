@@ -3,11 +3,10 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, toast } from "@heroui/react";
-import { ArrowLeft, CloudOff, Eye, Plus, Shapes, Trash2 } from "lucide-react";
+import { CloudOff, Eye, Plus, Shapes, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { EmptyState } from "@/components/empty-state";
-import { LinkButton } from "@/components/ui/link-button";
 import { ItemElementView } from "@/components/admin/item-element";
 import { ItemPackageAddModal } from "@/components/admin/item-package-add-modal";
 import { ItemPackageSampleModal } from "@/components/admin/item-package-sample-modal";
@@ -87,18 +86,16 @@ export default function ItemPackageDetailPage({ params }: { params: Promise<{ id
       <AppShell
         title={pkg?.name ?? t.title}
         description={pkg ? `${t.types[pkg.type]} · ${t.revisionLabel(pkg.revision)} · ${t.elementsCount(pkg.element_count)}` : undefined}
+        breadcrumb={[{ label: t.title, href: "/admin/item-packages" }, { label: pkg?.name ?? "…" }]}
         actions={
           <div className="flex gap-2">
-            <LinkButton href="/admin/item-packages" variant="ghost" size="sm">
-              <ArrowLeft className="size-3.5" /> {t.back}
-            </LinkButton>
             {pkg && (
               <>
                 <Button variant="secondary" size="sm" isDisabled={pkg.element_count === 0} onPress={() => setSampleOpen(true)}>
-                  <Eye className="size-3.5" /> {t.sampleAction}
+                  <Eye className="size-4" /> {t.sampleAction}
                 </Button>
                 <Button variant="primary" size="sm" onPress={() => setAddOpen(true)}>
-                  <Plus className="size-3.5" /> {t.addElements}
+                  <Plus className="size-4" /> {t.addElements}
                 </Button>
               </>
             )}
@@ -118,10 +115,10 @@ export default function ItemPackageDetailPage({ params }: { params: Promise<{ id
             }
           />
         ) : detail === null || !pkg ? (
-          <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+          <p className="py-14 text-center text-small text-muted">{t.loading}</p>
         ) : (
           <>
-            {pkg.required_count > 0 && <p className="mb-3 text-xs text-muted">{t.requiredHint(pkg.required_count)}</p>}
+            {pkg.required_count > 0 && <p className="mb-3 text-caption text-muted">{t.requiredHint(pkg.required_count)}</p>}
             {detail.elements.length === 0 ? (
               <EmptyState
                 icon={Shapes}
@@ -132,9 +129,9 @@ export default function ItemPackageDetailPage({ params }: { params: Promise<{ id
             ) : (
               <section aria-label={t.elementsHeading} className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-8">
                 {detail.elements.map((element) => (
-                  <div key={element.id} className="group relative flex aspect-square flex-col items-center justify-center rounded-xl border border-border bg-surface p-2">
+                  <div key={element.id} className="group relative flex aspect-square flex-col items-center justify-center rounded-tile border border-border bg-surface p-2 transition-colors hover:border-accent/40">
                     <ItemElementView element={element} className="size-10 text-3xl" />
-                    <span className="mt-1 max-w-full truncate text-[11px] text-muted">{element.kind === "symbol" ? "" : element.label}</span>
+                    <span className="mt-1 max-w-full truncate text-label text-muted">{element.kind === "symbol" ? "" : element.label}</span>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -150,7 +147,7 @@ export default function ItemPackageDetailPage({ params }: { params: Promise<{ id
                 ))}
               </section>
             )}
-            {isEmoji && attribution && <p className="mt-6 text-xs text-muted">{attribution}</p>}
+            {isEmoji && attribution && <p className="mt-6 text-caption text-muted">{attribution}</p>}
             <ItemPackageAddModal packageId={id} type={pkg.type} isOpen={addOpen} onOpenChange={setAddOpen} onSaved={reload} />
             <ItemPackageSampleModal packageId={id} isOpen={sampleOpen} onOpenChange={setSampleOpen} />
           </>

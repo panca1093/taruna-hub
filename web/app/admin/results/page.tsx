@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Chip, toast } from "@heroui/react";
+import { Button, toast } from "@heroui/react";
 import { AlertTriangle, BarChart3, CloudOff, Trophy, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
+import { Icon } from "@/components/icon";
+import { StatusChip } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput } from "@/components/ui/form";
 import { api, errorText, type Leaderboard, type StaffResult, type TryoutSummary, type ViolationTimeline } from "@/lib/api/client";
@@ -149,7 +151,7 @@ export default function ResultsPage() {
       render: (r) => (
         <div>
           <p className="text-foreground">{r.tryout_title}</p>
-          <p className="text-xs text-muted">{r.program_code}</p>
+          <p className="text-label text-muted">{r.program_code}</p>
         </div>
       ),
     },
@@ -161,9 +163,9 @@ export default function ResultsPage() {
       header: t.colIrt,
       render: (r) =>
         r.irt_warning ? (
-          <Chip size="sm" className="bg-warning-soft text-warning-soft-foreground gap-1 font-medium">
-            <TriangleAlert className="size-3" /> {t.irtWarning}
-          </Chip>
+          <StatusChip tone="warning" className="gap-1">
+            <Icon icon={TriangleAlert} size="xs" /> {t.irtWarning}
+          </StatusChip>
         ) : (
           <span className="text-muted">—</span>
         ),
@@ -179,27 +181,27 @@ export default function ResultsPage() {
 
       {board && board.entries.length > 0 && (
         <div className="mb-6">
-          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-            <Trophy className="size-4" /> {t.leaderboardTitle}
-          </p>
-          <div className="space-y-1.5">
+          <h2 className="mb-3 flex items-center gap-2 font-display text-heading-sm">
+            <Icon icon={Trophy} size="sm" className="text-rose" /> {t.leaderboardTitle}
+          </h2>
+          <div className="space-y-2">
             {board.entries.map((row) => (
-              <div key={row.user_id} className="flex items-center gap-3 rounded-lg border border-border px-3.5 py-2.5 text-sm">
-                <span className="w-6 shrink-0 text-center font-mono text-xs font-semibold text-muted">{row.rank}</span>
+              <div key={row.user_id} className="flex items-center gap-3 rounded-tile border border-border bg-surface px-4 py-3 text-small">
+                <span className="w-6 shrink-0 text-center font-mono text-label font-semibold text-muted">{row.rank}</span>
                 <GradientAvatar user={{ name: row.student_name }} size="sm" />
                 <span className="min-w-0 flex-1 truncate font-medium text-foreground">{row.student_name}</span>
-                <span className="text-xs text-muted">{t.attemptCount(row.attempts_counted)}</span>
+                <span className="text-label text-muted">{t.attemptCount(row.attempts_counted)}</span>
                 <span className="font-mono font-semibold text-foreground">{row.average_score}</span>
               </div>
             ))}
           </div>
           {board.total > board.entries.length && (
-            <p className="mt-2 text-xs text-muted">{t.leaderboardMore(board.entries.length, board.total)}</p>
+            <p className="mt-2 text-label text-muted">{t.leaderboardMore(board.entries.length, board.total)}</p>
           )}
         </div>
       )}
 
-      <p className="mb-2 text-sm font-semibold text-foreground">{t.historyTitle}</p>
+      <h2 className="mb-3 font-display text-heading-sm">{t.historyTitle}</h2>
       {loadFailed ? (
         <EmptyState
           icon={CloudOff}
@@ -212,7 +214,7 @@ export default function ResultsPage() {
           }
         />
       ) : rows === null ? (
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <p className="py-14 text-center text-caption text-muted">{t.loading}</p>
       ) : rows.length === 0 ? (
         <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
       ) : (
@@ -245,45 +247,45 @@ export default function ResultsPage() {
             <div className="flex items-center gap-3">
               <GradientAvatar user={{ name: detail.student_name }} size="lg" />
               <div className="flex-1">
-                <p className="text-sm font-semibold text-foreground">{detail.student_name}</p>
-                <p className="text-xs text-muted">{detail.tryout_title}</p>
+                <p className="font-display text-title text-foreground">{detail.student_name}</p>
+                <p className="text-label text-muted">{detail.tryout_title}</p>
               </div>
               {detail.irt_warning && (
-                <Chip size="sm" className="bg-warning-soft text-warning-soft-foreground gap-1 font-medium">
-                  <TriangleAlert className="size-3" /> {t.irtWarningBadge}
-                </Chip>
+                <StatusChip tone="warning" className="gap-1">
+                  <Icon icon={TriangleAlert} size="xs" /> {t.irtWarningBadge}
+                </StatusChip>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3 border-t border-border pt-4 text-sm sm:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-tile border border-border p-5 text-small sm:grid-cols-4">
               <div>
-                <p className="text-xs text-muted">{t.detailTotalScore}</p>
-                <p className="font-mono text-base font-semibold text-foreground">{detail.score} / 100</p>
+                <dt className="mb-1 text-label text-muted">{t.detailTotalScore}</dt>
+                <dd className="font-mono text-title font-semibold text-foreground">{detail.score} / 100</dd>
               </div>
               <div>
-                <p className="text-xs text-muted">{t.detailAverage}</p>
-                <p className="font-mono text-base font-semibold text-foreground">{detail.average_score}</p>
+                <dt className="mb-1 text-label text-muted">{t.detailAverage}</dt>
+                <dd className="font-mono text-title font-semibold text-foreground">{detail.average_score}</dd>
               </div>
               <div>
-                <p className="text-xs text-muted">{t.detailRank}</p>
-                <p className="font-medium text-foreground">
+                <dt className="mb-1 text-label text-muted">{t.detailRank}</dt>
+                <dd className="font-medium text-foreground">
                   {detail.rank} / {detail.participant_count}
-                </p>
+                </dd>
               </div>
               <div>
-                <p className="text-xs text-muted">{t.detailCompleted}</p>
-                <p className="font-medium text-foreground">{formatDateTime(detail.completed_at)}</p>
+                <dt className="mb-1 text-label text-muted">{t.detailCompleted}</dt>
+                <dd className="font-medium text-foreground">{formatDateTime(detail.completed_at)}</dd>
               </div>
-            </div>
+            </dl>
             <div>
-              <p className="mb-2 text-[13px] font-medium text-foreground">{t.subtestBreakdownTitle}</p>
+              <h3 className="mb-3 font-display text-title">{t.subtestBreakdownTitle}</h3>
               <ul className="space-y-2">
                 {detail.subtests.map((s) => (
                   <li
                     key={s.subtest_id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5 text-sm"
+                    className="flex items-center justify-between gap-3 rounded-control border border-border px-4 py-3 text-small"
                   >
                     <span className="font-medium text-foreground">{s.name}</span>
-                    <span className="flex items-center gap-3 text-xs text-muted">
+                    <span className="flex items-center gap-3 text-label text-muted">
                       <span>{t.correctOf(s.correct_count, s.question_count)}</span>
                       <span className="font-mono font-semibold text-foreground">{s.score}</span>
                     </span>
@@ -293,23 +295,26 @@ export default function ResultsPage() {
             </div>
             <div>
               {violationsFailed ? (
-                <p className="text-sm text-danger">{t.violationsError}</p>
+                <p className="text-caption text-danger">{t.violationsError}</p>
               ) : violations === null ? (
-                <p className="text-sm text-muted">{t.loading}</p>
+                <p className="text-caption text-muted">{t.loading}</p>
               ) : (
                 <>
-                  <p className="mb-2 text-[13px] font-medium text-foreground">{t.violationHistoryTitle(violations.total)}</p>
+                  <h3 className="mb-3 font-display text-title">{t.violationHistoryTitle(violations.total)}</h3>
                   {violations.violations.length === 0 ? (
-                    <p className="text-sm text-muted">{t.noViolations}</p>
+                    <p className="text-caption text-muted">{t.noViolations}</p>
                   ) : (
-                    <ul className="space-y-2">
+                    <ul>
                       {violations.violations.map((v) => (
-                        <li key={v.id} className="flex items-center gap-2.5 rounded-lg border border-danger/20 bg-danger-soft px-3 py-2 text-sm">
-                          <AlertTriangle className="size-3.5 shrink-0 text-danger" />
-                          <span className="text-danger-soft-foreground">
-                            {v.type === "screenshot_attempt" ? t.violationScreenshot : t.violationFullscreenExit}
-                          </span>
-                          <span className="ml-auto text-xs text-muted">{formatDateTime(v.occurred_at)}</span>
+                        <li key={v.id} className="relative flex items-baseline gap-3 py-3 not-last:after:absolute not-last:after:top-7 not-last:after:-bottom-3 not-last:after:left-1 not-last:after:w-px not-last:after:bg-border">
+                          <span className="z-10 size-2 shrink-0 rounded-full bg-danger" aria-hidden />
+                          <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3">
+                            <span className="flex items-center gap-2 text-small font-medium text-foreground">
+                              <Icon icon={AlertTriangle} size="xs" className="text-danger" />
+                              {v.type === "screenshot_attempt" ? t.violationScreenshot : t.violationFullscreenExit}
+                            </span>
+                            <time className="text-label text-muted">{formatDateTime(v.occurred_at)}</time>
+                          </div>
                         </li>
                       ))}
                     </ul>

@@ -8,6 +8,8 @@ import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { ProgramBadge } from "@/components/status-badge";
+import { LoadingNote } from "@/components/admin-detail";
+import { Icon } from "@/components/icon";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput, SwitchInput, TextInput, TextareaInput } from "@/components/ui/form";
 import { api, ApiError, errorText, type KecermatanTestSummary, type Product, type Program, type TryoutSummary } from "@/lib/api/client";
@@ -286,7 +288,7 @@ export default function ProductsPage() {
       key: "type",
       header: t.colType,
       render: (product) => (
-        <Chip size="sm" variant="secondary" className="border border-border">
+        <Chip size="sm" variant="secondary" className="border border-border font-medium">
           {product.type === "bundle"
             ? t.typeBundle(product.tryouts.length)
             : product.type === "kecermatan"
@@ -332,10 +334,10 @@ export default function ProductsPage() {
       render: (product) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="sm" isIconOnly onPress={() => openEdit(product)}>
-            <Pencil className="size-3.5" />
+            <Icon icon={Pencil} size="sm" />
           </Button>
           <Button variant="ghost" size="sm" isIconOnly className="text-danger" onPress={() => setDeleteTarget(product)}>
-            <Trash2 className="size-3.5" />
+            <Icon icon={Trash2} size="sm" />
           </Button>
         </div>
       ),
@@ -349,7 +351,7 @@ export default function ProductsPage() {
         description={t.productCount(total)}
         actions={
           <Button variant="primary" size="sm" onPress={openCreate}>
-            <Plus className="size-3.5" /> {t.addProduct}
+            <Icon icon={Plus} size="sm" /> {t.addProduct}
           </Button>
         }
       >
@@ -365,20 +367,26 @@ export default function ProductsPage() {
             }
           />
         ) : rows === null ? (
-          <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+          <LoadingNote>{t.loading}</LoadingNote>
         ) : rows.length === 0 ? (
           <EmptyState icon={Package} title={t.emptyTitle} description={t.emptyDescription} />
         ) : (
-          <>
-            <DataTable columns={columns} rows={rows} rowKey={(row) => row.id} onRowClick={openEdit} />
-            {rows.length < total && (
-              <div className="mt-4 flex justify-center">
-                <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
-                  {loadingMore ? t.loadingMore : t.loadMore}
-                </Button>
-              </div>
-            )}
-          </>
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(row) => row.id}
+            onRowClick={openEdit}
+            footer={
+              <>
+                <span>{t.shownOf(rows.length, total)}</span>
+                {rows.length < total && (
+                  <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
+                    {loadingMore ? t.loadingMore : t.loadMore}
+                  </Button>
+                )}
+              </>
+            }
+          />
         )}
 
         <FormModal
@@ -398,7 +406,7 @@ export default function ProductsPage() {
           }
         >
           <div>
-            <div className="flex gap-1 rounded-lg border border-border bg-surface-secondary p-1 sm:w-fit">
+            <div className="flex gap-1 rounded-control border border-border bg-surface-secondary p-1 sm:w-fit">
               {(["individual", "bundle", "kecermatan"] as const).map((productType) => (
                 <button
                   key={productType}
@@ -416,7 +424,7 @@ export default function ProductsPage() {
                     }))
                   }
                   className={cn(
-                    "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                    "rounded-chip px-4 py-1.5 text-small font-medium transition-colors",
                     form.type === productType ? "bg-surface text-foreground shadow-surface" : "text-muted",
                   )}
                 >
@@ -428,7 +436,7 @@ export default function ProductsPage() {
                 </button>
               ))}
             </div>
-            {formErrors.type && <p className="mt-1 text-xs text-danger">{formErrors.type}</p>}
+            {formErrors.type && <p className="mt-1 text-label text-danger">{formErrors.type}</p>}
           </div>
 
           <TextInput
@@ -461,14 +469,14 @@ export default function ProductsPage() {
 
           {form.type === "kecermatan" ? (
             <div>
-              <p className="mb-2 text-[13px] font-medium text-foreground">{t.kecermatanPickTitle}</p>
+              <p className="mb-2 text-small font-medium text-foreground">{t.kecermatanPickTitle}</p>
               <div className="space-y-1.5">
                 {choiceFailed ? (
-                  <p className="text-xs text-danger">{t.loadErrorDescription}</p>
+                  <p className="text-label text-danger">{t.loadErrorDescription}</p>
                 ) : choiceKecermatan === null ? (
-                  <p className="text-xs text-muted">{t.tryoutLoading}</p>
+                  <p className="text-label text-muted">{t.tryoutLoading}</p>
                 ) : choiceKecermatan.length === 0 ? (
-                  <p className="text-xs text-muted">{t.kecermatanEmpty}</p>
+                  <p className="text-label text-muted">{t.kecermatanEmpty}</p>
                 ) : (
                   choiceKecermatan.map((test) => {
                     const checked = form.kecermatanTestId === test.id;
@@ -478,7 +486,7 @@ export default function ProductsPage() {
                         type="button"
                         onClick={() => setForm((current) => ({ ...current, kecermatanTestId: test.id }))}
                         className={cn(
-                          "flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                          "flex w-full items-center gap-2.5 rounded-control border px-3 py-2 text-left text-small transition-colors",
                           checked
                             ? "border-accent bg-accent-soft text-accent-soft-foreground"
                             : "border-border text-foreground hover:bg-surface-secondary",
@@ -486,7 +494,7 @@ export default function ProductsPage() {
                       >
                         <span
                           className={cn(
-                            "flex size-4 items-center justify-center rounded-[5px] border-2 text-[10px] font-bold",
+                            "flex size-4 items-center justify-center rounded-chip border-2 text-micro font-bold",
                             checked ? "border-accent bg-accent text-white" : "border-border text-transparent",
                           )}
                         >
@@ -498,7 +506,7 @@ export default function ProductsPage() {
                   })
                 )}
               </div>
-              {formErrors.kecermatan_test_id && <p className="mt-1 text-xs text-danger">{formErrors.kecermatan_test_id}</p>}
+              {formErrors.kecermatan_test_id && <p className="mt-1 text-label text-danger">{formErrors.kecermatan_test_id}</p>}
               <div className="mt-4">
                 <TextInput
                   label={t.fieldIncludedAttempts}
@@ -511,16 +519,16 @@ export default function ProductsPage() {
             </div>
           ) : (
           <div>
-            <p className="mb-2 text-[13px] font-medium text-foreground">
+            <p className="mb-2 text-small font-medium text-foreground">
               {form.type === "bundle" ? t.tryoutPickBundle : t.tryoutPickSingle}
             </p>
             <div className="space-y-1.5">
               {choiceFailed ? (
-                <p className="text-xs text-danger">{t.loadErrorDescription}</p>
+                <p className="text-label text-danger">{t.loadErrorDescription}</p>
               ) : choiceTryouts === null ? (
-                <p className="text-xs text-muted">{t.tryoutLoading}</p>
+                <p className="text-label text-muted">{t.tryoutLoading}</p>
               ) : choiceTryouts.length === 0 ? (
-                <p className="text-xs text-muted">{t.tryoutEmpty}</p>
+                <p className="text-label text-muted">{t.tryoutEmpty}</p>
               ) : (
                 choiceTryouts.map((tryout) => {
                   const checked = form.tryoutIds.includes(tryout.id);
@@ -530,7 +538,7 @@ export default function ProductsPage() {
                       type="button"
                       onClick={() => toggleTryout(tryout.id)}
                       className={cn(
-                        "flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                        "flex w-full items-center gap-2.5 rounded-control border px-3 py-2 text-left text-small transition-colors",
                         checked
                           ? "border-accent bg-accent-soft text-accent-soft-foreground"
                           : "border-border text-foreground hover:bg-surface-secondary",
@@ -538,7 +546,7 @@ export default function ProductsPage() {
                     >
                       <span
                         className={cn(
-                          "flex size-4 items-center justify-center rounded-[5px] border-2 text-[10px] font-bold",
+                          "flex size-4 items-center justify-center rounded-chip border-2 text-micro font-bold",
                           checked ? "border-accent bg-accent text-white" : "border-border text-transparent",
                         )}
                       >
@@ -550,7 +558,7 @@ export default function ProductsPage() {
                 })
               )}
             </div>
-            {formErrors.tryout_ids && <p className="mt-1 text-xs text-danger">{formErrors.tryout_ids}</p>}
+            {formErrors.tryout_ids && <p className="mt-1 text-label text-danger">{formErrors.tryout_ids}</p>}
           </div>
           )}
 
@@ -612,7 +620,7 @@ export default function ProductsPage() {
             </>
           }
         >
-          <p className="text-sm text-muted">{t.deleteDescription}</p>
+          <p className="text-small text-muted">{t.deleteDescription}</p>
         </FormModal>
       </AppShell>
     </RequireRole>

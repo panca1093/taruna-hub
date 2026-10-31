@@ -100,10 +100,10 @@ export default function KecermatanListPage() {
       header: t.columns.title,
       render: (row) => (
         <div className="flex items-center gap-3">
-          <div className="size-8 shrink-0 rounded-md" style={{ background: `linear-gradient(135deg, ${row.cover_from}, ${row.cover_to})` }} />
-          <span className="font-medium">{row.title}</span>
+          <div className="size-8 shrink-0 rounded-control" style={{ background: `linear-gradient(135deg, ${row.cover_from}, ${row.cover_to})` }} />
+          <span className="font-semibold">{row.title}</span>
           {row.locked && (
-            <span className="flex items-center gap-1 text-xs text-muted" title={t.lockedHint}>
+            <span className="flex items-center gap-1 text-caption text-muted" title={t.lockedHint}>
               <Lock className="size-3.5" /> <span className="sr-only">{t.lockedLabel}</span>
             </span>
           )}
@@ -128,10 +128,10 @@ export default function KecermatanListPage() {
       render: (row) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <LinkButton href={`/admin/kecermatan/${row.id}`} variant="ghost" size="sm" isIconOnly>
-            <Pencil className="size-3.5" />
+            <Pencil className="size-4" />
           </LinkButton>
           <Button variant="ghost" size="sm" isIconOnly className="text-danger" isDisabled={row.locked} onPress={() => setDeleteTarget(row)}>
-            <Trash2 className="size-3.5" />
+            <Trash2 className="size-4" />
           </Button>
         </div>
       ),
@@ -144,7 +144,7 @@ export default function KecermatanListPage() {
       description={t.description(total)}
       actions={
         <LinkButton href="/admin/kecermatan/new" variant="primary" size="sm">
-          <Plus className="size-3.5" /> {t.createTest}
+          <Plus className="size-4" /> {t.createTest}
         </LinkButton>
       }
     >
@@ -156,12 +156,12 @@ export default function KecermatanListPage() {
           action={<Button variant="primary" size="sm" onPress={retry}>{t.retry}</Button>}
         />
       ) : rows === null ? (
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <p className="py-14 text-center text-small text-muted">{t.loading}</p>
       ) : rows.length === 0 ? (
         <EmptyState icon={Gauge} title={t.emptyTitle} description={t.emptyDescription} />
       ) : (
         <>
-          <DataTable columns={columns} rows={rows} rowKey={(row) => row.id} onRowClick={(row) => router.push(`/admin/kecermatan/${row.id}`)} />
+          <DataTable columns={columns} rows={rows} rowKey={(row) => row.id} footer={<span>{t.footerCount(rows.length, total)}</span>} onRowClick={(row) => router.push(`/admin/kecermatan/${row.id}`)} />
           {rows.length < total && (
             <div className="mt-4 flex justify-center">
               <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
@@ -188,7 +188,7 @@ export default function KecermatanListPage() {
           </>
         }
       >
-        <p className="text-sm text-muted">{t.deleteWarning}</p>
+        <p className="text-small text-muted">{t.deleteWarning}</p>
       </FormModal>
     </AppShell>
   );

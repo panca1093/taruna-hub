@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Card } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { CheckCircle2, KeyRound, User as UserIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { Icon } from "@/components/icon";
+import { CardKicker, Panel } from "@/components/page-blocks";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { TextInput } from "@/components/ui/form";
 import { ApiError, api, errorText } from "@/lib/api/client";
@@ -24,15 +26,15 @@ function failure(err: unknown, fallback: string): Outcome {
 function Feedback({ outcome, savedText }: { outcome: Outcome; savedText: string }) {
   if (outcome.error) {
     return (
-      <p role="alert" className="text-sm text-danger">
+      <p role="alert" className="text-small text-danger">
         {outcome.error}
       </p>
     );
   }
   if (outcome.saved) {
     return (
-      <p role="status" className="flex items-center gap-1.5 text-sm text-success">
-        <CheckCircle2 className="size-4" />
+      <p role="status" className="flex items-center gap-1.5 text-small text-success">
+        <Icon icon={CheckCircle2} size="sm" />
         {savedText}
       </p>
     );
@@ -87,69 +89,76 @@ export default function StudentProfilePage() {
   };
 
   return (
-    <AppShell title={t.title} description={t.description}>
-      <div className="mx-auto max-w-2xl space-y-6">
-        <Card className="gap-4 p-5">
-          <div className="flex items-center gap-2">
-            <UserIcon className="size-4 text-accent" />
-            <p className="text-sm font-semibold text-foreground">{t.accountInfo}</p>
-          </div>
+    <AppShell
+      title={t.title}
+      description={t.description}
+      maxWidth="max-w-3xl"
+      breadcrumb={[{ label: t.crumbDashboard, href: "/student" }, { label: t.title }]}
+    >
+      <div className="space-y-6">
+        <Panel>
+          <CardKicker icon={UserIcon} className="mb-5">
+            {t.accountInfo}
+          </CardKicker>
           <div className="flex items-center gap-3">
             <GradientAvatar user={user} size="lg" />
-            <p className="text-sm font-semibold text-foreground">{user.name}</p>
+            <p className="font-display text-heading-sm">{user.name}</p>
           </div>
-          <form onSubmit={handleSaveProfile} className="flex flex-col gap-4 border-t border-border pt-4">
-            <TextInput
-              label={t.fullName}
-              required
-              maxLength={100}
-              error={profile.fields.name}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <div className="flex flex-col gap-1.5">
-              <p className="text-sm font-medium text-foreground">{t.email}</p>
-              <p className="text-sm text-foreground">{user.email ?? "-"}</p>
-              <p className="text-xs text-muted">{t.emailHint}</p>
+          <form onSubmit={handleSaveProfile} className="mt-5 flex flex-col gap-5 border-t border-border pt-5">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <TextInput
+                label={t.fullName}
+                required
+                maxLength={100}
+                error={profile.fields.name}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <TextInput
+                label={t.phone}
+                type="tel"
+                description={t.phoneHint}
+                error={profile.fields.phone}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
             </div>
-            <TextInput
-              label={t.phone}
-              type="tel"
-              description={t.phoneHint}
-              error={profile.fields.phone}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <div className="flex flex-col gap-1.5">
+              <p className="text-caption font-medium text-foreground">{t.email}</p>
+              <p className="text-small text-foreground">{user.email ?? "-"}</p>
+              <p className="text-label text-muted">{t.emailHint}</p>
+            </div>
             <Feedback outcome={profile} savedText={t.profileSaved} />
             <Button type="submit" variant="primary" className="self-start" isDisabled={savingProfile}>
               {savingProfile ? t.saving : t.saveChanges}
             </Button>
           </form>
-        </Card>
+        </Panel>
 
-        <Card className="gap-4 p-5">
-          <div className="flex items-center gap-2">
-            <KeyRound className="size-4 text-accent" />
-            <p className="text-sm font-semibold text-foreground">{t.changePassword}</p>
-          </div>
-          <form onSubmit={handleChangePassword} className="flex flex-col gap-4">
-            <TextInput
-              label={t.currentPassword}
-              type="password"
-              autoComplete="current-password"
-              error={password.fields.current_password}
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-            />
-            <TextInput
-              label={t.newPassword}
-              type="password"
-              autoComplete="new-password"
-              description={t.newPasswordHint}
-              error={password.fields.new_password}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
+        <Panel>
+          <CardKicker icon={KeyRound} className="mb-5">
+            {t.changePassword}
+          </CardKicker>
+          <form onSubmit={handleChangePassword} className="flex flex-col gap-5">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <TextInput
+                label={t.currentPassword}
+                type="password"
+                autoComplete="current-password"
+                error={password.fields.current_password}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+              <TextInput
+                label={t.newPassword}
+                type="password"
+                autoComplete="new-password"
+                description={t.newPasswordHint}
+                error={password.fields.new_password}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
             <Feedback outcome={password} savedText={t.passwordSaved} />
             <Button
               type="submit"
@@ -160,7 +169,7 @@ export default function StudentProfilePage() {
               {savingPassword ? t.updatingPassword : t.updatePassword}
             </Button>
           </form>
-        </Card>
+        </Panel>
       </div>
     </AppShell>
   );

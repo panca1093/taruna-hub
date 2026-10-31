@@ -7,6 +7,7 @@ import { CloudOff, Pencil, Plus, Shapes, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
+import { StatusChip } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput, TextInput } from "@/components/ui/form";
@@ -105,15 +106,22 @@ export default function ItemPackagesPage() {
   };
 
   const columns: Column<ItemPackage>[] = [
-    { key: "name", header: t.columns.name, render: (r) => <span className="font-medium">{r.name}</span> },
+    {
+      key: "name",
+      header: t.columns.name,
+      render: (r) => (
+        <div className="flex items-center gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+            <Shapes className="size-4" aria-hidden />
+          </span>
+          <span className="font-semibold">{r.name}</span>
+        </div>
+      ),
+    },
     {
       key: "type",
       header: t.columns.type,
-      render: (r) => (
-        <span className="inline-flex rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent-soft-foreground">
-          {t.types[r.type]}
-        </span>
-      ),
+      render: (r) => <StatusChip tone="accent">{t.types[r.type]}</StatusChip>,
     },
     {
       key: "elements",
@@ -133,10 +141,10 @@ export default function ItemPackagesPage() {
       render: (r) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="sm" isIconOnly aria-label={t.renameAction} onPress={() => openRename(r)}>
-            <Pencil className="size-3.5" />
+            <Pencil className="size-4" />
           </Button>
           <Button variant="ghost" size="sm" isIconOnly aria-label={t.deleteAction} className="text-danger" isDisabled={r.in_use} onPress={() => setDeleting(r)}>
-            <Trash2 className="size-3.5" />
+            <Trash2 className="size-4" />
           </Button>
         </div>
       ),
@@ -150,7 +158,7 @@ export default function ItemPackagesPage() {
         description={t.description}
         actions={
           <Button variant="primary" size="sm" onPress={openCreate}>
-            <Plus className="size-3.5" /> {t.addPackage}
+            <Plus className="size-4" /> {t.addPackage}
           </Button>
         }
       >
@@ -162,7 +170,7 @@ export default function ItemPackagesPage() {
             action={<Button variant="primary" size="sm" onPress={retry}>{t.retry}</Button>}
           />
         ) : rows === null ? (
-          <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+          <p className="py-14 text-center text-small text-muted">{t.loading}</p>
         ) : rows.length === 0 ? (
           <EmptyState
             icon={Shapes}
@@ -171,7 +179,7 @@ export default function ItemPackagesPage() {
             action={<Button variant="primary" size="sm" onPress={openCreate}>{t.addPackage}</Button>}
           />
         ) : (
-          <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={(r) => router.push(`/admin/item-packages/${r.id}`)} />
+          <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} footer={<span>{t.footerCount(rows.length)}</span>} onRowClick={(r) => router.push(`/admin/item-packages/${r.id}`)} />
         )}
 
         <FormModal

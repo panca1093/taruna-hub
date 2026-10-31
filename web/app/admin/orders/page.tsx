@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Chip, toast } from "@heroui/react";
-import { CheckCircle2, ChevronRight, ClipboardList, CloudOff, FileImage, Undo2, Wallet, XCircle } from "lucide-react";
+import { Button, toast } from "@heroui/react";
+import { CheckCircle2, ChevronRight, ClipboardList, CloudOff, Undo2, Wallet, XCircle } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
-import { OrderStatusBadge } from "@/components/status-badge";
+import { OrderStatusBadge, StatusChip } from "@/components/status-badge";
+import { DetailAmount, DetailGrid, DetailItem, LoadingNote, ProofButton } from "@/components/admin-detail";
+import { FilterPills } from "@/components/filter-pills";
+import { Icon } from "@/components/icon";
 import { FormModal } from "@/components/ui/form-modal";
 import { TextareaInput } from "@/components/ui/form";
-import { cn } from "@/lib/cn";
 import { api, ApiError, errorText, type Order } from "@/lib/api/client";
 import { formatIDR } from "@/lib/format-money";
 import { useOrdersT } from "@/lib/i18n/dict/orders";
@@ -163,7 +165,7 @@ export default function OrdersPage() {
     o.payment_method === "wallet" ? t.paymentWalletLong : o.payment_method === "gateway" ? t.paymentGatewayLong : t.paymentManualLong;
 
   const columns: Column<Order>[] = [
-    { key: "code", header: t.colCode, render: (o) => <span className="font-mono text-xs text-muted">{o.code}</span> },
+    { key: "code", header: t.colCode, render: (o) => <span className="font-mono text-label text-muted">{o.code}</span> },
     { key: "student", header: t.colStudent, render: (o) => o.student_name },
     { key: "product", header: t.colProduct, render: (o) => o.product_title },
     { key: "amount", header: t.colTotal, render: (o) => formatIDR(o.price) },
@@ -176,9 +178,9 @@ export default function OrdersPage() {
         <span className="inline-flex flex-wrap items-center gap-1.5">
           <OrderStatusBadge status={o.status} />
           {o.payment_exception && (
-            <Chip size="sm" className="bg-warning-soft font-medium text-warning-soft-foreground">
+            <StatusChip tone="warning" dot>
               {t.needsReview}
-            </Chip>
+            </StatusChip>
           )}
         </span>
       ),
@@ -188,26 +190,19 @@ export default function OrdersPage() {
       header: "",
       headerClassName: "text-right",
       className: "text-right",
-      render: () => <ChevronRight className="ml-auto size-4 text-muted" />,
+      render: () => <Icon icon={ChevronRight} size="xs" className="ml-auto text-muted" />,
     },
   ];
 
   return (
-    <AppShell title={t.pageTitle} description={rows === null ? undefined : t.orderCount(total)}>
-      <div className="mb-4 flex flex-wrap gap-2">
-        {tabs.map((item) => (
-          <button
-            key={item.key}
-            onClick={() => switchTab(item.key)}
-            className={cn(
-              "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-              tab === item.key ? "border-accent bg-accent text-accent-foreground" : "border-border text-muted hover:border-accent/40 hover:text-foreground",
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+    <AppShell title={t.pageTitle} description={t.pageDescription}>
+      <FilterPills
+        className="mb-5"
+        ariaLabel={t.pageTitle}
+        options={tabs.map((item) => ({ id: item.key, label: item.label }))}
+        value={tab}
+        onChange={(id) => switchTab(id as Tab)}
+      />
 
       {loadFailed ? (
         <EmptyState
@@ -221,20 +216,26 @@ export default function OrdersPage() {
           }
         />
       ) : rows === null ? (
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <LoadingNote>{t.loading}</LoadingNote>
       ) : rows.length === 0 ? (
         <EmptyState icon={ClipboardList} title={t.emptyTitle} />
       ) : (
-        <>
-          <DataTable columns={columns} rows={rows} rowKey={(o) => o.id} onRowClick={setDetail} />
-          {rows.length < total && (
-            <div className="mt-4 flex justify-center">
-              <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
-                {loadingMore ? t.loadingMore : t.loadMore}
-              </Button>
-            </div>
-          )}
-        </>
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(o) => o.id}
+          onRowClick={setDetail}
+          footer={
+            <>
+              <span>{t.shownOf(rows.length, total)}</span>
+              {rows.length < total && (
+                <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
+                  {loadingMore ? t.loadingMore : t.loadMore}
+                </Button>
+              )}
+            </>
+          }
+        />
       )}
 
       <FormModal
@@ -259,10 +260,10 @@ export default function OrdersPage() {
                   {t.close}
                 </Button>
                 <Button variant="secondary" isDisabled={busy} onPress={() => setResolving("refund")}>
-                  <Undo2 className="size-3.5" /> {t.refundAction}
+                  <Icon icon={Undo2} size="sm" /> {t.refundAction}
                 </Button>
                 <Button variant="primary" isDisabled={busy} onPress={() => setResolving("credit")}>
-                  <Wallet className="size-3.5" /> {t.creditAction}
+                  <Icon icon={Wallet} size="sm" /> {t.creditAction}
                 </Button>
               </>
             )
@@ -273,17 +274,17 @@ export default function OrdersPage() {
                   {t.back}
                 </Button>
                 <Button variant="danger" isDisabled={busy || reason.trim() === ""} onPress={() => cancel(detail)}>
-                  <XCircle className="size-3.5" /> {t.cancelConfirm}
+                  <Icon icon={XCircle} size="sm" /> {t.cancelConfirm}
                 </Button>
               </>
             ) : (
               <>
                 <Button variant="danger" isDisabled={busy} onPress={() => setCancelling(true)}>
-                  <XCircle className="size-3.5" /> {t.cancel}
+                  <Icon icon={XCircle} size="sm" /> {t.cancel}
                 </Button>
                 {detail.payment_method !== "gateway" && (
                   <Button variant="primary" isDisabled={busy} onPress={() => confirm(detail)}>
-                    <CheckCircle2 className="size-3.5" /> {t.confirmPayment}
+                    <Icon icon={CheckCircle2} size="sm" /> {t.confirmPayment}
                   </Button>
                 )}
               </>
@@ -297,50 +298,29 @@ export default function OrdersPage() {
       >
         {detail && (
           <>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-muted">{t.detailStudent}</p>
-                <p className="font-medium text-foreground">{detail.student_name}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted">{t.detailTotal}</p>
-                <p className="font-medium text-foreground">{formatIDR(detail.price)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted">{t.detailMethod}</p>
-                <p className="font-medium text-foreground">{methodLong(detail)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted">{t.detailStatus}</p>
+            <DetailAmount>{formatIDR(detail.price)}</DetailAmount>
+            <DetailGrid>
+              <DetailItem label={t.detailStudent}>{detail.student_name}</DetailItem>
+              <DetailItem label={t.detailMethod}>{methodLong(detail)}</DetailItem>
+              <DetailItem label={t.detailStatus}>
                 <OrderStatusBadge status={detail.status} />
-              </div>
+              </DetailItem>
               {detail.status === "cancelled" && (
-                <div className="col-span-2">
-                  <p className="text-xs text-muted">{t.detailCancelReason}</p>
-                  <p className="font-medium text-foreground">{detail.cancel_reason}</p>
-                </div>
+                <DetailItem label={t.detailCancelReason} wide>
+                  {detail.cancel_reason}
+                </DetailItem>
               )}
-            </div>
+            </DetailGrid>
             {detail.proof_asset_id ? (
-              <button
-                type="button"
-                onClick={() => detail.proof_asset_id && openProof(detail.proof_asset_id)}
-                className="flex items-center gap-3 rounded-lg border border-dashed border-border p-4 text-left transition-colors hover:border-accent/50"
-              >
-                <FileImage className="size-8 shrink-0 text-muted" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">{t.proofOpen}</p>
-                  <p className="text-xs text-muted">{t.proofUploadedBy}</p>
-                </div>
-              </button>
+              <ProofButton title={t.proofOpen} hint={t.proofUploadedBy} onPress={() => detail.proof_asset_id && openProof(detail.proof_asset_id)} />
             ) : (
-              detail.payment_method === "manual" && <p className="text-xs text-muted">{t.proofNotUploaded}</p>
+              detail.payment_method === "manual" && <p className="text-label text-muted">{t.proofNotUploaded}</p>
             )}
             {detail.payment_exception && (
-              <div className="rounded-lg border border-warning/40 bg-warning-soft p-3 text-sm text-warning-soft-foreground">
+              <div className="rounded-tile border border-warning/40 bg-warning-soft p-4 text-small text-warning-soft-foreground">
                 <p className="font-semibold">{t.needsReview}</p>
-                <p className="mt-1 text-xs">{t.exceptionKind[detail.payment_exception.kind]}</p>
-                <p className="mt-1 text-xs">{t.exceptionPaid(formatIDR(detail.payment_exception.paid_amount))}</p>
+                <p className="mt-1 text-caption">{t.exceptionKind[detail.payment_exception.kind]}</p>
+                <p className="mt-1 text-caption">{t.exceptionPaid(formatIDR(detail.payment_exception.paid_amount))}</p>
               </div>
             )}
             {resolving && (

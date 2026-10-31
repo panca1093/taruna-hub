@@ -183,11 +183,11 @@ export function QuestionEditor({
             value={draft.content}
             onChange={(content) => setDraft((d) => ({ ...d, content }))}
           />
-          <p className="text-xs text-muted italic">{t.contentHelp}</p>
-          {errors.content && <p className="text-xs text-danger">{errors.content}</p>}
+          <p className="text-caption text-muted italic">{t.contentHelp}</p>
+          {errors.content && <p className="text-caption text-danger">{errors.content}</p>}
           {draft.content && (
-            <div className="rounded-lg border border-dashed border-border bg-surface-secondary px-3.5 py-3 text-sm">
-              <p className="mb-1 text-[11px] font-medium tracking-wide text-muted uppercase">{t.previewLabel}</p>
+            <div className="rounded-control border border-dashed border-border bg-surface-secondary px-3.5 py-3 text-small">
+              <p className="mb-1 text-label font-medium tracking-wide text-muted uppercase">{t.previewLabel}</p>
               <LatexText text={draft.content} />
             </div>
           )}
@@ -276,7 +276,7 @@ export function QuestionEditor({
             </div>
           ) : (
             <div className="space-y-2.5">
-              <p className="text-[13px] font-medium text-foreground">
+              <p className="text-small font-medium text-foreground">
                 {t.optionsLabel}{" "}
                 <span className="text-muted">{draft.optionWeighted ? t.optionsHintWeighted : t.optionsHintMark}</span>
               </p>
@@ -297,25 +297,25 @@ export function QuestionEditor({
                     placeholder={t.optionPlaceholder(String.fromCharCode(65 + index))}
                   />
                   {errors[`options[${index}].label`] && (
-                    <p className="pl-8 text-xs text-danger">{errors[`options[${index}].label`]}</p>
+                    <p className="pl-8 text-caption text-danger">{errors[`options[${index}].label`]}</p>
                   )}
                   {errors[`options[${index}].points`] && (
-                    <p className="pl-8 text-xs text-danger">{errors[`options[${index}].points`]}</p>
+                    <p className="pl-8 text-caption text-danger">{errors[`options[${index}].points`]}</p>
                   )}
                 </div>
               ))}
               {draft.type !== "benar_salah" && draft.options.length < 8 && (
                 <Button type="button" variant="ghost" size="sm" onPress={addOption}>
-                  <Plus className="size-3.5" /> {t.addOption}
+                  <Plus className="size-4" /> {t.addOption}
                 </Button>
               )}
-              {errors.correct && <p className="text-xs text-danger">{errors.correct}</p>}
-              {errors.options && <p className="text-xs text-danger">{errors.options}</p>}
-              {errors.option_weighted && <p className="text-xs text-danger">{errors.option_weighted}</p>}
+              {errors.correct && <p className="text-caption text-danger">{errors.correct}</p>}
+              {errors.options && <p className="text-caption text-danger">{errors.options}</p>}
+              {errors.option_weighted && <p className="text-caption text-danger">{errors.option_weighted}</p>}
             </div>
           )}
-          {draft.type === "isian" && errors.options && <p className="text-xs text-danger">{errors.options}</p>}
-          {draft.type === "isian" && errors.case_sensitive && <p className="text-xs text-danger">{errors.case_sensitive}</p>}
+          {draft.type === "isian" && errors.options && <p className="text-caption text-danger">{errors.options}</p>}
+          {draft.type === "isian" && errors.case_sensitive && <p className="text-caption text-danger">{errors.case_sensitive}</p>}
         </div>
       </div>
     </form>
@@ -356,7 +356,7 @@ function OptionRow({
           value={option.points ?? ""}
           placeholder="1"
           onChange={(e) => onPointsChange?.(e.target.value === "" ? undefined : Number(e.target.value))}
-          className="w-14 shrink-0 rounded-lg border border-border bg-field px-2 py-2 text-center text-xs font-semibold text-field-foreground outline-none focus:border-accent"
+          className="w-14 shrink-0 rounded-control border border-border bg-field px-2 py-2 text-center text-caption font-semibold text-field-foreground outline-none focus:border-accent"
         />
       ) : (
         <button
@@ -364,9 +364,9 @@ function OptionRow({
           onClick={onToggle}
           aria-pressed={checked}
           className={cn(
-            "flex size-6 shrink-0 items-center justify-center border-2 text-xs font-bold transition-colors",
-            multi ? "rounded-[6px]" : "rounded-full",
-            checked ? "border-accent bg-accent text-white" : "border-border text-transparent",
+            "flex size-6 shrink-0 items-center justify-center border-2 text-caption font-bold transition-colors",
+            multi ? "rounded-chip" : "rounded-full",
+            checked ? "border-accent bg-accent text-accent-foreground" : "border-border text-transparent",
           )}
         >
           ✓
@@ -377,14 +377,14 @@ function OptionRow({
           value={option.label}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="flex-1 rounded-lg border border-border bg-field px-3 py-2 text-sm text-field-foreground outline-none focus:border-accent"
+          className="flex-1 rounded-control border border-border bg-field px-3 py-2 text-small text-field-foreground outline-none focus:border-accent"
         />
       ) : (
-        <span className="flex-1 rounded-lg border border-transparent px-3 py-2 text-sm text-foreground">{option.label}</span>
+        <span className="flex-1 rounded-control border border-transparent px-3 py-2 text-small text-foreground">{option.label}</span>
       )}
       {onRemove && (
         <Button type="button" variant="ghost" size="sm" isIconOnly onPress={onRemove}>
-          <Trash2 className="size-3.5 text-muted" />
+          <Trash2 className="size-4 text-muted" />
         </Button>
       )}
     </div>
