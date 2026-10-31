@@ -254,8 +254,15 @@ func TestShapeCatalogKeepsTheOriginalDefaultPool(t *testing.T) {
 			t.Fatalf("default shape %d = %s, want %s: locked tests would draw a different pool", i, pool[i].Key, id)
 		}
 	}
+	drawings, err := os.ReadFile(filepath.Join("..", "..", "..", "web", "components", "admin", "item-element.tsx"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	seen := map[string]bool{}
 	for _, s := range shapeCatalog {
+		if !strings.Contains(string(drawings), "\n  "+s.ID+": ") {
+			t.Errorf("shape %s has no drawing in item-element.tsx shapePaths; students would see an empty box", s.ID)
+		}
 		if seen[s.ID] {
 			t.Errorf("duplicate shape id %s", s.ID)
 		}

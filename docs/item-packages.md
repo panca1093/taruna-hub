@@ -2,7 +2,7 @@
 
 A package is a named pool of elements a kecermatan test draws its reference items from. Four types:
 `symbol` (typed or pasted text, a built-in palette, or a CSV/TXT/XLSX file), `image` (many files or a ZIP),
-`emoji` (picked from a built-in catalog of 345) and `shape` (17 built-in flat and 7 solid shapes). Tenant-owned only:
+`emoji` (picked from a built-in catalog of 331) and `shape` (17 built-in flat and 7 solid shapes). Tenant-owned only:
 master packages and copy-to-own are out of the MVP (D17). Admin and Operator may change packages (D02).
 
     item_packages           id, tenant_id, type, name, current_revision, created_by, created_at, updated_at

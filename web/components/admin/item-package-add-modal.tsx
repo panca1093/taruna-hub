@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, toast } from "@heroui/react";
 import { CheckCircle2, Download, FileUp, XCircle } from "lucide-react";
 import { FormModal } from "@/components/ui/form-modal";
+import { TextInput } from "@/components/ui/form";
 import { EmojiImage, ShapeIcon } from "@/components/admin/item-element";
 import {
   api,
@@ -168,7 +169,10 @@ export function ItemPackageAddModal({
   };
 
   const needle = query.trim().toLowerCase();
-  const matchingEmoji = (catalog?.emoji ?? []).filter((item) => !needle || item.name.toLowerCase().includes(needle));
+  // Picked emoji stay visible while searching, so a selection can always be seen and undone.
+  const matchingEmoji = (catalog?.emoji ?? []).filter(
+    (item) => !needle || ids.has(item.id) || item.name.toLowerCase().includes(needle),
+  );
   const flatShapes = (catalog?.shapes ?? []).filter((shape) => shape.group === "flat");
   const solidShapes = (catalog?.shapes ?? []).filter((shape) => shape.group === "solid");
 
@@ -322,13 +326,13 @@ export function ItemPackageAddModal({
           </p>
           {type === "emoji" && (
             <>
-              <input
+              <TextInput
                 type="search"
                 aria-label={t.add.emojiSearchLabel}
                 placeholder={t.add.emojiSearchPlaceholder}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="mb-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
+                className="mb-2"
               />
               {catalog && matchingEmoji.length === 0 ? (
                 <p className="text-xs text-muted">{t.add.emojiNoMatch}</p>
@@ -339,10 +343,22 @@ export function ItemPackageAddModal({
           )}
           {type === "shape" && (
             <>
-              {catalog && <p className="mb-1.5 text-xs font-medium text-muted">{t.add.shapeGroupFlat}</p>}
-              {catalogGrid("shape", flatShapes)}
-              {catalog && <p className="mt-3 mb-1.5 text-xs font-medium text-muted">{t.add.shapeGroupSolid}</p>}
-              {catalog && catalogGrid("shape", solidShapes)}
+              <div role="group" aria-labelledby="shape-group-flat">
+                {catalog && (
+                  <p id="shape-group-flat" className="mb-1.5 text-xs font-medium text-muted">
+                    {t.add.shapeGroupFlat}
+                  </p>
+                )}
+                {catalogGrid("shape", flatShapes)}
+              </div>
+              {catalog && (
+                <div role="group" aria-labelledby="shape-group-solid">
+                  <p id="shape-group-solid" className="mt-3 mb-1.5 text-xs font-medium text-muted">
+                    {t.add.shapeGroupSolid}
+                  </p>
+                  {catalogGrid("shape", solidShapes)}
+                </div>
+              )}
             </>
           )}
           {type === "emoji" && catalog && (
