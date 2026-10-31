@@ -7,12 +7,14 @@ export function Metric({
   value,
   label,
   icon,
+  note,
   size = "md",
   className,
 }: {
   value: string;
   label: string;
   icon?: LucideIcon;
+  note?: string;
   size?: "md" | "lg" | "xl";
   className?: string;
 }) {
@@ -27,6 +29,7 @@ export function Metric({
       <div className="min-w-0">
         <p className={cn("font-display tabular-nums", valueClass)}>{value}</p>
         <p className="mt-0.5 text-micro text-muted">{label}</p>
+        {note && <p className="mt-0.5 hidden text-micro text-muted sm:block">{note}</p>}
       </div>
     </div>
   );
@@ -35,7 +38,7 @@ export function Metric({
 /** Row of 2-4 metrics in one bordered card with hairline dividers (prototype .metric-strip). */
 export function MetricStrip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("grid auto-cols-fr grid-flow-col rounded-tile border border-border bg-surface py-4 shadow-soft [&>*+*]:border-l [&>*+*]:border-border", className)}>
+    <div className={cn("grid grid-cols-2 gap-y-4 rounded-tile border border-border bg-surface py-4 shadow-soft sm:auto-cols-fr sm:grid-flow-col sm:gap-y-0 max-sm:[&>*:nth-child(even)]:border-l max-sm:[&>*:nth-child(n+3)]:border-t max-sm:[&>*:nth-child(n+3)]:pt-4 sm:[&>*+*]:border-l [&>*]:border-border", className)}>
       {children}
     </div>
   );

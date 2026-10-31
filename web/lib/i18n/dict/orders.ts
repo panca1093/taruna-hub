@@ -4,7 +4,6 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   pageTitle: "Pesanan",
-  orderCount: (n: number) => `${n} pesanan`,
   pageDescription: "Periksa nominal dan bukti sebelum mengambil keputusan.",
   shownOf: (n: number, total: number) => `Menampilkan ${n} dari ${total} pesanan`,
   tabAll: "Semua",
@@ -32,7 +31,6 @@ const id = {
   confirmPayment: "Konfirmasi Pembayaran",
   close: "Tutup",
   detailStudent: "Siswa",
-  detailTotal: "Total",
   detailMethod: "Metode",
   detailStatus: "Status",
   proofUploadedBy: "Diunggah oleh siswa saat checkout",
@@ -72,7 +70,6 @@ const id = {
 
 const en: typeof id = {
   pageTitle: "Orders",
-  orderCount: (n: number) => `${n} orders`,
   pageDescription: "Compare the amount and proof before you decide.",
   shownOf: (n: number, total: number) => `Showing ${n} of ${total} orders`,
   tabAll: "All",
@@ -100,7 +97,6 @@ const en: typeof id = {
   confirmPayment: "Confirm Payment",
   close: "Close",
   detailStudent: "Student",
-  detailTotal: "Total",
   detailMethod: "Method",
   detailStatus: "Status",
   proofUploadedBy: "Uploaded by the student at checkout",

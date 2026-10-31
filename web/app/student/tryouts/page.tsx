@@ -7,7 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
 import { Icon } from "@/components/icon";
-import { UnderlineTabs } from "@/components/filter-pills";
+import { UnderlineTabs, tabId, tabPanelId } from "@/components/filter-pills";
 import { TextLink } from "@/components/page-blocks";
 import { ProgramBadge, StatusChip } from "@/components/status-badge";
 import { useTryoutsListT } from "@/lib/i18n/dict/tryouts-list";
@@ -122,9 +122,10 @@ export default function StudentTryoutsPage() {
           setSearch("");
         }}
         ariaLabel={t.tabsLabel}
+        idPrefix="tryouts"
       />
 
-      <div role="tabpanel" aria-label={tabs.find((item) => item.id === tab)?.label}>
+      <div role="tabpanel" id={tabPanelId("tryouts")} aria-labelledby={tabId("tryouts", tab)}>
         {(tab === "tryout" ? held.length > 0 : kecTests.length > 0) && (
           <div className="mb-6 flex">
             <div className="relative w-full sm:ml-auto sm:w-56">

@@ -154,7 +154,7 @@ export default function StudentTopupPage() {
 
   return (
     <AppShell title={t.topupTitle} description={t.topupDescription} maxWidth="max-w-5xl" breadcrumb={crumbs}>
-      <div className="grid gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)] lg:items-start">
+      <div className="grid gap-7 lg:grid-cols-detail lg:items-start">
         <Panel className="space-y-8">
           <section className="space-y-4">
             <h2 className="font-display text-heading-sm">{t.amountSection}</h2>

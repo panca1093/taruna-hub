@@ -127,12 +127,12 @@ export default function TryoutOverviewPage({ params }: { params: Promise<{ id: s
               )}
             </CardKicker>
             <h1 className="font-display max-w-2xl text-hero-lg sm:text-display-sm">{overview.title}</h1>
-            <p className="mt-3 max-w-prose text-small text-muted">{overview.description}</p>
+            <p className="mt-3 max-w-prose text-small text-foreground/80">{overview.description}</p>
             <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-4 sm:gap-x-8">
               {stats.map((stat) => (
                 <div key={stat.label}>
                   <dd className="font-display text-heading">{stat.value}</dd>
-                  <dt className="mt-0.5 text-micro text-muted">{stat.label}</dt>
+                  <dt className="mt-0.5 text-micro text-foreground/80">{stat.label}</dt>
                 </div>
               ))}
             </dl>

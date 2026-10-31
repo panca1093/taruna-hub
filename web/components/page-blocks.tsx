@@ -4,15 +4,23 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Icon } from "./icon";
 
-/** Small accent label with a leading icon at the top of a card (prototype .card-kicker). */
+/** Small accent label with a leading icon at the top of a card (prototype .card-kicker). No built-in margin: callers set the gap below via className. */
 export function CardKicker({ icon, children, className }: { icon?: LucideIcon; children: React.ReactNode; className?: string }) {
   return (
-    <p className={cn("mb-7 flex items-center gap-2 text-label text-accent", className)}>
+    <p className={cn("flex items-center gap-2 text-label text-accent", className)}>
       {icon && <Icon icon={icon} size="sm" />}
       {children}
     </p>
   );
 }
+
+const panelPadding = {
+  none: "",
+  sm: "p-5 sm:p-6",
+  md: "p-6 sm:p-7",
+  lg: "p-6 sm:p-7.5",
+  xl: "p-6 sm:p-9",
+} as const;
 
 const panelTone = {
   plain: "bg-surface border border-border",
@@ -26,6 +34,7 @@ export function Panel({
   tone = "plain",
   elevated,
   radius = "card",
+  padding = "md",
   as: Tag = "div",
   className,
   children,
@@ -33,12 +42,13 @@ export function Panel({
   tone?: keyof typeof panelTone;
   elevated?: boolean;
   radius?: "tile" | "card" | "hero";
+  padding?: keyof typeof panelPadding;
   as?: "div" | "section" | "article" | "aside";
   className?: string;
   children: React.ReactNode;
 }) {
   const rounded = radius === "tile" ? "rounded-tile" : radius === "hero" ? "rounded-hero" : "rounded-card";
-  return <Tag className={cn("min-w-0 p-6 sm:p-7", rounded, panelTone[tone], elevated && "shadow-soft", className)}>{children}</Tag>;
+  return <Tag className={cn("min-w-0", panelPadding[padding], rounded, panelTone[tone], elevated && "shadow-soft", className)}>{children}</Tag>;
 }
 
 /** Section title with an optional link on the right (prototype .section-heading). */
@@ -70,11 +80,11 @@ export function SectionHeader({
 }
 
 /** Accent text link with a trailing arrow (prototype .text-button). */
-export function TextLink({ href, children, className, arrow = true }: { href: string; children: React.ReactNode; className?: string; arrow?: boolean }) {
+export function TextLink({ href, children, className, arrow = true, size = "md" }: { href: string; children: React.ReactNode; className?: string; arrow?: boolean; size?: "md" | "sm" }) {
   return (
     <Link
       href={href}
-      className={cn("inline-flex min-h-9 items-center gap-1.5 rounded-chip text-caption font-medium text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus", className)}
+      className={cn("inline-flex items-center gap-1.5 rounded-chip font-medium text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus", size === "sm" ? "min-h-8 text-label" : "min-h-9 text-caption", className)}
     >
       {children}
       {arrow && <Icon icon={ArrowRight} size="xs" />}

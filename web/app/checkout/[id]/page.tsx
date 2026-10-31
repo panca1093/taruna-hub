@@ -114,7 +114,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
     return (
       <AppShell title={t.pageTitle} maxWidth="max-w-5xl">
         {view === "loading" ? (
-          <div className="grid gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)]">
+          <div className="grid gap-7 lg:grid-cols-detail">
             <div className="h-72 animate-pulse rounded-card border border-border bg-surface" />
             <div className="h-56 animate-pulse rounded-card border border-border bg-surface" />
           </div>
@@ -324,7 +324,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
           e.preventDefault();
           void submit();
         }}
-        className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)]"
+        className="grid items-start gap-7 lg:grid-cols-detail"
       >
         <Panel className="flex flex-col gap-3">
           <h2 className="font-display text-heading-sm">{t.methodTitle}</h2>

@@ -347,7 +347,9 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
   return (
     <div ref={containerRef} className="fixed inset-0 z-50 flex flex-col bg-background">
       <header className="flex min-h-20 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 lg:gap-5 lg:px-8">
-        <Image src="/taruna-eduka-logo.png" alt="Taruna Eduka" width={750} height={250} className="hidden h-9 w-auto sm:block" priority />
+        <span className="logo-plate hidden shrink-0 sm:block">
+          <Image src="/taruna-eduka-logo.png" alt="Taruna Eduka" width={750} height={250} className="h-9 w-auto" priority />
+        </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-small font-semibold">{loaded.title}</p>
           <p className="mt-1 truncate text-micro text-muted">
@@ -372,7 +374,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
 
       {confirming ? (
         <main className="flex-1 overflow-y-auto px-4 py-10 lg:py-14">
-          <Panel as="section" radius="card" className="mx-auto max-w-3xl sm:p-9">
+          <Panel as="section" radius="card" padding="xl" className="mx-auto max-w-3xl">
             <h1 className="font-display text-hero">{t.confirmHeading}</h1>
             <p className="mt-4 text-small leading-relaxed text-muted">{t.confirmBody(answered.length, blankCount)}</p>
             {pendingCount > 0 && <NoteBox className="mt-5" icon={AlertTriangle}>{t.confirmPendingWarning(pendingCount)}</NoteBox>}
@@ -493,9 +495,8 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                         aria-current={isCurrent ? "true" : undefined}
                         className={cn(
                           "flex size-9.5 items-center justify-center rounded-control border text-caption transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
-                          isAnswered ? "border-accent bg-accent-soft text-accent" : "border-border bg-background",
-                          isCurrent && "border-surface ring-2 ring-accent",
-                          isPending && "ring-2 ring-warning",
+                          isCurrent ? "border-accent bg-accent text-accent-foreground" : isAnswered ? "border-accent bg-accent-soft text-accent" : "border-border bg-background",
+                          isPending && "relative ring-2 ring-warning",
                         )}
                       >
                         {i + 1}

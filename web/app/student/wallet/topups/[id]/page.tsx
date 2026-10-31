@@ -156,11 +156,11 @@ export default function StudentTopupStatusPage() {
         </span>
         <div className="min-w-0">
           <h1 className="font-display text-hero text-balance">{bannerTitle}</h1>
-          <p className="mt-2 text-caption text-muted">{bannerBody}</p>
+          <p className="mt-2 text-caption text-foreground/80">{bannerBody}</p>
         </div>
       </div>
 
-      <div className="grid gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)] lg:items-start">
+      <div className="grid gap-7 lg:grid-cols-detail lg:items-start">
         <Panel>
           <h2 className="mb-3 font-display text-heading-sm">{t.statusTitle}</h2>
           {topup.status === "approved" && (

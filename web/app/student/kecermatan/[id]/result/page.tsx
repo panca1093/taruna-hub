@@ -138,11 +138,11 @@ function ResultContent({ testId }: { testId: string }) {
       }
     >
       <div className="space-y-6">
-        <div className="grid gap-5 sm:gap-7.5 md:grid-cols-[15rem_minmax(0,1fr)]">
+        <div className="grid gap-5 sm:gap-7.5 md:grid-cols-score">
           <Panel tone="peach" radius="hero" className="flex flex-col items-center justify-center text-center">
-            <p className="text-label text-muted">{t.nilaiAkhirLabel(result.attempt_number)}</p>
+            <p className="text-label text-foreground/80">{t.nilaiAkhirLabel(result.attempt_number)}</p>
             <p className="my-5 font-display text-score tabular-nums">{result.scores.nilai_akhir}</p>
-            <p className="text-label text-muted">{t.outOf100}</p>
+            <p className="text-label text-foreground/80">{t.outOf100}</p>
           </Panel>
           <div className="grid content-start gap-4">
             <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
@@ -169,7 +169,7 @@ function ResultContent({ testId }: { testId: string }) {
           ))}
         </div>
 
-        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)]">
+        <div className="grid items-start gap-7 lg:grid-cols-detail">
           <Panel>
             <h2 className="font-display mb-3 text-heading-sm">{t.perKolomTitle}</h2>
             <div className="overflow-x-auto">

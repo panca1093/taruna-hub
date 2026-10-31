@@ -140,9 +140,9 @@ function ResultContent({ tryoutId, attemptParam }: { tryoutId: string; attemptPa
       <div className="space-y-6">
         <div className="grid gap-4 lg:grid-cols-4 lg:gap-6">
           <Panel as="section" tone="peach" radius="hero" className="flex flex-col items-center justify-center text-center lg:row-span-2">
-            <p className="text-label text-muted">{t.scoreLabel}</p>
+            <p className="text-label text-foreground/80">{t.scoreLabel}</p>
             <p className="font-display my-5 text-score">{result.score}</p>
-            <p className="text-label text-muted">{t.scoreOutOf}</p>
+            <p className="text-label text-foreground/80">{t.scoreOutOf}</p>
           </Panel>
           <div className={stat}>
             <p className="font-display text-hero-lg">{correct}</p>

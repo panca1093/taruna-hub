@@ -147,9 +147,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </span>
         <div className="min-w-0">
           <h1 className="font-display text-hero text-balance">{banner.title}</h1>
-          <p className="mt-2 text-caption text-muted">{banner.body}</p>
+          <p className="mt-2 text-caption text-foreground/80">{banner.body}</p>
           {order.status === "cancelled" && order.cancel_reason !== "" && (
-            <p className="mt-1 text-caption text-muted">{t.cancelReason(order.cancel_reason)}</p>
+            <p className="mt-1 text-caption text-foreground/80">{t.cancelReason(order.cancel_reason)}</p>
           )}
         </div>
       </div>
@@ -167,7 +167,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
       {refreshFailed && <p className="mt-4 text-small text-danger">{t.refreshFailed}</p>}
 
-      <div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)] lg:items-start">
+      <div className="mt-6 grid gap-7 lg:grid-cols-detail lg:items-start">
         <Panel className="space-y-5">
           <div>
             <p className="text-label text-muted">{t.summaryProduct}</p>

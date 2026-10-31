@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Activity, BarChart3, CalendarDays, Gauge, Receipt, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
-import { MetricStrip } from "@/components/metric-strip";
+import { Metric, MetricStrip } from "@/components/metric-strip";
 import { Panel, TextLink } from "@/components/page-blocks";
 import { StatusChip } from "@/components/status-badge";
 import { api, type ActiveSessionList, type OrderList, type TopupList } from "@/lib/api/client";
@@ -20,23 +20,8 @@ const SESSION_ROWS = 5;
 const ORDER_ROWS = 3;
 const TOPUP_ROWS = 2;
 
-type Block<T> = { data: T | null; failed: boolean };
-const idle = { data: null, failed: false };
-
-function Kpi({ icon, value, label, note }: { icon: LucideIcon; value: string; label: string; note: string }) {
-  return (
-    <div className="flex min-w-0 items-center gap-4 px-3 sm:px-6">
-      <span className="hidden size-9.5 shrink-0 place-items-center rounded-control bg-background text-rose sm:grid">
-        <Icon icon={icon} size="sm" />
-      </span>
-      <div className="min-w-0">
-        <p className="font-display text-metric-lg tabular-nums">{value}</p>
-        <p className="mt-0.5 text-caption text-muted">{label}</p>
-        <p className="mt-0.5 hidden text-micro text-muted sm:block">{note}</p>
-      </div>
-    </div>
-  );
-}
+type Block<T> = { data: T | null; failed: boolean; syncedAt: Date | null };
+const idle = { data: null, failed: false, syncedAt: null };
 
 function QueueRow({ icon, title, lines, href, action }: { icon: LucideIcon; title: string; lines: string[]; href: string; action: string }) {
   return (
@@ -51,7 +36,7 @@ function QueueRow({ icon, title, lines, href, action }: { icon: LucideIcon; titl
             {line}
           </p>
         ))}
-        <TextLink href={href} className="mt-1 min-h-8 text-label">
+        <TextLink href={href} size="sm" className="mt-1">
           {action}
         </TextLink>
       </div>
@@ -61,7 +46,7 @@ function QueueRow({ icon, title, lines, href, action }: { icon: LucideIcon; titl
 
 function Shortcut({ icon, title, body, href, action }: { icon: LucideIcon; title: string; body: string; href: string; action: string }) {
   return (
-    <Panel radius="tile" className="flex items-center gap-4 p-5 sm:p-6">
+    <Panel radius="tile" padding="sm" className="flex items-center gap-4">
       <span className="hidden size-10.5 shrink-0 place-items-center rounded-control bg-accent-soft text-accent sm:grid">
         <Icon icon={icon} size="md" />
       </span>
@@ -82,7 +67,7 @@ export default function AdminDashboardPage() {
   const [sessions, setSessions] = useState<Block<ActiveSessionList>>(idle);
   const [orders, setOrders] = useState<Block<OrderList>>(idle);
   const [topups, setTopups] = useState<Block<TopupList>>(idle);
-  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const polling = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,21 +75,21 @@ export default function AdminDashboardPage() {
     const track = <T,>(request: Promise<T>, set: React.Dispatch<React.SetStateAction<Block<T>>>) =>
       request.then(
         (data) => {
-          if (!cancelled) set({ data, failed: false });
-          return true;
+          if (!cancelled) set({ data, failed: false, syncedAt: new Date() });
         },
         () => {
           if (!cancelled) set((prev) => ({ ...prev, failed: true }));
-          return false;
         },
       );
     const poll = async () => {
-      const results = await Promise.all([
+      if (polling.current || document.hidden) return;
+      polling.current = true;
+      await Promise.all([
         track(api.monitoring.active({ limit: SESSION_ROWS }), setSessions),
         track(api.adminOrders.list({ status: "pending", limit: ORDER_ROWS }), setOrders),
         track(api.adminTopups.list({ status: "pending", limit: TOPUP_ROWS }), setTopups),
       ]);
-      if (!cancelled && results.every(Boolean)) setLastSync(new Date());
+      polling.current = false;
     };
     void poll();
     const interval = setInterval(() => void poll(), POLL_MS);
@@ -116,9 +101,9 @@ export default function AdminDashboardPage() {
 
   const intlLocale = locale === "en" ? "en-US" : "id-ID";
   const today = new Intl.DateTimeFormat(intlLocale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
-  const syncedTime = lastSync ? new Intl.DateTimeFormat(intlLocale, { hour: "2-digit", minute: "2-digit" }).format(lastSync) : null;
+  const syncedTime = sessions.syncedAt ? new Intl.DateTimeFormat(intlLocale, { hour: "2-digit", minute: "2-digit" }).format(sessions.syncedAt) : null;
 
-  const note = (block: Block<unknown>, text: string) => (block.data ? text : block.failed ? t.unavailableNote : t.loading);
+  const note = (block: Block<unknown>, text: string) => (block.data ? (block.failed ? t.syncStale : text) : block.failed ? t.unavailableNote : t.loading);
 
   const sessionRows = sessions.data?.sessions ?? [];
   const pendingOrders = orders.data?.orders ?? [];
@@ -141,9 +126,9 @@ export default function AdminDashboardPage() {
       }
     >
       <MetricStrip className="mb-6">
-        <Kpi icon={Activity} value={sessions.data ? String(sessions.data.total) : t.unavailable} label={t.kpiSessions} note={note(sessions, t.kpiSessionsNote)} />
-        <Kpi icon={Receipt} value={orders.data ? String(orders.data.total) : t.unavailable} label={t.kpiOrders} note={note(orders, t.kpiOrdersNote)} />
-        <Kpi icon={Wallet} value={topups.data ? String(topups.data.total) : t.unavailable} label={t.kpiTopups} note={note(topups, t.kpiTopupsNote)} />
+        <Metric size="lg" icon={Activity} value={sessions.data ? String(sessions.data.total) : t.unavailable} label={t.kpiSessions} note={note(sessions, t.kpiSessionsNote)} />
+        <Metric size="lg" icon={Receipt} value={orders.data ? String(orders.data.total) : t.unavailable} label={t.kpiOrders} note={note(orders, t.kpiOrdersNote)} />
+        <Metric size="lg" icon={Wallet} value={topups.data ? String(topups.data.total) : t.unavailable} label={t.kpiTopups} note={note(topups, t.kpiTopupsNote)} />
       </MetricStrip>
 
       <div className="grid gap-6 xl:grid-cols-3">
@@ -198,7 +183,7 @@ export default function AdminDashboardPage() {
             </div>
           )}
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border px-6 py-3.5 text-label text-muted sm:px-7">
-            <span>{syncedTime ? t.syncedAt(syncedTime) : t.loading}</span>
+            <span>{syncedTime ? t.syncedAt(syncedTime) : sessions.failed ? t.unavailableNote : t.loading}</span>
             {staleOrTotal(t, sessions, sessionRows.length)}
           </div>
         </section>
@@ -216,10 +201,12 @@ export default function AdminDashboardPage() {
             <p className="py-6 text-center text-caption text-muted">{t.queueEmpty}</p>
           ) : (
             <ul>
+              {orders.failed && <li className="py-3 text-label text-warning">{orders.data ? t.syncStale : t.queueOrdersError}</li>}
               {pendingOrders.map((o) => (
                 <QueueRow key={o.id} icon={Receipt} title={o.student_name} lines={[o.product_title, formatIDR(o.price)]} href="/admin/orders" action={t.queueOrderAction} />
               ))}
               {orderRest > 0 && <li className="border-t border-border py-3 text-label text-muted">{t.queueOrderMore(orderRest)}</li>}
+              {topups.failed && <li className="border-t border-border py-3 text-label text-warning first:border-t-0">{topups.data ? t.syncStale : t.queueTopupsError}</li>}
               {pendingTopups.map((p) => (
                 <QueueRow key={p.id} icon={Wallet} title={t.topupItem(p.student_name)} lines={[formatIDR(p.amount)]} href="/admin/topups" action={t.queueTopupAction} />
               ))}

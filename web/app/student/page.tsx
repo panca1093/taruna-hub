@@ -77,27 +77,27 @@ export default function StudentDashboardPage() {
             <p className="text-small text-muted">{t.loading}</p>
             <div className="grid gap-5 md:grid-cols-2"><Skeleton className="h-66 rounded-hero" /><Skeleton className="h-66 rounded-hero" /></div>
             <Skeleton className="h-20 rounded-tile" />
-            <div className="grid gap-7 lg:grid-cols-[minmax(0,1.28fr)_minmax(0,0.9fr)]"><Skeleton className="h-64 rounded-tile" /><Skeleton className="h-64 rounded-tile" /></div>
+            <div className="grid gap-7 lg:grid-cols-hero-pair"><Skeleton className="h-64 rounded-tile" /><Skeleton className="h-64 rounded-tile" /></div>
           </div>
         ) : (
           <>
             <div className="grid gap-5 md:grid-cols-2">
-              <Panel tone="peach" radius="hero" as="section" className="flex min-h-66 flex-col sm:px-7.5">
-                <CardKicker icon={BookOpen}>{t.tryoutKicker}</CardKicker>
+              <Panel tone="peach" radius="hero" as="section" padding="lg" className="flex min-h-66 flex-col">
+                <CardKicker icon={BookOpen} className="mb-7">{t.tryoutKicker}</CardKicker>
                 <h2 className="mb-2.5 max-w-md font-display text-hero-lg">{featuredTryout ? featuredTryout.tryout_title : t.tryoutPromoTitle}</h2>
-                <p className="max-w-md text-small text-muted">{featuredTryout ? t.tryoutOwnedDescription : t.tryoutPromoDescription}</p>
+                <p className="max-w-md text-small text-foreground/80">{featuredTryout ? t.tryoutOwnedDescription : t.tryoutPromoDescription}</p>
                 <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-6">
-                  <span className="flex items-center gap-2 text-label text-muted">{featuredTryout && <><Icon icon={Clock} size="sm" />{t.subtestCount(featuredTryout.subtest_count)}</>}</span>
+                  <span className="flex items-center gap-2 text-label text-foreground/80">{featuredTryout && <><Icon icon={Clock} size="sm" />{t.subtestCount(featuredTryout.subtest_count)}</>}</span>
                   <LinkButton href={featuredTryout ? `/student/tryout/${featuredTryout.tryout_id}` : "/catalog"} variant="primary" className="min-h-10">{featuredTryout ? t.openTryout : t.viewCatalog}<Icon icon={ArrowRight} size="xs" /></LinkButton>
                 </div>
               </Panel>
-              <Panel tone="soft" radius="hero" as="section" className="flex min-h-66 flex-col sm:px-7.5">
-                <CardKicker icon={Sparkles}>{t.kecermatanKicker}</CardKicker>
+              <Panel tone="soft" radius="hero" as="section" padding="lg" className="flex min-h-66 flex-col">
+                <CardKicker icon={Sparkles} className="mb-7">{t.kecermatanKicker}</CardKicker>
                 <h2 className="mb-2.5 max-w-md font-display text-hero-lg">{featuredTest ? featuredTest.title : t.kecermatanPromoTitle}</h2>
-                <p className="max-w-md text-small text-muted">{t.kecermatanPromoDescription}</p>
+                <p className="max-w-md text-small text-foreground/80">{t.kecermatanPromoDescription}</p>
                 <div className="mt-auto flex flex-wrap items-end justify-between gap-3 pt-6">
                   {featuredTest ? (
-                    <p className="flex items-baseline gap-1.5"><span className="font-display text-metric-lg tabular-nums text-accent">{featuredTest.attempts_remaining}</span><span className="text-label text-muted">{t.attemptsLeft}</span></p>
+                    <p className="flex items-baseline gap-1.5"><span className="font-display text-metric-lg tabular-nums text-accent">{featuredTest.attempts_remaining}</span><span className="text-label text-foreground/80">{t.attemptsLeft}</span></p>
                   ) : <span />}
                   <LinkButton href={featuredTest ? `/student/kecermatan/${featuredTest.test_id}` : "/catalog"} variant="primary" className="min-h-10">{featuredTest ? t.openTest : t.viewCatalog}<Icon icon={ArrowRight} size="xs" /></LinkButton>
                 </div>
@@ -111,7 +111,7 @@ export default function StudentDashboardPage() {
               <Metric icon={TrendingUp} value={data.summary.average_score === null ? "—" : formatScore(data.summary.average_score)} label={t.averageScore} />
             </MetricStrip>
 
-            <div className="grid gap-7 lg:grid-cols-[minmax(0,1.28fr)_minmax(0,0.9fr)] lg:gap-9">
+            <div className="grid gap-7 lg:grid-cols-hero-pair lg:gap-9">
               <section>
                 <SectionHeader title={t.myPractice} href={hasContent ? "/student/tryouts" : undefined} linkLabel={t.viewAll} />
                 {!hasContent ? <EmptyState icon={PackageOpen} title={t.emptyTitle} description={t.emptyTryoutsDescription} action={<LinkButton href="/catalog" variant="ghost" size="sm">{t.viewCatalog}</LinkButton>} /> : (

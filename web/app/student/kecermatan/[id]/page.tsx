@@ -98,7 +98,7 @@ export default function KecermatanOverviewPage({ params }: { params: Promise<{ i
   return (
     <AppShell>
       <Breadcrumb items={[{ label: t.crumbDashboard, href: "/student" }, { label: t.crumbKecermatan }]} />
-      <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)]">
+      <div className="grid items-start gap-7 lg:grid-cols-detail">
         <div className="space-y-5.5">
           <Panel tone="soft" radius="hero">
             <div className="mb-4.5 flex flex-wrap items-center gap-3">
@@ -109,12 +109,12 @@ export default function KecermatanOverviewPage({ params }: { params: Promise<{ i
               <ProgramBadge code={test.program_code} />
             </div>
             <h1 className="font-display mb-3 max-w-2xl text-display-sm text-balance md:text-display">{test.title}</h1>
-            <p className="max-w-prose text-small text-muted">{test.description}</p>
+            <p className="max-w-prose text-small text-foreground/80">{test.description}</p>
             <div className="mt-6 flex flex-wrap gap-x-7.5 gap-y-4">
               {facts.map((fact) => (
                 <div key={fact.label}>
                   <p className="font-display text-metric tabular-nums">{fact.value}</p>
-                  <p className="mt-0.5 text-micro text-muted">{fact.label}</p>
+                  <p className="mt-0.5 text-micro text-foreground/80">{fact.label}</p>
                 </div>
               ))}
             </div>

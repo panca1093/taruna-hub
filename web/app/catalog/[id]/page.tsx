@@ -140,9 +140,9 @@ function ProductDetail({ product }: { product: PublicProduct }) {
     <>
       <Breadcrumb items={[{ label: t.catalogCrumb, href: "/catalog" }, { label: product.title }]} />
 
-      <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(17.5rem,0.65fr)]">
+      <div className="grid items-start gap-7 lg:grid-cols-detail">
         <div className="flex flex-col gap-5.5">
-          <Panel tone={kecermatan ? "soft" : "peach"} radius="hero" className="p-6 sm:p-7.5">
+          <Panel tone={kecermatan ? "soft" : "peach"} radius="hero" padding="lg">
             <CardKicker icon={kecermatan ? Grid2x2 : BookOpen} className="mb-4.5">
               {kecermatan
                 ? t.chipKecermatan

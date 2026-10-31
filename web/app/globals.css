@@ -149,7 +149,7 @@
   --field-border-width: 1px;
 
   --success: oklch(0.6534 0.1567 156.7);
-  --success-foreground: oklch(0.2242 0.019 267);
+  --success-foreground: oklch(0.985 0.005 78);
   --warning: oklch(0.7723 0.1585 73.7);
   --warning-foreground: oklch(0.2242 0.019 267);
   --danger: oklch(0.58 0.2116 20.6);
@@ -240,7 +240,6 @@
   --sidebar: oklch(0.188 0.009 317.7);
   --sidebar-foreground: oklch(0.929 0.014 336.2);
   --sidebar-accent: oklch(0.819 0.056 346.8);
-  --sidebar-foreground: oklch(0.929 0.014 336.2);
 
   --accent-soft: oklch(0.339 0.03 330.7);
   --accent-soft-hover: oklch(0.37 0.034 330.7);
@@ -493,6 +492,26 @@
 
 @utility shadow-rail-glow {
   box-shadow: 0 0 14px color-mix(in oklab, var(--sidebar-accent) 67%, transparent);
+}
+
+@utility grid-cols-detail {
+  grid-template-columns: minmax(0, 1.5fr) minmax(17.5rem, 0.65fr);
+}
+
+@utility grid-cols-hero-pair {
+  grid-template-columns: minmax(0, 1.28fr) minmax(0, 0.9fr);
+}
+
+@utility grid-cols-wallet {
+  grid-template-columns: minmax(0, 1fr) 17.5rem;
+}
+
+@utility grid-cols-score {
+  grid-template-columns: 15rem minmax(0, 1fr);
+}
+
+@utility max-w-popover {
+  max-width: calc(100vw - 2rem);
 }
 
 @utility bg-grid {

@@ -104,10 +104,10 @@ export default function StudentWalletPage() {
         </LinkButton>
       }
     >
-      <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:items-start">
+      <div className="grid gap-7 lg:grid-cols-wallet lg:items-start">
         <div className="min-w-0 space-y-6 lg:order-1">
           {!loadFailed && entries !== null && (
-            <Panel className="p-0 sm:p-0">
+            <Panel padding="none">
               <h2 className="px-6 pt-6 pb-2 font-display text-heading-sm sm:px-7 sm:pt-7">{t.requestsTitle}</h2>
               {topups.length === 0 ? (
                 <p className="px-6 pb-6 text-caption text-muted sm:px-7 sm:pb-7">{t.requestsEmpty}</p>

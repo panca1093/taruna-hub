@@ -41,7 +41,7 @@ Guidelines:
 | `accent-2` | `0.643 0.058 346.7` → #A87F94 | `0.715 0.07 341.1` → #C292B0 | Lighter rose ring endpoint |
 | `accent-foreground` | `0.985 0.005 78` → cream | `0.2 0.02 335` → dark plum | Text on solid accent |
 | `success` | `0.6534 0.1567 156.7` → `#00AC67` | Inherits light value → `#00AC67` | Completed / confirmed |
-| `success-foreground` | `0.2242 0.019 267` → `#181B25` | Inherits light value → `#181B25` | Text on solid success |
+| `success-foreground` | `0.985 0.005 78` → cream | `0.2 0.02 155` → dark green ink | Text on solid success (light ink on the dark green, ≥4.5:1) |
 | `warning` | `0.7723 0.1585 73.7` → `#F0A31B` | `0.8022 0.1451 76.6` → `#F3B040` | Pending / attention |
 | `warning-foreground` | `0.2242 0.019 267` → `#181B25` | `0.16 0.01 267` → `#0B0D12` | Text on solid warning |
 | `danger` | `0.58 0.2116 20.6` → `#DB2740` | `0.671 0.1988 22.5` → `#F8555A` | Error / destructive / urgent |
@@ -76,6 +76,8 @@ Each numeric triplet is wrapped in `oklch(...)` in CSS. Success, warning and dan
 | Text selection | Accent at 30% mixed with transparent | Selected text |
 
 HeroUI supplies `*-soft`, `*-soft-foreground`, and hover tokens. These are theme-dependent color mixes, not additional hardcoded palettes. For example, `accent-soft` is accent at 15% against transparent in light mode and 12% in dark mode. Its appearance changes with the surface beneath it. Use `bg-accent-soft text-accent-soft-foreground` together; do not substitute solid-accent text colors on a soft background.
+
+**Text on tinted surfaces.** On `bg-peach` and `bg-accent-soft` (hero Panels, order and top-up status banners), `text-muted` falls below 4.5:1. Use `text-foreground/80` for body and caption text there. `text-muted` stays for plain `surface` and `background`.
 
 ### 2.3 Status and category mapping
 
@@ -380,20 +382,22 @@ Reuse these before writing page-local markup. All are small, prop-driven, and to
 | --- | --- | --- |
 | `PageHeading`, `Breadcrumb` (`page-heading.tsx`) | `title`, `description?`, `breadcrumb?: Crumb[]`, `actions?`, `size?: "display" \| "compact"` | Page h1 block. `AppShell` already renders it |
 | `Icon` (`icon.tsx`) | `icon`, `size?: rail\|nav\|md\|sm\|xs\|hero`, `className?` | Sized lucide icon at the prototype stroke |
-| `CardKicker` (`page-blocks.tsx`) | `icon?`, `children` | 11px accent label at the top of a card |
-| `Panel` (`page-blocks.tsx`) | `tone?: plain\|peach\|soft\|canvas`, `elevated?`, `radius?: tile\|card\|hero`, `as?` | Card surface; `peach`/`soft` are the tinted hero cards |
+| `CardKicker` (`page-blocks.tsx`) | `icon?`, `children`, `className?` | 11px accent label at the top of a card. No built-in margin: pass the gap below as `className="mb-N"` (it cannot be overridden against a built-in class, because `cn()` has no tailwind-merge) |
+| `Panel` (`page-blocks.tsx`) | `tone?: plain\|peach\|soft\|canvas`, `elevated?`, `radius?: tile\|card\|hero`, `padding?: none\|sm\|md\|lg\|xl`, `as?` | Card surface; `padding` is `p-6 sm:p-7` by default (`md`), `sm` = `p-5 sm:p-6`, `lg` = `p-6 sm:p-7.5`, `xl` = `p-6 sm:p-9`, `none` for edge-to-edge content. Never override padding through `className`; `peach`/`soft` are the tinted hero cards |
 | `SectionHeader` (`page-blocks.tsx`) | `title`, `description?`, `href?`, `linkLabel?`, `actions?` | h2 with a link on the right |
-| `TextLink` (`page-blocks.tsx`) | `href`, `arrow?` | Accent link with trailing arrow |
+| `TextLink` (`page-blocks.tsx`) | `href`, `arrow?`, `size?: md\|sm` | `sm` = `min-h-8 text-label` (dense rows); `md` = `min-h-9 text-caption`. Do not override min-h or text size through `className`.  Accent link with trailing arrow |
 | `NoteBox` (`page-blocks.tsx`) | `tone?: neutral\|success`, `icon?` | Quiet bordered note |
 | `ScoreBar` (`page-blocks.tsx`) | `label`, `valueLabel?`, `value` (0-100) | Thin progress bar with `progressbar` semantics |
-| `Metric`, `MetricStrip` (`metric-strip.tsx`) | `value`, `label`, `icon?`, `size?: md\|lg\|xl` | Bordered row of numbers with dividers |
-| `FilterPills`, `UnderlineTabs` (`filter-pills.tsx`) | `options: {id,label,count?}[]`, `value`, `onChange`, `ariaLabel` | Rounded filters; underlined hub tabs. Controlled |
+| `Metric`, `MetricStrip` (`metric-strip.tsx`) | `value`, `label`, `icon?`, `note?`, `size?: md\|lg\|xl` | Bordered row of numbers with dividers. Two columns below `sm` (icons and `note` hidden), one row from `sm` |
+| `FilterPills`, `UnderlineTabs` (`filter-pills.tsx`) | `options: {id,label,count?}[]`, `value`, `onChange`, `ariaLabel`, `idPrefix?` (tabs) | Rounded filters; underlined hub tabs. Controlled. `UnderlineTabs` follows the WAI-ARIA tabs pattern (roving tabindex, Arrow/Home/End select). Render one panel with `role="tabpanel"`, `id={tabPanelId(idPrefix)}` and `aria-labelledby={tabId(idPrefix, value)}` |
 | `StatusChip` (`status-badge.tsx`) | `tone: success\|warning\|danger\|accent\|neutral`, `dot?` | Generic status chip |
 | `ExamTimerPill` (`countdown-ring.tsx`) | `time`, `urgent?` | Prototype exam timer pill; display only |
 | `DataTable` (`data-table.tsx`) | existing props plus `footer?` | Table with a summary strip |
 | `EmptyState` (`empty-state.tsx`) | existing props plus `bare?` | Rose icon, Geist title; `bare` inside a panel |
 | `Logo` (`logo.tsx`) | existing props plus `size?: sm\|md`, `plate?` | 132px topbar logo with dark-theme plate |
 | `GradientAvatar` | unchanged props | Flat peach disc with accent initials unless explicit colors are given |
+
+Layout utilities in `globals.css` replace arbitrary grid values: `grid-cols-detail` (main + 17.5rem aside), `grid-cols-hero-pair`, `grid-cols-wallet`, `grid-cols-score`, `max-w-popover`. Use them with `lg:`/`md:` variants; do not write `grid-cols-[...]` in components.
 
 Tinted tokens added for these: `bg-peach`, `bg-accent-soft`, `text-rose` / `bg-rose`, `bg-success-soft` with `text-success-soft-foreground` (prototype green), `bg-rail-active`, `bg-sidebar-hover`, `logo-plate`.
 

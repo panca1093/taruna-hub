@@ -311,7 +311,7 @@ function AccountMenu() {
         </span>
         <ChevronDown className="hidden size-3.5 text-muted md:block" aria-hidden />
       </Dropdown.Trigger>
-      <Dropdown.Popover placement="bottom end" className="w-82.5 max-w-[calc(100vw-2rem)] p-2.5">
+      <Dropdown.Popover placement="bottom end" className="w-82.5 max-w-popover p-2.5">
         <div className="mb-1.5 flex items-center gap-3 border-b border-border px-2 pt-2 pb-4">
           <GradientAvatar user={user} size="md" />
           <div className="min-w-0">

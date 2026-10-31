@@ -116,7 +116,7 @@ export default function StudentOrdersPage() {
         <EmptyState icon={Receipt} title={t.emptyTitle} description={t.emptyDescription} />
       ) : (
         <>
-          <Panel className="py-2 sm:py-3">
+          <Panel padding="none" className="px-6 py-2 sm:px-7 sm:py-3">
             <ul>
               {orders.map((o) => (
                 <li

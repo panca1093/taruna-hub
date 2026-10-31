@@ -6,7 +6,7 @@ import { Button } from "@heroui/react";
 import { ArrowLeft, Clock, CloudOff, Lock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
-import { UnderlineTabs } from "@/components/filter-pills";
+import { UnderlineTabs, tabId, tabPanelId } from "@/components/filter-pills";
 import { Icon } from "@/components/icon";
 import { NoteBox, Panel } from "@/components/page-blocks";
 import { StatusChip } from "@/components/status-badge";
@@ -158,17 +158,20 @@ function ReviewContent({ tryoutId, attemptParam }: { tryoutId: string; attemptPa
         ariaLabel={t.subtestsLabel}
         value={active?.subtest_id ?? ""}
         onChange={setSubtestId}
+        idPrefix="review"
         options={review.subtests.map((st) => ({ id: st.subtest_id, label: `${st.name} · ${t.correctCount(st.correct_count, st.question_count)}` }))}
       />
 
       {active && (
-        <Panel as="section">
-          <div className="divide-y divide-border">
-            {active.questions.map((q, i) => (
-              <ReviewItem key={q.id} q={q} index={i} subtestName={active.name} t={t} />
-            ))}
-          </div>
-        </Panel>
+        <div role="tabpanel" id={tabPanelId("review")} aria-labelledby={tabId("review", active.subtest_id)}>
+          <Panel as="section">
+            <div className="divide-y divide-border">
+              {active.questions.map((q, i) => (
+                <ReviewItem key={q.id} q={q} index={i} subtestName={active.name} t={t} />
+              ))}
+            </div>
+          </Panel>
+        </div>
       )}
     </AppShell>
   );

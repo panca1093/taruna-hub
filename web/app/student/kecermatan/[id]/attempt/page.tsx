@@ -35,7 +35,9 @@ function ExamFrame({ children }: { children: React.ReactNode }) {
 function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: string; subtitle: string; timer: string; urgent: boolean; timerLabel: string }) {
   return (
     <header className="flex min-h-19.5 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 py-3.5 sm:min-h-22 sm:gap-5 sm:px-8 sm:py-4">
-      <Image src="/taruna-eduka-logo.png" alt="Taruna Eduka" width={750} height={250} className="h-8 w-auto sm:h-10" />
+      <span className="logo-plate shrink-0">
+        <Image src="/taruna-eduka-logo.png" alt="Taruna Eduka" width={750} height={250} className="h-8 w-auto sm:h-10" />
+      </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-small font-semibold text-foreground">{title}</p>
         <p className="mt-1 truncate text-micro text-muted">{subtitle}</p>

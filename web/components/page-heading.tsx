@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useShellT } from "@/lib/i18n/dict/shell";
 
 export interface Crumb {
   label: string;
@@ -8,8 +11,9 @@ export interface Crumb {
 }
 
 export function Breadcrumb({ items, className }: { items: Crumb[]; className?: string }) {
+  const t = useShellT();
   return (
-    <nav aria-label="Breadcrumb" className={cn("mb-6 flex flex-wrap items-center gap-2 text-label text-muted", className)}>
+    <nav aria-label={t.breadcrumbLabel} className={cn("mb-6 flex flex-wrap items-center gap-2 text-label text-muted", className)}>
       {items.map((item, index) => {
         const last = index === items.length - 1;
         return (
