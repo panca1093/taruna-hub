@@ -194,8 +194,9 @@ For every slice, use this verification loop:
 - [ ] Reload/refresh/logout/idle expiry and active-exam policy behave as specified; secrets are absent from logs.
       Everything but the active-exam half is done and tested; D13 says an exam keeps its session alive, which P16 implements.
 
-- [x] Owner-approved account UI refresh: public student entry, direct `/portal`, registration → optional email verification → dashboard, refresh/logout and 320–1440px layouts.
+- [ ] Owner-approved account UI refresh: public student entry, direct `/portal`, registration → optional email verification → dashboard, refresh/logout and 320–1440px layouts.
       Browser/API/database demo used one local QA student and a guarded code fixture; live inbox delivery is not claimed because local SMTP is unconfigured. Existing seed credentials were rejected, so current staff-account credentials were not reset or browser-certified.
+      Left open: the staff `/portal` login has not had its browser demo yet.
 - [x] Dashboard displays API-backed counts, nullable average and exact balance with loading, retry, empty and populated modules.
       Scoped/role, zero-score, retake and kecermatan-exclusion tests passed; empty/populated browser data and 24px module gaps were verified.
 

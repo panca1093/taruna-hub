@@ -6816,7 +6816,8 @@ components:
           minimum: 0
           description: Distinct tryouts with at least one completed result.
         average_score:
-          type: [number, "null"]
+          type: number
+          nullable: true
           minimum: 0
           maximum: 100
           description: Average of persisted completed-attempt scores, rounded to two decimals.
