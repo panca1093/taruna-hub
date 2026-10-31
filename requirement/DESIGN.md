@@ -196,7 +196,7 @@ Reuse [AppShell](../web/components/app-shell.tsx) for authenticated operational 
 | Header | Sticky; 56px; `z-30`; `surface/85`, blur, bottom border |
 | Header padding | 16px base; 24px at `lg` |
 | Main padding | 16px horizontal / 24px vertical; 24px / 32px at `lg` |
-| Student content | Centered `max-w-6xl` = 1152px |
+| Student dashboard | Uses the available content width with the main padding above |
 | Admin overview | Uses the available content width |
 | Focused builder | Existing tryout builder uses `max-w-3xl` = 768px |
 
@@ -401,7 +401,7 @@ The illustration reuses `CountdownRing` decoratively. Its 224px region contains 
 
 Registration opens `/verify-email` after the server establishes the session. The code field is one accessible numeric six-digit input with paste/autofill support. Wrong/expired codes, pending verification, resend errors and session restoration are distinct from success. Verification remains optional (D01): skip opens `/student`, where a non-blocking reminder links back to verification. No prototype codes or simulated success belong in the application.
 
-The student overview reuses `AppShell`, with 24px separation between heading, compact statistics, welcome panel and activity modules; module grids have 20px gaps. Cards use 20px padding (24px for larger modules), with the welcome panel using 24/32px. `StatCard compact` is opt-in and leaves other dashboard cards unchanged. The verification reminder is inside the same content-width boundary as these modules. New accounts show real empty states; populated accounts retain owned tryouts and latest completed results. Loading uses placeholders, errors offer retry, a missing average is `—`, and zero is a measured score. Counts, average and exact wallet balance come from the authenticated summary endpoint; tryout metrics exclude kecermatan, which remains visible in owned-content links.
+The student overview reuses `AppShell` at the full available width beside the sidebar, without a centered maximum-width cap; retain the shell's 16px mobile and 24px desktop horizontal padding. Use 24px separation between heading, compact statistics, welcome panel and activity modules; module grids have 20px gaps. Cards use 20px padding (24px for larger modules), with the welcome panel using 24/32px. `StatCard compact` is opt-in and leaves other dashboard cards unchanged. The verification reminder is inside the same content-width boundary as these modules. New accounts show real empty states; populated accounts retain owned tryouts and latest completed results. Loading uses placeholders, errors offer retry, a missing average is `—`, and zero is a measured score. Counts, average and exact wallet balance come from the authenticated summary endpoint; tryout metrics exclude kecermatan, which remains visible in owned-content links.
 
 ### 7.5 Specify data states before connecting the API
 

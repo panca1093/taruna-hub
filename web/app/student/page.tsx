@@ -57,7 +57,7 @@ export default function StudentDashboardPage() {
   const hasContent = !!data && (data.enrollments.length > 0 || data.kecermatan.length > 0);
 
   return (
-    <AppShell title={t.pageTitle} maxWidth="max-w-6xl">
+    <AppShell title={t.pageTitle}>
       <div className="space-y-6">
         <div className="space-y-2">
           <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{t.greeting(user.name.split(" ")[0])}</h2>
