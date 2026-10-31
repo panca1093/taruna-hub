@@ -249,7 +249,7 @@ function NavLinks({ expanded, onNavigate }: { expanded: boolean; onNavigate?: ()
         }
         if (!expanded) {
           return (
-            <div key={group.id} className={cn(index > 0 && "mt-1 border-t border-sidebar-border pt-3")}>
+            <div key={group.id} className={cn(index === 1 && "mt-1 border-t border-sidebar-border pt-3")}>
               <CollapsedGroup
                 group={group}
                 open={flyout === group.id}
@@ -498,6 +498,9 @@ function useStaffCrumb(title?: string) {
   return { group: group && group.items.length > 1 ? (navT[`group:${group.id}`] ?? group.id) : null, title };
 }
 
+// Each page mounts its own AppShell, so the rail choice lives at module scope to survive client navigation.
+let railPref: boolean | null = null;
+
 export function AppShell({
   children,
   title,
@@ -516,7 +519,11 @@ export function AppShell({
   /** Constrains and centers main content — e.g. "max-w-5xl". Omit for full-width (tables, dashboards). */
   maxWidth?: string;
 }) {
-  const [pref, setPref] = useState<boolean | null>(null);
+  const [pref, setPrefState] = useState<boolean | null>(railPref);
+  const setPref = (value: boolean) => {
+    railPref = value;
+    setPrefState(value);
+  };
   const [mobileOpen, setMobileOpen] = useState(false);
   const shellT = useShellT();
   const { role } = useSession();
