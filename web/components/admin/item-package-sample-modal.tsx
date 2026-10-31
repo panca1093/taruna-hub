@@ -73,16 +73,16 @@ export function ItemPackageSampleModal({
         <TextInput label={t.sample.soalPerKolom} type="number" min={1} max={100} value={soal} onChange={(e) => setSoal(e.target.value)} />
       </div>
       {error && (
-        <p className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger-soft-foreground">{error}</p>
+        <p className="rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-caption text-danger-soft-foreground">{error}</p>
       )}
       {column && (
         <div className="max-h-80 space-y-3 overflow-auto">
           {column.soal.map((q, at) => (
-            <div key={at} className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-xs font-medium text-muted">{t.sample.soalHeading(at + 1)}</p>
+            <div key={at} className="rounded-tile bg-accent-soft p-4">
+              <p className="mb-2 text-caption font-medium text-muted">{t.sample.soalHeading(at + 1)}</p>
               <div className="flex flex-wrap gap-2">
                 {q.items.map((item, i) => (
-                  <div key={i} className="flex items-center gap-1 rounded-md bg-surface-secondary px-2 py-1">
+                  <div key={i} className="flex items-center gap-1 rounded-chip bg-surface-secondary px-2 py-1">
                     {item.elements.map((el) => (
                       <ItemElementView key={el.id} element={el} className="size-6 text-xl" />
                     ))}

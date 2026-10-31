@@ -180,8 +180,8 @@ export function ItemPackageAddModal({
     reason ? (t.reasons[reason] ?? fallback ?? reason) : "";
 
   const catalogGrid = (kind: "emoji" | "shape", items: { id: string; name: string }[]) => {
-    if (catalogFailed) return <p className="text-xs text-danger">{t.add.catalogFailed}</p>;
-    if (!catalog) return <p className="text-xs text-muted">{t.add.catalogLoading}</p>;
+    if (catalogFailed) return <p className="text-caption text-danger">{t.add.catalogFailed}</p>;
+    if (!catalog) return <p className="text-caption text-muted">{t.add.catalogLoading}</p>;
     return <CatalogGrid kind={kind} items={items} selected={ids} disabled={pending} onToggle={toggleId} />;
   };
 
@@ -215,7 +215,7 @@ export function ItemPackageAddModal({
       {type === "symbol" && (
         <>
           <div>
-            <label htmlFor="symbol-text" className="mb-1.5 block text-[13px] font-medium text-foreground">
+            <label htmlFor="symbol-text" className="mb-1.5 block text-small font-medium text-foreground">
               {t.add.symbolTextLabel}
             </label>
             <textarea
@@ -227,18 +227,18 @@ export function ItemPackageAddModal({
                 edited();
                 setText(e.target.value);
               }}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
+              className="w-full rounded-control border border-border bg-surface px-3 py-2 text-small text-foreground placeholder:text-muted focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
             />
-            <p className="mt-1 text-xs text-muted">{t.add.symbolTextHelp}</p>
+            <p className="mt-1 text-caption text-muted">{t.add.symbolTextHelp}</p>
           </div>
           <div>
-            <p className="mb-1.5 text-[13px] font-medium text-foreground">{t.add.paletteHeading}</p>
+            <p className="mb-1.5 text-small font-medium text-foreground">{t.add.paletteHeading}</p>
             <div className="flex flex-wrap gap-1.5">
               {(catalog?.symbol_palette ?? []).map((symbol) => (
                 <button
                   key={symbol}
                   type="button"
-                  className="size-8 rounded-md border border-border bg-surface text-base text-foreground hover:border-accent/50"
+                  className="size-8 rounded-chip border border-border bg-surface text-base text-foreground hover:border-accent/50"
                   onClick={() => {
                     edited();
                     setText((prev) => (prev && !/\s$/.test(prev) ? `${prev} ${symbol}` : `${prev}${symbol}`));
@@ -247,12 +247,12 @@ export function ItemPackageAddModal({
                   {symbol}
                 </button>
               ))}
-              {!catalog && <span className="text-xs text-muted">{catalogFailed ? t.add.catalogFailed : t.add.catalogLoading}</span>}
+              {!catalog && <span className="text-caption text-muted">{catalogFailed ? t.add.catalogFailed : t.add.catalogLoading}</span>}
             </div>
-            <p className="mt-1 text-xs text-muted">{t.add.paletteHelp}</p>
+            <p className="mt-1 text-caption text-muted">{t.add.paletteHelp}</p>
           </div>
           <div>
-            <p className="mb-1.5 text-[13px] font-medium text-foreground">{t.add.fileHeading}</p>
+            <p className="mb-1.5 text-small font-medium text-foreground">{t.add.fileHeading}</p>
             <input
               ref={fileRef}
               type="file"
@@ -266,13 +266,13 @@ export function ItemPackageAddModal({
             />
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="secondary" size="sm" onPress={() => fileRef.current?.click()}>
-                <FileUp className="size-3.5" /> {file?.name ?? t.add.chooseFile}
+                <FileUp className="size-4" /> {file?.name ?? t.add.chooseFile}
               </Button>
               <Button variant="ghost" size="sm" onPress={() => void downloadTemplate("xlsx")}>
-                <Download className="size-3.5" /> {t.add.templateXlsx}
+                <Download className="size-4" /> {t.add.templateXlsx}
               </Button>
               <Button variant="ghost" size="sm" onPress={() => void downloadTemplate("csv")}>
-                <Download className="size-3.5" /> {t.add.templateCsv}
+                <Download className="size-4" /> {t.add.templateCsv}
               </Button>
             </div>
           </div>
@@ -303,22 +303,22 @@ export function ItemPackageAddModal({
               pickImages(e.dataTransfer.files);
             }}
             className={cn(
-              "flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-8 text-center transition-colors hover:border-accent/50 hover:bg-accent-soft/30",
+              "flex flex-col items-center gap-2 rounded-tile border border-dashed border-border py-8 text-center transition-colors hover:border-accent/50 hover:bg-accent-soft/30",
               dragging && "border-accent bg-accent-soft/40",
             )}
           >
-            <FileUp className="size-5 text-muted" />
-            <span className="text-sm font-medium text-foreground">
+            <FileUp className="size-5 text-rose" />
+            <span className="text-small font-medium text-foreground">
               {files.length > 0 ? files.map((f) => f.name).slice(0, 3).join(", ") + (files.length > 3 ? ` +${files.length - 3}` : "") : t.add.imagePrompt}
             </span>
           </button>
-          <p className="text-xs text-muted">{t.add.imageHelp}</p>
+          <p className="text-caption text-muted">{t.add.imageHelp}</p>
         </>
       )}
 
       {(type === "emoji" || type === "shape") && (
         <div>
-          <p className="mb-1.5 text-[13px] font-medium text-foreground">
+          <p className="mb-1.5 text-small font-medium text-foreground">
             {type === "emoji" ? t.add.emojiHeading : t.add.shapeHeading}
             <span className="ml-2 font-normal text-muted">
               {type === "emoji" ? t.add.emojiSelected(ids.size) : t.add.shapeSelected(ids.size)}
@@ -335,7 +335,7 @@ export function ItemPackageAddModal({
                 className="mb-2"
               />
               {catalog && matchingEmoji.length === 0 ? (
-                <p className="text-xs text-muted">{t.add.emojiNoMatch}</p>
+                <p className="text-caption text-muted">{t.add.emojiNoMatch}</p>
               ) : (
                 catalogGrid("emoji", matchingEmoji)
               )}
@@ -345,7 +345,7 @@ export function ItemPackageAddModal({
             <>
               <div role="group" aria-labelledby="shape-group-flat">
                 {catalog && (
-                  <p id="shape-group-flat" className="mb-1.5 text-xs font-medium text-muted">
+                  <p id="shape-group-flat" className="mb-1.5 text-caption font-medium text-muted">
                     {t.add.shapeGroupFlat}
                   </p>
                 )}
@@ -353,7 +353,7 @@ export function ItemPackageAddModal({
               </div>
               {catalog && (
                 <div role="group" aria-labelledby="shape-group-solid">
-                  <p id="shape-group-solid" className="mt-3 mb-1.5 text-xs font-medium text-muted">
+                  <p id="shape-group-solid" className="mt-3 mb-1.5 text-caption font-medium text-muted">
                     {t.add.shapeGroupSolid}
                   </p>
                   {catalogGrid("shape", solidShapes)}
@@ -362,7 +362,7 @@ export function ItemPackageAddModal({
             </>
           )}
           {type === "emoji" && catalog && (
-            <p className="mt-2 text-xs text-muted">
+            <p className="mt-2 text-caption text-muted">
               {t.add.attribution}: {catalog.emoji_attribution}
             </p>
           )}
@@ -370,24 +370,24 @@ export function ItemPackageAddModal({
       )}
 
       {inlineError && (
-        <p className="flex items-start gap-1.5 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-danger-soft-foreground">
-          <XCircle className="mt-px size-3.5 shrink-0" /> {inlineError}
+        <p className="flex items-start gap-1.5 rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-caption text-danger-soft-foreground">
+          <XCircle className="mt-px size-4 shrink-0" /> {inlineError}
         </p>
       )}
 
       {preview && (
         <div>
-          <p className="mb-2 flex flex-wrap items-center gap-1.5 text-xs font-medium text-success">
-            <CheckCircle2 className="size-3.5" /> {t.add.summary(preview.accepted, preview.rejected)}
+          <p className="mb-2 flex flex-wrap items-center gap-1.5 text-caption font-medium text-success">
+            <CheckCircle2 className="size-4" /> {t.add.summary(preview.accepted, preview.rejected)}
             <button type="button" className="ml-2 font-normal text-muted underline" onClick={edited}>
               {t.add.reset}
             </button>
           </p>
           {preview.items.length === 0 ? (
-            <p className="text-xs text-muted">{t.add.nothingNew}</p>
+            <p className="text-caption text-muted">{t.add.nothingNew}</p>
           ) : (
-            <div className="max-h-72 overflow-auto rounded-lg border border-border">
-              <table className="w-full text-xs">
+            <div className="max-h-72 overflow-auto rounded-tile border border-border">
+              <table className="w-full text-caption">
                 <thead className="sticky top-0 bg-surface-secondary text-muted">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">{t.add.colItem}</th>
@@ -402,11 +402,11 @@ export function ItemPackageAddModal({
                       <td className="px-3 py-2 align-top">
                         {item.accepted ? (
                           <span className="flex items-center gap-1 text-success">
-                            <CheckCircle2 className="size-3.5" /> {t.add.accepted}
+                            <CheckCircle2 className="size-4" /> {t.add.accepted}
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-danger">
-                            <XCircle className="size-3.5" /> {t.add.rejected}
+                            <XCircle className="size-4" /> {t.add.rejected}
                           </span>
                         )}
                       </td>
@@ -445,7 +445,7 @@ function CatalogGrid({
             key={item.id}
             title={item.name}
             className={cn(
-              "flex cursor-pointer items-center justify-center rounded-lg border border-border p-2 transition-colors hover:border-accent/50 has-focus-visible:ring-2 has-focus-visible:ring-focus",
+              "flex cursor-pointer items-center justify-center rounded-control border border-border p-2 transition-colors hover:border-accent/50 has-focus-visible:ring-2 has-focus-visible:ring-focus",
               on && "border-accent bg-accent-soft/40",
             )}
           >

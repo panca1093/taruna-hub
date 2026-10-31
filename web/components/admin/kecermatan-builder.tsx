@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, toast } from "@heroui/react";
+import { Button, toast } from "@heroui/react";
+import { Info } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { NoteBox, Panel } from "@/components/page-blocks";
+import { SummaryBox } from "@/components/admin/summary-box";
 import { KecermatanPreviewModal } from "@/components/admin/kecermatan-preview-modal";
 import { SelectInput, TextInput, TextareaInput } from "@/components/ui/form";
 import { cn } from "@/lib/cn";
@@ -267,7 +270,7 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
   if (loading) {
     return (
       <AppShell title={t.editTitle}>
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <p className="py-14 text-center text-small text-muted">{t.loading}</p>
       </AppShell>
     );
   }
@@ -276,8 +279,8 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
     return (
       <AppShell title={t.editTitle}>
         <div className="py-14 text-center">
-          <p className="text-sm font-medium text-foreground">{t.loadErrorTitle}</p>
-          <p className="mt-1 text-sm text-muted">{t.loadErrorDescription}</p>
+          <p className="text-small font-medium text-foreground">{t.loadErrorTitle}</p>
+          <p className="mt-1 text-small text-muted">{t.loadErrorDescription}</p>
           <Button variant="primary" size="sm" className="mt-4" onPress={retry}>
             {t.retry}
           </Button>
@@ -300,6 +303,7 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
     <AppShell
       title={isEditing ? t.editTitle : t.createTitle}
       description={locked ? t.lockedDescription : undefined}
+      breadcrumb={[{ label: t.listCrumb, href: "/admin/kecermatan" }, { label: isEditing ? t.editTitle : t.createTitle }]}
       actions={
         <div className="flex gap-2">
           {test && (
@@ -313,16 +317,17 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
         </div>
       }
     >
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
         {test && (
-          <p className="text-xs text-muted">
+          <p className="text-caption text-muted">
             {t.revisionLabel(test.revision)}
             {dirty && ` · ${t.saveBeforePreview}`}
           </p>
         )}
 
-        <Card className="gap-4 p-5">
-          <p className="text-sm font-semibold text-foreground">{t.infoHeading}</p>
+        <Panel as="section" className="flex flex-col gap-4">
+          <h2 className="font-display text-heading-sm">{t.infoHeading}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <TextInput
               label={t.titleLabel}
@@ -377,7 +382,7 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
             disabled={locked}
           />
           <div>
-            <p className="mb-2 text-[13px] font-medium text-foreground">{t.coverColorLabel}</p>
+            <p className="mb-2 text-small font-medium text-foreground">{t.coverColorLabel}</p>
             <div className="flex gap-2">
               {covers.map(([from, to]) => (
                 <button
@@ -386,7 +391,7 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
                   disabled={locked}
                   onClick={() => setDraft((d) => ({ ...d, coverFrom: from, coverTo: to }))}
                   className={cn(
-                    "size-8 rounded-md ring-offset-2 ring-offset-surface transition-shadow disabled:cursor-not-allowed disabled:opacity-40",
+                    "size-8 rounded-control ring-offset-2 ring-offset-surface transition-shadow disabled:cursor-not-allowed disabled:opacity-40",
                     draft.coverFrom === from && draft.coverTo === to && "ring-2 ring-accent",
                   )}
                   style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
@@ -395,10 +400,10 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
               ))}
             </div>
           </div>
-        </Card>
+        </Panel>
 
-        <Card className="gap-4 p-5">
-          <p className="text-sm font-semibold text-foreground">{t.structureHeading}</p>
+        <Panel as="section" className="flex flex-col gap-4">
+          <h2 className="font-display text-heading-sm">{t.structureHeading}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <TextInput label={t.itemLengthLabel} min={1} max={5} {...numberField("itemLength")} />
             <TextInput label={t.optionsPerSoalLabel} min={3} max={8} {...numberField("optionsPerSoal")} />
@@ -406,15 +411,25 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
             <TextInput label={t.kolomCountLabel} min={10} max={50} step={2} {...numberField("kolomCount")} />
             <TextInput label={t.kolomDurationLabel} min={1} max={60} {...numberField("kolomDurationMinutes")} />
           </div>
-          <p className={cn("text-xs", pool < need || formErrors.pool ? "text-danger" : "text-muted")}>
+          <p className={cn("text-caption", pool < need || formErrors.pool ? "text-danger" : "text-muted")}>
             {t.poolSummary(pool, need)}
             {(pool < need || formErrors.pool) && ` — ${t.poolShort}`}
           </p>
-          {draft.itemType === "mix" && <p className="text-xs text-muted">{t.mixNote}</p>}
-          <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted">
-            {t.structureNote}
-          </p>
-        </Card>
+          {draft.itemType === "mix" && <p className="text-caption text-muted">{t.mixNote}</p>}
+          <NoteBox icon={Info}>{t.structureNote}</NoteBox>
+        </Panel>
+        </div>
+
+        <SummaryBox
+          title={t.summaryHeading}
+          lines={[
+            { label: t.summaryColumns, value: numeric("kolomCount") ?? "–" },
+            { label: t.summaryQuestionsPerColumn, value: numeric("soalPerKolom") ?? "–" },
+            { label: t.summaryTotal, value: (numeric("kolomCount") ?? 0) * (numeric("soalPerKolom") ?? 0) },
+            { label: t.summaryDuration, value: t.summaryDurationValue(numeric("kolomDurationMinutes") ?? 0) },
+            { label: t.summaryPool, value: `${pool} / ${need}` },
+          ]}
+        />
       </div>
       {test && <KecermatanPreviewModal testId={test.id} kolomCount={test.kolom_count} isOpen={previewOpen} onOpenChange={setPreviewOpen} />}
     </AppShell>

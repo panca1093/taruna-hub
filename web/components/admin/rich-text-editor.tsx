@@ -59,11 +59,11 @@ export function RichTextEditor({
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label && (
-        <label className="text-[13px] font-medium text-foreground">
+        <label className="text-caption font-medium text-foreground">
           {label} {required && <span className="text-danger">*</span>}
         </label>
       )}
-      <div className="overflow-hidden rounded-lg border border-border bg-field focus-within:border-accent">
+      <div className="overflow-hidden rounded-control border border-border bg-field focus-within:border-accent">
         <div className="flex items-center gap-0.5 border-b border-border bg-surface-secondary px-1.5 py-1">
           <ToolbarButton icon={Bold} label={t.bold} onPress={() => applyWrap("**", "**", t.boldPlaceholder)} />
           <ToolbarButton icon={Italic} label={t.italic} onPress={() => applyWrap("*", "*", t.italicPlaceholder)} />
@@ -80,7 +80,7 @@ export function RichTextEditor({
           placeholder={placeholder}
           rows={rows}
           required={required}
-          className="w-full resize-y bg-transparent px-3.5 py-3 text-sm text-field-foreground outline-none"
+          className="w-full resize-y bg-transparent px-3.5 py-3 text-small text-field-foreground outline-none"
         />
       </div>
     </div>

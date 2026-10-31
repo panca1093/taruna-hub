@@ -226,13 +226,13 @@ export default function QuestionsPage() {
   };
 
   const columns: Column<Question>[] = [
-    { key: "id", header: t.columns.id, render: (question) => <span className="font-mono text-xs text-muted">{question.number}</span> },
+    { key: "id", header: t.columns.id, render: (question) => <span className="font-mono text-caption text-muted">{question.number}</span> },
     {
       key: "content",
       header: t.columns.content,
       className: "max-w-md",
       render: (question) => (
-        <div className="line-clamp-2 text-sm">
+        <div className="line-clamp-2 text-small">
           <LatexText text={question.content} />
         </div>
       ),
@@ -251,7 +251,7 @@ export default function QuestionsPage() {
       render: (question) => (
         <div>
           <span className="text-muted">{subjectName(question)}</span>
-          {chapterName(question) && <p className="text-[10px] text-muted/70">{chapterName(question)}</p>}
+          {chapterName(question) && <p className="text-micro text-muted/70">{chapterName(question)}</p>}
         </div>
       ),
     },
@@ -265,10 +265,10 @@ export default function QuestionsPage() {
       render: (question) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="sm" isIconOnly onPress={() => openEdit(question)}>
-            <Pencil className="size-3.5" />
+            <Pencil className="size-4" />
           </Button>
           <Button variant="ghost" size="sm" isIconOnly className="text-danger" onPress={() => setDeleteTarget(question)}>
-            <Trash2 className="size-3.5" />
+            <Trash2 className="size-4" />
           </Button>
         </div>
       ),
@@ -286,7 +286,7 @@ export default function QuestionsPage() {
               <Upload className="size-3.5" /> <span className="sr-only sm:not-sr-only">{t.bulkImport}</span>
             </Button>
             <Button variant="primary" size="sm" onPress={openCreate}>
-              <Plus className="size-3.5" /> <span className="sr-only sm:not-sr-only">{t.addQuestion}</span>
+              <Plus className="size-4" /> <span className="sr-only sm:not-sr-only">{t.addQuestion}</span>
             </Button>
           </div>
         }
@@ -305,12 +305,12 @@ export default function QuestionsPage() {
             action={<Button variant="primary" size="sm" onPress={retry}>{t.retry}</Button>}
           />
         ) : rows === null ? (
-          <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+          <p className="py-14 text-center text-small text-muted">{t.loading}</p>
         ) : rows.length === 0 ? (
           <EmptyState icon={FileQuestion} title={t.emptyTitle} description={t.emptyDescription} action={<Button variant="primary" size="sm" onPress={openCreate}>{t.addQuestion}</Button>} />
         ) : (
           <>
-            <DataTable columns={columns} rows={rows} rowKey={(question) => question.id} onRowClick={setPreview} />
+            <DataTable columns={columns} rows={rows} rowKey={(question) => question.id} footer={<span>{t.footerCount(rows.length, total)}</span>} onRowClick={setPreview} />
             {rows.length < total && (
               <div className="mt-4 flex justify-center">
                 <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
@@ -372,7 +372,7 @@ export default function QuestionsPage() {
                   setPreview(null);
                 }}
               >
-                <Pencil className="size-3.5" /> {t.editQuestion}
+                <Pencil className="size-4" /> {t.editQuestion}
               </Button>
             </>
           }
@@ -383,19 +383,19 @@ export default function QuestionsPage() {
                 {programOf(preview.program_id) && <ProgramBadge code={programOf(preview.program_id)!.code} />}
                 <QuestionTypeBadge type={preview.type} />
                 <DifficultyBadge difficulty={preview.difficulty} />
-                <span className="text-xs text-muted">
+                <span className="text-caption text-muted">
                   {subjectName(preview)}
                   {chapterName(preview) ? ` / ${chapterName(preview)}` : ""} · ID {preview.number} ·{" "}
                   {t.versionLabel(preview.version)}
                   {preview.option_weighted ? ` · ${t.optionWeighted}` : ""}
                 </span>
               </div>
-              <div className="text-[15px] leading-relaxed text-foreground">
+              <div className="leading-relaxed text-foreground">
                 <LatexText text={preview.content} />
               </div>
               {preview.type === "isian" ? (
-                <div className="rounded-lg border border-success/30 bg-success-soft px-3.5 py-3 text-sm">
-                  <p className="mb-1 text-[11px] font-medium tracking-wide text-success-soft-foreground uppercase">{t.correctAnswer}</p>
+                <div className="rounded-control border border-success/30 bg-success-soft px-3.5 py-3 text-small">
+                  <p className="mb-1 text-label font-medium tracking-wide text-success-soft-foreground uppercase">{t.correctAnswer}</p>
                   {preview.correct.map((answer) => (
                     <p key={answer} className="font-medium text-success-soft-foreground">{answer}</p>
                   ))}
@@ -403,8 +403,8 @@ export default function QuestionsPage() {
               ) : preview.option_weighted ? (
                 <div className="space-y-2">
                   {preview.options.map((option) => (
-                    <div key={option.id} className="flex items-center gap-2.5 rounded-lg border border-border px-3.5 py-2.5 text-sm">
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent-soft-foreground">
+                    <div key={option.id} className="flex items-center gap-2.5 rounded-control border border-border px-3.5 py-2.5 text-small">
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-caption font-semibold text-accent-soft-foreground">
                         {option.points ?? 1}
                       </span>
                       <LatexText text={option.label} className="text-foreground" />
@@ -419,7 +419,7 @@ export default function QuestionsPage() {
                       <div
                         key={option.id}
                         className={cn(
-                          "flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-sm",
+                          "flex items-center gap-2.5 rounded-control border px-3.5 py-2.5 text-small",
                           correct ? "border-success/40 bg-success-soft" : "border-border",
                         )}
                       >
@@ -430,8 +430,8 @@ export default function QuestionsPage() {
                   })}
                 </div>
               )}
-              <div className="rounded-lg border border-dashed border-border bg-surface-secondary px-3.5 py-3 text-sm">
-                <p className="mb-1 text-[11px] font-medium tracking-wide text-muted uppercase">{t.explanation}</p>
+              <div className="rounded-control border border-dashed border-border bg-surface-secondary px-3.5 py-3 text-small">
+                <p className="mb-1 text-label font-medium tracking-wide text-muted uppercase">{t.explanation}</p>
                 <LatexText text={preview.explanation} />
               </div>
             </>
@@ -455,7 +455,7 @@ export default function QuestionsPage() {
           }
         >
           {deleteTarget && (
-            <p className="text-sm text-foreground">
+            <p className="text-small text-foreground">
               <LatexText text={deleteTarget.content} />
             </p>
           )}
