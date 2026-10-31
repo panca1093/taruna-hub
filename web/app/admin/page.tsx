@@ -1,119 +1,244 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Activity, ClipboardList, MonitorPlay, Users, Wallet } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, Gauge, Receipt, Wallet } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { StatCard } from "@/components/stat-card";
-import { BarChart, DonutStat } from "@/components/charts";
-import { DataTable, type Column } from "@/components/data-table";
-import { OrderStatusBadge } from "@/components/status-badge";
-import { Card } from "@heroui/react";
-import {
-  allStudents,
-  formatDate,
-  formatIDR,
-  getOrderTitle,
-  getProduct,
-  liveSessions,
-  orders,
-  programs,
-  tryouts,
-  findUser,
-} from "@/lib/mock-data";
-import { useSession } from "@/lib/session-context";
-import type { Order } from "@/lib/types";
+import { GradientAvatar } from "@/components/gradient-avatar";
+import { Icon } from "@/components/icon";
+import { MetricStrip } from "@/components/metric-strip";
+import { Panel, TextLink } from "@/components/page-blocks";
+import { StatusChip } from "@/components/status-badge";
+import { api, type ActiveSessionList, type OrderList, type TopupList } from "@/lib/api/client";
+import { formatIDR } from "@/lib/format-money";
+import { useLocale } from "@/lib/i18n/locale-context";
 import { useAdminDashboardT } from "@/lib/i18n/dict/admin-dashboard";
 
-const pending = orders.filter((o) => o.status === "pending");
-const confirmed = orders.filter((o) => o.status === "confirmed");
-const cancelled = orders.filter((o) => o.status === "cancelled");
-const revenue = confirmed.reduce((sum, o) => sum + o.amount, 0);
+const POLL_MS = 30_000;
+const SESSION_ROWS = 5;
+const ORDER_ROWS = 3;
+const TOPUP_ROWS = 2;
 
-const ordersByProgram = programs.map((p) => ({
-  label: p.code,
-  value: orders.filter((o) => getProduct(o.productId)?.programId === p.id).length,
-}));
+type Block<T> = { data: T | null; failed: boolean };
+const idle = { data: null, failed: false };
 
-const recentOrders = [...orders].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, 6);
+function Kpi({ icon, value, label, note }: { icon: LucideIcon; value: string; label: string; note: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-4 px-3 sm:px-6">
+      <span className="hidden size-9.5 shrink-0 place-items-center rounded-control bg-background text-rose sm:grid">
+        <Icon icon={icon} size="sm" />
+      </span>
+      <div className="min-w-0">
+        <p className="font-display text-metric-lg tabular-nums">{value}</p>
+        <p className="mt-0.5 text-caption text-muted">{label}</p>
+        <p className="mt-0.5 hidden text-micro text-muted sm:block">{note}</p>
+      </div>
+    </div>
+  );
+}
+
+function QueueRow({ icon, title, lines, href, action }: { icon: LucideIcon; title: string; lines: string[]; href: string; action: string }) {
+  return (
+    <li className="flex items-start gap-3 border-t border-border py-4 first:border-t-0 first:pt-0">
+      <span className="grid size-9 shrink-0 place-items-center rounded-control bg-warning-soft text-warning-soft-foreground">
+        <Icon icon={icon} size="sm" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-small font-medium text-foreground">{title}</p>
+        {lines.map((line) => (
+          <p key={line} className="mt-0.5 truncate text-label text-muted">
+            {line}
+          </p>
+        ))}
+        <TextLink href={href} className="mt-1 min-h-8 text-label">
+          {action}
+        </TextLink>
+      </div>
+    </li>
+  );
+}
+
+function Shortcut({ icon, title, body, href, action }: { icon: LucideIcon; title: string; body: string; href: string; action: string }) {
+  return (
+    <Panel radius="tile" className="flex items-center gap-4 p-5 sm:p-6">
+      <span className="hidden size-10.5 shrink-0 place-items-center rounded-control bg-accent-soft text-accent sm:grid">
+        <Icon icon={icon} size="md" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h3 className="font-display text-title">{title}</h3>
+        <p className="mt-1 text-label text-muted">{body}</p>
+      </div>
+      <Link href={href} className="inline-flex min-h-10 shrink-0 items-center rounded-control border border-border bg-surface px-3.5 text-label font-medium outline-none hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-focus">
+        {action}
+      </Link>
+    </Panel>
+  );
+}
 
 export default function AdminDashboardPage() {
-  const { role } = useSession();
   const t = useAdminDashboardT();
+  const { locale } = useLocale();
+  const [sessions, setSessions] = useState<Block<ActiveSessionList>>(idle);
+  const [orders, setOrders] = useState<Block<OrderList>>(idle);
+  const [topups, setTopups] = useState<Block<TopupList>>(idle);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
 
-  const columns: Column<Order>[] = [
-    { key: "code", header: t.columns.code, render: (o) => <span className="font-mono text-xs text-muted">{o.code}</span> },
-    { key: "student", header: t.columns.student, render: (o) => findUser(o.userId)?.name ?? o.userId },
-    { key: "product", header: t.columns.product, render: (o) => getOrderTitle(o) },
-    { key: "amount", header: t.columns.total, render: (o) => formatIDR(o.amount) },
-    { key: "date", header: t.columns.date, render: (o) => formatDate(o.createdAt) },
-    { key: "status", header: t.columns.status, render: (o) => <OrderStatusBadge status={o.status} /> },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    // A failed poll keeps the last good data and only flips `failed`, so nothing flashes or zeroes out.
+    const track = <T,>(request: Promise<T>, set: React.Dispatch<React.SetStateAction<Block<T>>>) =>
+      request.then(
+        (data) => {
+          if (!cancelled) set({ data, failed: false });
+          return true;
+        },
+        () => {
+          if (!cancelled) set((prev) => ({ ...prev, failed: true }));
+          return false;
+        },
+      );
+    const poll = async () => {
+      const results = await Promise.all([
+        track(api.monitoring.active({ limit: SESSION_ROWS }), setSessions),
+        track(api.adminOrders.list({ status: "pending", limit: ORDER_ROWS }), setOrders),
+        track(api.adminTopups.list({ status: "pending", limit: TOPUP_ROWS }), setTopups),
+      ]);
+      if (!cancelled && results.every(Boolean)) setLastSync(new Date());
+    };
+    void poll();
+    const interval = setInterval(() => void poll(), POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const intlLocale = locale === "en" ? "en-US" : "id-ID";
+  const today = new Intl.DateTimeFormat(intlLocale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+  const syncedTime = lastSync ? new Intl.DateTimeFormat(intlLocale, { hour: "2-digit", minute: "2-digit" }).format(lastSync) : null;
+
+  const note = (block: Block<unknown>, text: string) => (block.data ? text : block.failed ? t.unavailableNote : t.loading);
+
+  const sessionRows = sessions.data?.sessions ?? [];
+  const pendingOrders = orders.data?.orders ?? [];
+  const pendingTopups = topups.data?.topups ?? [];
+  const queueLoading = (!orders.data && !orders.failed) || (!topups.data && !topups.failed);
+  const queueUnavailable = !orders.data && !topups.data;
+  const queueEmpty = !!orders.data && !!topups.data && pendingOrders.length === 0 && pendingTopups.length === 0;
+  const orderRest = orders.data ? orders.data.total - pendingOrders.length : 0;
+  const topupRest = topups.data ? topups.data.total - pendingTopups.length : 0;
 
   return (
-    <AppShell title={t.title} description={t.description}>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label={t.totalStudents} value={String(allStudents.length)} icon={Users} delta={{ value: t.totalStudentsDelta, direction: "up" }} />
-        <StatCard
-          label={t.pendingOrders}
-          value={String(pending.length)}
-          icon={ClipboardList}
-          ring={(pending.length / orders.length) * 100}
-        />
-        <StatCard label={t.activeTryouts} value={String(tryouts.length)} icon={Activity} />
-        {role === "admin" ? (
-          <StatCard label={t.confirmedRevenue} value={formatIDR(revenue)} icon={Wallet} delta={{ value: t.confirmedRevenueDelta, direction: "up" }} />
-        ) : (
-          <StatCard label={t.liveSessions} value={String(liveSessions.length)} icon={MonitorPlay} />
-        )}
+    <AppShell
+      title={t.title}
+      description={t.description}
+      actions={
+        <span className="hidden items-center gap-2 text-caption text-muted sm:flex">
+          <Icon icon={CalendarDays} size="sm" />
+          {today}
+        </span>
+      }
+    >
+      <MetricStrip className="mb-6">
+        <Kpi icon={Activity} value={sessions.data ? String(sessions.data.total) : t.unavailable} label={t.kpiSessions} note={note(sessions, t.kpiSessionsNote)} />
+        <Kpi icon={Receipt} value={orders.data ? String(orders.data.total) : t.unavailable} label={t.kpiOrders} note={note(orders, t.kpiOrdersNote)} />
+        <Kpi icon={Wallet} value={topups.data ? String(topups.data.total) : t.unavailable} label={t.kpiTopups} note={note(topups, t.kpiTopupsNote)} />
+      </MetricStrip>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <section className="min-w-0 overflow-hidden rounded-card border border-border bg-surface xl:col-span-2">
+          <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 sm:px-7">
+            <div className="min-w-0">
+              <h2 className="font-display text-heading-sm">{t.liveTitle}</h2>
+              <p className="mt-1 text-label text-muted">{t.liveDescription}</p>
+            </div>
+            <TextLink href="/admin/monitoring">{t.liveLink}</TextLink>
+          </div>
+          {!sessions.data ? (
+            <p className="border-t border-border px-7 py-10 text-center text-caption text-muted">{sessions.failed ? t.liveError : t.loading}</p>
+          ) : sessionRows.length === 0 ? (
+            <p className="border-t border-border px-7 py-10 text-center text-caption text-muted">{t.liveEmpty}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-caption">
+                <thead>
+                  <tr className="border-y border-border bg-surface-secondary">
+                    <th className="px-6 py-3 text-left text-label font-medium whitespace-nowrap text-muted sm:px-7">{t.colStudent}</th>
+                    <th className="hidden px-5 py-3 text-left text-label font-medium whitespace-nowrap text-muted sm:table-cell">{t.colSubtest}</th>
+                    <th className="px-5 py-3 text-left text-label font-medium whitespace-nowrap text-muted">{t.colViolations}</th>
+                    <th className="px-5 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessionRows.map((s) => (
+                    <tr key={s.session_id} className="border-b border-border last:border-b-0">
+                      <td className="px-6 py-4 sm:px-7">
+                        <div className="flex items-center gap-2.5">
+                          <GradientAvatar user={{ name: s.student_name }} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-foreground">{s.student_name}</p>
+                            <p className="truncate text-label text-muted">{s.tryout_title}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="hidden px-5 py-4 whitespace-nowrap sm:table-cell">{s.subtest?.name ?? t.subtestNone}</td>
+                      <td className="px-5 py-4">
+                        <StatusChip tone={s.violation_count > 0 ? "danger" : "neutral"} dot>
+                          {s.violation_count}
+                        </StatusChip>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <TextLink href="/admin/monitoring">{t.detail}</TextLink>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border px-6 py-3.5 text-label text-muted sm:px-7">
+            <span>{syncedTime ? t.syncedAt(syncedTime) : t.loading}</span>
+            {staleOrTotal(t, sessions, sessionRows.length)}
+          </div>
+        </section>
+
+        <Panel tone="plain" className="xl:col-span-1">
+          <div className="mb-5">
+            <h2 className="font-display text-heading-sm">{t.queueTitle}</h2>
+            <p className="mt-1 text-label text-muted">{t.queueDescription}</p>
+          </div>
+          {queueLoading && !orders.data && !topups.data ? (
+            <p className="py-6 text-center text-caption text-muted">{t.loading}</p>
+          ) : queueUnavailable ? (
+            <p className="py-6 text-center text-caption text-muted">{t.queueError}</p>
+          ) : queueEmpty ? (
+            <p className="py-6 text-center text-caption text-muted">{t.queueEmpty}</p>
+          ) : (
+            <ul>
+              {pendingOrders.map((o) => (
+                <QueueRow key={o.id} icon={Receipt} title={o.student_name} lines={[o.product_title, formatIDR(o.price)]} href="/admin/orders" action={t.queueOrderAction} />
+              ))}
+              {orderRest > 0 && <li className="border-t border-border py-3 text-label text-muted">{t.queueOrderMore(orderRest)}</li>}
+              {pendingTopups.map((p) => (
+                <QueueRow key={p.id} icon={Wallet} title={t.topupItem(p.student_name)} lines={[formatIDR(p.amount)]} href="/admin/topups" action={t.queueTopupAction} />
+              ))}
+              {topupRest > 0 && <li className="border-t border-border py-3 text-label text-muted">{t.queueTopupMore(topupRest)}</li>}
+            </ul>
+          )}
+        </Panel>
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <Card className="gap-4 p-5 lg:col-span-2">
-          <div>
-            <p className="text-sm font-semibold text-foreground">{t.ordersByProgramTitle}</p>
-            <p className="text-xs text-muted">{t.ordersByProgramDescription}</p>
-          </div>
-          <BarChart data={ordersByProgram} />
-        </Card>
-        <Card className="gap-4 p-5">
-          <div>
-            <p className="text-sm font-semibold text-foreground">{t.orderStatusTitle}</p>
-            <p className="text-xs text-muted">{t.totalOrders(orders.length)}</p>
-          </div>
-          <DonutStat
-            segments={[
-              { label: t.confirmed, value: confirmed.length, className: "stroke-success" },
-              { label: t.pending, value: pending.length, className: "stroke-warning" },
-              { label: t.cancelled, value: cancelled.length, className: "stroke-danger" },
-            ]}
-          />
-        </Card>
-      </div>
-
-      <Card className="mt-4 flex-row items-center justify-between gap-3 p-4">
-        <div className="flex items-center gap-3">
-          <span className="relative inline-flex size-2.5">
-            <span className="absolute inline-flex size-full animate-ping rounded-full motion-reduce:animate-none bg-accent opacity-60" />
-            <span className="relative inline-flex size-2.5 rounded-full bg-accent" />
-          </span>
-          <p className="text-sm text-foreground">
-            <strong className="font-semibold">{t.liveNowStrong(liveSessions.length)}</strong> {t.liveNowSuffix}
-          </p>
-        </div>
-        <Link href="/admin/monitoring" className="text-sm font-medium text-accent hover:underline">
-          {t.viewMonitoring}
-        </Link>
-      </Card>
-
-      <div className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-semibold text-foreground">{t.recentOrders}</p>
-          <Link href="/admin/orders" className="text-sm font-medium text-accent hover:underline">
-            {t.viewAll}
-          </Link>
-        </div>
-        <DataTable columns={columns} rows={recentOrders} rowKey={(o) => o.id} />
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <Shortcut icon={Gauge} title={t.shortcutKecermatanTitle} body={t.shortcutKecermatanBody} href="/admin/kecermatan" action={t.shortcutKecermatanAction} />
+        <Shortcut icon={BarChart3} title={t.shortcutResultsTitle} body={t.shortcutResultsBody} href="/admin/results" action={t.shortcutResultsAction} />
       </div>
     </AppShell>
   );
+}
+
+function staleOrTotal(t: ReturnType<typeof useAdminDashboardT>, block: Block<ActiveSessionList>, shown: number) {
+  if (block.failed) return <span className="text-warning">{t.syncStale}</span>;
+  if (block.data && block.data.total > shown) return <span>{t.liveMore(shown, block.data.total)}</span>;
+  return null;
 }
