@@ -119,10 +119,10 @@ export type ViewElement = Pick<ItemElement, "value" | "asset_id"> & { kind: stri
 function ImageElement({ element, className }: { element: ViewElement; className?: string }) {
   const link = useAssetUrl(element.asset_id);
   if (!link?.url) {
-    return <span className={cn("block size-10 rounded-md bg-surface-secondary", !link?.failed && "animate-pulse", className)} />;
+    return <span className={cn("block size-10 rounded-chip bg-surface-secondary", !link?.failed && "animate-pulse", className)} />;
   }
   // eslint-disable-next-line @next/next/no-img-element -- a short-lived presigned URL cannot go through the optimizer
-  return <img src={link.url} alt={element.label ?? ""} className={cn("size-10 rounded-md object-contain", className)} />;
+  return <img src={link.url} alt={element.label ?? ""} className={cn("size-10 rounded-chip object-contain", className)} />;
 }
 
 /** One element of a package revision, drawn the way a student will see it. */

@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, toast } from "@heroui/react";
+import { Button, toast } from "@heroui/react";
 import { ArrowDown, ArrowUp, Clock, FileQuestion, GripVertical, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { LatexText } from "@/components/latex";
+import { Panel } from "@/components/page-blocks";
+import { SummaryBox } from "@/components/admin/summary-box";
 import { DifficultyBadge, QuestionTypeBadge, TryoutStatusBadge } from "@/components/status-badge";
 import { SelectInput, SwitchInput, TextInput, TextareaInput } from "@/components/ui/form";
 import { QuestionPickerDrawer, type PickedQuestion } from "@/components/admin/question-picker-drawer";
@@ -304,7 +306,7 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
   if (loading) {
     return (
       <AppShell title={t.editTitle}>
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <p className="py-14 text-center text-small text-muted">{t.loading}</p>
       </AppShell>
     );
   }
@@ -313,8 +315,8 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
     return (
       <AppShell title={t.editTitle}>
         <div className="py-14 text-center">
-          <p className="text-sm font-medium text-foreground">{t.loadErrorTitle}</p>
-          <p className="mt-1 text-sm text-muted">{t.loadErrorDescription}</p>
+          <p className="text-small font-medium text-foreground">{t.loadErrorTitle}</p>
+          <p className="mt-1 text-small text-muted">{t.loadErrorDescription}</p>
           <Button variant="primary" size="sm" className="mt-4" onPress={retry}>
             {t.retry}
           </Button>
@@ -331,6 +333,7 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
     <AppShell
       title={isEditing ? t.editTitle : t.createTitle}
       description={locked ? t.lockedDescription : undefined}
+      breadcrumb={[{ label: t.listCrumb, href: "/admin/tryouts" }, { label: isEditing ? t.editTitle : t.createTitle }]}
       actions={
         <div className="flex gap-2">
           {tryout && (
@@ -349,17 +352,18 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
         </div>
       }
     >
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
         {tryout && (
-          <div className="flex items-center gap-2 text-xs text-muted">
+          <div className="flex items-center gap-2 text-caption text-muted">
             <TryoutStatusBadge status={tryout.status} />
             <span>{t.revisionLabel(tryout.revision)}</span>
             {dirty && !locked && <span className="text-warning">{t.saveBeforeStatus}</span>}
           </div>
         )}
 
-        <Card className="gap-4 p-5">
-          <p className="text-sm font-semibold text-foreground">{t.infoHeading}</p>
+        <Panel as="section" className="flex flex-col gap-4">
+          <h2 className="font-display text-heading-sm">{t.infoHeading}</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <TextInput
               label={t.titleLabel}
@@ -454,27 +458,27 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
             error={formErrors.grace_seconds}
             onChange={(e) => setDraft((current) => ({ ...current, graceSeconds: e.target.value }))}
           />
-          <p className="text-xs text-muted">{t.coverColorNote}</p>
-        </Card>
+          <p className="text-caption text-muted">{t.coverColorNote}</p>
+        </Panel>
 
-        <Card className="gap-4 p-5">
-          <div className="flex items-center justify-between">
+        <Panel as="section" className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-foreground">{t.subtestsHeading}</p>
-              <p className="text-xs text-muted">{t.subtestsSubtitle(draft.subtests.length, totalQuestions)}</p>
+              <h2 className="font-display text-heading-sm">{t.subtestsHeading}</h2>
+              <p className="mt-1 text-caption text-muted">{t.subtestsSubtitle(draft.subtests.length, totalQuestions)}</p>
             </div>
             <Button variant="secondary" size="sm" onPress={addSubtest} isDisabled={locked}>
-              <Plus className="size-3.5" /> {t.addSubtest}
+              <Plus className="size-4" /> {t.addSubtest}
             </Button>
           </div>
-          {subtestsError && <p className="text-xs text-danger">{subtestsError}</p>}
+          {subtestsError && <p className="text-caption text-danger">{subtestsError}</p>}
 
           {draft.subtests.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted">{t.noSubtests}</p>
+            <p className="rounded-control border border-dashed border-border py-8 text-center text-small text-muted">{t.noSubtests}</p>
           ) : (
             <div className="space-y-3">
               {draft.subtests.map((subtest, index) => (
-                <div key={subtest.key} className="rounded-lg border border-border p-3.5">
+                <div key={subtest.key} className="rounded-tile border border-border bg-background p-4">
                   <div className="flex items-start gap-3">
                     <GripVertical className="mt-2.5 size-4 shrink-0 text-muted" />
                     <div className="grid flex-1 gap-2.5 sm:grid-cols-[1fr_140px]">
@@ -509,20 +513,20 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
                       </Button>
                     </div>
                     <Button variant="ghost" size="sm" isIconOnly className="shrink-0 text-danger" isDisabled={locked} onPress={() => removeSubtest(subtest.key)}>
-                      <Trash2 className="size-3.5" />
+                      <Trash2 className="size-4" />
                     </Button>
                   </div>
 
                   <div className="mt-3 space-y-1.5 border-t border-border pt-3 pl-7">
                     {subtest.questionIds.length === 0 ? (
-                      <p className="text-xs text-muted">{t.emptyQuestions}</p>
+                      <p className="text-caption text-muted">{t.emptyQuestions}</p>
                     ) : (
                       subtest.questionIds.map((questionId) => {
                         const question = library[questionId];
                         return (
-                          <div key={questionId} className="flex items-center gap-2 rounded-md bg-surface-secondary px-2.5 py-1.5">
-                            <span className="font-mono text-[11px] text-muted">#{question?.number ?? "?"}</span>
-                            <span className="line-clamp-1 min-w-0 flex-1 text-xs text-foreground">
+                          <div key={questionId} className="flex items-center gap-2 rounded-chip bg-surface-secondary px-2.5 py-1.5">
+                            <span className="font-mono text-label text-muted">#{question?.number ?? "?"}</span>
+                            <span className="line-clamp-1 min-w-0 flex-1 text-caption text-foreground">
                               {question ? <LatexText text={question.content} /> : questionId}
                             </span>
                             {question && <QuestionTypeBadge type={question.type} />}
@@ -545,9 +549,9 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
                   </div>
 
                   <div className="mt-3 flex items-center justify-between border-t border-border pt-3 pl-7">
-                    <span className="flex items-center gap-1.5 text-xs text-muted">
-                      <Clock className="size-3.5" /> {t.durationMinutes(subtest.durationMinutes)}
-                      <FileQuestion className="ml-2 size-3.5" /> {t.questionsSelected(subtest.questionIds.length)}
+                    <span className="flex items-center gap-1.5 text-caption text-muted">
+                      <Clock className="size-4" /> {t.durationMinutes(subtest.durationMinutes)}
+                      <FileQuestion className="ml-2 size-4" /> {t.questionsSelected(subtest.questionIds.length)}
                     </span>
                     <Button variant="ghost" size="sm" isDisabled={locked} onPress={() => setPickerFor(subtest.key)}>
                       {t.manageQuestions}
@@ -557,7 +561,18 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
               ))}
             </div>
           )}
-        </Card>
+        </Panel>
+        </div>
+
+        <SummaryBox
+          title={t.summaryHeading}
+          lines={[
+            { label: t.summarySubtests, value: draft.subtests.length },
+            { label: t.summaryQuestions, value: totalQuestions },
+            { label: t.summaryDuration, value: t.summaryDurationValue(draft.subtests.reduce((sum, subtest) => sum + subtest.durationMinutes, 0)) },
+            { label: t.summaryScoring, value: draft.scoringMode === "irt" ? t.summaryScoringIrt : t.summaryScoringWeighted },
+          ]}
+        />
       </div>
 
       {pickerFor && (
