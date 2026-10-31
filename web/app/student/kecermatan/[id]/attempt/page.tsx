@@ -269,44 +269,44 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       {timerHeader}
 
-      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-5 py-6">
+      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-center-safe overflow-y-auto px-5 py-6">
         <div>
-          <p className="mb-2 text-xs font-medium tracking-wide text-muted uppercase">{t.referenceLabel}</p>
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+          <p className="mb-2 text-center text-xs font-medium tracking-wide text-muted uppercase">{t.referenceLabel}</p>
+          <div className="flex flex-wrap justify-center gap-2">
             {kolom.reference.map((item) => (
-              <div key={item.label} className="rounded-lg border border-border bg-surface-secondary py-2.5 text-center">
-                <p className="text-[10px] font-medium text-muted">{item.label}</p>
-                <KecermatanItem elements={item.elements} className="text-sm font-semibold" />
+              <div key={item.label} className="min-w-24 rounded-lg border border-border bg-surface-secondary px-2 py-3 text-center sm:min-w-20">
+                <p className="text-xs font-semibold text-muted">{item.label}</p>
+                <KecermatanItem elements={item.elements} className="mt-1 text-xl font-extrabold" elementClassName="size-6 sm:size-7" />
               </div>
             ))}
           </div>
         </div>
 
         <div className="mt-8">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-center gap-4">
             <p className="text-xs font-medium text-muted">{t.soalProgress(soalIndex + 1, kolom.soal.length)}</p>
             <button type="button" onClick={() => answer(null)} className="flex items-center gap-1 text-xs font-medium text-muted hover:text-foreground">
               <SkipForward className="size-3.5" /> {t.skip}
             </button>
           </div>
-          <p className="text-sm text-foreground">{t.soalPrompt}</p>
-          <div className="mt-3 grid grid-cols-4 gap-2">
+          <p className="text-center text-base text-foreground">{t.soalPrompt}</p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
             {soal.shown.map((label) => (
-              <div key={label} className="rounded-lg border border-dashed border-border py-3.5 text-center">
-                <KecermatanItem elements={labelOf(label)?.elements ?? []} className="text-base font-semibold" />
+              <div key={label} className="min-w-36 rounded-lg border border-dashed border-border px-3 py-5 text-center">
+                <KecermatanItem elements={labelOf(label)?.elements ?? []} className="text-2xl font-extrabold sm:text-3xl" elementClassName="size-6 sm:size-9" />
               </div>
             ))}
           </div>
         </div>
 
         <div className="mt-8">
-          <p className="mb-2 text-xs font-medium text-muted">{t.chooseMissingLabel}</p>
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+          <p className="mb-2 text-center text-xs font-medium text-muted">{t.chooseMissingLabel}</p>
+          <div className="flex flex-wrap justify-center gap-2">
             {kolom.reference.map((item) => (
               <button
                 key={item.label}
                 onClick={() => answer(item.label)}
-                className="flex h-14 items-center justify-center rounded-lg border border-border font-mono text-lg font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent-soft-foreground"
+                className="flex h-16 w-24 items-center justify-center rounded-lg border border-border font-mono text-2xl font-extrabold text-foreground transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent-soft-foreground sm:w-20"
               >
                 {item.label}
               </button>
