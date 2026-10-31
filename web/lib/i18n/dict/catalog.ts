@@ -23,6 +23,7 @@ const id = {
   emptyDescription: "Coba pilih program lain, ubah kata kunci, atau kembali lagi nanti.",
   discountChip: (pct: number) => `Hemat ${pct}%`,
   bundleSize: (n: number) => `${n} tryout`,
+  viewDetail: "Lihat detail",
 };
 
 const en: typeof id = {
@@ -46,6 +47,7 @@ const en: typeof id = {
   emptyDescription: "Pick another program, change the keyword, or check back later.",
   discountChip: (pct: number) => `Save ${pct}%`,
   bundleSize: (n: number) => `${n} tryouts`,
+  viewDetail: "View details",
 };
 
 export function useCatalogT() {
