@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -88,14 +88,131 @@ function AdminGroup({ group, open, onToggle, pathname, onNavigate }: { group: Na
         className={cn("flex w-full items-center justify-between rounded-control px-3 py-1.5 text-label font-medium transition-colors hover:text-sidebar-foreground", focusRing, hasActive && !open ? "text-sidebar-foreground" : "text-sidebar-muted")}
       >
         <span>{name}</span>
-        <ChevronDown className={cn("size-3.5 transition-transform", !open && "-rotate-90")} aria-hidden />
+        <ChevronDown className={cn("size-3.5 transition-transform duration-200 ease-out motion-reduce:transition-none", !open && "-rotate-90")} aria-hidden />
+      </button>
+      <div className={cn("grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none", open ? "rows-expanded" : "rows-collapsed")}>
+        <div className="min-h-0 overflow-hidden">
+          <ul id={panelId} inert={!open} className="ml-5 flex flex-col pt-0.5">
+            {group.items.map((item, index) => (
+              <ChildLink key={item.href} item={item} active={isNavActive(item, pathname)} last={index === group.items.length - 1} onNavigate={onNavigate} />
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const HOVER_OPEN_MS = 150;
+const HOVER_CLOSE_MS = 200;
+
+function CollapsedGroup({ group, open, onOpen, onClose, pathname }: { group: NavGroup; open: boolean; onOpen: (pinned: boolean) => void; onClose: () => void; pathname: string }) {
+  const navT = useNavT();
+  const name = navT[`group:${group.id}`] ?? group.id;
+  const panelId = `nav-flyout-${group.id}`;
+  const hasActive = group.items.some((item) => isNavActive(item, pathname));
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pinned = useRef(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const clearTimer = () => clearTimeout(timer.current);
+  const show = (pin: boolean) => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) setPos({ top: rect.top, left: rect.right + 12 });
+    pinned.current = pin;
+    onOpen(pin);
+  };
+  const hide = () => {
+    clearTimer();
+    pinned.current = false;
+    onClose();
+  };
+
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+      onClose();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) hide();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  });
+
+  useEffect(() => {
+    if (open && pinned.current) panelRef.current?.querySelector<HTMLElement>("a")?.focus();
+  }, [open]);
+
+  const onPointerEnter = () => {
+    clearTimer();
+    if (!open) timer.current = setTimeout(() => show(false), HOVER_OPEN_MS);
+  };
+  const onPointerLeave = () => {
+    clearTimer();
+    if (open && !pinned.current) timer.current = setTimeout(hide, HOVER_CLOSE_MS);
+  };
+
+  return (
+    <div
+      ref={wrapRef}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !open) return;
+        hide();
+        buttonRef.current?.focus();
+      }}
+      onBlur={(event) => {
+        if (open && pinned.current && !wrapRef.current?.contains(event.relatedTarget as Node | null)) hide();
+      }}
+    >
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        aria-label={name}
+        onClick={() => {
+          clearTimer();
+          if (open && pinned.current) hide();
+          else show(true);
+        }}
+        className={cn(
+          "relative flex min-h-12 w-full items-center justify-center rounded-tile transition-colors",
+          focusRing,
+          hasActive || open ? "bg-rail-active text-sidebar-foreground" : "text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-foreground",
+        )}
+      >
+        {hasActive && <span className="absolute inset-y-5 -left-2.5 w-0.75 rounded-full bg-sidebar-accent shadow-rail-glow" aria-hidden />}
+        {group.icon && <Icon icon={group.icon} size="rail" />}
       </button>
       {open && (
-        <ul id={panelId} className="ml-5 mt-0.5 flex flex-col">
-          {group.items.map((item, index) => (
-            <ChildLink key={item.href} item={item} active={isNavActive(item, pathname)} last={index === group.items.length - 1} onNavigate={onNavigate} />
-          ))}
-        </ul>
+        <div
+          ref={panelRef}
+          id={panelId}
+          role="group"
+          aria-label={name}
+          style={pos}
+          className="fixed z-40 w-60 rounded-menu bg-sidebar p-3 text-sidebar-foreground shadow-menu"
+        >
+          <p className="px-3 pb-1.5 text-label font-medium text-sidebar-muted">{name}</p>
+          <ul className="ml-5 flex flex-col">
+            {group.items.map((item, index) => (
+              <ChildLink key={item.href} item={item} active={isNavActive(item, pathname)} last={index === group.items.length - 1} onNavigate={hide} />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
@@ -107,11 +224,12 @@ function NavLinks({ expanded, onNavigate }: { expanded: boolean; onNavigate?: ()
   const shellT = useShellT();
   const groups = role ? navGroupsForRole(role) : [];
   const activeGroup = groups.find((group) => group.items.some((item) => isNavActive(item, pathname)))?.id ?? null;
-  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [openGroup, setOpenGroup] = useState<string | null>(activeGroup);
   const [seenGroup, setSeenGroup] = useState(activeGroup);
+  const [flyout, setFlyout] = useState<string | null>(null);
   if (seenGroup !== activeGroup) {
     setSeenGroup(activeGroup);
-    if (activeGroup) setToggled((prev) => ({ ...prev, [activeGroup]: true }));
+    if (activeGroup) setOpenGroup(activeGroup);
   }
   const isStudent = role === "student";
 
@@ -119,7 +237,7 @@ function NavLinks({ expanded, onNavigate }: { expanded: boolean; onNavigate?: ()
     <nav aria-label={shellT.mainNavigation} className="flex flex-col gap-2">
       {groups.map((group, index) => {
         const flat = group.items.length === 1 || isStudent;
-        if (!expanded || flat) {
+        if (flat) {
           const layout: NavLayout = isStudent ? (expanded ? "row" : "stacked") : expanded ? "row" : "icon";
           return (
             <div key={group.id} className={cn("flex flex-col gap-2", !expanded && !isStudent && index > 0 && "mt-1 border-t border-sidebar-border pt-3")}>
@@ -129,12 +247,25 @@ function NavLinks({ expanded, onNavigate }: { expanded: boolean; onNavigate?: ()
             </div>
           );
         }
+        if (!expanded) {
+          return (
+            <div key={group.id} className={cn(index > 0 && "mt-1 border-t border-sidebar-border pt-3")}>
+              <CollapsedGroup
+                group={group}
+                open={flyout === group.id}
+                onOpen={() => setFlyout(group.id)}
+                onClose={() => setFlyout((prev) => (prev === group.id ? null : prev))}
+                pathname={pathname}
+              />
+            </div>
+          );
+        }
         return (
           <AdminGroup
             key={group.id}
             group={group}
-            open={toggled[group.id] ?? group.id === activeGroup}
-            onToggle={() => setToggled((prev) => ({ ...prev, [group.id]: !(prev[group.id] ?? group.id === activeGroup) }))}
+            open={openGroup === group.id}
+            onToggle={() => setOpenGroup((prev) => (prev === group.id ? null : group.id))}
             pathname={pathname}
             onNavigate={onNavigate}
           />

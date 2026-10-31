@@ -7,15 +7,19 @@ import {
   ClipboardList,
   FileQuestion,
   Gauge,
+  Layers,
   LayoutGrid,
   Shapes,
   LayoutDashboard,
+  MonitorDot,
   Package,
   Receipt,
   School,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Users,
+  Wallet,
 } from "lucide-react";
 import type { Role } from "./types";
 
@@ -32,6 +36,8 @@ export interface NavItem {
 
 export interface NavGroup {
   id: string;
+  /** Collapsed-rail button for multi-item groups; must differ from every child icon. */
+  icon?: LucideIcon;
   items: NavItem[];
 }
 
@@ -46,6 +52,7 @@ const adminGroups: NavGroup[] = [
   { id: "overview", items: [{ href: "/admin", label: "Ringkasan", icon: LayoutDashboard, exact: true }] },
   {
     id: "operations",
+    icon: MonitorDot,
     items: [
       { href: "/admin/monitoring", label: "Monitoring", icon: Activity },
       { href: "/admin/students", label: "Siswa", icon: Users },
@@ -55,6 +62,7 @@ const adminGroups: NavGroup[] = [
   },
   {
     id: "content",
+    icon: Layers,
     items: [
       { href: "/admin/tryouts", label: "Tryout", icon: ClipboardList },
       { href: "/admin/kecermatan", label: "Tes Kecermatan", icon: Gauge },
@@ -66,6 +74,7 @@ const adminGroups: NavGroup[] = [
   },
   {
     id: "finance",
+    icon: Wallet,
     items: [
       { href: "/admin/orders", label: "Pesanan", icon: Receipt },
       { href: "/admin/topups", label: "Top-up", icon: Banknote },
@@ -73,6 +82,7 @@ const adminGroups: NavGroup[] = [
   },
   {
     id: "system",
+    icon: SlidersHorizontal,
     items: [
       { href: "/admin/users", label: "Akun Pengguna", icon: ShieldCheck, adminOnly: true },
       { href: "/admin/settings", label: "Pengaturan", icon: Settings, adminOnly: true },
