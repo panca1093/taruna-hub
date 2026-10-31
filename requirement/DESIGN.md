@@ -40,7 +40,7 @@ Guidelines:
 | `accent` | `0.442 0.063 341.6` → #6B455D | `0.819 0.056 346.8` → #E0B6CB | Primary action and links (plum in light, pale rose in dark) |
 | `accent-2` | `0.643 0.058 346.7` → #A87F94 | `0.715 0.07 341.1` → #C292B0 | Lighter rose ring endpoint |
 | `accent-foreground` | `0.985 0.005 78` → cream | `0.2 0.02 335` → dark plum | Text on solid accent |
-| `success` | `0.6534 0.1567 156.7` → `#00AC67` | Inherits light value → `#00AC67` | Completed / confirmed |
+| `success` | `0.495 0.061 163.4` → muted prototype green | `0.814 0.064 153.3` → pale green | Completed / confirmed (`.palette-classic` keeps `#00AC67` with a dark ink) |
 | `success-foreground` | `0.985 0.005 78` → cream | `0.2 0.02 155` → dark green ink | Text on solid success (light ink on the dark green, ≥4.5:1) |
 | `warning` | `0.7723 0.1585 73.7` → `#F0A31B` | `0.8022 0.1451 76.6` → `#F3B040` | Pending / attention |
 | `warning-foreground` | `0.2242 0.019 267` → `#181B25` | `0.16 0.01 267` → `#0B0D12` | Text on solid warning |

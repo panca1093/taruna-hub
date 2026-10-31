@@ -289,6 +289,7 @@
   --focus: var(--accent);
   --link: var(--accent);
   --success: oklch(0.6534 0.1567 156.7);
+  --success-foreground: oklch(0.2242 0.0075 264);
   --success-soft: color-mix(in oklab, var(--success) 15%, transparent);
   --success-soft-foreground: color-mix(in oklab, var(--success) 80%, var(--foreground) 60%);
   background: var(--background);

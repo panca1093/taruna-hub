@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Activity, BarChart3, CalendarDays, Gauge, Receipt, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -67,10 +67,10 @@ export default function AdminDashboardPage() {
   const [sessions, setSessions] = useState<Block<ActiveSessionList>>(idle);
   const [orders, setOrders] = useState<Block<OrderList>>(idle);
   const [topups, setTopups] = useState<Block<TopupList>>(idle);
-  const polling = useRef(false);
-
   useEffect(() => {
     let cancelled = false;
+    // Effect-local so StrictMode's dev remount starts with a fresh flag instead of the dropped first poll's.
+    let polling = false;
     // A failed poll keeps the last good data and only flips `failed`, so nothing flashes or zeroes out.
     const track = <T,>(request: Promise<T>, set: React.Dispatch<React.SetStateAction<Block<T>>>) =>
       request.then(
@@ -82,14 +82,17 @@ export default function AdminDashboardPage() {
         },
       );
     const poll = async () => {
-      if (polling.current || document.hidden) return;
-      polling.current = true;
-      await Promise.all([
-        track(api.monitoring.active({ limit: SESSION_ROWS }), setSessions),
-        track(api.adminOrders.list({ status: "pending", limit: ORDER_ROWS }), setOrders),
-        track(api.adminTopups.list({ status: "pending", limit: TOPUP_ROWS }), setTopups),
-      ]);
-      polling.current = false;
+      if (polling || document.hidden) return;
+      polling = true;
+      try {
+        await Promise.all([
+          track(api.monitoring.active({ limit: SESSION_ROWS }), setSessions),
+          track(api.adminOrders.list({ status: "pending", limit: ORDER_ROWS }), setOrders),
+          track(api.adminTopups.list({ status: "pending", limit: TOPUP_ROWS }), setTopups),
+        ]);
+      } finally {
+        polling = false;
+      }
     };
     void poll();
     const interval = setInterval(() => void poll(), POLL_MS);
