@@ -393,6 +393,16 @@ Import `AppShell` / `StatCard` from `@/components/...` and `Card` from `@heroui/
 
 Use the richer landing visual treatment only where discovery/marketing is the goal. Detailed timing, ranking, payment, and entitlement rules remain product requirements.
 
+### 7.4a Approved account entry and student overview
+
+Owner-approved on 2026-10-31. `AuthLayout` is the shared layout for login, registration, verification and recovery. Desktop has equal columns, a 24px gap, a 380px form and a restrained accent-tinted illustration panel. `/login` is the student entry (form right); staff enter `/portal` directly (form left), with no public portal link. `/login/staff` redirects to `/portal`. Below 800px the illustration panel is hidden and the form has at least 24px horizontal inset. Forms use 48px primary controls, visible labels, autofill semantics and an accessible password visibility control. Idle input boundaries mix `muted` at 75% with `surface`; focused/invalid borders retain their semantic state. Error text uses `danger` on `surface`, avoiding a tinted background that would lower text contrast.
+
+The illustration reuses `CountdownRing` decoratively. Its 224px region contains only the ring and book icon; caption and two feature cards are separate rows in normal flow. Never position their text over the ring. Entrance animation is one sequence; CSS and the ring both respect reduced motion. Colors and radii remain derived from existing tokens; dark auth headers use a light semantic backdrop for the existing logo asset.
+
+Registration opens `/verify-email` after the server establishes the session. The code field is one accessible numeric six-digit input with paste/autofill support. Wrong/expired codes, pending verification, resend errors and session restoration are distinct from success. Verification remains optional (D01): skip opens `/student`, where a non-blocking reminder links back to verification. No prototype codes or simulated success belong in the application.
+
+The student overview reuses `AppShell`, with 24px separation between heading, compact statistics, welcome panel and activity modules; module grids have 20px gaps. Cards use 20px padding (24px for larger modules), with the welcome panel using 24/32px. `StatCard compact` is opt-in and leaves other dashboard cards unchanged. The verification reminder is inside the same content-width boundary as these modules. New accounts show real empty states; populated accounts retain owned tryouts and latest completed results. Loading uses placeholders, errors offer retry, a missing average is `—`, and zero is a measured score. Counts, average and exact wallet balance come from the authenticated summary endpoint; tryout metrics exclude kecermatan, which remains visible in owned-content links.
+
 ### 7.5 Specify data states before connecting the API
 
 These are required design considerations for new integration; most are not supplied by the present mock-data components.

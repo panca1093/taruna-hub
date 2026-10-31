@@ -4,9 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button, Card } from "@heroui/react";
 import { MailCheck } from "lucide-react";
-import { Logo } from "@/components/logo";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { LanguageToggle } from "@/components/language-toggle";
+import { AuthLayout } from "@/components/auth-layout";
 import { TextInput } from "@/components/ui/form";
 import { api, errorText } from "@/lib/api/client";
 import { useAuthT } from "@/lib/i18n/dict/auth";
@@ -33,17 +31,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <header className="flex items-center justify-between px-6 py-5">
-        <Logo />
-        <div className="flex items-center gap-2">
-          <LanguageToggle />
-          <ThemeToggle />
-        </div>
-      </header>
-
-      <main className="flex flex-1 items-center justify-center px-5 pb-16">
-        <div className="w-full max-w-sm">
+    <AuthLayout>
           {sent ? (
             <Card className="items-center gap-3 p-6 text-center">
               <MailCheck className="size-8 text-accent" />
@@ -58,11 +46,11 @@ export default function ForgotPasswordPage() {
             </Card>
           ) : (
             <>
-              <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">{t.forgotTitle}</h1>
-              <p className="mt-1.5 text-sm text-muted">{t.forgotSubtitle}</p>
+              <h1 className="auth-title">{t.forgotTitle}</h1>
+              <p className="auth-subtitle">{t.forgotSubtitle}</p>
 
-              <Card className="mt-6 gap-4 p-5">
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="mt-8">
+                <form onSubmit={handleSubmit} className="auth-fields">
                   <TextInput
                     label={t.emailLabel}
                     type="email"
@@ -72,11 +60,11 @@ export default function ForgotPasswordPage() {
                     onChange={(e) => setEmail(e.target.value)}
                   />
                   {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-                  <Button type="submit" variant="primary" fullWidth className="mt-1" isDisabled={pending}>
+                  <Button type="submit" variant="primary" fullWidth className="auth-submit" isDisabled={pending}>
                     {t.submitReset}
                   </Button>
                 </form>
-              </Card>
+              </div>
 
               <p className="mt-6 text-center text-sm text-muted">
                 <Link href="/login" className="font-medium text-accent hover:underline">
@@ -85,8 +73,6 @@ export default function ForgotPasswordPage() {
               </p>
             </>
           )}
-        </div>
-      </main>
-    </div>
+    </AuthLayout>
   );
 }

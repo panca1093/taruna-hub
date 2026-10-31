@@ -178,6 +178,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	// are authenticated requests, so an active attempt keeps its login session alive (D13).
 	v1.GET("/my/tryouts/:id", h.StudentTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.POST("/my/tryouts/:id/sessions", h.StartTryoutSession, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
+	v1.GET("/my/dashboard", h.StudentDashboard, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/my/tryout-sessions", h.MyAttempts, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/my/tryout-sessions/:id", h.TryoutSession, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.GET("/my/tryout-sessions/:id/result", h.TryoutSessionResult, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))

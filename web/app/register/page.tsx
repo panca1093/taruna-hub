@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, Card, toast } from "@heroui/react";
-import { Logo } from "@/components/logo";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { LanguageToggle } from "@/components/language-toggle";
+import { Button, Spinner, toast } from "@heroui/react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import { AuthLayout } from "@/components/auth-layout";
+import { PasswordInput } from "@/components/password-input";
 import { TextInput } from "@/components/ui/form";
 import { useSession } from "@/lib/session-context";
 import { ApiError, errorText } from "@/lib/api/client";
@@ -38,7 +38,7 @@ export default function RegisterPage() {
     try {
       await register({ name, email, phone: phone.trim() || undefined, password });
       toast.success(t.toastAccountCreatedTitle, { description: t.toastAccountCreatedDescription });
-      router.push("/catalog");
+      router.push("/verify-email");
     } catch (err) {
       if (err instanceof ApiError && err.fields) {
         setFields(err.fields);
@@ -50,71 +50,24 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <header className="flex items-center justify-between px-6 py-5">
-        <Logo />
-        <div className="flex items-center gap-2">
-          <LanguageToggle />
-          <ThemeToggle />
+    <AuthLayout variant="register">
+      <Link href="/login" className="auth-back"><ArrowLeft className="size-4" />{t.backToLogin}</Link>
+      <h1 className="auth-title">{t.registerTitle}</h1>
+      <p className="auth-subtitle">{t.registerSubtitle}</p>
+      <form onSubmit={handleSubmit} className="auth-fields" aria-busy={pending}>
+        <TextInput label={t.fullNameLabel} name="name" autoComplete="name" placeholder={t.fullNamePlaceholder} required error={fields.name} value={name} onChange={edit("name", setName)} />
+        <TextInput label={t.emailLabel} name="email" autoComplete="email" type="email" placeholder={t.emailPlaceholder} required error={fields.email} value={email} onChange={edit("email", setEmail)} />
+        <TextInput label={t.phoneLabel} name="phone" autoComplete="tel" type="tel" placeholder={t.phonePlaceholder} error={fields.phone} value={phone} onChange={edit("phone", setPhone)} />
+        <div>
+          <PasswordInput label={t.passwordLabel} name="password" autoComplete="new-password" minLength={8} placeholder={t.registerPasswordPlaceholder} required error={fields.password} value={password} onChange={edit("password", setPassword)} aria-describedby="password-hint" />
+          <p id="password-hint" className="auth-hint">{t.passwordHint}</p>
         </div>
-      </header>
-
-      <main className="flex flex-1 items-center justify-center px-5 pb-16">
-        <div className="w-full max-w-sm">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">{t.registerTitle}</h1>
-          <p className="mt-1.5 text-sm text-muted">{t.registerSubtitle}</p>
-
-          <Card className="mt-6 gap-4 p-5">
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <TextInput
-                label={t.fullNameLabel}
-                placeholder={t.fullNamePlaceholder}
-                required
-                error={fields.name}
-                value={name}
-                onChange={edit("name", setName)}
-              />
-              <TextInput
-                label={t.emailLabel}
-                type="email"
-                placeholder={t.emailPlaceholder}
-                required
-                error={fields.email}
-                value={email}
-                onChange={edit("email", setEmail)}
-              />
-              <TextInput
-                label={t.phoneLabel}
-                type="tel"
-                placeholder={t.phonePlaceholder}
-                error={fields.phone}
-                value={phone}
-                onChange={edit("phone", setPhone)}
-              />
-              <TextInput
-                label={t.passwordLabel}
-                type="password"
-                placeholder={t.registerPasswordPlaceholder}
-                required
-                error={fields.password}
-                value={password}
-                onChange={edit("password", setPassword)}
-              />
-              {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-              <Button type="submit" variant="primary" fullWidth className="mt-1" isDisabled={pending}>
-                {t.submitRegister}
-              </Button>
-            </form>
-          </Card>
-
-          <p className="mt-6 text-center text-sm text-muted">
-            {t.haveAccount}{" "}
-            <Link href="/login" className="font-medium text-accent hover:underline">
-              {t.loginLink}
-            </Link>
-          </p>
-        </div>
-      </main>
-    </div>
+        {error && <p role="alert" className="auth-error">{error}</p>}
+        <Button type="submit" variant="primary" fullWidth className="auth-submit" isDisabled={pending}>
+          {pending && <Spinner size="sm" />}{pending ? t.creatingAccount : t.submitRegister}{!pending && <ArrowRight className="size-4" />}
+        </Button>
+      </form>
+      <p className="auth-secondary">{t.haveAccount}{" "}<Link href="/login">{t.loginLink}</Link></p>
+    </AuthLayout>
   );
 }

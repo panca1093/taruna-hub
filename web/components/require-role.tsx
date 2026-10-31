@@ -27,7 +27,7 @@ export function RequireRole({
   const staffOnly = !roles.includes("student");
 
   useEffect(() => {
-    if (status === "anonymous") router.replace(staffOnly ? "/login/staff" : "/login");
+    if (status === "anonymous") router.replace(staffOnly ? "/portal" : "/login");
   }, [status, staffOnly, router]);
 
   if (status === "unavailable") {

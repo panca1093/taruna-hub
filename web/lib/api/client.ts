@@ -419,6 +419,7 @@ export function errorText(err: unknown, fallback: string): string {
 }
 
 export const api = {
+  studentDashboard: () => authed<components["schemas"]["StudentDashboardSummary"]>("/api/v1/my/dashboard"),
   ready: (): Promise<Ready> =>
     request<Ready>("/readyz", undefined, (status, body) => {
       if (status !== 503) return undefined;

@@ -4,9 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button, Card } from "@heroui/react";
 import { CheckCircle2 } from "lucide-react";
-import { Logo } from "@/components/logo";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { LanguageToggle } from "@/components/language-toggle";
+import { AuthLayout } from "@/components/auth-layout";
 import { TextInput } from "@/components/ui/form";
 import { ApiError, api, errorText } from "@/lib/api/client";
 import { useAuthT } from "@/lib/i18n/dict/auth";
@@ -55,17 +53,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <header className="flex items-center justify-between px-6 py-5">
-        <Logo />
-        <div className="flex items-center gap-2">
-          <LanguageToggle />
-          <ThemeToggle />
-        </div>
-      </header>
-
-      <main className="flex flex-1 items-center justify-center px-5 pb-16">
-        <div className="w-full max-w-sm">
+    <AuthLayout>
           {done ? (
             <Card className="items-center gap-3 p-6 text-center">
               <CheckCircle2 className="size-8 text-accent" />
@@ -77,11 +65,11 @@ export default function ResetPasswordPage() {
             </Card>
           ) : (
             <>
-              <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">{t.resetTitle}</h1>
-              <p className="mt-1.5 text-sm text-muted">{t.resetSubtitle}</p>
+              <h1 className="auth-title">{t.resetTitle}</h1>
+              <p className="auth-subtitle">{t.resetSubtitle}</p>
 
-              <Card className="mt-6 gap-4 p-5">
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="mt-8">
+                <form onSubmit={handleSubmit} className="auth-fields">
                   <TextInput
                     label={t.newPasswordLabel}
                     type="password"
@@ -108,15 +96,13 @@ export default function ResetPasswordPage() {
                       </Link>
                     </p>
                   )}
-                  <Button type="submit" variant="primary" fullWidth className="mt-1" isDisabled={pending}>
+                  <Button type="submit" variant="primary" fullWidth className="auth-submit" isDisabled={pending}>
                     {t.submitNewPassword}
                   </Button>
                 </form>
-              </Card>
+              </div>
             </>
           )}
-        </div>
-      </main>
-    </div>
+    </AuthLayout>
   );
 }

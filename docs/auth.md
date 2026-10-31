@@ -103,7 +103,7 @@ minutes; the reset link still works and clears it.
 `web/lib/api/client.ts` holds the access token **in memory only**; the refresh cookie is `HttpOnly`
 and never readable from JS. A protected call that gets a `401` refreshes once and retries once,
 and concurrent callers share one refresh. If that refresh also fails the session is dropped and
-`RequireRole` sends the visitor to `/login` (or `/login/staff` for staff-only pages).
+`RequireRole` sends the visitor to `/login` (or `/portal` for staff-only pages).
 Only a `401`/`403` from the refresh on page load means "not signed in"; a network error or `5xx`
 shows a retry screen instead, because it says nothing about the session. Logout clears the local
 session only after the server confirmed it, so a failed logout leaves the user signed in and says so.
@@ -116,15 +116,26 @@ local auto-logout timer and no role switcher; the role is whatever the server sa
 
 | Route | Does |
 |---|---|
-| `/login`, `/login/staff` | `POST /auth/login`, then `/student` or `/admin` by the role the server returns |
-| `/register` | `POST /auth/register` (name, email, optional phone, password); server field errors show under the field |
+| `/login`, `/portal` | `POST /auth/login`, then `/student` or `/admin` by the role the server returns; staff enter the portal directly |
+| `/login/staff` | Redirects to `/portal` for existing bookmarks |
+| `/register` | `POST /auth/register` (name, email, optional phone, password), then `/verify-email`; server field errors show under the field |
+| `/verify-email` | Authenticated account code entry and resend through the existing API; success/skip returns students to `/student` and staff to `/admin` |
 | `/forgot-password` | `POST /auth/password/forgot`; always the same confirmation |
 | `/reset-password#token=…` | reads the token from the fragment, `POST /auth/password/reset`, then asks the user to log in |
 
-An unverified email shows a banner in the app shell with the code field and a resend button;
-it never blocks navigation. Screens that still read `lib/mock-data.ts` (wallet, enrollments,
-results, the admin tables) key it by the account's user id, so they are empty for a real account
-until their own slice replaces them.
+An unverified email shows a non-blocking app-shell reminder linking to `/verify-email`. The code form
+handles wrong/expired codes, resend throttles and API errors. A full page load restores the refresh
+session before the role guard decides whether verification is available. An already verified user
+returns to the dashboard. The public landing and student login do not expose internal portal links.
+
+The student overview reads `/my/dashboard`, enrollments, attempt history and owned kecermatan tests
+through the typed client. Its summary is a read-only repeatable-read database snapshot: owned tryout
+count, distinct tryouts with completed results, the mean of all persisted attempt scores (including
+retakes and zero, rounded to two decimals), and the exact decimal wallet projection. No completed
+results means a null average. Kecermatan is excluded from tryout metrics and remains visible among
+owned-content links. Recent result cards show only the latest completed attempt per tryout so their
+existing result-page destination matches the displayed attempt. Loading and failure never fabricate
+zero values; a retry reloads the required data. This page no longer reads the mock layer.
 
 ## Not here yet
 
