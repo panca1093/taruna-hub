@@ -7517,8 +7517,13 @@ export interface components {
         };
         ShapeCatalogItem: {
             /** @enum {string} */
-            id: "kotak" | "segitiga" | "persegi_panjang" | "lingkaran" | "jajar_genjang" | "trapesium" | "belah_ketupat";
+            id: "kotak" | "segitiga" | "persegi_panjang" | "lingkaran" | "jajar_genjang" | "trapesium" | "belah_ketupat" | "segi_lima" | "segi_enam" | "segi_delapan" | "bintang" | "oval" | "setengah_lingkaran" | "layang_layang" | "tanda_tambah" | "hati" | "panah" | "kubus" | "balok" | "tabung" | "kerucut" | "bola" | "limas" | "prisma";
             name: string;
+            /**
+             * @description `flat` is a bangun datar, `solid` a bangun ruang. A shape test without a shape package draws only from the first seven flat shapes; the others are reached through a shape package.
+             * @enum {string}
+             */
+            group: "flat" | "solid";
         };
         ItemCatalog: {
             emoji: components["schemas"]["EmojiCatalogItem"][];

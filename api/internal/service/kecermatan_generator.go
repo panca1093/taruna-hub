@@ -221,8 +221,8 @@ func kecermatanNumbers() []model.KecermatanElement {
 }
 
 func kecermatanShapes() []model.KecermatanElement {
-	out := make([]model.KecermatanElement, 0, len(shapeCatalog))
-	for _, s := range shapeCatalog {
+	out := make([]model.KecermatanElement, 0, defaultShapeCount)
+	for _, s := range shapeCatalog[:defaultShapeCount] {
 		out = append(out, model.KecermatanElement{Kind: model.KecShape, Key: s.ID, Value: s.ID})
 	}
 	return out
