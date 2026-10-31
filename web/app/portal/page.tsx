@@ -1,5 +1,6 @@
+import { Suspense } from "react";
 import { AuthLogin } from "@/components/auth-login";
 
 export default function PortalPage() {
-  return <AuthLogin staff />;
+  return <Suspense><AuthLogin staff /></Suspense>;
 }

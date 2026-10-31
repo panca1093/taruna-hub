@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Spinner, toast } from "@heroui/react";
 import { ArrowLeft, Mail } from "lucide-react";
 import { AuthLayout } from "@/components/auth-layout";
@@ -10,6 +10,7 @@ import { RequireRole } from "@/components/require-role";
 import { TextInput } from "@/components/ui/form";
 import { ApiError, api, errorText } from "@/lib/api/client";
 import { useAuthT } from "@/lib/i18n/dict/auth";
+import { safeReturnPath } from "@/lib/return-intent";
 import { homeFor, useSession, useUser } from "@/lib/session-context";
 
 function VerificationForm() {
@@ -17,7 +18,7 @@ function VerificationForm() {
   const user = useUser();
   const { reloadUser } = useSession();
   const router = useRouter();
-  const destination = homeFor(user.role);
+  const destination = safeReturnPath(useSearchParams().get("next"), user.role) ?? homeFor(user.role);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [fieldError, setFieldError] = useState("");
@@ -79,5 +80,5 @@ function VerificationForm() {
 
 export default function VerifyEmailPage() {
   const t = useAuthT();
-  return <RequireRole roles={["student", "operator", "admin"]} title={t.verifyPageTitle}><VerificationForm /></RequireRole>;
+  return <Suspense><RequireRole roles={["student", "operator", "admin"]} title={t.verifyPageTitle}><VerificationForm /></RequireRole></Suspense>;
 }
