@@ -234,12 +234,36 @@ func TestCatalogPackagesAcceptOnlyCatalogIds(t *testing.T) {
 		t.Errorf("key = %q, want the lowercase id", cands[0].Key)
 	}
 
-	shapes, err := buildCandidates(context.Background(), model.ItemShape, ElementInput{IDs: []string{"lingkaran", "bintang"}})
+	shapes, err := buildCandidates(context.Background(), model.ItemShape, ElementInput{IDs: []string{"lingkaran", "kubus", "dodekagon"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantAccepted(t, shapes, "Lingkaran")
-	wantRejected(t, shapes, "bintang", ElemNotInCatalog)
+	wantAccepted(t, shapes, "Kubus")
+	wantRejected(t, shapes, "dodekagon", ElemNotInCatalog)
+}
+
+func TestShapeCatalogKeepsTheOriginalDefaultPool(t *testing.T) {
+	original := []string{"kotak", "segitiga", "persegi_panjang", "lingkaran", "jajar_genjang", "trapesium", "belah_ketupat"}
+	pool := kecermatanShapes()
+	if len(pool) != len(original) {
+		t.Fatalf("default shape pool has %d shapes, want the original %d", len(pool), len(original))
+	}
+	for i, id := range original {
+		if pool[i].Key != id {
+			t.Fatalf("default shape %d = %s, want %s: locked tests would draw a different pool", i, pool[i].Key, id)
+		}
+	}
+	seen := map[string]bool{}
+	for _, s := range shapeCatalog {
+		if seen[s.ID] {
+			t.Errorf("duplicate shape id %s", s.ID)
+		}
+		seen[s.ID] = true
+		if s.Group != ShapeFlat && s.Group != ShapeSolid {
+			t.Errorf("shape %s has group %q", s.ID, s.Group)
+		}
+	}
 }
 
 func TestEmojiCatalogIsSingleCodepointAndFullyBundled(t *testing.T) {

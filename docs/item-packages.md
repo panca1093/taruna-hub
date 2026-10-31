@@ -2,7 +2,7 @@
 
 A package is a named pool of elements a kecermatan test draws its reference items from. Four types:
 `symbol` (typed or pasted text, a built-in palette, or a CSV/TXT/XLSX file), `image` (many files or a ZIP),
-`emoji` (picked from a built-in catalog) and `shape` (the seven built-in flat shapes). Tenant-owned only:
+`emoji` (picked from a built-in catalog of 345) and `shape` (17 built-in flat and 7 solid shapes). Tenant-owned only:
 master packages and copy-to-own are out of the MVP (D17). Admin and Operator may change packages (D02).
 
     item_packages           id, tenant_id, type, name, current_revision, created_by, created_at, updated_at
@@ -49,6 +49,11 @@ actually inflated are counted); images at most 5 MB each, 4096 x 4096, PNG/JPEG/
 A symbol is exactly one character. A token that contains an emoji (any pictographic block, the BMP
 emoji-presentation symbols, variation selector, ZWJ, keycap, tag characters) is `emoji_in_symbol`, and the
 message points at the Emoji package. Arrows, card suits and geometric shapes stay legal.
+
+The add dialog filters the emoji catalog by its Indonesian name. Shapes come back from the catalog with a
+`group` (`flat` or `solid`) and the dialog lists the two groups separately. A shape test without a shape package
+still draws only from the first seven flat shapes (`defaultShapeCount`): the pool is resolved at every admission,
+so growing it would change tests that are already locked. The newer shapes are reached through a shape package.
 
 Emoji are catalog-only: single-codepoint, no skin tones, flags or ZWJ sequences. An element stores the hex
 codepoint (`1f34e`) and is drawn from `web/public/emoji/<id>.svg`, a bundled Twemoji asset, so it looks the

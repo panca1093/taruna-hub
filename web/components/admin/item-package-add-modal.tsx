@@ -35,6 +35,7 @@ export function ItemPackageAddModal({
   const [file, setFile] = useState<File | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [ids, setIds] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
   const [catalog, setCatalog] = useState<ItemCatalog | null>(null);
   const [catalogFailed, setCatalogFailed] = useState(false);
   const [preview, setPreview] = useState<ItemElementPreview | null>(null);
@@ -77,6 +78,7 @@ export function ItemPackageAddModal({
     setFile(null);
     setFiles([]);
     setIds(new Set());
+    setQuery("");
     setPreview(null);
     setInlineError(null);
     setPending(false);
@@ -165,40 +167,18 @@ export function ItemPackageAddModal({
     setFiles(Array.from(picked));
   };
 
+  const needle = query.trim().toLowerCase();
+  const matchingEmoji = (catalog?.emoji ?? []).filter((item) => !needle || item.name.toLowerCase().includes(needle));
+  const flatShapes = (catalog?.shapes ?? []).filter((shape) => shape.group === "flat");
+  const solidShapes = (catalog?.shapes ?? []).filter((shape) => shape.group === "solid");
+
   const reasonText = (reason: string | undefined, fallback: string | undefined) =>
     reason ? (t.reasons[reason] ?? fallback ?? reason) : "";
 
-  const catalogGrid = (kind: "emoji" | "shape") => {
+  const catalogGrid = (kind: "emoji" | "shape", items: { id: string; name: string }[]) => {
     if (catalogFailed) return <p className="text-xs text-danger">{t.add.catalogFailed}</p>;
     if (!catalog) return <p className="text-xs text-muted">{t.add.catalogLoading}</p>;
-    const items = kind === "emoji" ? catalog.emoji : catalog.shapes;
-    return (
-      <div className="grid max-h-64 grid-cols-6 gap-2 overflow-auto sm:grid-cols-8">
-        {items.map((item) => {
-          const on = ids.has(item.id);
-          return (
-            <label
-              key={item.id}
-              title={item.name}
-              className={cn(
-                "flex cursor-pointer items-center justify-center rounded-lg border border-border p-2 transition-colors hover:border-accent/50 has-focus-visible:ring-2 has-focus-visible:ring-focus",
-                on && "border-accent bg-accent-soft/40",
-              )}
-            >
-              <input
-                type="checkbox"
-                className="sr-only"
-                aria-label={item.name}
-                checked={on}
-                disabled={pending}
-                onChange={() => toggleId(item.id)}
-              />
-              {kind === "emoji" ? <EmojiImage id={item.id} label={item.name} /> : <ShapeIcon shape={item.id} className="text-foreground" />}
-            </label>
-          );
-        })}
-      </div>
-    );
+    return <CatalogGrid kind={kind} items={items} selected={ids} disabled={pending} onToggle={toggleId} />;
   };
 
   return (
@@ -340,7 +320,31 @@ export function ItemPackageAddModal({
               {type === "emoji" ? t.add.emojiSelected(ids.size) : t.add.shapeSelected(ids.size)}
             </span>
           </p>
-          {catalogGrid(type)}
+          {type === "emoji" && (
+            <>
+              <input
+                type="search"
+                aria-label={t.add.emojiSearchLabel}
+                placeholder={t.add.emojiSearchPlaceholder}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="mb-2 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus-visible:ring-2 focus-visible:ring-focus focus-visible:outline-none"
+              />
+              {catalog && matchingEmoji.length === 0 ? (
+                <p className="text-xs text-muted">{t.add.emojiNoMatch}</p>
+              ) : (
+                catalogGrid("emoji", matchingEmoji)
+              )}
+            </>
+          )}
+          {type === "shape" && (
+            <>
+              {catalog && <p className="mb-1.5 text-xs font-medium text-muted">{t.add.shapeGroupFlat}</p>}
+              {catalogGrid("shape", flatShapes)}
+              {catalog && <p className="mt-3 mb-1.5 text-xs font-medium text-muted">{t.add.shapeGroupSolid}</p>}
+              {catalog && catalogGrid("shape", solidShapes)}
+            </>
+          )}
           {type === "emoji" && catalog && (
             <p className="mt-2 text-xs text-muted">
               {t.add.attribution}: {catalog.emoji_attribution}
@@ -400,5 +404,47 @@ export function ItemPackageAddModal({
         </div>
       )}
     </FormModal>
+  );
+}
+
+function CatalogGrid({
+  kind,
+  items,
+  selected,
+  disabled,
+  onToggle,
+}: {
+  kind: "emoji" | "shape";
+  items: { id: string; name: string }[];
+  selected: Set<string>;
+  disabled: boolean;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="grid max-h-64 grid-cols-6 gap-2 overflow-auto sm:grid-cols-8">
+      {items.map((item) => {
+        const on = selected.has(item.id);
+        return (
+          <label
+            key={item.id}
+            title={item.name}
+            className={cn(
+              "flex cursor-pointer items-center justify-center rounded-lg border border-border p-2 transition-colors hover:border-accent/50 has-focus-visible:ring-2 has-focus-visible:ring-focus",
+              on && "border-accent bg-accent-soft/40",
+            )}
+          >
+            <input
+              type="checkbox"
+              className="sr-only"
+              aria-label={item.name}
+              checked={on}
+              disabled={disabled}
+              onChange={() => onToggle(item.id)}
+            />
+            {kind === "emoji" ? <EmojiImage id={item.id} label={item.name} /> : <ShapeIcon shape={item.id} className="text-foreground" />}
+          </label>
+        );
+      })}
+    </div>
   );
 }

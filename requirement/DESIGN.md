@@ -309,7 +309,7 @@ Toasts are provided globally at `bottom end`. Use them for concise action outcom
 
 ### 6.7a Package elements
 
-[ItemElementView](../web/components/admin/item-element.tsx) draws one item-package element the way a student will see it: a symbol as text, an emoji from the bundled Twemoji SVG (`/emoji/<id>.svg`, never the device font), a built-in flat shape as an inline `currentColor` SVG, an image through a short-lived presigned asset link. It is used by the package grid, the add dialog's catalog and the sample column. Wherever the emoji catalog is shown, the CC-BY 4.0 attribution text from `GET /item-packages/catalog` appears too. The package add dialog follows the question import dialog: input, preview table with per-element reason, then confirm.
+[ItemElementView](../web/components/admin/item-element.tsx) draws one item-package element the way a student will see it: a symbol as text, an emoji from the bundled Twemoji SVG (`/emoji/<id>.svg`, never the device font), a built-in flat or solid shape as an inline `currentColor` SVG (solids shade their faces with fill opacity, never a new color), an image through a short-lived presigned asset link. It is used by the package grid, the add dialog's catalog and the sample column. Wherever the emoji catalog is shown, the CC-BY 4.0 attribution text from `GET /item-packages/catalog` appears too. The package add dialog follows the question import dialog: input, preview table with per-element reason, then confirm.
 
 ### 6.8 Charts and countdown rings
 

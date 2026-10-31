@@ -100,15 +100,21 @@ type itemElementCommitResponse struct {
 }
 
 type itemCatalogResponse struct {
-	Emoji            []catalogItemResponse `json:"emoji"`
-	EmojiAttribution string                `json:"emoji_attribution"`
-	Shapes           []catalogItemResponse `json:"shapes"`
-	SymbolPalette    []string              `json:"symbol_palette"`
+	Emoji            []catalogItemResponse      `json:"emoji"`
+	EmojiAttribution string                     `json:"emoji_attribution"`
+	Shapes           []shapeCatalogItemResponse `json:"shapes"`
+	SymbolPalette    []string                   `json:"symbol_palette"`
 }
 
 type catalogItemResponse struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+type shapeCatalogItemResponse struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Group string `json:"group"`
 }
 
 type createItemPackageRequest struct {
@@ -193,13 +199,13 @@ func (h *Handler) ItemCatalog(c echo.Context) error {
 	}
 	out := itemCatalogResponse{
 		Emoji: []catalogItemResponse{}, EmojiAttribution: service.EmojiAttribution,
-		Shapes: []catalogItemResponse{}, SymbolPalette: service.SymbolPalette(),
+		Shapes: []shapeCatalogItemResponse{}, SymbolPalette: service.SymbolPalette(),
 	}
 	for _, e := range service.EmojiCatalog() {
 		out.Emoji = append(out.Emoji, catalogItemResponse{ID: e.ID, Name: e.Name})
 	}
 	for _, s := range service.ShapeCatalog() {
-		out.Shapes = append(out.Shapes, catalogItemResponse{ID: s.ID, Name: s.Name})
+		out.Shapes = append(out.Shapes, shapeCatalogItemResponse{ID: s.ID, Name: s.Name, Group: s.Group})
 	}
 	return c.JSON(http.StatusOK, out)
 }
