@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
+import { Icon } from "@/components/icon";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput, TextInput, TextareaInput } from "@/components/ui/form";
 import { api, ApiError, errorText, type WalletEntry, type WalletStudent } from "@/lib/api/client";
@@ -162,7 +163,7 @@ export default function StudentsPage() {
           <GradientAvatar user={student} size="sm" />
           <div>
             <p className="font-medium text-foreground">{student.name}</p>
-            <p className="text-xs text-muted">{student.email ?? "—"}</p>
+            <p className="text-label text-muted">{student.email ?? "—"}</p>
           </div>
         </div>
       ),
@@ -179,7 +180,7 @@ export default function StudentsPage() {
         <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
           {(role === "admin" || role === "operator") && (
             <Button variant="ghost" size="sm" isIconOnly onPress={() => openAdjust(student)} aria-label={t.adjustTitle}>
-              <Wallet className="size-3.5" />
+              <Icon icon={Wallet} size="xs" />
             </Button>
           )}
         </div>
@@ -203,7 +204,7 @@ export default function StudentsPage() {
           onChange={(event) => setSearch(event.target.value)}
         />
         <Button variant="secondary" size="sm" type="submit">
-          <Search className="size-3.5" /> {t.searchAction}
+          <Icon icon={Search} size="xs" /> {t.searchAction}
         </Button>
         {query !== "" && (
           <Button
@@ -231,7 +232,7 @@ export default function StudentsPage() {
           }
         />
       ) : rows === null ? (
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <p className="py-14 text-center text-caption text-muted">{t.loading}</p>
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Users}
@@ -241,7 +242,7 @@ export default function StudentsPage() {
       ) : (
         <>
           <DataTable columns={columns} rows={rows} rowKey={(student) => student.id} onRowClick={openDetail} />
-          {moreFailed !== "" && <p className="mt-3 text-center text-sm text-danger">{moreFailed}</p>}
+          {moreFailed !== "" && <p className="mt-3 text-center text-caption text-danger">{moreFailed}</p>}
           {rows.length < total && (
             <div className="mt-4 flex justify-center">
               <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
@@ -320,49 +321,49 @@ export default function StudentsPage() {
             <div className="flex items-center gap-3">
               <GradientAvatar user={detail} size="lg" />
               <div>
-                <p className="text-sm font-semibold text-foreground">{detail.name}</p>
-                <p className="text-xs text-muted">{detail.email ?? "—"}</p>
+                <p className="font-display text-title text-foreground">{detail.name}</p>
+                <p className="text-label text-muted">{detail.email ?? "—"}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 border-t border-border pt-4 text-sm">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-tile border border-border p-5 text-small">
               <div>
-                <p className="text-xs text-muted">{t.detailJoined}</p>
-                <p className="font-medium text-foreground">{joined(detail.created_at)}</p>
+                <dt className="mb-1 text-label text-muted">{t.detailJoined}</dt>
+                <dd className="font-medium text-foreground">{joined(detail.created_at)}</dd>
               </div>
               <div>
-                <p className="text-xs text-muted">{t.detailBalance}</p>
-                <p className="font-medium text-foreground">{formatIDR(detail.balance)}</p>
+                <dt className="mb-1 text-label text-muted">{t.detailBalance}</dt>
+                <dd className="font-medium text-foreground">{formatIDR(detail.balance)}</dd>
               </div>
               <div>
-                <p className="text-xs text-muted">{t.detailPhone}</p>
-                <p className="font-medium text-foreground">{detail.phone ?? "—"}</p>
+                <dt className="mb-1 text-label text-muted">{t.detailPhone}</dt>
+                <dd className="font-medium text-foreground">{detail.phone ?? "—"}</dd>
               </div>
-            </div>
+            </dl>
             <div>
-              <p className="mb-2 text-[13px] font-medium text-foreground">{t.detailLedgerTitle}</p>
+              <h3 className="mb-3 font-display text-title">{t.detailLedgerTitle}</h3>
               {detailFailed ? (
-                <p className="text-sm text-danger">{t.detailLedgerFailed}</p>
+                <p className="text-caption text-danger">{t.detailLedgerFailed}</p>
               ) : detailEntries === null ? (
-                <p className="text-sm text-muted">{t.loading}</p>
+                <p className="text-caption text-muted">{t.loading}</p>
               ) : detailEntries.length === 0 ? (
-                <p className="text-sm text-muted">{t.detailLedgerEmpty}</p>
+                <p className="text-caption text-muted">{t.detailLedgerEmpty}</p>
               ) : (
                 <ul className="space-y-2">
                   {detailEntries.map((entry) => (
                     <li
                       key={entry.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5"
+                      className="flex items-center justify-between gap-3 rounded-control border border-border px-4 py-3"
                     >
                       <div className="min-w-0">
-                        <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                        <p className="flex items-center gap-1.5 text-small font-medium text-foreground">
                           {t.ledgerType[entry.kind] ?? entry.kind}
-                          <span className="text-xs font-normal text-muted">{new Date(entry.created_at).toLocaleString()}</span>
+                          <span className="text-label font-normal text-muted">{new Date(entry.created_at).toLocaleString()}</span>
                         </p>
-                        <p className="truncate text-xs text-muted">{entry.reason === "" ? "—" : entry.reason}</p>
+                        <p className="truncate text-label text-muted">{entry.reason === "" ? "—" : entry.reason}</p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="font-mono text-sm font-medium text-foreground">{formatSignedIDR(entry.amount)}</p>
-                        <p className="font-mono text-xs text-muted">{formatIDR(entry.balance_after)}</p>
+                        <p className="font-mono text-small font-medium text-foreground">{formatSignedIDR(entry.amount)}</p>
+                        <p className="font-mono text-label text-muted">{formatIDR(entry.balance_after)}</p>
                       </div>
                     </li>
                   ))}
@@ -372,7 +373,7 @@ export default function StudentsPage() {
             {(role === "admin" || role === "operator") && (
               <div className="border-t border-border pt-4">
                 <Button variant="secondary" size="sm" onPress={() => openAdjust(detail)}>
-                  <Wallet className="size-3.5" /> {t.adjustTitle}
+                  <Icon icon={Wallet} size="xs" /> {t.adjustTitle}
                 </Button>
               </div>
             )}
