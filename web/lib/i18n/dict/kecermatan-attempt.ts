@@ -3,8 +3,10 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
-  eyebrow: "Tes Kecermatan",
-  pageTitle: "Persiapan Tes Kecermatan",
+  crumbDashboard: "Dashboard",
+  crumbKecermatan: "Tes kecermatan",
+  crumbPrepare: "Persiapan",
+  prepTitle: "Siapkan ritmemu.",
   readinessHeading: "Satu kolom, satu ritme.",
   rulesReference: (options: number, letter: string) =>
     `Setiap kolom punya ${options} item referensi berlabel A–${letter}. Set itu tetap sama untuk semua soal di kolom tersebut.`,
@@ -58,8 +60,10 @@ const id = {
 };
 
 const en: typeof id = {
-  eyebrow: "Kecermatan Test",
-  pageTitle: "Kecermatan Test Setup",
+  crumbDashboard: "Dashboard",
+  crumbKecermatan: "Kecermatan test",
+  crumbPrepare: "Get ready",
+  prepTitle: "Find your rhythm.",
   readinessHeading: "One kolom, one rhythm.",
   rulesReference: (options: number, letter: string) =>
     `Each kolom has ${options} reference items labeled A–${letter}. The set stays the same for every soal in that kolom.`,

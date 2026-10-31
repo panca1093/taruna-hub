@@ -4,9 +4,12 @@ import { use, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "@heroui/react";
-import { CheckCircle2, ChevronRight, Clock, CloudOff, ShoppingBag, SkipForward, TriangleAlert } from "lucide-react";
+import { ArrowRight, CheckCircle2, CloudOff, ShoppingBag, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { ExamTimerPill } from "@/components/countdown-ring";
+import { Icon } from "@/components/icon";
 import { KecermatanItem } from "@/components/kecermatan-item";
+import { Panel, TextLink } from "@/components/page-blocks";
 import { LinkButton } from "@/components/ui/link-button";
 import { ApiError, api, type KecermatanOverview, type KecermatanSession } from "@/lib/api/client";
 import { isNoCredit, purchaseHref, useSecondsLeft } from "@/lib/kecermatan-session";
@@ -31,23 +34,13 @@ function ExamFrame({ children }: { children: React.ReactNode }) {
 
 function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: string; subtitle: string; timer: string; urgent: boolean; timerLabel: string }) {
   return (
-    <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border px-5">
-      <Image src="/taruna-eduka-logo.png" alt="Taruna Eduka" width={750} height={250} className="hidden h-8 w-auto sm:block" />
+    <header className="flex min-h-19.5 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 py-3.5 sm:min-h-22 sm:gap-5 sm:px-8 sm:py-4">
+      <Image src="/taruna-eduka-logo.png" alt="Taruna Eduka" width={750} height={250} className="h-8 w-auto sm:h-10" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-foreground">{title}</p>
-        <p className="truncate text-xs text-muted">{subtitle}</p>
+        <p className="truncate text-small font-semibold text-foreground">{title}</p>
+        <p className="mt-1 truncate text-micro text-muted">{subtitle}</p>
       </div>
-      <div
-        role="timer"
-        aria-label={timerLabel}
-        className={cn(
-          "flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-mono text-lg font-semibold",
-          urgent ? "bg-danger-soft text-danger" : "bg-accent-soft text-accent-soft-foreground",
-        )}
-      >
-        <Clock className="size-4" />
-        {timer}
-      </div>
+      <ExamTimerPill role="timer" aria-label={timerLabel} time={timer} urgent={urgent} />
     </header>
   );
 }
@@ -108,9 +101,9 @@ function KolomScreen({
         timerLabel={t.timerLabel}
       />
 
-      <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col justify-center-safe overflow-y-auto px-5 py-6">
+      <main className="mx-auto flex min-h-0 w-full max-w-290 flex-1 flex-col justify-center-safe overflow-y-auto px-4 py-6 text-center sm:px-6 sm:py-8">
         {unconfirmed > 0 && (
-          <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-warning bg-warning-soft p-3 text-warning-soft-foreground">
+          <div role="alert" className="mb-5 flex items-start gap-3 rounded-tile border border-warning bg-warning-soft p-3 text-left text-warning-soft-foreground">
             <TriangleAlert className="mt-0.5 size-4 shrink-0" />
             <div className="min-w-0 flex-1 text-xs">
               <p className="font-semibold">{t.unconfirmedTitle(unconfirmed)}</p>
@@ -123,12 +116,12 @@ function KolomScreen({
         )}
 
         <div>
-          <p className="mb-2 text-center text-xs font-medium text-muted">{t.referenceLabel(kolom.number)}</p>
-          <div className="flex flex-wrap justify-center gap-2">
+          <p className="text-caption text-muted">{t.referenceLabel(kolom.number)}</p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2 sm:gap-3">
             {kolom.reference.map((item) => (
-              <div key={item.label} className="min-w-24 rounded-lg border border-border bg-surface px-2 py-3 text-center sm:min-w-20">
-                <p className="text-xs font-semibold text-muted">{item.label}</p>
-                <KecermatanItem elements={item.elements} className="mt-1 text-xl font-extrabold" elementClassName="size-6 sm:size-7" />
+              <div key={item.label} className="min-w-24 rounded-tile border border-border bg-surface px-2 py-3 text-center sm:min-w-25 sm:px-4">
+                <p className="text-label text-muted">{item.label}</p>
+                <KecermatanItem elements={item.elements} className="mt-2 text-xl font-extrabold sm:text-2xl" elementClassName="size-6 sm:size-7" />
               </div>
             ))}
           </div>
@@ -136,11 +129,11 @@ function KolomScreen({
 
         {soal ? (
           <>
-            <div className="mt-8">
-              <p className="text-center font-display text-xl font-semibold text-foreground">{t.soalPrompt}</p>
-              <div className="mt-3 flex flex-wrap justify-center gap-2">
+            <div className="mt-7">
+              <h1 className="font-display text-heading sm:text-hero">{t.soalPrompt}</h1>
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:justify-center sm:gap-4">
                 {soal.shown.map((label) => (
-                  <div key={label} className="min-w-36 rounded-lg border border-dashed border-border bg-surface px-3 py-5 text-center">
+                  <div key={label} className="flex items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-2.5 py-5 sm:min-w-42.5 sm:px-6 sm:py-5.5">
                     <KecermatanItem elements={labelOf(label)?.elements ?? []} className="text-2xl font-extrabold sm:text-3xl" elementClassName="size-6 sm:size-9" />
                   </div>
                 ))}
@@ -148,10 +141,13 @@ function KolomScreen({
             </div>
 
             <div className="mt-8">
-              <p className="mb-2 text-center text-xs font-medium text-muted">
+              <p className="text-caption text-muted">
                 {t.soalProgress(soalIndex + 1, kolom.soal.length)} · {t.chooseMissingLabel}
               </p>
-              <div className="flex flex-wrap justify-center gap-2">
+              <div
+                className="mt-6 grid gap-2.5 sm:flex sm:flex-wrap sm:justify-center sm:gap-3"
+                style={{ gridTemplateColumns: `repeat(${Math.min(kolom.reference.length, 5)}, minmax(0, 1fr))` }}
+              >
                 {kolom.reference.map((item) => (
                   <button
                     key={item.label}
@@ -159,45 +155,45 @@ function KolomScreen({
                     disabled={timeUp}
                     aria-label={t.answerAria(item.label)}
                     onClick={() => onAnswer(soal.number, item.label)}
-                    className="flex h-16 w-24 items-center justify-center rounded-lg border border-border bg-surface font-mono text-2xl font-extrabold text-foreground transition-colors hover:border-accent hover:bg-accent-soft hover:text-accent-soft-foreground disabled:pointer-events-none disabled:opacity-50 sm:w-20"
+                    className="flex h-14 items-center justify-center rounded-tile border border-border bg-surface font-mono text-2xl font-extrabold text-foreground outline-none transition-colors hover:border-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 sm:h-16 sm:w-25"
                   >
                     {item.label}
                   </button>
                 ))}
               </div>
-              <div className="mt-4 flex items-center justify-center gap-4 text-xs text-muted">
+              <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-label text-muted">
                 <button
                   type="button"
                   disabled={timeUp}
                   onClick={() => onAnswer(soal.number, null)}
-                  className="flex items-center gap-1 font-medium text-accent hover:underline disabled:pointer-events-none disabled:opacity-50"
+                  className="min-h-9 rounded-chip font-medium text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50"
                 >
-                  <SkipForward className="size-3.5" /> {t.skip}
+                  {t.skip}
                 </button>
-                <span className="hidden sm:inline">{t.keyboardHint(labels[0] ?? "A", labels[labels.length - 1] ?? "E")}</span>
+                <span>{t.keyboardHint(labels[0] ?? "A", labels[labels.length - 1] ?? "E")}</span>
               </div>
             </div>
           </>
         ) : (
-          <div className="mt-8 flex flex-col items-center text-center">
+          <Panel tone="plain" radius="tile" className="mt-7 flex flex-col items-center">
             <span className="inline-flex size-11 items-center justify-center rounded-full bg-success-soft text-success-soft-foreground">
-              <CheckCircle2 className="size-5" />
+              <Icon icon={CheckCircle2} size="md" />
             </span>
-            <p className="mt-4 text-sm font-medium text-foreground">{t.allAnswered}</p>
-            <p className="mt-1 text-xs text-muted">{t.waitingForTimer}</p>
-          </div>
+            <p className="mt-4 font-display text-heading">{t.allAnswered}</p>
+            <p className="mt-2 text-caption text-muted">{t.waitingForTimer}</p>
+          </Panel>
         )}
 
-        {timeUp && <p className="mt-4 text-center text-xs font-medium text-warning-soft-foreground">{t.timeUp}</p>}
+        {timeUp && <p className="mt-4 text-caption font-medium text-warning-soft-foreground">{t.timeUp}</p>}
 
-        <div className="mt-8">
-          <div className="flex gap-1" aria-hidden>
+        <div className="mt-7">
+          <div className="mx-auto flex max-w-150 gap-1.25" aria-hidden>
             {Array.from({ length: session.kolom_count }, (_, index) => (
-              <span key={index} className={cn("h-1 flex-1 rounded-full", index < kolom.number ? "bg-accent" : "bg-default")} />
+              <span key={index} className={cn("h-1 flex-1 rounded-full", index < kolom.number ? "bg-accent" : "bg-border")} />
             ))}
           </div>
-          <p className="mt-2 text-center text-xs text-muted">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
-          <p className="mt-0.5 text-center text-xs text-muted">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
+          <p className="mt-3 text-caption text-muted">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
+          <p className="mt-0.5 text-label text-muted">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
         </div>
       </main>
     </ExamFrame>
@@ -484,48 +480,53 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
       t.rulesCredit,
     ];
     return (
-      <AppShell title={t.pageTitle} description={test.title}>
-        <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-          <section className="rounded-2xl border border-border bg-surface p-5">
-            <p className="text-xs font-medium tracking-wide text-muted uppercase">{t.eyebrow}</p>
-            <h2 className="font-display mt-1 text-xl font-semibold text-foreground">{t.readinessHeading}</h2>
-            <ul className="mt-4 space-y-2.5 text-sm text-muted">
+      <AppShell
+        title={t.prepTitle}
+        description={test.title}
+        breadcrumb={[
+          { label: t.crumbDashboard, href: "/student" },
+          { label: t.crumbKecermatan, href: `/student/kecermatan/${testId}` },
+          { label: t.crumbPrepare },
+        ]}
+        maxWidth="max-w-230"
+      >
+        <div className="grid gap-6 md:grid-cols-2">
+          <Panel>
+            <h2 className="font-display mb-3 text-heading-sm">{t.readinessHeading}</h2>
+            <ul className="list-disc space-y-1.5 pl-4.5 text-caption leading-loose text-muted marker:text-rose">
               {rules.map((rule) => (
-                <li key={rule} className="flex gap-2.5">
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-accent" />
-                  <span>{rule}</span>
-                </li>
+                <li key={rule}>{rule}</li>
               ))}
             </ul>
-          </section>
+          </Panel>
 
-          <section className="h-fit rounded-2xl border border-border bg-surface p-5">
-            <h2 className="font-display text-lg font-semibold text-foreground">{t.checkTitle}</h2>
-            <p className="mt-2 text-sm text-muted">{t.attemptsLeft(Math.max(0, left))}</p>
+          <Panel className="h-fit">
+            <h2 className="font-display mb-3 text-heading-sm">{t.checkTitle}</h2>
+            <p className="text-caption leading-relaxed text-muted">{t.attemptsLeft(Math.max(0, left))}</p>
             {blocked ? (
               <div className="mt-4 space-y-3">
-                <p className="text-sm font-medium text-foreground">{t.noCreditTitle}</p>
-                <p className="text-xs text-muted">{t.noCreditDescription}</p>
+                <p className="text-small font-medium text-foreground">{t.noCreditTitle}</p>
+                <p className="text-caption text-muted">{t.noCreditDescription}</p>
                 <LinkButton href={purchaseHref(overview.product_id)} variant="primary" className="w-full">
-                  <ShoppingBag className="size-4" /> {t.buyMore}
+                  <Icon icon={ShoppingBag} size="sm" /> {t.buyMore}
                 </LinkButton>
               </div>
             ) : (
-              <div className="mt-4 space-y-4">
-                <label className="flex items-start gap-2.5 text-sm text-foreground">
-                  <input type="checkbox" checked={ready} onChange={(event) => setReady(event.target.checked)} className="mt-0.5 size-4 accent-accent" />
+              <div className="mt-2 space-y-3">
+                <label className="flex items-start gap-2.5 py-3.5 text-caption leading-relaxed text-foreground">
+                  <input type="checkbox" checked={ready} onChange={(event) => setReady(event.target.checked)} className="mt-0.5 size-4.5 shrink-0 accent-accent" />
                   {t.readyCheck}
                 </label>
-                {startError && <p role="alert" className="text-xs text-danger">{t.startError}</p>}
+                {startError && <p role="alert" className="text-caption text-danger">{t.startError}</p>}
                 <Button variant="primary" size="lg" className="w-full" isDisabled={!ready || starting} onPress={() => void start()}>
-                  {starting ? t.starting : t.startKolom1} <ChevronRight className="size-4" />
+                  {starting ? t.starting : t.startKolom1} <Icon icon={ArrowRight} size="sm" />
                 </Button>
               </div>
             )}
-            <LinkButton href={`/student/kecermatan/${testId}`} variant="ghost" size="sm" className="mt-3 w-full">
+            <TextLink href={`/student/kecermatan/${testId}`} arrow={false} className="mt-3">
               {t.backToDetail}
-            </LinkButton>
-          </section>
+            </TextLink>
+          </Panel>
         </div>
       </AppShell>
     );
@@ -543,17 +544,17 @@ export default function KecermatanAttemptPage({ params }: { params: Promise<{ id
           urgent={false}
           timerLabel={t.timerLabel}
         />
-        <main className="flex min-h-0 flex-1 flex-col items-center justify-center-safe overflow-y-auto px-5 py-6">
-          <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 text-center">
-            <p className="text-sm font-medium text-muted">{t.kolomFinished(session.finished_kolom ?? nextKolom - 1)}</p>
-            <h1 className="font-display mt-1 text-2xl font-semibold text-foreground">{t.pauseHeading}</h1>
-            <p className="mt-2 text-sm text-muted">{startingNow ? t.startingNext : t.pauseHint(nextKolom)}</p>
-            <p className="font-display mt-4 text-5xl font-semibold text-accent tabular-nums">{pauseLeft ?? "—"}</p>
-            <Button variant="primary" size="lg" className="mt-5 w-full" isDisabled={continuing || startingNow} onPress={() => void goNext()}>
-              {t.continueToKolom(nextKolom)} <ChevronRight className="size-4" />
+        <main className="flex min-h-0 flex-1 flex-col items-center justify-center-safe overflow-y-auto px-4 py-8 sm:px-6">
+          <div className="w-full max-w-212 rounded-card border border-border bg-surface p-6 text-center sm:p-9">
+            <span className="mb-3 inline-flex rounded-chip bg-accent-soft px-2 py-1 text-micro text-accent">{t.kolomFinished(session.finished_kolom ?? nextKolom - 1)}</span>
+            <h1 className="font-display text-display-sm">{t.pauseHeading}</h1>
+            <p className="mt-3 text-small leading-loose text-muted">{startingNow ? t.startingNext : t.pauseHint(nextKolom)}</p>
+            <p className="my-6 font-display text-score tabular-nums text-accent">{pauseLeft ?? "—"}</p>
+            <Button variant="primary" size="lg" isDisabled={continuing || startingNow} onPress={() => void goNext()}>
+              {t.continueToKolom(nextKolom)} <Icon icon={ArrowRight} size="sm" />
             </Button>
-            {continueFailed && <p role="alert" className="mt-3 text-xs text-danger">{t.continueFailed}</p>}
-            <p className="mt-4 text-xs text-muted">{t.pauseNote}</p>
+            {continueFailed && <p role="alert" className="mt-3 text-caption text-danger">{t.continueFailed}</p>}
+            <p className="mt-5 text-label text-muted">{t.pauseNote}</p>
           </div>
         </main>
       </ExamFrame>
