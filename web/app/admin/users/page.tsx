@@ -1,11 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Chip, toast } from "@heroui/react";
+import { Button, toast } from "@heroui/react";
 import { Pencil, Plus, ShieldCheck, Trash2, UserCog } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
+import { DetailGrid, DetailItem } from "@/components/admin-detail";
+import { Icon } from "@/components/icon";
+import { NoteBox } from "@/components/page-blocks";
+import { StatusChip } from "@/components/status-badge";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput, TextInput } from "@/components/ui/form";
@@ -13,12 +17,6 @@ import { admins, formatDate, operators as initialOperators } from "@/lib/mock-da
 import { useUser } from "@/lib/session-context";
 import { useUsersT } from "@/lib/i18n/dict/users";
 import type { AppUser, Role } from "@/lib/types";
-
-const gradients = [
-  ["#4f46e5", "#8b5cf6"],
-  ["#0ea5e9", "#22d3ee"],
-  ["#f43f5e", "#ec4899"],
-] as const;
 
 export default function UsersPage() {
   const t = useUsersT();
@@ -39,7 +37,6 @@ export default function UsersPage() {
   };
 
   const handleSave = () => {
-    const g = gradients[Math.floor(Math.random() * gradients.length)];
     setRows((prev) => [
       {
         id: `u-staff-new-${Date.now()}`,
@@ -47,8 +44,8 @@ export default function UsersPage() {
         email: form.email,
         role: form.role,
         createdAt: new Date().toISOString().slice(0, 10),
-        avatarColorFrom: g[0],
-        avatarColorTo: g[1],
+        avatarColorFrom: "var(--accent)",
+        avatarColorTo: "var(--accent-2)",
       },
       ...prev,
     ]);
@@ -65,7 +62,7 @@ export default function UsersPage() {
           <GradientAvatar user={u} size="sm" />
           <div>
             <p className="font-medium text-foreground">{u.name}</p>
-            <p className="text-xs text-muted">{u.email}</p>
+            <p className="text-label text-muted">{u.email}</p>
           </div>
         </div>
       ),
@@ -74,9 +71,7 @@ export default function UsersPage() {
       key: "role",
       header: t.colRole,
       render: (u) => (
-        <Chip size="sm" className={u.role === "admin" ? "bg-accent-soft text-accent-soft-foreground font-medium" : "bg-default text-default-foreground font-medium"}>
-          {u.role === "admin" ? t.roleAdmin : t.roleOperator}
-        </Chip>
+        <StatusChip tone={u.role === "admin" ? "accent" : "neutral"}>{u.role === "admin" ? t.roleAdmin : t.roleOperator}</StatusChip>
       ),
     },
     { key: "createdAt", header: t.colCreated, render: (u) => formatDate(u.createdAt) },
@@ -88,7 +83,7 @@ export default function UsersPage() {
       render: (u) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="sm" isIconOnly>
-            <Pencil className="size-3.5" />
+            <Icon icon={Pencil} size="sm" />
           </Button>
           <Button
             variant="ghost"
@@ -98,7 +93,7 @@ export default function UsersPage() {
             isDisabled={u.id === sessionUser.id}
             onPress={() => setDeleteTarget(u)}
           >
-            <Trash2 className="size-3.5" />
+            <Icon icon={Trash2} size="sm" />
           </Button>
         </div>
       ),
@@ -112,7 +107,7 @@ export default function UsersPage() {
         description={t.pageDescription}
         actions={
           <Button variant="primary" size="sm" onPress={openCreate}>
-            <Plus className="size-3.5" /> {t.addAccount}
+            <Icon icon={Plus} size="sm" /> {t.addAccount}
           </Button>
         }
       >
@@ -141,10 +136,7 @@ export default function UsersPage() {
             selectedKey={form.role}
             onSelectionChange={(k) => setForm((f) => ({ ...f, role: (k as Role) ?? "operator" }))}
           />
-          <div className="flex items-start gap-2.5 rounded-lg bg-accent-soft p-3 text-xs text-accent-soft-foreground">
-            {form.role === "admin" ? <ShieldCheck className="mt-0.5 size-3.5 shrink-0" /> : <UserCog className="mt-0.5 size-3.5 shrink-0" />}
-            {form.role === "admin" ? t.adminInfo : t.operatorInfo}
-          </div>
+          <NoteBox icon={form.role === "admin" ? ShieldCheck : UserCog}>{form.role === "admin" ? t.adminInfo : t.operatorInfo}</NoteBox>
         </FormModal>
 
         <FormModal
@@ -160,36 +152,20 @@ export default function UsersPage() {
         >
           {detail && (
             <>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3.5">
                 <GradientAvatar user={detail} size="lg" />
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{detail.name}</p>
-                  <p className="text-xs text-muted">{detail.email}</p>
+                  <p className="font-display text-title text-foreground">{detail.name}</p>
+                  <p className="text-label text-muted">{detail.email}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 border-t border-border pt-4 text-sm">
-                <div>
-                  <p className="text-xs text-muted">{t.colRole}</p>
-                  <Chip
-                    size="sm"
-                    className={
-                      detail.role === "admin"
-                        ? "bg-accent-soft text-accent-soft-foreground font-medium"
-                        : "bg-default text-default-foreground font-medium"
-                    }
-                  >
-                    {detail.role === "admin" ? t.roleAdmin : t.roleOperator}
-                  </Chip>
-                </div>
-                <div>
-                  <p className="text-xs text-muted">{t.colCreated}</p>
-                  <p className="font-medium text-foreground">{formatDate(detail.createdAt)}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5 rounded-lg bg-accent-soft p-3 text-xs text-accent-soft-foreground">
-                {detail.role === "admin" ? <ShieldCheck className="mt-0.5 size-3.5 shrink-0" /> : <UserCog className="mt-0.5 size-3.5 shrink-0" />}
-                {detail.role === "admin" ? t.adminInfo : t.operatorInfo}
-              </div>
+              <DetailGrid className="border-t border-border pt-5">
+                <DetailItem label={t.colRole}>
+                  <StatusChip tone={detail.role === "admin" ? "accent" : "neutral"}>{detail.role === "admin" ? t.roleAdmin : t.roleOperator}</StatusChip>
+                </DetailItem>
+                <DetailItem label={t.colCreated}>{formatDate(detail.createdAt)}</DetailItem>
+              </DetailGrid>
+              <NoteBox icon={detail.role === "admin" ? ShieldCheck : UserCog}>{detail.role === "admin" ? t.adminInfo : t.operatorInfo}</NoteBox>
             </>
           )}
         </FormModal>
@@ -217,7 +193,7 @@ export default function UsersPage() {
             </>
           }
         >
-          <p className="text-sm text-muted">{t.deleteDescription}</p>
+          <p className="text-small text-muted">{t.deleteDescription}</p>
         </FormModal>
       </AppShell>
     </RequireRole>
