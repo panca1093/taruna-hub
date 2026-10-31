@@ -159,7 +159,6 @@ function ResultContent({ testId }: { testId: string }) {
                 </Card>
               ))}
             </div>
-            <p className="text-xs text-muted">{t.provisionalNote(result.scoring_version)}</p>
           </div>
         </div>
 

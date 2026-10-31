@@ -14,8 +14,6 @@ const id = {
   benar: "Benar",
   salah: "Salah",
   kosong: "Kosong",
-  provisionalNote: (version: number) =>
-    `Nilai komposit dihitung server dengan versi penilaian ${version} dan masih bersifat sementara. Jumlah benar, salah, dan kosong adalah hitungan resmi.`,
   scoreKecepatan: "Kecepatan",
   scoreKetahanan: "Ketahanan",
   scoreKetelitian: "Ketelitian",
@@ -59,8 +57,6 @@ const en: typeof id = {
   benar: "Correct",
   salah: "Wrong",
   kosong: "Blank",
-  provisionalNote: (version: number) =>
-    `The composite scores are computed by the server with scoring version ${version} and are still provisional. The correct, wrong and blank counts are the official tally.`,
   scoreKecepatan: "Speed",
   scoreKetahanan: "Endurance",
   scoreKetelitian: "Accuracy",

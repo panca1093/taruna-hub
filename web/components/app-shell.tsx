@@ -17,6 +17,7 @@ import { useCommonT } from "@/lib/i18n/dict/common";
 import { Logo } from "./logo";
 import { GradientAvatar } from "./gradient-avatar";
 import { EmailVerifyBanner } from "./email-verify-banner";
+import { WalletPopover } from "./wallet-popover";
 import type { Role } from "@/lib/types";
 
 const focusRing = "outline-none focus-visible:ring-2 focus-visible:ring-sidebar-accent";
@@ -161,20 +162,6 @@ function MobileStudentNav() {
 }
 
 /** Quick wallet entry. The wallet popover replaces this link without touching its siblings. */
-function WalletTrigger() {
-  const shellT = useShellT();
-  return (
-    <Link
-      href="/student/wallet"
-      aria-label={shellT.walletLabel}
-      className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2.5 text-sm font-medium text-foreground outline-none transition-colors hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-focus"
-    >
-      <Wallet className="size-4.5 text-muted" aria-hidden />
-      <span className="hidden sm:inline">{shellT.wallet}</span>
-    </Link>
-  );
-}
-
 function AccountMenu() {
   const { role, logout } = useSession();
   const user = useUser();
@@ -336,7 +323,7 @@ export function AppShell({
           </div>
           <div className="flex items-center gap-1.5">
             {actions}
-            {isStudent && <WalletTrigger />}
+            {isStudent && <WalletPopover />}
             <AccountMenu />
           </div>
         </header>

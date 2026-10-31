@@ -64,7 +64,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="min-h-dvh bg-background">
+    <div className="palette-classic min-h-dvh bg-background">
       <PublicNav />
 
       {/* Hero */}
