@@ -126,9 +126,13 @@ export default function StudentOrdersPage() {
                 <tbody>
                   {orders.map((o) => (
                     <tr key={o.id} className="border-b border-border last:border-b-0">
-                      <td className="px-4 py-3 font-mono text-xs text-muted">{o.code}</td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        <Link href={`/student/orders/${o.id}`} className="text-muted hover:text-foreground hover:underline">
+                          {o.code}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3 text-foreground">
-                        <Link href={`/catalog/${o.product_id}`} className="hover:underline">
+                        <Link href={`/student/orders/${o.id}`} className="font-medium hover:underline">
                           {o.product_title}
                         </Link>
                       </td>
@@ -138,6 +142,11 @@ export default function StudentOrdersPage() {
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center gap-2">
                           <OrderStatusBadge status={o.status} />
+                          {o.payment_exception && (
+                            <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-medium text-warning-soft-foreground">
+                              {t.heldBadge}
+                            </span>
+                          )}
                           {o.payment_method === "gateway" && o.status === "pending" && (
                             <Button size="sm" variant="ghost" onPress={() => cancelOrder(o.id)}>
                               {t.cancelOrder}

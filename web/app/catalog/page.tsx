@@ -93,7 +93,7 @@ function CatalogContent() {
 
   const renderCard = (product: PublicProduct) => (
     <Link key={product.id} href={`/catalog/${product.id}`}>
-      <Card className="group h-full gap-0 overflow-hidden p-0 transition-shadow hover:shadow-overlay">
+      <Card className="group h-full gap-0 overflow-hidden rounded-2xl p-0 transition-shadow hover:shadow-overlay">
         <div className="relative h-32 w-full bg-gradient-ring">
           <div className="absolute top-3 left-3 flex gap-1.5">
             <Chip size="sm" className="bg-white/20 text-white backdrop-blur-sm">
@@ -141,6 +141,8 @@ function CatalogContent() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
+              type="button"
+              aria-pressed={type === tab.key}
               onClick={() => setType(tab.key)}
               className={cn(
                 "relative flex-1 pb-3 text-sm font-medium whitespace-nowrap transition-colors sm:flex-none",
