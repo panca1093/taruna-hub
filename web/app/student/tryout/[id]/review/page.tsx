@@ -10,18 +10,19 @@ import { LatexText } from "@/components/latex";
 import { LinkButton } from "@/components/ui/link-button";
 import { api, ApiError, type ReviewQuestion, type StudentTryout, type TryoutResultDetail, type TryoutReview } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
+import { useLocale } from "@/lib/i18n/locale-context";
 import { useTryoutReviewT } from "@/lib/i18n/dict/tryout-review";
 
 type LoadState = "loading" | "ready" | "failed" | "unavailable" | "notReady" | "held";
 
-const formatDate = (iso: string) =>
-  new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(
-    new Date(iso),
-  );
-
 function ReviewContent({ tryoutId, attemptParam }: { tryoutId: string; attemptParam: string | null }) {
   const router = useRouter();
   const t = useTryoutReviewT();
+  const { locale } = useLocale();
+  const formatDate = (iso: string) =>
+    new Intl.DateTimeFormat(locale === "id" ? "id-ID" : "en-US", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(
+      new Date(iso),
+    );
   const [overview, setOverview] = useState<StudentTryout | null>(null);
   const [result, setResult] = useState<TryoutResultDetail | null>(null);
   const [review, setReview] = useState<TryoutReview | null>(null);

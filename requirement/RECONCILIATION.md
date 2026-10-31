@@ -41,6 +41,7 @@ The source PRD's post-MVP roadmap remains outside this release: predictive analy
 | Provider placeholders could look complete | Old plan proposes WhatsApp no-op to unblock work | Unconfigured state explicit; real channel delivery required for full-scope release |
 | CI omits lint and test coverage is narrow | Current lint fails; only error-handler tests exist | P00 enforces lint; per-slice behavioral/integration/browser verification |
 | Calendar/budget is obsolete | Original August deadline is historical; v1.3 itself calls for repricing | Relative sizing only; new calendar/cost depends on staffing/provider decisions and certification |
+| Student profile self-edit (2026-10-31) | PRD §4 gives students no profile-write FR; the workspace handoff gate G09 left it open | Owner approved student self-edit of name and phone only; email stays admin-managed; password change needs the current password and revokes other sessions. `PATCH /api/v1/me` is student-only. PRD unchanged |
 
 ## 3. Original slice migration
 

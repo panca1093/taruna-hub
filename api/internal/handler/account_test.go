@@ -324,6 +324,23 @@ func TestUpdateMeOverHTTP(t *testing.T) {
 		http.StatusUnprocessableEntity, httpx.CodeValidation, "body")
 }
 
+func TestUpdateMeIsStudentOnly(t *testing.T) {
+	f := newAuthFixture(t, false)
+	e := f.echo(t)
+	host := f.host(f.active[0].Slug)
+	for _, role := range []model.Role{model.RoleAdmin, model.RoleOperator} {
+		user := f.newUser(t, role, authTestPassword)
+		token := decodeTokenResponse(t, postJSON(e, host, "/api/v1/auth/login", credentials(*user.Email), nil)).AccessToken
+		bearer := map[string]string{echo.HeaderAuthorization: "Bearer " + token}
+		wantError(t, string(role), sendJSON(e, http.MethodPatch, host, "/api/v1/me", map[string]string{"name": "Renamed", "phone": ""}, bearer),
+			http.StatusForbidden, httpx.CodeForbidden)
+		var name string
+		if err := f.pool.QueryRow(context.Background(), `SELECT name FROM users WHERE id = $1`, user.ID).Scan(&name); err != nil || name != user.Name {
+			t.Errorf("%s name = %q, %v; want it unchanged", role, name, err)
+		}
+	}
+}
+
 func TestChangePasswordOverHTTP(t *testing.T) {
 	f := newAuthFixture(t, false)
 	e := f.echo(t)

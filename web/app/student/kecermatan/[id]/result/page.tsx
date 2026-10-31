@@ -134,7 +134,7 @@ function ResultContent({ testId }: { testId: string }) {
             <CountdownRing value={result.scores.nilai_akhir} size={120} strokeWidth={9} animate>
               <div className="text-center">
                 <p className="font-display text-3xl font-semibold text-foreground">{result.scores.nilai_akhir}</p>
-                <p className="text-[10px] text-muted">{t.outOf100}</p>
+                <p className="text-xs text-muted">{t.outOf100}</p>
               </div>
             </CountdownRing>
             <p className="text-sm font-medium text-muted">{t.nilaiAkhirLabel(result.attempt_number)}</p>

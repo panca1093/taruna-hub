@@ -63,7 +63,7 @@ Each numeric triplet is wrapped in `oklch(...)` in CSS. Success, warning and dan
 | `surface-foreground`, `overlay-foreground`, `default-foreground`, `segment-foreground` | Alias `foreground` | Text on the corresponding surface |
 | `surface-secondary-foreground`, `surface-tertiary-foreground` | Alias `foreground` | Secondary surface text |
 | `field-background` | Light `surface`; dark `surface-secondary` | Inputs |
-| `.palette-classic` | Scoped class restoring the pre-rose indigo values for `background`, `surface*`, `accent*`, `ring-*`, `border`, `separator`, `muted` | Opt-out for surfaces that must not be rebranded (public landing). Not used by the workspace |
+| `.palette-classic` | Scoped class restoring the pre-rose indigo values for `background`, `surface*`, `accent*`, `ring-*`, `border`, `separator`, `muted` | Opt-out for surfaces that must not be rebranded (public landing). Not used by the workspace. Also re-declares the `var()`-derived tokens (`*-foreground`, `field-*`, `focus`, `link`) so they resolve against the classic values. Portalled HeroUI overlays (popover, modal, dropdown) render outside the scope and keep the rose palette, so the landing must not open overlays that expect classic colors |
 | `field-foreground`, `field-placeholder`, `field-border` | `foreground`, `muted`, `border` | Field content and chrome |
 | `segment` | Light white; dark `surface-tertiary` | Segmented controls |
 | `focus`, `link` | Alias `accent` | Focus indication and links |

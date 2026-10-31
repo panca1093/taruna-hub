@@ -108,7 +108,7 @@ export default function StudentProfilePage() {
               onChange={(e) => setName(e.target.value)}
             />
             <div className="flex flex-col gap-1.5">
-              <p className="text-[13px] font-medium text-foreground">{t.email}</p>
+              <p className="text-sm font-medium text-foreground">{t.email}</p>
               <p className="text-sm text-foreground">{user.email ?? "-"}</p>
               <p className="text-xs text-muted">{t.emailHint}</p>
             </div>

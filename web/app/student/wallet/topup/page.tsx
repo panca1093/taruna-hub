@@ -34,6 +34,7 @@ export default function StudentTopupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
+  const [unresolved, setUnresolved] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const keyRef = useRef(newKey());
   const lockRef = useRef(false);
@@ -71,6 +72,8 @@ export default function StudentTopupPage() {
       cancelled = true;
     };
   }, [reloadKey]);
+
+  const locked = submitting || unresolved;
 
   const changed = () => {
     setSubmitError("");
@@ -110,16 +113,18 @@ export default function StudentTopupPage() {
       // replace, so Back from the status page never returns to a filled form that could create a second top-up
       router.replace(`/student/wallet/topups/${created.id}`);
     } catch (err) {
+      const unknown = !(err instanceof ApiError) || err.status >= 500;
+      setUnresolved(unknown);
       if (err instanceof ApiError && err.fields?.proof_asset_id) proofRef.current = null;
       if (err instanceof ApiError && err.fields) setFieldErrors(err.fields);
-      setSubmitError(errorText(err, t.submitFailed));
+      setSubmitError(unknown ? t.unknownOutcome : errorText(err, t.submitFailed));
       lockRef.current = false;
       setSubmitting(false);
     }
   };
 
   const crumbs = (
-    <nav aria-label="breadcrumb" className="text-xs text-muted">
+    <nav aria-label={t.breadcrumbLabel} className="text-xs text-muted">
       <Link href="/student/wallet" className="hover:text-foreground">
         {t.breadcrumbBalance}
       </Link>
@@ -164,7 +169,7 @@ export default function StudentTopupPage() {
                   <button
                     key={preset}
                     type="button"
-                    disabled={tooLow || minTopup === null}
+                    disabled={tooLow || minTopup === null || locked}
                     aria-pressed={amount === preset}
                     onClick={() => {
                       setAmount(preset);
@@ -189,6 +194,7 @@ export default function StudentTopupPage() {
               autoComplete="off"
               value={amount}
               error={amountError}
+              disabled={locked}
               onChange={(e) => {
                 setAmount(e.target.value.replace(/\D/g, "").replace(/^0+/, ""));
                 changed();
@@ -212,6 +218,7 @@ export default function StudentTopupPage() {
                     name="method"
                     className="mt-1 accent-accent"
                     checked={method === m.id}
+                    disabled={locked}
                     onChange={() => {
                       setMethod(m.id);
                       changed();
@@ -233,7 +240,7 @@ export default function StudentTopupPage() {
                     <div className="flex items-center justify-between rounded-lg border border-border bg-surface-secondary px-3.5 py-3">
                       <div>
                         <p className="text-xs text-muted">
-                          {bank.bank_name} — a.n. {bank.account_holder}
+                          {t.bankHolder(bank.bank_name, bank.account_holder)}
                         </p>
                         <p className="font-mono text-sm font-medium text-foreground">{bank.account_number}</p>
                       </div>
@@ -261,6 +268,7 @@ export default function StudentTopupPage() {
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     className="hidden"
+                    disabled={locked}
                     onChange={(e) => {
                       setFile(e.target.files?.[0] ?? null);
                       changed();
@@ -268,6 +276,7 @@ export default function StudentTopupPage() {
                   />
                   <button
                     type="button"
+                    disabled={locked}
                     onClick={() => fileRef.current?.click()}
                     className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-border py-6 text-center transition-colors hover:border-accent/50 hover:bg-accent-soft/30"
                   >
@@ -299,10 +308,15 @@ export default function StudentTopupPage() {
           {submitError !== "" && (
             <p role="alert" className="text-sm text-danger">
               {submitError}
+              {unresolved && (
+                <Link href="/student/wallet" className="mt-1 block font-medium underline">
+                  {t.unknownOutcomeList}
+                </Link>
+              )}
             </p>
           )}
           <Button variant="primary" fullWidth isDisabled={!canSubmit || submitting} onPress={submit}>
-            {submitting ? t.submitting : method === "gateway" ? t.continuePay : t.submitManual}
+            {submitting ? t.submitting : unresolved ? t.submitRetryUnknown : method === "gateway" ? t.continuePay : t.submitManual}
           </Button>
         </aside>
       </div>

@@ -62,7 +62,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     }
   }, [id]);
 
-  const polling = order?.payment_method === "gateway" && order.status === "pending";
+  const polling = state === "ready" && order?.payment_method === "gateway" && order.status === "pending";
 
   useEffect(() => {
     if (!polling) return;

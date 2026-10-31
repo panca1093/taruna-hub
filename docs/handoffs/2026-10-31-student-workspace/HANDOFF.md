@@ -67,7 +67,7 @@ Sebagian besar backend sudah tersedia. Tabel ini membedakan pemulihan/perilaku y
 | G06 / P0 | Simulasi `failed/review/confirmed` menyederhanakan status uang riil | Pisahkan status order/topup dari attempt gateway. Reload/return/poll/cancel/expiry/unknown outcome harus menunjuk entity yang sama. Status final server saja yang memberi akses/saldo; held exception tidak membuka akses atau menjanjikan refund. |
 | G07 / P0 | Topup belum membuktikan minimum dinamis, exact money, rejection dan duplicate submit | Gunakan `min_topup` dari server dan format exact numeric. Pending tidak menambah saldo, approved sekali, rejected menampilkan alasan. Isi saldo/status/ledger full page; tombol kembali tidak membuat transaksi baru. |
 | G08 / P1 | Cart merupakan fitur UI baru; belum ada API cart | Draft per akun berisi product IDs, harga/availability diambil ulang. Beberapa item boleh disimpan, **satu produk dipilih per order**. Hapus item yang dibayar saja, isolasi logout/account switch. Multi-product payment menjadi scope/kontrak terpisah. |
-| G09 / P1 | Profil aplikasi sekarang mock: save/password hanya toast; belum ada endpoint self-update | Jangan klaim tersimpan. Baseline profil readonly + recovery yang sudah tersedia. Self-edit/email/password harus paket kontrak terpisah setelah aturan owner diputuskan (reverification, uniqueness, sesi). |
+| G09 / P1 | Profil aplikasi dulu mock: save/password hanya toast; belum ada endpoint self-update | Diputuskan owner 2026-10-31 dan dibangun di PR ini: siswa boleh mengubah nama dan telepon saja; email tetap dikelola admin; ganti password wajib password saat ini dan mencabut sesi lain milik user. Hanya role siswa untuk `PATCH /api/v1/me`. |
 | G10 / P1 | Anonymous checkout → login/register → tujuan asal belum diperagakan | Audit guard yang ada dan tambah return intent internal yang diizinkan bila belum ada. Jangan menerima external redirect. Optional verify, sesi kedaluwarsa, recovery, dan `/portal` tetap benar. |
 | G11 / P1 | Belum semua loading/error/partial/pagination/account switch terbukti | Jangan render nol palsu saat loading. Refresh wallet/access/dashboard setelah perubahan server, pertahankan nol skor yang sah, pisahkan data tiap akun. |
 | G12 / P1 | Full flow masih ID-only; audit keyboard/contrast dan ultra-wide belum lengkap | ID/EN, light/dark, reduced motion, keyboard/focus/back, 320 sampai 2560px dan zoom. Shared shell admin tidak boleh kehilangan navigasi atau berubah visual tanpa scope. |
@@ -90,7 +90,7 @@ Seluruh path di tabel ini relatif terhadap root repo. Route baru adalah proposal
 | Checkout | `web/app/checkout/[id]/page.tsx` → `/checkout/:productId` | Harga server, proof-before-create, wallet/manual/gateway |
 | Pesanan | `web/app/student/orders/page.tsx` | List existing; usulan `orders/[id]/page.tsx` untuk status/detail pesanan yang bisa dibuka ulang |
 | Wallet | `web/app/student/wallet/page.tsx` | Reuse ledger/topups; popup ringkas pada shell. Usulan `wallet/topup/page.tsx` dan `wallet/topups/[id]/page.tsx` untuk create/status |
-| Akun | `web/app/student/profile/page.tsx`, auth/verify/recovery yang ada | Readonly jujur sampai mutation contract disepakati; preferensi reuse locale/theme existing |
+| Akun | `web/app/student/profile/page.tsx`, auth/verify/recovery yang ada | Self-edit nama + telepon dan ganti password sudah dibangun di PR ini (keputusan owner 2026-10-31); email tetap readonly; preferensi reuse locale/theme existing |
 | UI/i18n | `web/app/globals.css`, `web/lib/i18n/dict/`, `requirement/DESIGN.md` | Token/pola diperbarui bersama; semua copy ID+EN; reuse komponen existing |
 
 ## Kontrak yang wajib dipertahankan
@@ -149,7 +149,7 @@ Tetap **Go 1.26 / Echo / pgx + Next.js 16 / React 19 / HeroUI v3 / Tailwind v4**
 |---|---|---|
 | Palet — dipilih owner | Rose hangat bersama untuk auth, siswa dan admin; canvas, sidebar, kartu, teks, CTA dan state mengikuti [keputusan palet](PALETTE-DECISION.md) | Review hasil implementasi/contrast masih perlu; rebrand marketing dan seluruh fitur admin tidak otomatis masuk scope |
 | Cart | Draft account-scoped, satu product/order, revalidasi saat checkout | Combined payment, quantities, coupon, refund policy |
-| Profil | Readonly data server, existing recovery/verify | Self-update fields, email uniqueness/reverification, password/session revocation; kontrak belum ada |
+| Profil | Nama + telepon dapat diubah siswa; email tetap dikelola admin; ganti password butuh password saat ini dan mencabut sesi lain | Diputuskan owner 2026-10-31 dan dibangun di PR ini; perubahan email/reverification tetap di luar scope |
 | Kec scoring | Existing versioned output, label/rumus sesuai docs | Resolusi D03 oleh owner/client |
 | Uang | Status/error dan exception existing; tidak auto-refund | Policy refund atau review baru dan admin held-exception tooling |
 

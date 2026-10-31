@@ -662,7 +662,8 @@ export interface paths {
         head?: never;
         /**
          * Change the signed-in user's own name and phone
-         * @description A student may change only the name and the phone; the email is changed by an admin. The
+         * @description Students only: an admin or operator answers `403`, and staff profile changes stay with an
+         *     admin. A student may change only the name and the phone; the email is changed by an admin. The
          *     caller is the principal, so no id travels in the path or body, and unknown fields are
          *     refused with `422` and `fields.body`.
          *
@@ -695,6 +696,7 @@ export interface paths {
                     };
                 };
                 401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
                 404: components["responses"]["NotFound"];
                 409: components["responses"]["Conflict"];
                 422: components["responses"]["ValidationFailed"];
@@ -713,7 +715,7 @@ export interface paths {
         put?: never;
         /**
          * Change the signed-in user's password
-         * @description Requires the current password and ends every other session of the account, so their access
+         * @description Open to every authenticated user, staff included. Requires the current password and ends every other session of the account, so their access
          *     and refresh tokens stop working; the caller's own session stays signed in. A wrong current
          *     password answers `422` with `fields.current_password` and never `401`, so the session is
          *     not mistaken for expired. `new_password` follows the register and reset rule (8 characters

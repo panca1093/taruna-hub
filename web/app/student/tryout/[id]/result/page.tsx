@@ -10,18 +10,19 @@ import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
 import { api, ApiError, type StudentTryout, type TryoutResultDetail } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
+import { useLocale } from "@/lib/i18n/locale-context";
 import { useTryoutResultT } from "@/lib/i18n/dict/tryout-result";
 
 type LoadState = "loading" | "ready" | "failed" | "unavailable" | "notReady";
 
-const formatDate = (iso: string) =>
-  new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(
-    new Date(iso),
-  );
-
 function ResultContent({ tryoutId, attemptParam }: { tryoutId: string; attemptParam: string | null }) {
   const router = useRouter();
   const t = useTryoutResultT();
+  const { locale } = useLocale();
+  const formatDate = (iso: string) =>
+    new Intl.DateTimeFormat(locale === "id" ? "id-ID" : "en-US", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(
+      new Date(iso),
+    );
   const [overview, setOverview] = useState<StudentTryout | null>(null);
   const [result, setResult] = useState<TryoutResultDetail | null>(null);
   const [state, setState] = useState<LoadState>("loading");

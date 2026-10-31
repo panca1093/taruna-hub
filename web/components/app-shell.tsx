@@ -77,7 +77,7 @@ function AdminGroup({ group, open, onToggle, pathname, onNavigate }: { group: Na
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={shellT.toggleGroup(name)}
-        className={cn("flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors hover:text-sidebar-foreground", focusRing, hasActive && !open ? "text-sidebar-foreground" : "text-sidebar-muted")}
+        className={cn("flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors hover:text-sidebar-foreground", focusRing, hasActive && !open ? "text-sidebar-foreground" : "text-sidebar-muted")}
       >
         <span>{name}</span>
         <ChevronDown className={cn("size-3.5 transition-transform", !open && "-rotate-90")} aria-hidden />
@@ -150,7 +150,7 @@ function MobileStudentNav() {
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className={cn("flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium", focusRing, active ? "text-sidebar-accent" : "text-sidebar-muted")}
+            className={cn("flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-xs font-medium", focusRing, active ? "text-sidebar-accent" : "text-sidebar-muted")}
           >
             <Icon className="size-5" strokeWidth={2} aria-hidden />
             {navT[item.href] ?? item.label}
@@ -190,8 +190,8 @@ function AccountMenu() {
       >
         <GradientAvatar user={user} size="sm" />
         <span className="hidden min-w-0 max-w-40 md:block">
-          <span className="block truncate text-[13px] font-medium leading-tight text-foreground">{user.name}</span>
-          <span className="block truncate text-[11px] leading-tight text-muted">{role ? roleLabel[role] : ""}</span>
+          <span className="block truncate text-sm font-medium leading-tight text-foreground">{user.name}</span>
+          <span className="block truncate text-xs leading-tight text-muted">{role ? roleLabel[role] : ""}</span>
         </span>
         <ChevronDown className="mr-1 hidden size-3.5 text-muted md:block" aria-hidden />
       </Dropdown.Trigger>
@@ -318,7 +318,7 @@ export function AppShell({
             </Button>
           )}
           <div className="min-w-0 flex-1">
-            {title && <h1 className="truncate text-[15px] font-semibold text-foreground">{title}</h1>}
+            {title && <h1 className="truncate text-base font-semibold text-foreground">{title}</h1>}
             {description && <p className="hidden truncate text-xs text-muted sm:block">{description}</p>}
           </div>
           <div className="flex items-center gap-1.5">

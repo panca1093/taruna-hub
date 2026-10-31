@@ -15,7 +15,7 @@
 - Gunakan typed client `web/lib/api/`, ID/EN dictionary, shared UI dan guide Next terpasang. PRD read-only. Kontrak baru OpenAPI-first.
 - Scoring, auth, money, quota dan deadlines tetap server; tidak ada fake data, simulation control atau OTP di log/UI production.
 - Pertahankan local full-width diff, fitur admin/public, katalog emoji/shape terbaru dan URL yang sudah dipakai.
-- Satu product/order. Profil readonly sampai mutation policy/contract disepakati. D03 tetap provisional; tidak ada policy refund baru.
+- Satu product/order. Profil: owner memutuskan 2026-10-31 siswa boleh edit nama + telepon saja (email tetap admin-managed); ganti password wajib password saat ini dan mencabut sesi lain; dibangun di PR ini. D03 tetap provisional; tidak ada policy refund baru.
 - Kerjakan satu paket sebelum paket berikutnya. Update PLAN per slice yang dibuktikan, jangan menandai seluruh P14/P16/P18 selesai dari UI demo.
 - Commit/push/merge mengikuti instruksi owner, bukan otomatis dari checklist ini. Author user tanpa atribusi agent.
 
@@ -40,7 +40,7 @@ Jalankan prototype portabel sesuai spec. Semua path di bawah relatif root repo. 
 | 3 / P18 | `web/app/student/kecermatan/[id]/page.tsx`, `attempt/page.tsx`, `result/page.tsx`, `web/components/kecermatan-item.tsx` | Reuse renderer dan runtime existing |
 | 4 / P11,P13,P14 | `web/app/catalog/page.tsx`, `[id]/page.tsx`, `web/app/checkout/[id]/page.tsx`, `web/app/student/orders/page.tsx` | `web/lib/student-cart.ts`, `web/app/student/cart/page.tsx`, `web/app/student/orders/[id]/page.tsx` |
 | 5 / P12,P15,P14 | `web/app/student/wallet/page.tsx`, account balance shortcut | `web/app/student/wallet/topup/page.tsx`, `web/app/student/wallet/topups/[id]/page.tsx` |
-| 6 / P03,cross-cutting | `web/app/student/profile/page.tsx`, login/register/verify/recovery existing, locale/theme context | Contract work only after separate decision; no invented profile endpoint |
+| 6 / P03,cross-cutting | `web/app/student/profile/page.tsx`, login/register/verify/recovery existing, locale/theme context | Self-edit nama + telepon dan ganti password (keputusan owner 2026-10-31, dibangun di PR ini); email tetap admin-managed |
 
 Each task also changes its `web/lib/i18n/dict/<feature>.ts`, relevant `docs/<domain>.md`, DESIGN patterns and PLAN acceptance only as warranted. Final exact component extraction is implementer judgment; no generic redesign framework needed.
 
@@ -107,7 +107,7 @@ Each task also changes its `web/lib/i18n/dict/<feature>.ts`, relevant `docs/<dom
 
 **Consumes:** Existing auth/session/verify/recovery, locale/theme contexts and Tasks 1–5. **Produces:** Honest account pages, safe entry intent and documented end-to-end evidence, with unresolved product gates retained.
 
-- [ ] Inspect `web/app/student/profile/page.tsx`: save/password currently toast-only, programs mock. Remove false success affordance from redesigned baseline; show server profile readonly and link to existing recovery/verification. Do not call an endpoint absent from OpenAPI. List writable fields/policy as deferred for owner; if separately approved, write a dedicated contract-first plan rather than expand this task silently.
+- [ ] Inspect `web/app/student/profile/page.tsx`: save/password currently toast-only, programs mock. Remove false success affordance. Owner decision 2026-10-31: students edit name and phone only via `PATCH /api/v1/me` (email stays admin-managed); password change needs the current password and revokes the user's other sessions. Built in this PR; call only endpoints present in OpenAPI.
 - [ ] Trace anonymous catalog→checkout→login/register and verify optional-email route. Preserve existing safe return if implemented; otherwise retain only allowlisted internal student/product intent through auth. Test external/scheme-relative redirect rejected and staff `/portal` unaffected. Never persist OTP or credentials in cart/return state.
 - [ ] Add remaining ID/EN copy using existing dictionaries, real loading/empty/error/retry/partial states and same-user invalidation. Check new/active/unverified/expired accounts and network errors; fake zero/profile saves/simulation controls must not remain.
 - [ ] Execute spec acceptance across keyboard/focus/back/deep links, locale, themes, reduced motion, zoom, contrast and viewport 320–2560px. Review full user journeys, normal and Kecermatan runtimes, popup balance only, plus existing admin/public shell. Record limits where accessibility or provider testing remains incomplete.

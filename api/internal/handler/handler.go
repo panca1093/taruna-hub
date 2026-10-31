@@ -100,7 +100,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/me/email/verify", h.VerifyEmail, httpx.NoStore(), Authenticate(h.auth))
 	v1.POST("/me/email/resend", h.ResendEmailCode, httpx.NoStore(), Authenticate(h.auth))
 	v1.GET("/me", h.Me, httpx.NoStore(), Authenticate(h.auth))
-	v1.PATCH("/me", h.UpdateMe, httpx.NoStore(), Authenticate(h.auth))
+	v1.PATCH("/me", h.UpdateMe, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleStudent))
 	v1.POST("/me/password", h.ChangePassword, httpx.NoStore(), Authenticate(h.auth))
 
 	// Curriculum: operators read the tree for their dropdowns, only admins change it (FR-ADM-PRG-01).

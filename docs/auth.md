@@ -85,12 +85,14 @@ message that would arrive dead is expired instead of sent.
 
 | Route | Answer |
 |---|---|
-| `PATCH /me` | `200` and the updated user; body `{name, phone}` |
+| `PATCH /me` | `200` and the updated user; body `{name, phone}`; students only, staff get `403` |
 | `POST /me/password` | `204`; body `{current_password, new_password}` |
 
-Both take any authenticated principal and name no user: the account is always the caller's, and
-unknown body fields are refused with `422 fields.body`. A student changes only the name and the
-phone; the email is read-only and changes stay with an admin.
+`PATCH /me` is student-only (`RequireRole(student)`): an admin or operator gets `403` and their row
+is untouched, since the owner decision of 2026-10-31 covers students. `POST /me/password` takes any
+authenticated principal. Neither names a user: the account is always the caller's, and unknown body
+fields are refused with `422 fields.body`. A student changes only the name and the phone; the email
+is read-only and changes stay with an admin.
 
 `name` is trimmed and 1 to 100 characters. `phone` is optional and goes through the same
 `NormalizePhone` as register. Uniqueness is left to the `(tenant, phone)` unique index, so saving the
