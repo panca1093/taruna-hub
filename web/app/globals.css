@@ -24,6 +24,91 @@
   --color-sidebar-active: var(--sidebar-active);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-rose: var(--rose);
+
+  --shadow-soft: 0 16px 45px var(--shadow-tint);
+  --shadow-rail: 0 16px 36px var(--shadow-tint-strong);
+  --shadow-menu: 0 20px 70px var(--shadow-tint-strong);
+  --shadow-dialog: 0 32px 100px var(--shadow-tint-strong);
+}
+
+/* Literal-valued design tokens from the handoff prototype (style.css, flow.css).
+   `static` so they are always emitted and usable from plain CSS below. */
+@theme static {
+  /* Type steps. Pair the Geist ones with `font-display`; weight 550 is baked in. */
+  --text-display: 2.25rem;
+  --text-display--line-height: 1.15;
+  --text-display--letter-spacing: -1.3px;
+  --text-display--font-weight: 550;
+  --text-display-sm: 1.875rem;
+  --text-display-sm--line-height: 1.15;
+  --text-display-sm--letter-spacing: -1px;
+  --text-display-sm--font-weight: 550;
+  --text-hero: 1.6875rem;
+  --text-hero--line-height: 1.2;
+  --text-hero--letter-spacing: -0.8px;
+  --text-hero--font-weight: 550;
+  --text-hero-lg: 1.8125rem;
+  --text-hero-lg--line-height: 1.12;
+  --text-hero-lg--letter-spacing: -0.9px;
+  --text-hero-lg--font-weight: 550;
+  --text-heading: 1.25rem;
+  --text-heading--line-height: 1.25;
+  --text-heading--letter-spacing: -0.5px;
+  --text-heading--font-weight: 550;
+  --text-heading-sm: 1.125rem;
+  --text-heading-sm--line-height: 1.25;
+  --text-heading-sm--letter-spacing: -0.3px;
+  --text-heading-sm--font-weight: 550;
+  --text-title: 1.0625rem;
+  --text-title--line-height: 1.35;
+  --text-title--font-weight: 550;
+  --text-metric: 1.3125rem;
+  --text-metric--line-height: 1.2;
+  --text-metric--font-weight: 550;
+  --text-metric-lg: 2.1875rem;
+  --text-metric-lg--line-height: 1.1;
+  --text-metric-lg--letter-spacing: -1px;
+  --text-metric-lg--font-weight: 550;
+  --text-metric-xl: 2.625rem;
+  --text-metric-xl--line-height: 1.1;
+  --text-metric-xl--letter-spacing: -1.5px;
+  --text-metric-xl--font-weight: 550;
+  --text-score: 4.375rem;
+  --text-score--line-height: 0.95;
+  --text-score--letter-spacing: -3px;
+  --text-score--font-weight: 550;
+  --text-brand: 2.125rem;
+  --text-brand--line-height: 1;
+  --text-brand--letter-spacing: -3px;
+  --text-brand--font-weight: 650;
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.5;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.5;
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1.5;
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 1.5;
+  --text-nano: 0.5625rem;
+  --text-nano--line-height: 1.5;
+
+  /* Radii: control 10, tile 16, card 21, hero 23, rail 27 */
+  --radius-chip: 0.4375rem;
+  --radius-control: 0.625rem;
+  --radius-tile: 1rem;
+  --radius-menu: 1.1875rem;
+  --radius-card: 1.3125rem;
+  --radius-hero: 1.4375rem;
+  --radius-rail: 1.6875rem;
+
+  /* Shell geometry */
+  --spacing-inset: 0.875rem;
+  --spacing-rail: 5.5rem;
+  --spacing-rail-open: 14rem;
+  --spacing-rail-admin: 15.5rem;
+  --spacing-topbar: 5.125rem;
 }
 
 :root,
@@ -90,6 +175,21 @@
   --sidebar-active: color-mix(in oklab, var(--sidebar-foreground) 13%, transparent);
   --sidebar-accent: oklch(0.819 0.056 346.8);
   --sidebar-border: color-mix(in oklab, var(--sidebar-foreground) 14%, transparent);
+  --sidebar-hover: color-mix(in oklab, var(--sidebar-foreground) 6%, transparent);
+  --rail-active-start: oklch(0.599 0.081 345 / 29%);
+  --rail-active-end: oklch(0.599 0.081 345 / 6%);
+
+  /* Prototype accent-soft / green / rose, mapped onto the HeroUI semantic slots */
+  --accent-soft: oklch(0.921 0.016 352);
+  --accent-soft-hover: oklch(0.9 0.02 352);
+  --accent-soft-foreground: var(--accent);
+  --success: oklch(0.495 0.061 163.4);
+  --success-soft: oklch(0.947 0.013 149.2);
+  --success-soft-foreground: var(--success);
+  --rose: oklch(0.633 0.037 359.8);
+  --logo-plate: oklch(0.96 0.015 70);
+  --shadow-tint: oklch(0.333 0.021 342.4 / 3.5%);
+  --shadow-tint-strong: oklch(0.2 0.03 340 / 15%);
 }
 
 .dark,
@@ -140,6 +240,19 @@
   --sidebar: oklch(0.188 0.009 317.7);
   --sidebar-foreground: oklch(0.929 0.014 336.2);
   --sidebar-accent: oklch(0.819 0.056 346.8);
+  --sidebar-foreground: oklch(0.929 0.014 336.2);
+
+  --accent-soft: oklch(0.339 0.03 330.7);
+  --accent-soft-hover: oklch(0.37 0.034 330.7);
+  --accent-soft-foreground: var(--accent);
+  --success: oklch(0.814 0.064 153.3);
+  --success-foreground: oklch(0.2 0.02 155);
+  --success-soft: oklch(0.336 0.032 156.5);
+  --success-soft-foreground: var(--success);
+  --rose: oklch(0.704 0.048 346.1);
+  --logo-plate: oklch(0.96 0.015 70);
+  --shadow-tint: oklch(0 0 0 / 8%);
+  --shadow-tint-strong: oklch(0 0 0 / 40%);
 }
 
 /* Opt-out scope for surfaces that must keep the pre-rose indigo identity
@@ -176,8 +289,13 @@
   --segment-foreground: var(--foreground);
   --focus: var(--accent);
   --link: var(--accent);
+  --success: oklch(0.6534 0.1567 156.7);
+  --success-soft: color-mix(in oklab, var(--success) 15%, transparent);
+  --success-soft-foreground: color-mix(in oklab, var(--success) 80%, var(--foreground) 60%);
   background: var(--background);
   color: var(--foreground);
+  font-size: 1rem;
+  line-height: 1.5;
 }
 .dark .palette-classic,
 [data-theme="dark"] .palette-classic {
@@ -212,19 +330,140 @@
   --segment-foreground: var(--foreground);
   --focus: var(--accent);
   --link: var(--accent);
+  --success: oklch(0.6534 0.1567 156.7);
 }
 
 /* ---------------------------------------------------------------------- */
-/* Component tightening — pill defaults read consumer-app, not ops tool.  */
-/* Unlayered rules outrank HeroUI's layer(components) by cascade-layer    */
-/* precedence, so this is a safe, permanent override (not a specificity   */
-/* hack).                                                                 */
+/* Workspace type base. Headings use Geist at weight 550 with the         */
+/* prototype's tracking; utilities (text-*, font-*) still override these. */
+/* The landing (.palette-classic) keeps its own typography.               */
 /* ---------------------------------------------------------------------- */
 
-.button {
+@layer base {
+  body {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+  h1:not(:where(.palette-classic *)),
+  h2:not(:where(.palette-classic *)),
+  h3:not(:where(.palette-classic *)) {
+    font-family: var(--font-display);
+    font-weight: 550;
+  }
+  h1:not(:where(.palette-classic *)) {
+    font-size: var(--text-display);
+    line-height: 1.15;
+    letter-spacing: -1.3px;
+  }
+  h2:not(:where(.palette-classic *)) {
+    font-size: var(--text-heading);
+    letter-spacing: -0.5px;
+  }
+  h3:not(:where(.palette-classic *)) {
+    font-size: var(--text-title);
+    line-height: 1.35;
+  }
+  /* The prototype draws every icon at stroke 1.65; a stroke-* utility still wins. */
+  svg.lucide:not(:where(.palette-classic *)) {
+    stroke-width: 1.65;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* HeroUI restyle to the prototype's button / field / card / chip anatomy. */
+/* Inside @layer components so callers' utility classes still win. The    */
+/* landing (.palette-classic) opts out and keeps the old HeroUI look.     */
+/* ---------------------------------------------------------------------- */
+
+@layer components {
+  .button:not(:where(.palette-classic *)) {
+    border-radius: var(--radius-control);
+    font-size: var(--text-caption);
+    font-weight: 550;
+    gap: 0.5625rem;
+  }
+  .button:not(.button--icon-only):not(:where(.palette-classic *)) {
+    height: auto;
+    min-height: 2.625rem;
+    padding-inline: 1.0625rem;
+  }
+  .button--sm:not(.button--icon-only):not(:where(.palette-classic *)) {
+    min-height: 2.25rem;
+    padding-inline: 0.8125rem;
+  }
+  .button--lg:not(.button--icon-only):not(:where(.palette-classic *)) {
+    min-height: 3rem;
+    font-size: var(--text-small);
+  }
+  .button--secondary:not(:where(.palette-classic *)) {
+    --button-bg: var(--surface);
+    --button-bg-hover: var(--surface-secondary);
+    --button-bg-pressed: var(--surface-secondary);
+    --button-fg: var(--foreground);
+    border: 1px solid var(--border);
+  }
+  .button--tertiary:not(:where(.palette-classic *)) {
+    --button-bg: var(--surface-secondary);
+    --button-bg-hover: var(--surface-tertiary);
+    --button-bg-pressed: var(--surface-tertiary);
+    --button-fg: var(--foreground);
+  }
+  .button--primary:not(:where(.palette-classic *)):hover {
+    filter: brightness(1.07);
+  }
+
+  .input:not(:where(.palette-classic *)),
+  .select__trigger:not(:where(.palette-classic *)) {
+    min-height: 2.75rem;
+    border-radius: var(--radius-control);
+    box-shadow: none;
+  }
+
+  .chip:not(:where(.palette-classic *)) {
+    border-radius: var(--radius-chip);
+    font-weight: 500;
+  }
+  .chip--sm:not(:where(.palette-classic *)) {
+    padding: 0.25rem 0.5rem;
+    font-size: var(--text-label);
+    line-height: 1.2;
+  }
+  .chip--md:not(:where(.palette-classic *)) {
+    padding: 0.25rem 0.625rem;
+    font-size: var(--text-label);
+  }
+
+  .card:not(:where(.palette-classic *)) {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    box-shadow: none;
+  }
+
+  .modal__dialog:not(:where(.palette-classic *)),
+  .drawer__dialog:not(:where(.palette-classic *)) {
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-dialog);
+  }
+  .modal__dialog:not(:where(.palette-classic *)) {
+    border-radius: var(--radius-hero);
+    padding: 2rem;
+  }
+  .modal__backdrop--blur:not(:where(.palette-classic *)) {
+    backdrop-filter: blur(5px);
+  }
+  .dropdown__popover:not(:where(.palette-classic *)),
+  .popover:not(:where(.palette-classic *)),
+  .select__popover:not(:where(.palette-classic *)) {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-menu);
+    box-shadow: var(--shadow-menu);
+  }
+}
+
+.palette-classic .button {
   border-radius: var(--radius-lg);
 }
-.chip {
+.palette-classic .chip {
   border-radius: var(--radius-md);
 }
 
@@ -243,11 +482,32 @@
   background: linear-gradient(135deg, var(--ring-start), var(--ring-end));
 }
 
+/* Floating-rail geometry and the glowing active-item treatment (prototype .sidebar / .nav-item). */
+@utility h-rail {
+  height: calc(100dvh - 2 * var(--spacing-inset));
+}
+
+@utility bg-rail-active {
+  background: linear-gradient(100deg, var(--rail-active-start), var(--rail-active-end));
+}
+
+@utility shadow-rail-glow {
+  box-shadow: 0 0 14px color-mix(in oklab, var(--sidebar-accent) 67%, transparent);
+}
+
 @utility bg-grid {
   background-image:
     linear-gradient(to right, var(--border) 1px, transparent 1px),
     linear-gradient(to bottom, var(--border) 1px, transparent 1px);
   background-size: 32px 32px;
+}
+
+/* Dark-theme plate behind the (dark-ink) brand logo, as in the prototype. */
+.dark .logo-plate,
+[data-theme="dark"] .logo-plate {
+  background: var(--logo-plate);
+  padding: 0.3125rem 0.5rem;
+  border-radius: 0.5625rem;
 }
 
 html {

@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileQuestion,
   Gauge,
+  LayoutGrid,
   Shapes,
   LayoutDashboard,
   Package,
@@ -36,8 +37,8 @@ export interface NavGroup {
 
 export const studentNav: NavItem[] = [
   { href: "/student", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/student/tryouts", label: "Tryout", icon: ClipboardList, also: ["/student/tryout", "/student/kecermatan"] },
-  { href: "/catalog", label: "Katalog", icon: BookOpen },
+  { href: "/student/tryouts", label: "Tryout", icon: BookOpen, also: ["/student/tryout", "/student/kecermatan"] },
+  { href: "/catalog", label: "Katalog", icon: LayoutGrid },
 ];
 
 // Group ids double as dictionary keys ("group:<id>") in lib/i18n/dict/nav.ts.

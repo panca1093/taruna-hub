@@ -10,6 +10,8 @@ This document describes the visual language already implemented in `web/` and ho
 
 The workspace combines a warm cream canvas, plum ink, compact controls, quiet cards and a rose accent (owner decision 2026-10-31, handoff `PALETTE-DECISION.md`). Student, admin and auth share these tokens; a dark plum sidebar anchors both shells. Its signature element is the countdown/progress ring, now plum to rose. Operational pages use restrained color so status, numbers, and actions are easy to scan.
 
+**Visual parity pass (2026-10-31).** The workspace now follows the handoff prototype (`docs/handoffs/2026-10-31-student-workspace/prototype`) for shell, type, radii, shadows, icons and component anatomy: a floating rounded plum icon rail, a borderless 82px topbar, Geist display headings at weight 550 with negative tracking, Inter 14px body, 10/16/21/23px radii, a soft low-alpha shadow, and lucide icons at stroke 1.65. Where the prototype and older text in this file disagree on looks, the prototype wins. The marketing landing stays on `.palette-classic` and is opted out of every change below (type base, radii, component restyle, icon stroke).
+
 Guidelines:
 
 - Use warm neutral surfaces for the shell, cards, forms, and tables. Let hierarchy come from position, spacing, type, and contrast.
@@ -118,6 +120,28 @@ Observed type scale at a 16px root:
 | Kecermatan items (exam runtime) | Reference 20px (`text-xl`); soal 24px, 30px at `sm`; answer keys 24px | Geist Mono 800, one line per box (boxes grow from a min width); images 24px on phones, 28px / 36px from `sm` |
 | Landing hero title | 36px / 40px; 48px / 48px at `sm` | Geist 600, tight tracking |
 
+#### 3.1 Named type steps (prototype scale)
+
+Defined in `globals.css` (`@theme static`). Use these utilities; never `text-[13px]`. Geist steps bake in weight 550 and tracking; pair them with `font-display`. Inter steps are plain sizes.
+
+| Utility | Size / tracking | Prototype use |
+| --- | --- | --- |
+| `text-display` | 36px, -1.3px, lh 1.15 | Page h1 (student) |
+| `text-display-sm` | 30px, -1px | Page h1 on mobile and in admin |
+| `text-hero-lg` / `text-hero` | 29px (-0.9) / 27px (-0.8) | Entry cards, status banners, dialog titles |
+| `text-heading` | 20px, -0.5px | Panel and section h2 |
+| `text-heading-sm` | 18px, -0.3px | Section header, small panel title |
+| `text-title` | 17px, lh 1.35 | Card h3, empty-state title |
+| `text-metric-xl` / `-lg` / `text-metric` | 42px / 35px / 21px | Wallet amount, chart summary, metric strip |
+| `text-score` | 70px, -3px | Result score |
+| `text-brand` | 34px, -3px, 650 | The rail "T." mark |
+| `text-small` | 13px | Descriptions, row text |
+| `text-caption` | 12px | Buttons, table cells, form labels, menu rows |
+| `text-label` | 11px | Breadcrumb, kicker, table header, chips |
+| `text-micro` / `text-nano` | 10px / 9px | Hints, tags, rail labels |
+
+Base rules (workspace only): `body` 14px / 1.5; `h1` = display, `h2` = heading, `h3` = title, all Geist 550. A `text-*` or `font-*` utility on the element overrides them.
+
 Guidelines:
 
 - Keep dashboard titles compact; reserve hero-sized type for marketing.
@@ -152,25 +176,26 @@ Guideline: related controls use 8–12px gaps, component content uses 16px gaps,
 
 ### 4.2 Corner radii
 
-The project base radius is **6px** (`--radius: 0.375rem`). HeroUI radii are multiples of that base; its library comments describe another base and should not be copied as project measurements.
+The base `--radius` stays 6px for HeroUI internals. Workspace surfaces use these named radii (`@theme static`), taken from the prototype:
 
-| Class / token | Effective radius | Observed use |
+| Utility | Radius | Use |
 | --- | --- | --- |
-| `rounded-sm` | 3px | Small details |
-| `rounded-md` | 4.5px | Chips, deltas, chart corners |
-| `rounded-lg` | 6px | Buttons, nav items, result links |
-| `rounded-xl` | 9px | Tables, empty state; default field radius |
-| `rounded-2xl` | 12px | Available scale step |
-| `rounded-3xl` | 18px | HeroUI card default |
-| `rounded-4xl` | 24px | Available scale step |
-| `rounded-full` | Pill / circle | Avatars, status dots, order filter pills |
+| `rounded-chip` | 7px | Chips, deltas, small tags, progress bars |
+| `rounded-control` | 10px | Buttons, inputs, selects, icon tiles, menu rows |
+| `rounded-tile` | 16px | Rail nav items, list rows, metric strip, tables, banners |
+| `rounded-menu` | 19px | Dropdowns and popovers |
+| `rounded-card` | 21px | Panels, product cards, `Card` |
+| `rounded-hero` | 23px | Tinted hero cards, dialogs, mobile bottom nav |
+| `rounded-rail` | 27px | The floating rail |
+| `rounded-full` | pill | Avatars, filter pills |
 
-Project CSS explicitly tightens `.button` to 6px and `.chip` to 4.5px. Order filter pills are an observed exception for selection controls; they do not change the default action-button shape.
+The HeroUI restyle in `@layer components` applies these to `.button`, `.input`, `.select__trigger`, `.chip`, `.card`, `.modal__dialog`, dropdown and popover. It sits in the components layer so a caller's utility class (`rounded-full`, `p-6`) still wins. Elements inside `.palette-classic` keep the old values.
 
 ### 4.3 Borders and shadows
 
 - Tables and many inset rows use a 1px `border` boundary. Use `separator` for quieter divisions.
-- Cards use `shadow-surface`; overlays use `shadow-overlay`. Use these tokens instead of new shadows per page.
+- Prototype shadows, tinted by `--shadow-tint` / `--shadow-tint-strong` (light and dark values defined): `shadow-soft` (`0 16px 45px`, metric strips, performance cards), `shadow-rail`, `shadow-menu` (popovers), `shadow-dialog`. Plain panels carry a border and no shadow. `shadow-rail-glow` is the glow on the active rail indicator.
+- Legacy: HeroUI `shadow-surface` / `shadow-overlay` still exist; prefer the tokens above in new work.
 - The inherited light surface shadow is `0 2px 4px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.06), 0 0 1px rgba(0,0,0,.06)`.
 - Dark cards are distinguished mainly through surface color. Do not add bright outlines to every card to simulate light-mode elevation.
 - HeroUI's default theme sets `--field-border-width: 0px`; the project overrides it to `1px` so fields stay visible on same-color cards. Verify input boundaries and focus in both themes before shipping a form.
@@ -195,25 +220,26 @@ Reuse [AppShell](../web/components/app-shell.tsx) for authenticated operational 
 
 | Region | Specification |
 | --- | --- |
-| Expanded sidebar | 256px, sticky, viewport height, `sidebar` surface, no border; logo sits on a `surface` plate |
-| Collapsed sidebar | 68px; icon navigation with `title` and `aria-label` on every item; groups flatten to icons separated by a hairline |
-| Sidebar logo row | 56px high; 14px horizontal inset |
-| Sidebar navigation | 8px container inset; items 10px horizontal / 8px vertical; 18px icons; inactive `sidebar-muted`, hover/active `sidebar-active` |
-| Selected navigation | `sidebar-active` background, `sidebar-foreground` text, 2px `sidebar-accent` left indicator, `aria-current="page"` |
+| Layout | At `lg`: `p-inset` (14px) page inset, 32px gap between rail and workspace, 24px right padding. Below `lg`: 20px side padding |
+| Rail (all roles) | Floating `rounded-rail`, `bg-sidebar`, `shadow-rail`, sticky at `top-inset`, height `h-rail` (viewport minus 2 insets). Collapsed `w-rail` (88px); expanded `w-rail-open` (224px, student) or `w-rail-admin` (248px, staff). Round collapse button on the right edge. Student default collapsed, staff default expanded; the user's toggle is kept in component state |
+| Rail brand | "T." mark (`text-brand`, dot in `sidebar-accent`) at the top, linking to the role home; expanded adds "Taruna Eduka" and a tagline |
+| Rail bottom | Theme control (moon/sun icon, label when expanded); student expanded also shows the "Selangkah lebih siap." note |
+| Collapsed sidebar (staff) | Icon-only items with `title` and `aria-label`; groups flatten, separated by a hairline |
+| Nav item (student) | Collapsed: icon over a `text-nano` label, `min-h-18` (72px), `rounded-tile`. Expanded: row, 50px high, 13px label |
+| Nav item (staff) | Row, 48px; group children use 40px rows under the dashed tree |
 | Student navigation | Exactly three items: Dashboard `/student`, Tryout `/student/tryouts` (also active on `/student/tryout/*` and `/student/kecermatan/*`), Katalog `/catalog`, as a flat list with no group header or tree connector |
-| Student mobile | No drawer. A fixed bottom bar (`sidebar` surface, 56px) shows the same three destinations; main gets 96px bottom padding below `lg` |
+| Student mobile | No drawer. A floating bottom bar (`sidebar` surface, `rounded-hero`, 70px, 16px side inset) shows the same three destinations; main gets 112px bottom padding below `lg` |
 | Admin navigation | Groups: Ringkasan (single link), Operasional (Monitoring, Siswa, Hasil, Hasil Kecermatan), Konten (Tryout, Tes Kecermatan, Paket Item, Bank Soal, Produk, Program), Keuangan (Pesanan, Top-up), Sistem (Akun Pengguna, Pengaturan). Role guards (`adminOnly`) are unchanged; a group with no visible child is hidden |
 | Admin groups | Collapsible header button (`aria-expanded`, `aria-controls`); the group holding the active page opens automatically on navigation; the user may close it afterwards |
 | Group tree connector | Children hang off a dashed vertical line with a dashed branch to each child, like a file tree. Drawn with `border-dashed` in `sidebar-muted/60` on `li::before` (vertical, half height on the last child) and `li::after` (branch). Never solid |
 | Admin mobile | Left drawer, 288px set on `Drawer.Dialog`, `sidebar` surface, closes after navigation |
-| Header | Sticky; 56px; `z-30`; `surface/85`, blur, bottom border |
-| Header padding | 16px base; 24px at `lg` |
-| Header content | Title and description, page `actions`, student quick-wallet trigger, account menu. Below `lg` a student sees the logo, an admin sees the menu button |
-| Main padding | 16px horizontal / 24px vertical; 24px / 32px at `lg` |
+| Topbar | Not sticky, no border, no background: `min-h-topbar` (82px) at `lg`, 76px below. Student: the 132px logo (light plate in dark theme), then on the right the `WalletPopover` trigger and the account menu. Staff: menu button below `lg`, then a "Group > Page" crumb derived from the nav, then language and theme toggles (`md`+) and the account menu |
+| Page heading | `AppShell` renders `PageHeading` at the top of `main` from `title`, `description`, `breadcrumb` and `actions` (h1 `text-display` for students, `text-display-sm` for staff). Pages that render their own h1 must not also pass `title` |
+| Main padding | 4px horizontal at `lg`, 20px (shell) below; 20px top; student bottom padding clears the mobile nav |
 | Content width | Full available width at 1920 and 2560px. No wrapper imposes a maximum; pages opt in with the `maxWidth` prop |
 | Focused builder | Existing tryout builder uses `max-w-3xl` = 768px |
 
-Quick wallet: `WalletTrigger` in `app-shell.tsx` is a link to `/student/wallet` showing a wallet icon and "Saldo". It is the single mount point for the wallet popover.
+Quick wallet: the `WalletPopover` trigger sits in the student topbar and is the single mount point for the wallet popover.
 
 Account menu (header, every role): avatar, name and role open a HeroUI `Dropdown` (arrow keys, type-ahead, Escape closes and returns focus to the trigger). Students get Profil `/student/profile`, Riwayat pesanan `/student/orders`, Saldo dan transaksi `/student/wallet`; all roles get Tema and Bahasa (the existing theme and locale state, shown with their current value) and Keluar (danger, existing logout flow and redirect). The header no longer carries separate theme and language buttons.
 
@@ -302,9 +328,9 @@ Student result rows are bordered 6px-radius links with 14px horizontal / 10px ve
 
 ### 6.5 Chips and icons
 
-Reuse the [status badge components](../web/components/status-badge.tsx) so status translation and color mapping stay consistent. Chips use `size="sm"`, weight 500, and the project 4.5px radius.
+Reuse the [status badge components](../web/components/status-badge.tsx) so status translation and color mapping stay consistent. Chips use `size="sm"` (11px), weight 500, and the `rounded-chip` 7px radius. `StatusChip` (tone + optional dot) covers statuses without a typed badge.
 
-Icons use Lucide with a common 16–18px control size and stroke width around 2. Empty-state icons use 20px / 1.75 stroke. Decorative icons should be hidden from assistive technology; actionable icons need names. Do not use the same checkmark to imply both payment confirmation and exam correctness without a label.
+**Icon rule.** Icons are `lucide-react`. The prototype's 19-icon SVG sprite is a hand-drawn lucide-style set (same 24px grid, round caps and joins, 1.65 stroke), so no sprite is ported. `globals.css` forces `stroke-width: 1.65` on every `svg.lucide` outside the landing; do not pass `strokeWidth` (a `stroke-*` utility still wins if truly needed). Sizes come from `Icon` in `components/icon.tsx`: `rail` 22px, `nav` 21px, `md` 20px, `sm` 16px (buttons, kickers), `xs` 14px (arrows, chevrons), `hero` 34px (empty state). Student nav icons: Dashboard `LayoutDashboard`, Tryout `BookOpen`, Katalog `LayoutGrid`. Decorative icons should be hidden from assistive technology; actionable icons need names. Do not use the same checkmark to imply both payment confirmation and exam correctness without a label.
 
 ### 6.6 Dialogs and drawers
 
@@ -345,6 +371,31 @@ Zero renders as an empty bar; small positive values keep a 4% minimum so they st
 Use the existing Taruna Eduka image assets through [Logo](../web/components/logo.tsx): full logo at 36px height; collapsed icon at 32px. Preserve aspect ratio and use legible assets for each surface. The current full logo is visually subdued on the dark sidebar; review a suitable dark-surface asset before release.
 
 [GradientAvatar](../web/components/gradient-avatar.tsx) uses initials over a user-color gradient: 28px small, 36px medium, 48px large. Avatar and product-cover colors are decorative identity, not permission or status indicators.
+
+### 6.10 Shared visual helpers (visual parity pass)
+
+Reuse these before writing page-local markup. All are small, prop-driven, and token-only.
+
+| Component (file) | Props | Use |
+| --- | --- | --- |
+| `PageHeading`, `Breadcrumb` (`page-heading.tsx`) | `title`, `description?`, `breadcrumb?: Crumb[]`, `actions?`, `size?: "display" \| "compact"` | Page h1 block. `AppShell` already renders it |
+| `Icon` (`icon.tsx`) | `icon`, `size?: rail\|nav\|md\|sm\|xs\|hero`, `className?` | Sized lucide icon at the prototype stroke |
+| `CardKicker` (`page-blocks.tsx`) | `icon?`, `children` | 11px accent label at the top of a card |
+| `Panel` (`page-blocks.tsx`) | `tone?: plain\|peach\|soft\|canvas`, `elevated?`, `radius?: tile\|card\|hero`, `as?` | Card surface; `peach`/`soft` are the tinted hero cards |
+| `SectionHeader` (`page-blocks.tsx`) | `title`, `description?`, `href?`, `linkLabel?`, `actions?` | h2 with a link on the right |
+| `TextLink` (`page-blocks.tsx`) | `href`, `arrow?` | Accent link with trailing arrow |
+| `NoteBox` (`page-blocks.tsx`) | `tone?: neutral\|success`, `icon?` | Quiet bordered note |
+| `ScoreBar` (`page-blocks.tsx`) | `label`, `valueLabel?`, `value` (0-100) | Thin progress bar with `progressbar` semantics |
+| `Metric`, `MetricStrip` (`metric-strip.tsx`) | `value`, `label`, `icon?`, `size?: md\|lg\|xl` | Bordered row of numbers with dividers |
+| `FilterPills`, `UnderlineTabs` (`filter-pills.tsx`) | `options: {id,label,count?}[]`, `value`, `onChange`, `ariaLabel` | Rounded filters; underlined hub tabs. Controlled |
+| `StatusChip` (`status-badge.tsx`) | `tone: success\|warning\|danger\|accent\|neutral`, `dot?` | Generic status chip |
+| `ExamTimerPill` (`countdown-ring.tsx`) | `time`, `urgent?` | Prototype exam timer pill; display only |
+| `DataTable` (`data-table.tsx`) | existing props plus `footer?` | Table with a summary strip |
+| `EmptyState` (`empty-state.tsx`) | existing props plus `bare?` | Rose icon, Geist title; `bare` inside a panel |
+| `Logo` (`logo.tsx`) | existing props plus `size?: sm\|md`, `plate?` | 132px topbar logo with dark-theme plate |
+| `GradientAvatar` | unchanged props | Flat peach disc with accent initials unless explicit colors are given |
+
+Tinted tokens added for these: `bg-peach`, `bg-accent-soft`, `text-rose` / `bg-rose`, `bg-success-soft` with `text-success-soft-foreground` (prototype green), `bg-rail-active`, `bg-sidebar-hover`, `logo-plate`.
 
 ## 7. How to build a dashboard
 

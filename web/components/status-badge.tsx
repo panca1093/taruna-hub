@@ -18,6 +18,24 @@ const orderStatusClassName: Record<OrderStatus, string> = {
   cancelled: "bg-danger-soft text-danger-soft-foreground",
 };
 
+const toneClassName = {
+  success: "bg-success-soft text-success-soft-foreground",
+  warning: "bg-warning-soft text-warning-soft-foreground",
+  danger: "bg-danger-soft text-danger-soft-foreground",
+  accent: "bg-accent-soft text-accent-soft-foreground",
+  neutral: "bg-surface-secondary text-muted",
+} as const;
+
+/** Generic tone chip with an optional leading dot (prototype admin .status). Prefer the typed badges below when one fits. */
+export function StatusChip({ tone, dot, children, className }: { tone: keyof typeof toneClassName; dot?: boolean; children: React.ReactNode; className?: string }) {
+  return (
+    <Chip size="sm" className={cn("font-medium", toneClassName[tone], className)}>
+      {dot && <span className="mr-1.5 size-1.25 rounded-full bg-current" aria-hidden />}
+      {children}
+    </Chip>
+  );
+}
+
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
   const t = useStatusBadgeT();
   return (

@@ -11,9 +11,9 @@ export function LanguageToggle({ className }: { className?: string }) {
 
   return (
     <Button
-      variant="ghost"
+      variant="outline"
       size="sm"
-      className={className}
+      className={className ?? "text-label"}
       aria-label={locale === "id" ? t.switchToEnglish : t.switchToIndonesian}
       onPress={() => setLocale(next)}
     >

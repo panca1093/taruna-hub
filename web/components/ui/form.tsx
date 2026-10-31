@@ -31,10 +31,10 @@ export function FormField({
 }) {
   return (
     <TextField isRequired={required} isInvalid={!!error} className={cn("flex flex-col gap-1.5", className)}>
-      {label && <Label className="text-[13px] font-medium text-foreground">{label}</Label>}
+      {label && <Label className="text-caption font-medium text-foreground">{label}</Label>}
       {children}
-      {description && !error && <p className="text-xs text-muted">{description}</p>}
-      {error && <FieldError className="text-xs text-danger">{error}</FieldError>}
+      {description && !error && <p className="text-label text-muted">{description}</p>}
+      {error && <FieldError className="text-label text-danger">{error}</FieldError>}
     </TextField>
   );
 }
@@ -119,7 +119,7 @@ export function SelectInput({
       onSelectionChange={(key) => onSelectionChange?.(key as string | null)}
       className={cn("flex flex-col gap-1.5", className)}
     >
-      {label && <Label className="text-[13px] font-medium text-foreground">{label}</Label>}
+      {label && <Label className="text-caption font-medium text-foreground">{label}</Label>}
       <Select.Trigger className="justify-between">
         <Select.Value />
         <Select.Indicator>
@@ -135,8 +135,8 @@ export function SelectInput({
           ))}
         </ListBox>
       </Select.Popover>
-      {description && !error && <p className="text-xs text-muted">{description}</p>}
-      {error && <FieldError className="text-xs text-danger">{error}</FieldError>}
+      {description && !error && <p className="text-label text-muted">{description}</p>}
+      {error && <FieldError className="text-label text-danger">{error}</FieldError>}
     </Select>
   );
 }
@@ -160,7 +160,7 @@ export function SwitchInput({
     <Switch isSelected={isSelected} onChange={onChange} isDisabled={isDisabled} className={cn("w-full", className)}>
       <Switch.Content className="flex w-full flex-row items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
-          <span className="text-[13px] font-medium text-foreground">{label}</span>
+          <span className="text-caption font-medium text-foreground">{label}</span>
           {description && <span className="text-xs text-muted">{description}</span>}
         </span>
         <Switch.Control>

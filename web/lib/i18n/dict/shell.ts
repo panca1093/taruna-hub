@@ -20,6 +20,15 @@ const id = {
   language: "Bahasa",
   languageName: "Indonesia",
   toggleGroup: (name: string) => `Buka atau tutup grup ${name}`,
+  studentTagline: "Ruang belajarmu",
+  staffTagline: "Ruang staf",
+  railNote: "Selangkah lebih siap.",
+  changeTheme: "Ganti tema",
+  profileHint: "Identitas dan keamanan akun",
+  ordersHint: "Pembelian dan status pembayaran",
+  walletHint: "Saldo, top-up, dan mutasi",
+  footer: "Taruna Eduka · Selangkah lebih siap.",
+  skipToContent: "Lewati ke konten",
 };
 
 const en: typeof id = {
@@ -40,6 +49,15 @@ const en: typeof id = {
   language: "Language",
   languageName: "English",
   toggleGroup: (name: string) => `Toggle ${name} group`,
+  studentTagline: "Your study space",
+  staffTagline: "Staff workspace",
+  railNote: "One step more ready.",
+  changeTheme: "Change theme",
+  profileHint: "Identity and account security",
+  ordersHint: "Purchases and payment status",
+  walletHint: "Balance, top-ups, and ledger",
+  footer: "Taruna Eduka · One step more ready.",
+  skipToContent: "Skip to content",
 };
 
 export function useShellT() {
