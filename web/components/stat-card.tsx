@@ -11,9 +11,19 @@ interface StatCardProps {
   delta?: { value: string; direction: "up" | "down" };
   ring?: number;
   className?: string;
+  compact?: boolean;
 }
 
-export function StatCard({ label, value, icon: Icon, delta, ring, className }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, delta, ring, className, compact }: StatCardProps) {
+  if (compact) {
+    return (
+      <Card className={cn("relative gap-2 rounded-2xl border border-separator p-5 shadow-none", className)}>
+        <p className="pr-6 text-xs leading-relaxed text-muted">{label}</p>
+        <Icon className="absolute right-5 top-5 size-4 text-muted" aria-hidden="true" />
+        <p className="break-words font-display text-2xl font-semibold tracking-tight text-foreground tabular-nums">{value}</p>
+      </Card>
+    );
+  }
   return (
     <Card className={cn("gap-4 p-5", className)}>
       <div className="flex items-start justify-between">

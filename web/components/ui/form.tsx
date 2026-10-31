@@ -45,6 +45,7 @@ export function TextInput({
   error,
   required,
   className,
+  inputClassName,
   ...props
 }: {
   label?: string;
@@ -52,10 +53,11 @@ export function TextInput({
   error?: string;
   required?: boolean;
   className?: string;
+  inputClassName?: string;
 } & Omit<React.ComponentProps<typeof Input>, "className">) {
   return (
     <FormField label={label} description={description} error={error} required={required} className={className}>
-      <Input fullWidth {...props} />
+      <Input fullWidth className={inputClassName} {...props} />
     </FormField>
   );
 }

@@ -433,6 +433,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/my/dashboard:
+    get:
+      tags: [runtime]
+      summary: The signed-in student's dashboard summary
+      description: |
+        Counts owned tryouts and distinct tryouts with a persisted completed result. The average
+        is over every completed tryout attempt, including retakes and zero scores, rounded to two
+        decimals; null means no completed results. Kecermatan is not included in tryout metrics.
+        Balance is the student's exact decimal wallet projection. The principal supplies identity;
+        client user/tenant identifiers are never used. Read from one database snapshot.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The student's authoritative summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentDashboardSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/programs:
     get:
       tags: [programs]
@@ -6778,6 +6802,28 @@ components:
         score:
           type: number
           nullable: true
+
+    StudentDashboardSummary:
+      type: object
+      additionalProperties: false
+      required: [owned_tryouts, completed_tryouts, average_score, balance]
+      properties:
+        owned_tryouts:
+          type: integer
+          minimum: 0
+        completed_tryouts:
+          type: integer
+          minimum: 0
+          description: Distinct tryouts with at least one completed result.
+        average_score:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 100
+          description: Average of persisted completed-attempt scores, rounded to two decimals.
+        balance:
+          type: string
+          pattern: '^\d+\.\d{2}$'
+          description: Exact wallet projection, never a floating-point amount.
 
     AttemptList:
       type: object

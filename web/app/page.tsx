@@ -243,9 +243,6 @@ export default function HomePage() {
             <p className="text-xs text-muted/70">{t.footerPoweredBy}</p>
           </div>
           <p>{t.footerTagline}</p>
-          <Link href="/login/staff" className="text-xs text-muted/70 transition-colors hover:text-foreground">
-            {t.footerInternalPortal}
-          </Link>
         </div>
       </footer>
     </div>

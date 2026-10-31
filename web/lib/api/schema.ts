@@ -663,6 +663,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/my/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The signed-in student's dashboard summary
+         * @description Counts owned tryouts and distinct tryouts with a persisted completed result. The average
+         *     is over every completed tryout attempt, including retakes and zero scores, rounded to two
+         *     decimals; null means no completed results. Kecermatan is not included in tryout metrics.
+         *     Balance is the student's exact decimal wallet projection. The principal supplies identity;
+         *     client user/tenant identifiers are never used. Read from one database snapshot.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The student's authoritative summary */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StudentDashboardSummary"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/programs": {
         parameters: {
             query?: never;
@@ -7258,6 +7303,15 @@ export interface components {
             /** Format: date-time */
             completed_at: string | null;
             score: number | null;
+        };
+        StudentDashboardSummary: {
+            owned_tryouts: number;
+            /** @description Distinct tryouts with at least one completed result. */
+            completed_tryouts: number;
+            /** @description Average of persisted completed-attempt scores, rounded to two decimals. */
+            average_score: number | null;
+            /** @description Exact wallet projection, never a floating-point amount. */
+            balance: string;
         };
         AttemptList: {
             attempts: components["schemas"]["AttemptSummary"][];

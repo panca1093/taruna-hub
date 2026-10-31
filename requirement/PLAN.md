@@ -175,7 +175,7 @@ For every slice, use this verification loop:
 
 ### P03 — Real tenant accounts and sessions
 
-**Status:** done — D02 is resolved (the Operator is allowed what the PRD leaves ambiguous); P03a sessions/login/role guard, P03b registration, email code, reset, rotation and throttling, and P03c web login, registration, recovery and session screens are done; the Operator guard on user and settings mutations has nothing to test until P04/P22 add those endpoints · **Size:** L · **Depends:** P01, P02
+**Status:** done — D02 is resolved (the Operator is allowed what the PRD leaves ambiguous); P03a sessions/login/role guard, P03b registration, email code, reset, rotation and throttling, and P03c web login, registration, recovery and session screens are done; the owner-approved 2026-10-31 auth/dashboard refresh is verified (direct `/portal`, split auth layout, optional `/verify-email`, real dashboard data and shared spacing); the Operator guard on user and settings mutations has nothing to test until P04/P22 add those endpoints · **Size:** L · **Depends:** P01, P02
 
 **Outcome:** Students and staff authenticate in their own tenant and recover accounts through the approved channel.
 
@@ -193,6 +193,11 @@ For every slice, use this verification loop:
       Programs are tested under D02 (curriculum role tests); users and settings have no mutation endpoints until P04/P22.
 - [ ] Reload/refresh/logout/idle expiry and active-exam policy behave as specified; secrets are absent from logs.
       Everything but the active-exam half is done and tested; D13 says an exam keeps its session alive, which P16 implements.
+
+- [x] Owner-approved account UI refresh: public student entry, direct `/portal`, registration → optional email verification → dashboard, refresh/logout and 320–1440px layouts.
+      Browser/API/database demo used one local QA student and a guarded code fixture; live inbox delivery is not claimed because local SMTP is unconfigured. Existing seed credentials were rejected, so current staff-account credentials were not reset or browser-certified.
+- [x] Dashboard displays API-backed counts, nullable average and exact balance with loading, retry, empty and populated modules.
+      Scoped/role, zero-score, retake and kecermatan-exclusion tests passed; empty/populated browser data and 24px module gaps were verified.
 
 **Decision / verification gate:** D01 OTP and phone-only recovery; D02 privileges; D13 token/idle policy. Auth cannot be signed off with phone signup silently removed.
 
@@ -530,7 +535,7 @@ For every slice, use this verification loop:
 
 ### P17 — Tryout history, ranking and controlled review
 
-**Status:** in progress, lean (API, student result/review and admin results wired and tested; Redis cache, browser demo and student history page changes deferred) · **Size:** L · **Depends:** P16
+**Status:** in progress, lean (API, student result/review and admin results wired and tested; student dashboard reads the API with a scoped summary and real activity, with browser/API/database verification; Redis cache, result/review/admin browser demo and student history page changes deferred) · **Size:** L · **Depends:** P16
 
 **Outcome:** Students review all attempts and tenant-local average-based rankings without premature explanation access.
 

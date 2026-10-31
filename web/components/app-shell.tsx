@@ -35,6 +35,8 @@ function NavLinks({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?:
           <Link
             key={item.href}
             href={item.href}
+            aria-label={navT[item.href] ?? item.label}
+            aria-current={active ? "page" : undefined}
             onClick={onNavigate}
             className={cn(
               "group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
@@ -61,13 +63,14 @@ function UserMenu({ collapsed }: { collapsed?: boolean }) {
   const router = useRouter();
   const commonT = useCommonT();
   const roleLabel: Record<Role, string> = { student: commonT.student, operator: commonT.operator, admin: commonT.admin };
-  const goHome = role === "student" ? "/login" : "/login/staff";
+  const goHome = role === "student" ? "/login" : "/portal";
 
   return (
     <Dropdown>
       <Dropdown.Trigger
+        aria-label={user.name}
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left outline-none hover:bg-surface-secondary",
+          "flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left outline-none hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-focus",
           collapsed && "justify-center",
         )}
       >
@@ -127,7 +130,7 @@ export function AppShell({
         )}
       >
         <div className={cn("flex h-14 items-center px-3.5", collapsed && "justify-center px-0")}>
-          <Logo collapsed={collapsed} />
+            <Logo collapsed={collapsed} className={cn("focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-focus", !collapsed && "dark:rounded-lg dark:bg-foreground dark:px-2 dark:py-1")} />
         </div>
         <div className="flex-1 overflow-y-auto py-2">
           <NavLinks collapsed={collapsed} />
@@ -138,6 +141,7 @@ export function AppShell({
             size="sm"
             className={cn("mb-1 w-full justify-start gap-2.5 text-muted", collapsed && "justify-center px-0")}
             onPress={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? shellT.expand : shellT.collapse}
           >
             <ChevronsLeft className={cn("size-4 shrink-0 transition-transform", collapsed && "rotate-180")} />
             {!collapsed && shellT.collapse}
@@ -150,9 +154,9 @@ export function AppShell({
       <Drawer isOpen={mobileOpen} onOpenChange={setMobileOpen}>
         <Drawer.Backdrop>
           <Drawer.Content placement="left">
-            <Drawer.Dialog className="flex h-full w-72 flex-col">
+            <Drawer.Dialog className="flex h-full w-72 flex-col" aria-label={shellT.navigation}>
               <Drawer.Header className="flex h-14 items-center px-3.5">
-                <Logo />
+                <Logo className="focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-focus" />
               </Drawer.Header>
               <Drawer.Body className="flex-1 overflow-y-auto px-0 py-2">
                 <NavLinks onNavigate={() => setMobileOpen(false)} />
@@ -167,7 +171,7 @@ export function AppShell({
 
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-surface/85 px-4 backdrop-blur-sm lg:px-6">
-          <Button variant="ghost" isIconOnly size="sm" className="lg:hidden" onPress={() => setMobileOpen(true)}>
+          <Button variant="ghost" isIconOnly size="sm" className="lg:hidden" onPress={() => setMobileOpen(true)} aria-label={shellT.openNavigation}>
             <Menu className="size-[18px]" />
           </Button>
           <div className="min-w-0 flex-1">
@@ -181,8 +185,10 @@ export function AppShell({
           </div>
         </header>
         <main className="flex-1 px-4 py-6 lg:px-6 lg:py-8">
-          <EmailVerifyBanner />
-          {maxWidth ? <div className={cn("mx-auto", maxWidth)}>{children}</div> : children}
+          <div className={cn(maxWidth && "mx-auto", maxWidth)}>
+            <EmailVerifyBanner />
+            {children}
+          </div>
         </main>
       </div>
     </div>
