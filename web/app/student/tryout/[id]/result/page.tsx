@@ -3,10 +3,12 @@
 import { Suspense, use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button, Card } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { ArrowRight, Clock, CloudOff, Lock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/icon";
+import { Panel, ScoreBar } from "@/components/page-blocks";
 import { LinkButton } from "@/components/ui/link-button";
 import { api, ApiError, type StudentTryout, type TryoutResultDetail } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
@@ -106,7 +108,7 @@ function ResultContent({ tryoutId, attemptParam }: { tryoutId: string; attemptPa
   if (state === "loading" || !result || !overview) {
     return (
       <AppShell title={t.pageTitle}>
-        <p className="py-14 text-center text-sm text-muted">{t.loadingResult}</p>
+        <p className="py-14 text-center text-small text-muted">{t.loadingResult}</p>
       </AppShell>
     );
   }
@@ -116,90 +118,84 @@ function ResultContent({ tryoutId, attemptParam }: { tryoutId: string; attemptPa
   const completed = overview.attempts.filter((a) => a.status === "completed");
   const reviewHref = `/student/tryout/${tryoutId}/review?attempt=${result.session_id}`;
 
-  return (
-    <AppShell title={t.pageTitle} description={overview.title}>
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">{t.heading(result.attempt_number)}</h1>
-            <p className="mt-1 text-sm text-muted">{t.headingMeta(overview.title, formatDate(result.completed_at))}</p>
-          </div>
-          {result.explanations_released ? (
-            <LinkButton href={reviewHref} variant="primary" size="md">
-              {t.viewReview} <ArrowRight className="size-4" />
-            </LinkButton>
-          ) : (
-            <Button variant="secondary" isDisabled>
-              <Clock className="size-4" /> {t.reviewHeld}
-            </Button>
-          )}
-        </div>
+  const stat = "rounded-tile border border-border bg-surface p-5 sm:p-5.5";
 
-        <div className="grid gap-4 lg:grid-cols-4">
-          <section className="flex flex-col items-center justify-center rounded-2xl bg-accent-soft p-6 text-center text-accent-soft-foreground lg:row-span-2">
-            <p className="text-sm">{t.scoreLabel}</p>
-            <p className="font-display mt-2 text-6xl font-semibold text-foreground">{result.score}</p>
-            <p className="mt-1 text-xs">{t.scoreOutOf}</p>
-          </section>
-          <Card className="gap-0 p-5">
-            <p className="font-display text-3xl font-semibold text-foreground">{correct}</p>
-            <p className="text-xs text-muted">{t.statCorrect}</p>
-          </Card>
-          <Card className="gap-0 p-5">
-            <p className="font-display text-3xl font-semibold text-foreground">{total}</p>
-            <p className="text-xs text-muted">{t.statQuestions}</p>
-          </Card>
-          <Card className="gap-0 p-5">
-            <p className="font-display text-3xl font-semibold text-foreground">
-              {t.rankValue(result.ranking.rank, result.ranking.participant_count)}
-            </p>
-            <p className="text-xs text-muted">{t.statRank}</p>
-            <p className="mt-1 text-xs text-muted">{t.rankNote(result.ranking.average_score, result.ranking.attempts_counted)}</p>
-          </Card>
-          <Card className="gap-0 p-5 lg:col-span-3">
+  return (
+    <AppShell
+      title={t.heading(result.attempt_number)}
+      description={t.headingMeta(overview.title, formatDate(result.completed_at))}
+      breadcrumb={[{ label: t.crumbDashboard, href: "/student" }, { label: t.crumbResult }]}
+      actions={
+        result.explanations_released ? (
+          <LinkButton href={reviewHref} variant="primary" size="md">
+            {t.viewReview} <Icon icon={ArrowRight} size="sm" />
+          </LinkButton>
+        ) : (
+          <Button variant="secondary" isDisabled>
+            <Icon icon={Clock} size="sm" /> {t.reviewHeld}
+          </Button>
+        )
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid gap-4 lg:grid-cols-4 lg:gap-6">
+          <Panel as="section" tone="peach" radius="hero" className="flex flex-col items-center justify-center text-center lg:row-span-2">
+            <p className="text-label text-muted">{t.scoreLabel}</p>
+            <p className="font-display my-5 text-score">{result.score}</p>
+            <p className="text-label text-muted">{t.scoreOutOf}</p>
+          </Panel>
+          <div className={stat}>
+            <p className="font-display text-hero-lg">{correct}</p>
+            <p className="mt-1.5 text-micro text-muted">{t.statCorrect}</p>
+          </div>
+          <div className={stat}>
+            <p className="font-display text-hero-lg">{total}</p>
+            <p className="mt-1.5 text-micro text-muted">{t.statQuestions}</p>
+          </div>
+          <div className={stat}>
+            <p className="font-display text-hero-lg">{t.rankValue(result.ranking.rank, result.ranking.participant_count)}</p>
+            <p className="mt-1.5 text-micro text-muted">{t.statRank}</p>
+            <p className="mt-1 text-micro text-muted">{t.rankNote(result.ranking.average_score, result.ranking.attempts_counted)}</p>
+          </div>
+          <Panel as="section" radius="card" className="lg:col-span-3">
             {result.explanations_released ? (
               <>
-                <h2 className="font-display text-lg font-semibold text-foreground">{t.learnTitle}</h2>
-                <p className="mt-1 text-sm text-muted">{t.learnBody}</p>
+                <h2 className="font-display mb-3 text-heading-sm">{t.learnTitle}</h2>
+                <p className="text-caption leading-relaxed text-muted">{t.learnBody}</p>
               </>
             ) : (
               <div className="flex items-start gap-3">
-                <Clock className="mt-0.5 size-4 shrink-0 text-muted" />
+                <Icon icon={Clock} size="sm" className="mt-1 text-rose" />
                 <div>
-                  <h2 className="font-display text-lg font-semibold text-foreground">{t.heldTitle}</h2>
-                  <p className="mt-1 text-sm text-muted">{t.heldBody}</p>
+                  <h2 className="font-display mb-3 text-heading-sm">{t.heldTitle}</h2>
+                  <p className="text-caption leading-relaxed text-muted">{t.heldBody}</p>
                   {result.explanation_release_at && (
-                    <p className="mt-1 text-sm font-medium text-foreground">{t.heldUntil(formatDate(result.explanation_release_at))}</p>
+                    <p className="mt-1 text-caption font-medium">{t.heldUntil(formatDate(result.explanation_release_at))}</p>
                   )}
                 </div>
               </div>
             )}
-          </Card>
+          </Panel>
         </div>
 
-        <Card className="gap-0 p-6">
-          <h2 className="font-display text-lg font-semibold text-foreground">{t.subtestScoresTitle}</h2>
-          <ul className="mt-4 space-y-4">
+        <Panel as="section">
+          <h2 className="font-display mb-5 text-heading-sm">{t.subtestScoresTitle}</h2>
+          <div className="grid gap-5">
             {result.subtests.map((s) => (
-              <li key={s.subtest_id}>
-                <div className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="text-foreground">{s.name}</span>
-                  <span className="shrink-0 font-semibold text-foreground">
-                    {s.score} / 100 <span className="ml-2 text-xs font-normal text-muted">{t.correctCount(s.correct_count, s.question_count)}</span>
-                  </span>
-                </div>
-                <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-secondary" role="presentation">
-                  <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, s.score))}%` }} />
-                </div>
-              </li>
+              <ScoreBar
+                key={s.subtest_id}
+                label={s.name}
+                valueLabel={`${s.score} / 100 · ${t.correctCount(s.correct_count, s.question_count)}`}
+                value={s.score}
+              />
             ))}
-          </ul>
-        </Card>
+          </div>
+        </Panel>
 
         {completed.length > 0 && (
-          <Card className="gap-0 p-6">
-            <h2 className="font-display text-lg font-semibold text-foreground">{t.historyTitle}</h2>
-            <ul className="mt-3 divide-y divide-border">
+          <Panel as="section">
+            <h2 className="font-display text-heading-sm">{t.historyTitle}</h2>
+            <ul className="mt-2 divide-y divide-border">
               {completed.map((attempt) => {
                 const isCurrent = attempt.session_id === result.session_id;
                 return (
@@ -208,35 +204,35 @@ function ResultContent({ tryoutId, attemptParam }: { tryoutId: string; attemptPa
                       href={`/student/tryout/${tryoutId}/result?attempt=${attempt.session_id}`}
                       aria-current={isCurrent ? "page" : undefined}
                       className={cn(
-                        "flex items-center justify-between gap-3 rounded-lg px-2 py-3.5 transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+                        "flex items-center justify-between gap-4 rounded-control px-3 py-4 text-caption outline-none transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-focus",
                         isCurrent && "bg-accent-soft",
                       )}
                     >
                       <span>
-                        <span className="block text-sm font-medium text-foreground">
+                        <span className="block">
                           {t.attemptLabel(attempt.attempt_number)}
-                          {isCurrent && <span className="ml-2 text-xs font-normal text-muted">{t.currentAttempt}</span>}
+                          {isCurrent && <span className="ml-2 text-micro text-muted">{t.currentAttempt}</span>}
                         </span>
-                        {attempt.completed_at && <span className="block text-xs text-muted">{formatDate(attempt.completed_at)}</span>}
+                        {attempt.completed_at && <span className="mt-1 block text-micro text-muted">{formatDate(attempt.completed_at)}</span>}
                       </span>
-                      <span className="flex items-center gap-3">
-                        <span className="font-display text-xl font-semibold text-foreground">{attempt.score ?? "–"}</span>
-                        <ArrowRight className="size-4 text-muted" />
+                      <span className="flex items-center gap-5">
+                        <span className="font-display text-heading">{attempt.score ?? "–"}</span>
+                        <Icon icon={ArrowRight} size="sm" />
                       </span>
                     </Link>
                   </li>
                 );
               })}
             </ul>
-          </Card>
+          </Panel>
         )}
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3.5">
           <LinkButton href={`/student/tryout/${tryoutId}`} variant="secondary" size="md">
-            {t.historyAndRetry} <ArrowRight className="size-4" />
+            {t.historyAndRetry} <Icon icon={ArrowRight} size="sm" />
           </LinkButton>
           <LinkButton href="/student" variant="secondary" size="md">
-            {t.backToDashboard}
+            {t.backToDashboard} <Icon icon={ArrowRight} size="sm" />
           </LinkButton>
         </div>
       </div>

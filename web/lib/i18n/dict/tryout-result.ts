@@ -4,6 +4,8 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   pageTitle: "Hasil Tryout",
+  crumbDashboard: "Dashboard",
+  crumbResult: "Hasil tryout",
   loadingResult: "Memuat hasil…",
   loadErrorTitle: "Hasil tidak dapat dimuat",
   loadErrorDescription: "Periksa koneksi kamu lalu coba lagi.",
@@ -40,6 +42,8 @@ const id = {
 
 const en: typeof id = {
   pageTitle: "Tryout Result",
+  crumbDashboard: "Dashboard",
+  crumbResult: "Tryout result",
   loadingResult: "Loading result…",
   loadErrorTitle: "The result could not be loaded",
   loadErrorDescription: "Check your connection and try again.",
