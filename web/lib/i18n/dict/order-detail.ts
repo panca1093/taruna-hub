@@ -3,6 +3,7 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
+  crumbDashboard: "Dashboard",
   title: "Detail pesanan",
   crumbOrders: "Riwayat pesanan",
   loading: "Memuat pesanan…",
@@ -63,6 +64,7 @@ const id = {
 };
 
 const en: typeof id = {
+  crumbDashboard: "Dashboard",
   title: "Order details",
   crumbOrders: "Order history",
   loading: "Loading order…",
