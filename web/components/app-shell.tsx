@@ -223,7 +223,7 @@ function Rail({ expanded, onToggle, staff, homeHref }: { expanded: boolean; onTo
   return (
     <aside
       className={cn(
-        "sticky top-inset z-30 hidden h-rail shrink-0 flex-col rounded-rail bg-sidebar pt-6.5 pb-4 text-sidebar-foreground shadow-rail transition-[width] duration-300 ease-out motion-reduce:transition-none lg:flex",
+        "sticky top-inset z-30 hidden h-rail-full shrink-0 flex-col rounded-rail bg-sidebar pt-6.5 pb-4 text-sidebar-foreground shadow-rail transition-[width] duration-300 ease-out motion-reduce:transition-none lg:flex",
         expanded ? (staff ? "w-rail-admin px-4" : "w-rail-open px-4") : "w-rail px-2.5",
       )}
     >

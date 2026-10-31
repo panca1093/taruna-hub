@@ -221,7 +221,7 @@ Reuse [AppShell](../web/components/app-shell.tsx) for authenticated operational 
 | Region | Specification |
 | --- | --- |
 | Layout | At `lg`: `p-inset` (14px) page inset, 32px gap between rail and workspace, 24px right padding. Below `lg`: 20px side padding |
-| Rail (all roles) | Floating `rounded-rail`, `bg-sidebar`, `shadow-rail`, sticky at `top-inset`, height `h-rail` (viewport minus 2 insets). Collapsed `w-rail` (88px); expanded `w-rail-open` (224px, student) or `w-rail-admin` (248px, staff). Round collapse button on the right edge. Student default collapsed, staff default expanded; the user's toggle is kept in component state |
+| Rail (all roles) | Floating `rounded-rail`, `bg-sidebar`, `shadow-rail`, sticky at `top-inset`, height `h-rail-full` (viewport minus 2 insets; not `h-rail`, which is the 88px spacing token). Collapsed `w-rail` (88px); expanded `w-rail-open` (224px, student) or `w-rail-admin` (248px, staff). Round collapse button on the right edge. Student default collapsed, staff default expanded; the user's toggle is kept in component state |
 | Rail brand | "T." mark (`text-brand`, dot in `sidebar-accent`) at the top, linking to the role home; expanded adds "Taruna Eduka" and a tagline |
 | Rail bottom | Theme control (moon/sun icon, label when expanded); student expanded also shows the "Selangkah lebih siap." note |
 | Collapsed sidebar (staff) | Icon-only items with `title` and `aria-label`; groups flatten, separated by a hairline |

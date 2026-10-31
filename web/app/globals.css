@@ -483,7 +483,7 @@
 }
 
 /* Floating-rail geometry and the glowing active-item treatment (prototype .sidebar / .nav-item). */
-@utility h-rail {
+@utility h-rail-full {
   height: calc(100dvh - 2 * var(--spacing-inset));
 }
 
