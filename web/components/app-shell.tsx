@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -105,8 +105,10 @@ function AdminGroup({ group, open, onToggle, pathname, onNavigate }: { group: Na
 
 const HOVER_OPEN_MS = 150;
 const HOVER_CLOSE_MS = 200;
+const FLYOUT_GAP = 12;
+const FLYOUT_MARGIN = 8;
 
-function CollapsedGroup({ group, open, onOpen, onClose, pathname }: { group: NavGroup; open: boolean; onOpen: (pinned: boolean) => void; onClose: () => void; pathname: string }) {
+function CollapsedGroup({ group, open, pinned, onOpen, onClose, pathname }: { group: NavGroup; open: boolean; pinned: boolean; onOpen: (pinned: boolean) => void; onClose: () => void; pathname: string }) {
   const navT = useNavT();
   const name = navT[`group:${group.id}`] ?? group.id;
   const panelId = `nav-flyout-${group.id}`;
@@ -115,51 +117,62 @@ function CollapsedGroup({ group, open, onOpen, onClose, pathname }: { group: Nav
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const pinned = useRef(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const focusOnOpen = useRef(false);
 
   const clearTimer = () => clearTimeout(timer.current);
-  const show = (pin: boolean) => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (rect) setPos({ top: rect.top, left: rect.right + 12 });
-    pinned.current = pin;
-    onOpen(pin);
-  };
   const hide = () => {
     clearTimer();
-    pinned.current = false;
     onClose();
   };
+  const focusFirstLink = () => panelRef.current?.querySelector<HTMLElement>("a")?.focus();
 
-  useEffect(
-    () => () => {
-      clearTimeout(timer.current);
-      onClose();
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!open || !panel || !rect) return;
+    panel.style.left = `${rect.right + FLYOUT_GAP}px`;
+    panel.style.top = `${Math.max(FLYOUT_MARGIN, Math.min(rect.top, window.innerHeight - panel.offsetHeight - FLYOUT_MARGIN))}px`;
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
       if (!wrapRef.current?.contains(event.target as Node)) hide();
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const focusInside = panelRef.current?.contains(document.activeElement) ?? false;
+      hide();
+      if (focusInside) buttonRef.current?.focus();
+    };
     document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("scroll", hide, true);
+    window.addEventListener("resize", hide);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("scroll", hide, true);
+      window.removeEventListener("resize", hide);
+    };
   });
 
   useEffect(() => {
-    if (open && pinned.current) panelRef.current?.querySelector<HTMLElement>("a")?.focus();
+    if (open && focusOnOpen.current) {
+      focusOnOpen.current = false;
+      focusFirstLink();
+    }
   }, [open]);
 
   const onPointerEnter = () => {
     clearTimer();
-    if (!open) timer.current = setTimeout(() => show(false), HOVER_OPEN_MS);
+    if (!open) timer.current = setTimeout(() => onOpen(false), HOVER_OPEN_MS);
   };
   const onPointerLeave = () => {
     clearTimer();
-    if (open && !pinned.current) timer.current = setTimeout(hide, HOVER_CLOSE_MS);
+    if (open && !pinned) timer.current = setTimeout(hide, HOVER_CLOSE_MS);
   };
 
   return (
@@ -167,26 +180,26 @@ function CollapsedGroup({ group, open, onOpen, onClose, pathname }: { group: Nav
       ref={wrapRef}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
-      onKeyDown={(event) => {
-        if (event.key !== "Escape" || !open) return;
-        hide();
-        buttonRef.current?.focus();
-      }}
       onBlur={(event) => {
-        if (open && pinned.current && !wrapRef.current?.contains(event.relatedTarget as Node | null)) hide();
+        const next = event.relatedTarget as Node | null;
+        if (open && next && !wrapRef.current?.contains(next)) hide();
       }}
     >
       <button
         ref={buttonRef}
         type="button"
-        aria-haspopup="true"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         aria-label={name}
         onClick={() => {
           clearTimer();
-          if (open && pinned.current) hide();
-          else show(true);
+          if (open && pinned) {
+            hide();
+            return;
+          }
+          if (open) focusFirstLink();
+          else focusOnOpen.current = true;
+          onOpen(true);
         }}
         className={cn(
           "relative flex min-h-12 w-full items-center justify-center rounded-tile transition-colors",
@@ -203,7 +216,6 @@ function CollapsedGroup({ group, open, onOpen, onClose, pathname }: { group: Nav
           id={panelId}
           role="group"
           aria-label={name}
-          style={pos}
           className="fixed z-40 w-60 rounded-menu bg-sidebar p-3 text-sidebar-foreground shadow-menu"
         >
           <p className="px-3 pb-1.5 text-label font-medium text-sidebar-muted">{name}</p>
@@ -225,22 +237,19 @@ function NavLinks({ expanded, onNavigate }: { expanded: boolean; onNavigate?: ()
   const groups = role ? navGroupsForRole(role) : [];
   const activeGroup = groups.find((group) => group.items.some((item) => isNavActive(item, pathname)))?.id ?? null;
   const [openGroup, setOpenGroup] = useState<string | null>(activeGroup);
-  const [seenGroup, setSeenGroup] = useState(activeGroup);
-  const [flyout, setFlyout] = useState<string | null>(null);
-  if (seenGroup !== activeGroup) {
-    setSeenGroup(activeGroup);
-    if (activeGroup) setOpenGroup(activeGroup);
-  }
+  const [flyout, setFlyout] = useState<{ id: string; pinned: boolean } | null>(null);
+  if (expanded && flyout) setFlyout(null);
   const isStudent = role === "student";
 
   return (
     <nav aria-label={shellT.mainNavigation} className="flex flex-col gap-2">
       {groups.map((group, index) => {
         const flat = group.items.length === 1 || isStudent;
+        const collapsedRule = !expanded && !isStudent && index === 1 && "mt-1 border-t border-sidebar-border pt-3";
         if (flat) {
           const layout: NavLayout = isStudent ? (expanded ? "row" : "stacked") : expanded ? "row" : "icon";
           return (
-            <div key={group.id} className={cn("flex flex-col gap-2", !expanded && !isStudent && index > 0 && "mt-1 border-t border-sidebar-border pt-3")}>
+            <div key={group.id} className={cn("flex flex-col gap-2", collapsedRule)}>
               {group.items.map((item) => (
                 <NavLink key={item.href} item={item} active={isNavActive(item, pathname)} layout={layout} barInset={expanded ? "-left-4" : "-left-2.5"} onNavigate={onNavigate} />
               ))}
@@ -249,12 +258,13 @@ function NavLinks({ expanded, onNavigate }: { expanded: boolean; onNavigate?: ()
         }
         if (!expanded) {
           return (
-            <div key={group.id} className={cn(index === 1 && "mt-1 border-t border-sidebar-border pt-3")}>
+            <div key={group.id} className={cn(collapsedRule)}>
               <CollapsedGroup
                 group={group}
-                open={flyout === group.id}
-                onOpen={() => setFlyout(group.id)}
-                onClose={() => setFlyout((prev) => (prev === group.id ? null : prev))}
+                open={flyout?.id === group.id}
+                pinned={flyout?.id === group.id && flyout.pinned}
+                onOpen={(pinned) => setFlyout((prev) => (!pinned && prev?.pinned && prev.id !== group.id ? prev : { id: group.id, pinned }))}
+                onClose={() => setFlyout((prev) => (prev?.id === group.id ? null : prev))}
                 pathname={pathname}
               />
             </div>
@@ -499,7 +509,7 @@ function useStaffCrumb(title?: string) {
 }
 
 // Each page mounts its own AppShell, so the rail choice lives at module scope to survive client navigation.
-let railPref: boolean | null = null;
+let railPref: { role: Role | null; expanded: boolean } | null = null;
 
 export function AppShell({
   children,
@@ -519,16 +529,16 @@ export function AppShell({
   /** Constrains and centers main content — e.g. "max-w-5xl". Omit for full-width (tables, dashboards). */
   maxWidth?: string;
 }) {
-  const [pref, setPrefState] = useState<boolean | null>(railPref);
+  const [pref, setPrefState] = useState(railPref);
+  const { role } = useSession();
   const setPref = (value: boolean) => {
-    railPref = value;
-    setPrefState(value);
+    railPref = { role, expanded: value };
+    setPrefState(railPref);
   };
   const [mobileOpen, setMobileOpen] = useState(false);
   const shellT = useShellT();
-  const { role } = useSession();
   const isStudent = role === "student";
-  const expanded = pref ?? !isStudent;
+  const expanded = (pref?.role === role ? pref.expanded : null) ?? !isStudent;
   const homeHref = isStudent ? "/student" : "/admin";
   const crumb = useStaffCrumb(title);
 
