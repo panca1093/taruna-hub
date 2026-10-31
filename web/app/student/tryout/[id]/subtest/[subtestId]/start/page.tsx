@@ -2,10 +2,12 @@
 
 import { Suspense, use, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button, Card, toast } from "@heroui/react";
+import { Button, toast } from "@heroui/react";
 import { ArrowRight, CheckCircle2, CloudOff, Lock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { Icon } from "@/components/icon";
+import { NoteBox, Panel, TextLink } from "@/components/page-blocks";
 import { LinkButton } from "@/components/ui/link-button";
 import { api, ApiError, errorText, type StudentTryout } from "@/lib/api/client";
 import { useTryoutPrepareT } from "@/lib/i18n/dict/tryout-prepare";
@@ -51,7 +53,7 @@ function PrepareContent({ tryoutId, subtestId }: { tryoutId: string; subtestId: 
     </LinkButton>
   );
 
-  if (state === "loading") return shell(<p className="py-14 text-center text-sm text-muted">{t.loading}</p>);
+  if (state === "loading") return shell(<p className="py-14 text-center text-small text-muted">{t.loading}</p>);
   if (state === "noAccess") return shell(<EmptyState icon={Lock} title={t.noAccess} action={backLink} />);
   if (state === "failed" || !overview) {
     return shell(
@@ -118,51 +120,51 @@ function PrepareContent({ tryoutId, subtestId }: { tryoutId: string; subtestId: 
     }
   };
 
-  return shell(
-    <div className="space-y-6">
+  return (
+    <AppShell
+      title={heading}
+      description={overview.title}
+      maxWidth="max-w-4xl"
+      breadcrumb={[
+        { label: t.crumbDashboard, href: "/student" },
+        { label: t.crumbTryout, href: `/student/tryout/${tryoutId}` },
+        { label: t.pageTitle },
+      ]}
+    >
       {justFinished && (
-        <p className="flex items-center gap-2 rounded-xl border border-success/30 bg-success-soft p-4 text-sm font-medium text-success-soft-foreground">
-          <CheckCircle2 className="size-4 shrink-0" /> {t.afterBanner(justFinished.name)}
-        </p>
+        <NoteBox tone="success" icon={CheckCircle2} className="mb-6">
+          {t.afterBanner(justFinished.name)}
+        </NoteBox>
       )}
-      <div>
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">{heading}</h1>
-        <p className="mt-1 text-sm text-muted">{overview.title}</p>
-      </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="gap-0 p-6">
-          <h2 className="font-display text-lg font-semibold text-foreground">{t.heading}</h2>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-foreground">
+        <Panel as="section">
+          <h2 className="font-display mb-3 text-heading-sm">{t.heading}</h2>
+          <ul className="list-disc space-y-1.5 pl-4.5 text-caption leading-loose text-muted marker:text-rose">
             {rules.map((rule) => (
               <li key={rule}>{rule}</li>
             ))}
           </ul>
-        </Card>
-        <Card className="gap-0 p-6">
-          <h2 className="font-display text-lg font-semibold text-foreground">{t.checkTitle}</h2>
-          <p className="mt-2 text-sm font-medium text-foreground">
+        </Panel>
+        <Panel as="section">
+          <h2 className="font-display mb-3 text-heading-sm">{t.checkTitle}</h2>
+          <p className="text-caption font-medium">
             {index + 1}. {subtest.name}
           </p>
-          <p className="text-sm text-muted">{t.subtestMeta(Math.round(subtest.duration_seconds / 60), subtest.question_count)}</p>
-          <p className="mt-2 text-xs text-muted">{t.clockNote}</p>
-          <label className="mt-5 flex items-start gap-2.5 text-sm text-foreground">
-            <input
-              type="checkbox"
-              checked={ready}
-              onChange={(e) => setReady(e.target.checked)}
-              className="mt-0.5 size-4 shrink-0 accent-accent"
-            />
+          <p className="mt-1 text-caption text-muted">{t.subtestMeta(Math.round(subtest.duration_seconds / 60), subtest.question_count)}</p>
+          <p className="mt-2 text-label leading-relaxed text-muted">{t.clockNote}</p>
+          <label className="flex items-start gap-2.5 py-3.5 text-caption leading-relaxed">
+            <input type="checkbox" checked={ready} onChange={(e) => setReady(e.target.checked)} className="mt-0.5 size-4.5 shrink-0 accent-accent" />
             {t.confirmCheck}
           </label>
-          <Button variant="primary" className="mt-5 w-full" isDisabled={!ready || starting} onPress={() => void handleStart()}>
-            {starting ? t.starting : t.startButton} {!starting && <ArrowRight className="size-4" />}
+          <Button variant="primary" className="w-full" isDisabled={!ready || starting} onPress={() => void handleStart()}>
+            {starting ? t.starting : t.startButton} {!starting && <Icon icon={ArrowRight} size="sm" />}
           </Button>
-          <LinkButton href={`/student/tryout/${tryoutId}`} variant="ghost" size="sm" className="mt-2 w-full">
+          <TextLink href={`/student/tryout/${tryoutId}`} className="mt-3">
             {t.backToDetail}
-          </LinkButton>
-        </Card>
+          </TextLink>
+        </Panel>
       </div>
-    </div>,
+    </AppShell>
   );
 }
 

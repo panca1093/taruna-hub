@@ -2,12 +2,15 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { Button, Card } from "@heroui/react";
-import { ArrowRight, CheckCircle2, CloudOff, Lock, PlayCircle } from "lucide-react";
+import { Button } from "@heroui/react";
+import { ArrowRight, CheckCircle2, CloudOff, Lock, PlayCircle, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
-import { ProgramBadge } from "@/components/status-badge";
+import { Icon } from "@/components/icon";
+import { NoteBox, Panel, CardKicker, TextLink } from "@/components/page-blocks";
+import { Breadcrumb } from "@/components/page-heading";
+import { StatusChip } from "@/components/status-badge";
 import { api, ApiError, type StudentTryout } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { useTryoutOverviewT } from "@/lib/i18n/dict/tryout-overview";
@@ -39,7 +42,7 @@ export default function TryoutOverviewPage({ params }: { params: Promise<{ id: s
   if (state === "loading") {
     return (
       <AppShell title={t.pageTitle}>
-        <p className="py-14 text-center text-sm text-muted">{t.loading}</p>
+        <p className="py-14 text-center text-small text-muted">{t.loading}</p>
       </AppShell>
     );
   }
@@ -110,30 +113,33 @@ export default function TryoutOverviewPage({ params }: { params: Promise<{ id: s
   ];
 
   return (
-    <AppShell title={t.pageTitle}>
-      <div className="grid gap-6 lg:grid-cols-3">
+    <AppShell>
+      <Breadcrumb items={[{ label: t.crumbDashboard, href: "/student" }, { label: t.crumbTryout }]} />
+      <div className="grid gap-6 lg:grid-cols-3 lg:gap-7">
         <div className="space-y-6 lg:col-span-2">
-          <section className="rounded-2xl bg-accent-soft p-6 text-accent-soft-foreground">
-            <div className="flex flex-wrap items-center gap-2">
-              <ProgramBadge code={overview.program_code} />
+          <Panel as="section" tone="peach" radius="hero">
+            <CardKicker icon={ShieldCheck} className="mb-4">
+              {overview.program_code}
               {overview.scoring_mode === "irt" && (
-                <span className="rounded-md bg-surface px-2 py-0.5 text-xs font-medium text-foreground">{t.irtModeChip}</span>
+                <StatusChip tone="neutral" className="ml-2 bg-surface">
+                  {t.irtModeChip}
+                </StatusChip>
               )}
-            </div>
-            <h1 className="font-display mt-3 text-3xl font-semibold tracking-tight text-foreground">{overview.title}</h1>
-            <p className="mt-1.5 text-sm">{overview.description}</p>
-            <dl className="mt-5 flex flex-wrap gap-x-8 gap-y-3">
+            </CardKicker>
+            <h1 className="font-display max-w-2xl text-hero-lg sm:text-display-sm">{overview.title}</h1>
+            <p className="mt-3 max-w-prose text-small text-muted">{overview.description}</p>
+            <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-4 sm:gap-x-8">
               {stats.map((stat) => (
                 <div key={stat.label}>
-                  <dd className="font-display text-xl font-semibold text-foreground">{stat.value}</dd>
-                  <dt className="text-xs">{stat.label}</dt>
+                  <dd className="font-display text-heading">{stat.value}</dd>
+                  <dt className="mt-0.5 text-micro text-muted">{stat.label}</dt>
                 </div>
               ))}
             </dl>
-          </section>
+          </Panel>
 
-          <Card className="gap-0 p-6">
-            <h2 className="font-display text-lg font-semibold text-foreground">{t.subtestsTitle}</h2>
+          <Panel as="section">
+            <h2 className="font-display text-heading-sm">{t.subtestsTitle}</h2>
             <ol className="mt-3 divide-y divide-border">
               {overview.subtests.map((st, i) => {
                 const status = statusOf(st.id);
@@ -141,83 +147,83 @@ export default function TryoutOverviewPage({ params }: { params: Promise<{ id: s
                 const locked = status === "pending" && !isNext;
                 return (
                   <li key={st.id} className={cn("flex items-center gap-4 py-4", locked && "opacity-60")}>
-                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary font-mono text-sm text-muted">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-background text-label text-muted">
                       {i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{st.name}</p>
-                      <p className="text-xs text-muted">{t.subtestMeta(Math.round(st.duration_seconds / 60), st.question_count)}</p>
+                      <p className="truncate text-caption font-medium">{st.name}</p>
+                      <p className="mt-1 text-micro text-muted">{t.subtestMeta(Math.round(st.duration_seconds / 60), st.question_count)}</p>
                     </div>
                     {status === "submitted" ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                        <CheckCircle2 className="size-3.5" /> {t.completedStatus}
+                      <span className="inline-flex items-center gap-1.5 text-label font-medium text-success">
+                        <Icon icon={CheckCircle2} size="xs" /> {t.completedStatus}
                       </span>
                     ) : status === "running" ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-accent">
-                        <PlayCircle className="size-3.5" /> {t.runningStatus}
+                      <span className="inline-flex items-center gap-1.5 text-label font-medium text-accent">
+                        <Icon icon={PlayCircle} size="xs" /> {t.runningStatus}
                       </span>
                     ) : locked ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-muted">
-                        <Lock className="size-3" /> {t.lockedStatus}
+                      <span className="inline-flex items-center gap-1.5 text-label text-muted">
+                        <Icon icon={Lock} size="xs" /> {t.lockedStatus}
                       </span>
                     ) : (
-                      <span className="text-xs text-muted">{t.pendingStatus}</span>
+                      <span className="text-label text-muted">{t.pendingStatus}</span>
                     )}
                   </li>
                 );
               })}
             </ol>
-            <p className="mt-2 rounded-lg border border-border bg-surface-secondary p-3 text-xs text-muted">{t.rulesNotice}</p>
-          </Card>
+            <NoteBox className="mt-5">{t.rulesNotice}</NoteBox>
+          </Panel>
 
-          <Card className="gap-0 p-6">
-            <h2 className="font-display text-lg font-semibold text-foreground">{t.historyTitle}</h2>
+          <Panel as="section">
+            <h2 className="font-display text-heading-sm">{t.historyTitle}</h2>
             {completedAttempts.length === 0 ? (
-              <p className="mt-3 text-sm text-muted">{t.historyEmpty}</p>
+              <p className="mt-3 text-caption leading-relaxed text-muted">{t.historyEmpty}</p>
             ) : (
-              <ul className="mt-3 divide-y divide-border">
+              <ul className="mt-2 divide-y divide-border">
                 {completedAttempts.map((attempt) => (
                   <li key={attempt.session_id}>
                     <Link
                       href={`/student/tryout/${id}/result?attempt=${attempt.session_id}`}
                       aria-label={t.openAttemptLabel(attempt.attempt_number)}
-                      className="flex items-center justify-between gap-3 rounded-lg py-4 transition-colors hover:bg-surface-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                      className="flex items-center justify-between gap-4 rounded-control py-4 text-caption outline-none transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-focus"
                     >
                       <span>
-                        <span className="block text-sm font-medium text-foreground">{t.attemptLabel(attempt.attempt_number)}</span>
+                        <span className="block">{t.attemptLabel(attempt.attempt_number)}</span>
                         {attempt.completed_at && (
-                          <span className="block text-xs text-muted">{new Date(attempt.completed_at).toLocaleString()}</span>
+                          <span className="mt-1 block text-micro text-muted">{new Date(attempt.completed_at).toLocaleString()}</span>
                         )}
                       </span>
-                      <span className="flex items-center gap-3">
-                        <span className="font-display text-2xl font-semibold text-foreground">{attempt.score ?? "–"}</span>
-                        <ArrowRight className="size-4 text-muted" />
+                      <span className="flex items-center gap-5">
+                        <span className="font-display text-heading">{attempt.score ?? "–"}</span>
+                        <Icon icon={ArrowRight} size="sm" />
                       </span>
                     </Link>
                   </li>
                 ))}
               </ul>
             )}
-          </Card>
+          </Panel>
         </div>
 
         <aside className="lg:col-span-1">
-          <Card className="gap-0 p-6 lg:sticky lg:top-20">
-            <p className="text-sm text-muted">{t.accessTitle}</p>
-            <p className="font-display mt-1 text-2xl font-semibold text-foreground">{t.accessOwned}</p>
-            <p className="mt-1.5 text-sm text-muted">{t.accessUntil(new Date(overview.active_until).toLocaleDateString())}</p>
-            {current && <p className="mt-3 text-xs text-muted">{t.inProgressNote}</p>}
-            <div className="mt-5 flex flex-col gap-2">
+          <Panel as="div" className="lg:sticky lg:top-6">
+            <p className="mb-3 text-label text-muted">{t.accessTitle}</p>
+            <p className="font-display text-display-sm">{t.accessOwned}</p>
+            <p className="mt-1 mb-5 text-label text-muted">{t.accessUntil(new Date(overview.active_until).toLocaleDateString())}</p>
+            <div className="flex flex-col gap-2">
               {cta && (
                 <LinkButton href={cta.href} variant="primary" size="md" className="w-full">
-                  {cta.label} <ArrowRight className="size-4" />
+                  {cta.label} <Icon icon={ArrowRight} size="sm" />
                 </LinkButton>
               )}
-              <LinkButton href="/student/tryouts" variant="ghost" size="md" className="w-full">
+              <TextLink href="/student/tryouts" className="self-start">
                 {t.ctaBack}
-              </LinkButton>
+              </TextLink>
             </div>
-          </Card>
+            {current && <NoteBox className="mt-5">{t.inProgressNote}</NoteBox>}
+          </Panel>
         </aside>
       </div>
     </AppShell>

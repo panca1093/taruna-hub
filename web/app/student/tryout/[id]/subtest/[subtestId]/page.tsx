@@ -2,8 +2,12 @@
 
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, toast } from "@heroui/react";
-import { AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, Clock, CloudOff, Maximize, WifiOff } from "lucide-react";
+import Image from "next/image";
+import { Button, toast } from "@heroui/react";
+import { AlertTriangle, ArrowRight, CloudOff, Maximize, WifiOff } from "lucide-react";
+import { ExamTimerPill } from "@/components/countdown-ring";
+import { Icon } from "@/components/icon";
+import { NoteBox, Panel } from "@/components/page-blocks";
 import { LatexText } from "@/components/latex";
 import { QuestionTypeBadge } from "@/components/status-badge";
 import { LanguageToggle } from "@/components/language-toggle";
@@ -270,9 +274,9 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
   if (failed) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background p-6 text-center">
-        <CloudOff className="size-8 text-muted" />
-        <p className="text-sm font-medium text-foreground">{t.loadErrorTitle}</p>
-        <p className="max-w-sm text-xs text-muted">{t.loadErrorDescription}</p>
+        <Icon icon={CloudOff} size="hero" className="text-rose" />
+        <p className="font-display text-title">{t.loadErrorTitle}</p>
+        <p className="max-w-sm text-caption leading-relaxed text-muted">{t.loadErrorDescription}</p>
         <Button
           variant="primary"
           size="sm"
@@ -289,7 +293,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
   if (!loaded || questions.length === 0) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
-        <p className="text-sm text-muted">{t.loading}</p>
+        <p className="text-small text-muted">{t.loading}</p>
       </div>
     );
   }
@@ -330,45 +334,36 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
 
   const optionClass = (selected: boolean) =>
     cn(
-      "flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
-      selected
-        ? "border-accent bg-accent-soft text-accent-soft-foreground"
-        : "border-border text-foreground hover:border-accent/40 hover:bg-surface-secondary",
+      "flex w-full items-center gap-3.5 rounded-control border px-4 py-3.5 text-left text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+      selected ? "border-accent bg-accent-soft" : "border-border bg-surface hover:border-accent/40",
     );
   const letterBadge = (i: number) => (
-    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-secondary font-mono text-xs font-medium text-muted">
+    <span className="flex size-7 shrink-0 items-center justify-center rounded-chip bg-background text-label text-foreground">
       {String.fromCharCode(65 + i)}
     </span>
   );
+  const dialog = "w-full max-w-sm rounded-hero bg-surface p-7 text-center shadow-dialog";
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-50 flex flex-col bg-background">
-      <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 lg:px-6">
+      <header className="flex min-h-20 shrink-0 items-center gap-4 border-b border-border bg-surface px-4 lg:gap-5 lg:px-8">
+        <Image src="/taruna-eduka-logo.png" alt="Taruna Eduka" width={750} height={250} className="hidden h-9 w-auto sm:block" priority />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{loaded.title}</p>
-          <p className="truncate text-xs text-muted">
+          <p className="truncate text-small font-semibold">{loaded.title}</p>
+          <p className="mt-1 truncate text-micro text-muted">
             {subtest.name} · {t.subtestPosition(position, subtests.length)}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {pendingCount > 0 && <span className="hidden text-xs text-warning sm:inline">{t.pendingCount(pendingCount)}</span>}
+          {pendingCount > 0 && <span className="hidden text-label text-warning sm:inline">{t.pendingCount(pendingCount)}</span>}
           <LanguageToggle />
-          <div
-            role="timer"
-            aria-label={t.timeLeft}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-xl px-3 py-1.5 font-mono text-lg font-semibold",
-              urgent ? "bg-danger-soft text-danger-soft-foreground" : "bg-accent-soft text-accent-soft-foreground",
-            )}
-          >
-            <Clock className="size-4" /> {timeText}
-          </div>
+          <ExamTimerPill role="timer" aria-label={t.timeLeft} time={timeText} urgent={urgent} />
         </div>
       </header>
 
       {!online && (
-        <div role="alert" className="flex shrink-0 items-start gap-2.5 border-b border-warning/30 bg-warning-soft px-4 py-2.5 text-sm text-warning-soft-foreground lg:px-6">
-          <WifiOff className="mt-0.5 size-4 shrink-0" />
+        <div role="alert" className="flex shrink-0 items-start gap-2.5 border-b border-warning/30 bg-warning-soft px-4 py-2.5 text-small text-warning-soft-foreground lg:px-8">
+          <Icon icon={WifiOff} size="sm" className="mt-0.5" />
           <p>
             <strong className="font-semibold">{t.offlineTitle}.</strong> {t.offlineBody(pendingCount)}
           </p>
@@ -376,40 +371,37 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
       )}
 
       {confirming ? (
-        <main className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-10">
-          <Card className="w-full max-w-xl gap-0 p-8 text-center">
-            <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-warning-soft text-warning-soft-foreground">
-              <AlertTriangle className="size-5" />
-            </span>
-            <h1 className="font-display mt-4 text-2xl font-semibold text-foreground">{t.confirmHeading}</h1>
-            <p className="mt-2 text-sm text-muted">{t.confirmBody(answered.length, blankCount)}</p>
-            {pendingCount > 0 && <p className="mt-3 text-sm font-medium text-warning">{t.confirmPendingWarning(pendingCount)}</p>}
-            {!online && <p className="mt-3 text-sm font-medium text-warning">{t.confirmOfflineWarning}</p>}
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+        <main className="flex-1 overflow-y-auto px-4 py-10 lg:py-14">
+          <Panel as="section" radius="card" className="mx-auto max-w-3xl sm:p-9">
+            <h1 className="font-display text-hero">{t.confirmHeading}</h1>
+            <p className="mt-4 text-small leading-relaxed text-muted">{t.confirmBody(answered.length, blankCount)}</p>
+            {pendingCount > 0 && <NoteBox className="mt-5" icon={AlertTriangle}>{t.confirmPendingWarning(pendingCount)}</NoteBox>}
+            {!online && <NoteBox className="mt-5" icon={AlertTriangle}>{t.confirmOfflineWarning}</NoteBox>}
+            <div className="mt-8 flex flex-wrap items-center gap-3.5">
+              <Button variant="primary" isDisabled={submitting} onPress={() => void doSubmit()}>
+                {submitting ? t.submitting : t.confirmYes} {!submitting && <Icon icon={ArrowRight} size="sm" />}
+              </Button>
               <Button variant="secondary" isDisabled={submitting} onPress={() => setConfirming(false)}>
                 {t.keepWorking}
               </Button>
-              <Button variant="primary" isDisabled={submitting} onPress={() => void doSubmit()}>
-                {submitting ? t.submitting : t.confirmYes}
-              </Button>
             </div>
-          </Card>
+          </Panel>
         </main>
       ) : (
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 lg:grid-cols-3 lg:px-6">
-            <div className="space-y-4 lg:col-span-2">
-              <Card className="gap-0 p-6">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <span className="text-xs font-medium text-muted">{t.questionProgress(index + 1, questions.length)}</span>
+          <div className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-6 lg:grid-cols-5 lg:gap-7 lg:px-8 lg:py-8">
+            <div className="space-y-5 lg:col-span-4">
+              <section className="min-h-96 rounded-card border border-border bg-surface p-5 sm:p-8">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <span className="text-label text-muted">{t.questionProgress(index + 1, questions.length)}</span>
                   <QuestionTypeBadge type={question.type} />
                 </div>
 
-                <div className="text-lg leading-relaxed text-foreground">
+                <div className="mb-7 max-w-4xl text-lg leading-loose font-medium">
                   <LatexText text={question.content} />
                 </div>
 
-                <div className="mt-6 space-y-2.5">
+                <div className="space-y-2.5">
                   {(question.type === "pg" || question.type === "benar_salah") &&
                     question.options.map((opt, i) => {
                       const selected = given[0] === opt.id;
@@ -417,7 +409,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                         <button key={opt.id} aria-pressed={selected} onClick={() => setAnswer(question.id, [opt.id])} className={optionClass(selected)}>
                           <span
                             className={cn(
-                              "flex size-4 shrink-0 items-center justify-center rounded-full border-2",
+                              "flex size-4.5 shrink-0 items-center justify-center rounded-full border-2",
                               selected ? "border-accent" : "border-border",
                             )}
                           >
@@ -436,11 +428,11 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                         <button key={opt.id} aria-pressed={selected} onClick={() => toggleMulti(opt.id)} className={optionClass(selected)}>
                           <span
                             className={cn(
-                              "flex size-4 shrink-0 items-center justify-center rounded-sm border-2",
+                              "flex size-4.5 shrink-0 items-center justify-center rounded-chip border-2",
                               selected ? "border-accent bg-accent" : "border-border",
                             )}
                           >
-                            {selected && <span className="size-2 rounded-xs bg-white" />}
+                            {selected && <span className="size-2 rounded-chip bg-white" />}
                           </span>
                           {letterBadge(i)}
                           <LatexText text={opt.label} />
@@ -456,39 +448,39 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                       onChange={(e) => setAnswer(question.id, [e.target.value])}
                       placeholder={t.answerPlaceholder}
                       aria-label={t.answerPlaceholder}
-                      className="w-full rounded-lg border border-border bg-field px-4 py-3 text-base text-field-foreground outline-none focus:border-accent"
+                      className="min-h-13.5 w-full max-w-md rounded-control border border-border bg-field px-4 py-3 text-lg text-field-foreground outline-none focus:border-accent"
                     />
                   )}
                 </div>
 
                 <p
                   role="status"
-                  className={cn("mt-5 min-h-4 text-xs", answerStatus === "pending" ? "font-medium text-warning" : "text-success")}
+                  className={cn("mt-5 min-h-4 text-label", answerStatus === "pending" ? "font-medium text-warning" : "text-success")}
                 >
                   {answerStatus === "pending" ? t.answerPending : answerStatus === "saved" ? t.answerSaved : ""}
                 </p>
-              </Card>
+              </section>
 
               <div className="flex items-center justify-between gap-3">
                 <Button variant="secondary" isDisabled={index === 0} onPress={() => setIndex((i) => i - 1)}>
-                  <ChevronLeft className="size-4" /> {t.previousButton}
+                  {t.previousButton}
                 </Button>
                 {isLast ? (
                   <Button variant="primary" onPress={() => setConfirming(true)}>
-                    {t.finishButton} <ArrowRight className="size-4" />
+                    {t.finishButton} <Icon icon={ArrowRight} size="sm" />
                   </Button>
                 ) : (
-                  <Button variant="secondary" onPress={() => setIndex((i) => i + 1)}>
-                    {t.nextButton} <ChevronRight className="size-4" />
+                  <Button variant="primary" onPress={() => setIndex((i) => i + 1)}>
+                    {t.nextButton} <Icon icon={ArrowRight} size="sm" />
                   </Button>
                 )}
               </div>
             </div>
 
             <aside className="lg:col-span-1">
-              <Card className="gap-0 p-6 lg:sticky lg:top-6">
-                <h2 className="font-display text-lg font-semibold text-foreground">{t.navTitle}</h2>
-                <div className="mt-3 flex flex-wrap gap-2">
+              <div className="rounded-card border border-border bg-surface p-5 lg:sticky lg:top-6">
+                <h2 className="font-display mb-4 text-title">{t.navTitle}</h2>
+                <div className="mb-4 flex flex-wrap gap-2">
                   {questions.map((q, i) => {
                     const isAnswered = (answers[q.id]?.length ?? 0) > 0;
                     const isCurrent = i === index;
@@ -500,12 +492,9 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                         aria-label={t.questionNumberLabel(i + 1)}
                         aria-current={isCurrent ? "true" : undefined}
                         className={cn(
-                          "flex size-9 items-center justify-center rounded-md font-mono text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
-                          isCurrent
-                            ? "bg-gradient-ring text-white"
-                            : isAnswered
-                              ? "bg-accent-soft text-accent-soft-foreground"
-                              : "bg-surface-secondary text-muted",
+                          "flex size-9.5 items-center justify-center rounded-control border text-caption transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+                          isAnswered ? "border-accent bg-accent-soft text-accent" : "border-border bg-background",
+                          isCurrent && "border-surface ring-2 ring-accent",
                           isPending && "ring-2 ring-warning",
                         )}
                       >
@@ -514,29 +503,29 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                     );
                   })}
                 </div>
-                <p className="mt-4 text-xs text-muted">{t.answeredBlank(answered.length, blankCount)}</p>
-                {pendingCount > 0 && <p className="mt-1 text-xs font-medium text-warning">{t.pendingCount(pendingCount)}</p>}
-                <Button variant="secondary" className="mt-4 w-full" onPress={() => setConfirming(true)}>
-                  {t.submitButton} <ArrowRight className="size-4" />
+                <p className="text-label text-muted">{t.answeredBlank(answered.length, blankCount)}</p>
+                {pendingCount > 0 && <p className="mt-1 text-label font-medium text-warning">{t.pendingCount(pendingCount)}</p>}
+                <Button variant="secondary" className="mt-5 w-full" onPress={() => setConfirming(true)}>
+                  {t.submitButton} <Icon icon={ArrowRight} size="sm" />
                 </Button>
 
-                <ul className="mt-5 space-y-2 border-t border-border pt-4 text-sm">
+                <ul className="mt-5 space-y-3 border-t border-border pt-4 text-label">
                   {subtests.map((st) => {
                     const status = statusOf(st.id);
                     return (
                       <li key={st.id} className="flex items-center justify-between gap-3">
-                        <span className={cn("truncate", status === "running" ? "font-semibold text-foreground" : "text-muted")}>{st.name}</span>
-                        <span className={cn("shrink-0 text-xs", status === "running" ? "font-semibold text-accent" : "text-muted")}>
+                        <span className={cn("truncate", status === "running" ? "font-semibold text-accent" : "text-muted")}>{st.name}</span>
+                        <span className={cn("shrink-0", status === "running" ? "font-semibold text-accent" : "text-muted")}>
                           {status === "running" ? t.statusRunning : status === "submitted" ? t.statusSubmitted : t.statusPending}
                         </span>
                       </li>
                     );
                   })}
                 </ul>
-                <Button variant="ghost" size="sm" className="mt-3 justify-start px-0" onPress={() => void handleBack()}>
-                  {t.backToDetail} <ArrowRight className="size-3.5" />
+                <Button variant="ghost" size="sm" className="mt-3 justify-start px-0 text-caption text-accent" onPress={() => void handleBack()}>
+                  {t.backToDetail} <Icon icon={ArrowRight} size="xs" />
                 </Button>
-              </Card>
+              </div>
             </aside>
           </div>
         </main>
@@ -544,13 +533,13 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
 
       {screenshotWarning && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-backdrop p-5">
-          <div className="w-full max-w-sm rounded-xl bg-surface p-6 text-center shadow-overlay">
+          <div className={dialog}>
             <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-danger-soft text-danger-soft-foreground">
-              <AlertTriangle className="size-5" />
+              <Icon icon={AlertTriangle} />
             </span>
-            <p className="mt-3 text-sm font-semibold text-foreground">{t.screenshotWarningTitle}</p>
-            <p className="mt-1.5 text-xs text-muted">{t.screenshotWarningBody}</p>
-            <Button variant="primary" size="sm" className="mt-4 w-full" onPress={() => setScreenshotWarning(false)}>
+            <p className="font-display mt-4 text-title">{t.screenshotWarningTitle}</p>
+            <p className="mt-2 text-caption leading-relaxed text-muted">{t.screenshotWarningBody}</p>
+            <Button variant="primary" size="sm" className="mt-5 w-full" onPress={() => setScreenshotWarning(false)}>
               {t.understood}
             </Button>
           </div>
@@ -559,19 +548,19 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
 
       {fullscreenWarning && (
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-backdrop p-5">
-          <div className="w-full max-w-sm rounded-xl bg-surface p-6 text-center shadow-overlay">
+          <div className={dialog}>
             <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-danger-soft text-danger-soft-foreground">
-              <AlertTriangle className="size-5" />
+              <Icon icon={AlertTriangle} />
             </span>
-            <p className="mt-3 text-sm font-semibold text-foreground">{fullscreenWarning === "left" ? t.fullscreenWarningTitle : t.fullscreenRequestTitle}</p>
-            <p className="mt-1.5 text-xs text-muted">{fullscreenWarning === "left" ? t.fullscreenWarningBody : t.fullscreenRequestBody}</p>
+            <p className="font-display mt-4 text-title">{fullscreenWarning === "left" ? t.fullscreenWarningTitle : t.fullscreenRequestTitle}</p>
+            <p className="mt-2 text-caption leading-relaxed text-muted">{fullscreenWarning === "left" ? t.fullscreenWarningBody : t.fullscreenRequestBody}</p>
             <Button
               variant="primary"
               size="sm"
-              className="mt-4 w-full"
+              className="mt-5 w-full"
               onPress={() => containerRef.current?.requestFullscreen?.().catch(() => setFullscreenWarning(null))}
             >
-              <Maximize className="size-3.5" /> {t.backToFullscreen}
+              <Icon icon={Maximize} size="xs" /> {t.backToFullscreen}
             </Button>
           </div>
         </div>
