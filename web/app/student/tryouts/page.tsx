@@ -9,9 +9,13 @@ import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
 import { useTryoutsListT } from "@/lib/i18n/dict/tryouts-list";
 import { api, type AttemptSummary, type Enrollment, type KecermatanStudentTest } from "@/lib/api/client";
+import { cn } from "@/lib/cn";
 import { useHydrated } from "@/lib/use-hydrated";
 
 type TryoutState = "not_started" | "in_progress" | "completed";
+type Tab = "tryout" | "kecermatan";
+
+const completedTime = (a: AttemptSummary) => (a.completed_at ? new Date(a.completed_at).getTime() : 0);
 
 export default function StudentTryoutsPage() {
   const t = useTryoutsListT();
@@ -22,6 +26,7 @@ export default function StudentTryoutsPage() {
   const [kecTests, setKecTests] = useState<KecermatanStudentTest[]>([]);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [pickedTab, setPickedTab] = useState<Tab | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,22 +46,11 @@ export default function StudentTryoutsPage() {
   }, [reloadKey]);
 
   const held = enrollments ?? [];
-
-  const statuses: Record<string, TryoutState> = {};
-  if (hydrated) {
-    for (const e of held) {
-      const own = attempts.filter((a) => a.tryout_id === e.tryout_id);
-      statuses[e.tryout_id] = own.some((a) => a.status === "in_progress")
-        ? "in_progress"
-        : own.length > 0
-          ? "completed"
-          : "not_started";
-    }
-  }
+  const shellProps = { title: t.pageTitle, description: t.pageDescription } as const;
 
   if (loadFailed || enrollments === null) {
     return (
-      <AppShell title={t.pageTitle} description={t.pageDescription} maxWidth="max-w-6xl">
+      <AppShell {...shellProps}>
         {loadFailed ? (
           <EmptyState
             icon={CloudOff}
@@ -84,7 +78,7 @@ export default function StudentTryoutsPage() {
 
   if (held.length === 0 && kecTests.length === 0) {
     return (
-      <AppShell title={t.pageTitle} description={t.pageDescription} maxWidth="max-w-6xl">
+      <AppShell {...shellProps}>
         <EmptyState
           icon={PackageOpen}
           title={t.emptyTitle}
@@ -99,64 +93,129 @@ export default function StudentTryoutsPage() {
     );
   }
 
+  const tab: Tab = pickedTab ?? (held.length === 0 ? "kecermatan" : "tryout");
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: "tryout", label: t.tabTryout, count: held.length },
+    { id: "kecermatan", label: t.tabKecermatan, count: kecTests.length },
+  ];
+
   return (
-    <AppShell title={t.pageTitle} description={t.pageDescription} maxWidth="max-w-6xl">
-      {held.length > 0 && (
+    <AppShell {...shellProps}>
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="mb-3 text-sm font-semibold text-foreground">{t.tryoutSectionTitle}</p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {held.map((e) => {
-              const state = statuses[e.tryout_id] ?? "not_started";
-              const cta =
-                state === "completed"
-                  ? { label: t.ctaViewResult, href: `/student/tryout/${e.tryout_id}/result` }
-                  : state === "in_progress"
-                    ? { label: t.ctaContinue, href: `/student/tryout/${e.tryout_id}` }
-                    : { label: t.ctaStart, href: `/student/tryout/${e.tryout_id}` };
-
-              return (
-                <Card key={e.id} className="gap-0 overflow-hidden p-0">
-                  <div className="h-20 w-full bg-gradient-ring" />
-                  <div className="space-y-3 p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <ProgramBadge code={e.program_code} />
-                      <Chip
-                        size="sm"
-                        className={`font-medium ${
-                          state === "completed"
-                            ? "bg-success-soft text-success-soft-foreground"
-                            : state === "in_progress"
-                              ? "bg-accent-soft text-accent-soft-foreground"
-                              : "bg-default text-default-foreground"
-                        }`}
-                      >
-                        {state === "completed" ? t.stateCompleted : state === "in_progress" ? t.stateInProgress : t.stateNotStarted}
-                      </Chip>
-                    </div>
-                    <p className="line-clamp-1 text-sm font-semibold text-foreground">{e.tryout_title}</p>
-                    <div className="flex gap-3 text-xs text-muted">
-                      <span className="inline-flex items-center gap-1">
-                        <ListChecks className="size-3.5" /> {t.subtestCount(e.subtest_count)}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Clock className="size-3.5" /> {t.activeUntil(new Date(e.active_until).toLocaleDateString())}
-                      </span>
-                    </div>
-                    <LinkButton href={cta.href} variant={state === "completed" ? "secondary" : "primary"} size="sm" className="w-full">
-                      {cta.label}
-                    </LinkButton>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+          <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">{t.heading}</h2>
+          <p className="mt-1 text-sm text-muted">{t.headingDescription}</p>
         </div>
-      )}
+        <LinkButton href="/catalog" variant="secondary" size="sm">
+          {t.browseCatalog}
+        </LinkButton>
+      </div>
 
-      {kecTests.length > 0 && (
-        <div className={held.length > 0 ? "mt-8" : undefined}>
-          <p className="mb-3 text-sm font-semibold text-foreground">{t.kecermatanSectionTitle}</p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div role="tablist" aria-label={t.tabsLabel} className="mt-6 flex gap-2 border-b border-border">
+        {tabs.map((item) => {
+          const active = tab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              id={`practice-tab-${item.id}`}
+              aria-selected={active}
+              aria-controls={`practice-panel-${item.id}`}
+              onClick={() => setPickedTab(item.id)}
+              className={cn(
+                "-mb-px inline-flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+                active ? "border-accent text-foreground" : "border-transparent text-muted hover:text-foreground",
+              )}
+            >
+              {item.label}
+              <span className="rounded-full bg-surface-secondary px-2 py-0.5 text-xs text-muted">{item.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div role="tabpanel" id={`practice-panel-${tab}`} aria-labelledby={`practice-tab-${tab}`} className="mt-6">
+        {tab === "tryout" ? (
+          held.length === 0 ? (
+            <TabEmpty title={t.emptyTryoutTabTitle} description={t.emptyTabDescription} cta={t.emptyCta} />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {held.map((e) => {
+                const own = hydrated ? attempts.filter((a) => a.tryout_id === e.tryout_id) : [];
+                const done = own.filter((a) => a.status === "completed").sort((a, b) => completedTime(b) - completedTime(a));
+                const latest = done[0];
+                const state: TryoutState = !hydrated
+                  ? "not_started"
+                  : own.some((a) => a.status === "in_progress")
+                    ? "in_progress"
+                    : done.length > 0
+                      ? "completed"
+                      : "not_started";
+
+                return (
+                  <Card key={e.id} className="gap-0 overflow-hidden p-0">
+                    <div className="h-20 w-full bg-gradient-ring" />
+                    <div className="space-y-3 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <ProgramBadge code={e.program_code} />
+                        <Chip
+                          size="sm"
+                          className={`font-medium ${
+                            state === "completed"
+                              ? "bg-success-soft text-success-soft-foreground"
+                              : state === "in_progress"
+                                ? "bg-accent-soft text-accent-soft-foreground"
+                                : "bg-default text-default-foreground"
+                          }`}
+                        >
+                          {state === "completed" ? t.stateCompleted : state === "in_progress" ? t.stateInProgress : t.stateNotStarted}
+                        </Chip>
+                      </div>
+                      <p className="line-clamp-1 text-sm font-semibold text-foreground">{e.tryout_title}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+                        <span className="inline-flex items-center gap-1">
+                          <ListChecks className="size-3.5" /> {t.subtestCount(e.subtest_count)}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="size-3.5" /> {t.activeUntil(new Date(e.active_until).toLocaleDateString())}
+                        </span>
+                      </div>
+                      {latest && (
+                        <p className="text-xs text-muted">
+                          {t.attemptsDone(done.length)}
+                          {latest.score !== null && ` · ${t.latestScore(latest.score)}`}
+                        </p>
+                      )}
+                      {state === "completed" && latest ? (
+                        <div className="flex gap-2">
+                          <LinkButton
+                            href={`/student/tryout/${e.tryout_id}/result?attempt=${latest.session_id}`}
+                            variant="secondary"
+                            size="sm"
+                            className="flex-1"
+                          >
+                            {t.ctaViewResult}
+                          </LinkButton>
+                          <LinkButton href={`/student/tryout/${e.tryout_id}`} variant="ghost" size="sm" className="flex-1">
+                            {t.ctaHistory}
+                          </LinkButton>
+                        </div>
+                      ) : (
+                        <LinkButton href={`/student/tryout/${e.tryout_id}`} variant="primary" size="sm" className="w-full">
+                          {state === "in_progress" ? t.ctaContinue : t.ctaStart}
+                        </LinkButton>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )
+        ) : kecTests.length === 0 ? (
+          <TabEmpty title={t.emptyKecermatanTabTitle} description={t.emptyTabDescription} cta={t.emptyCta} />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {kecTests.map((test) => {
               const left = test.attempts_remaining;
 
@@ -182,8 +241,23 @@ export default function StudentTryoutsPage() {
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </AppShell>
+  );
+}
+
+function TabEmpty({ title, description, cta }: { title: string; description: string; cta: string }) {
+  return (
+    <EmptyState
+      icon={PackageOpen}
+      title={title}
+      description={description}
+      action={
+        <LinkButton href="/catalog" variant="primary" size="sm">
+          {cta}
+        </LinkButton>
+      }
+    />
   );
 }

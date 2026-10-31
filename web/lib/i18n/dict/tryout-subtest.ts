@@ -3,20 +3,34 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
-  submitButton: "Submit Subtes",
   loading: "Memuat subtes…",
   loadErrorTitle: "Subtes tidak dapat dimuat",
   loadErrorDescription: "Waktu tetap berjalan di server. Periksa koneksi lalu coba lagi.",
   retry: "Coba Lagi",
-  answerSaved: "Tersimpan",
+  subtestPosition: (current: number, total: number) => `Subtes ${current} / ${total}`,
+  timeLeft: "Sisa waktu",
+  offlineTitle: "Koneksi terputus",
+  offlineBody: (n: number) =>
+    n > 0
+      ? `${n} jawaban belum tersimpan di server. Waktu tetap berjalan; jawaban dikirim ulang otomatis saat koneksi pulih.`
+      : "Jawaban baru belum bisa tersimpan sampai koneksi pulih. Waktu tetap berjalan di server.",
+  answerSaved: "Tersimpan di server",
   answerPending: "Belum tersimpan di server",
   pendingCount: (n: number) => `${n} jawaban belum tersimpan`,
-  confirmPendingWarning: (n: number) => `${n} jawaban belum tersimpan di server dan tidak akan dihitung.`,
   questionProgress: (current: number, total: number) => `Soal ${current} dari ${total}`,
   answerPlaceholder: "Ketik jawabanmu",
   previousButton: "Sebelumnya",
   nextButton: "Selanjutnya",
-  answeredCount: (answered: number, total: number) => `Terjawab ${answered}/${total}`,
+  finishButton: "Selesaikan subtes",
+  navTitle: "Navigasi soal",
+  questionNumberLabel: (n: number) => `Soal ${n}`,
+  answeredBlank: (answered: number, blank: number) => `${answered} dijawab · ${blank} kosong`,
+  submitButton: "Kumpulkan subtes",
+  statusRunning: "Berjalan",
+  statusSubmitted: "Selesai",
+  statusPending: "Belum dimulai",
+  backToDetail: "Kembali ke detail",
+  backBlocked: (n: number) => `${n} jawaban belum tersimpan, tunggu sampai tersimpan sebelum keluar.`,
   screenshotWarningTitle: "Percobaan screenshot terdeteksi",
   screenshotWarningBody:
     "Pelanggaran ini tercatat. Mengambil tangkapan layar soal tidak diperbolehkan selama tryout berlangsung.",
@@ -27,27 +41,46 @@ const id = {
   fullscreenRequestTitle: "Gunakan mode layar penuh",
   fullscreenRequestBody: "Tryout ini berjalan dalam mode layar penuh. Timer tetap berjalan — aktifkan layar penuh untuk melanjutkan.",
   backToFullscreen: "Kembali ke Layar Penuh",
-  confirmSubmitTitle: "Submit subtes ini?",
-  confirmSubmitBody: (answered: number, total: number) =>
-    `Kamu sudah menjawab ${answered} dari ${total} soal. Setelah disubmit, kamu tidak bisa kembali ke subtes ini.`,
-  confirmSubmitYes: "Ya, Submit",
+  confirmHeading: "Kumpulkan subtes ini?",
+  confirmBody: (answered: number, blank: number) =>
+    `Kamu menjawab ${answered} soal dan membiarkan ${blank} kosong. Setelah dikumpulkan, subtes ini terkunci dan tidak bisa dibuka kembali.`,
+  confirmPendingWarning: (n: number) => `${n} jawaban belum tersimpan di server dan tidak akan dihitung.`,
+  confirmOfflineWarning: "Koneksi terputus. Pengumpulan akan dicoba saat kamu menekan tombol, dan bisa gagal sampai koneksi pulih.",
+  keepWorking: "Kembali ke soal",
+  confirmYes: "Ya, kumpulkan",
+  submitting: "Mengumpulkan…",
+  submitFailed: "Subtes belum terkumpul. Periksa koneksi lalu coba lagi.",
 };
 
 const en: typeof id = {
-  submitButton: "Submit Subtest",
   loading: "Loading subtest…",
   loadErrorTitle: "The subtest could not be loaded",
   loadErrorDescription: "The clock keeps running on the server. Check your connection and try again.",
   retry: "Retry",
-  answerSaved: "Saved",
+  subtestPosition: (current: number, total: number) => `Subtest ${current} / ${total}`,
+  timeLeft: "Time left",
+  offlineTitle: "Connection lost",
+  offlineBody: (n: number) =>
+    n > 0
+      ? `${n} answers are not saved on the server. The clock keeps running; they are re-sent automatically when the connection returns.`
+      : "New answers can't be saved until the connection returns. The clock keeps running on the server.",
+  answerSaved: "Saved on the server",
   answerPending: "Not saved on the server yet",
   pendingCount: (n: number) => `${n} answers not saved yet`,
-  confirmPendingWarning: (n: number) => `${n} answers are not saved on the server and will not be counted.`,
   questionProgress: (current: number, total: number) => `Question ${current} of ${total}`,
   answerPlaceholder: "Type your answer",
   previousButton: "Previous",
   nextButton: "Next",
-  answeredCount: (answered: number, total: number) => `Answered ${answered}/${total}`,
+  finishButton: "Finish subtest",
+  navTitle: "Question navigator",
+  questionNumberLabel: (n: number) => `Question ${n}`,
+  answeredBlank: (answered: number, blank: number) => `${answered} answered · ${blank} blank`,
+  submitButton: "Submit subtest",
+  statusRunning: "Running",
+  statusSubmitted: "Done",
+  statusPending: "Not started",
+  backToDetail: "Back to detail",
+  backBlocked: (n: number) => `${n} answers are not saved yet, wait until they are saved before leaving.`,
   screenshotWarningTitle: "Screenshot attempt detected",
   screenshotWarningBody:
     "This violation has been logged. Taking screenshots of questions isn't allowed during the tryout.",
@@ -58,10 +91,15 @@ const en: typeof id = {
   fullscreenRequestTitle: "Use fullscreen mode",
   fullscreenRequestBody: "This tryout runs in fullscreen. The timer keeps running — turn on fullscreen to continue.",
   backToFullscreen: "Return to Fullscreen",
-  confirmSubmitTitle: "Submit this subtest?",
-  confirmSubmitBody: (answered: number, total: number) =>
-    `You've answered ${answered} of ${total} questions. Once submitted, you can't return to this subtest.`,
-  confirmSubmitYes: "Yes, Submit",
+  confirmHeading: "Submit this subtest?",
+  confirmBody: (answered: number, blank: number) =>
+    `You answered ${answered} questions and left ${blank} blank. Once submitted, this subtest is locked and can't be reopened.`,
+  confirmPendingWarning: (n: number) => `${n} answers are not saved on the server and will not be counted.`,
+  confirmOfflineWarning: "You're offline. Submitting will be tried when you press the button and may fail until the connection returns.",
+  keepWorking: "Back to questions",
+  confirmYes: "Yes, submit",
+  submitting: "Submitting…",
+  submitFailed: "The subtest was not submitted. Check your connection and try again.",
 };
 
 export function useTryoutSubtestT() {
