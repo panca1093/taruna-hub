@@ -5,9 +5,10 @@ publishes one whole-site snapshot. Visitors read only the published snapshot. Th
 contract and the invariants; the wire shapes are in `api/openapi.yaml` and the plan is
 [P11b](../requirement/PLAN.md#p11b).
 
-**Status:** the contract is defined (OpenAPI, typed client `api.website.*`, `normalizeWebsiteContent`
-and its tests). Persistence, endpoints, the portal editor, preview and the public landing are not built
-yet, so the sections on storage and the web describe what they must do.
+**Status:** the contract is defined (OpenAPI, typed client `api.website.*`, `normalizeWebsiteContent` and
+its tests) and the API is built: migration `000022_website_content`, the repository, `WebsiteService` and
+the five endpoints. The portal editor, preview and the public landing are not built yet, so the sections
+on the web describe what they must do.
 
 ## Owner decisions
 
@@ -25,7 +26,7 @@ Recorded by Saifullah Panca, 2026-11-01.
 `WebsiteContent` is `schema_version: 1` plus `locales` with exactly `id` and `en`, both required. Each
 locale has `home` and `programs`. `programs` has exactly three stable marketing slots: `tni`, `polri`,
 `kedinasan`. They are not curriculum Program ids and have no add, delete, reorder or slug editor.
-Unknown fields, locales and slots are refused. A tenant, role, publisher or timestamp in a request body
+Unknown fields, locales and slots are refused (an unknown field is `validation_failed`, an unknown locale or slot `website_content_invalid`). A tenant, role, publisher or timestamp in a request body
 is never accepted.
 
 | Scope | Field | Max code points | Required |
@@ -95,7 +96,7 @@ route is `401`; an authenticated non-Admin is `403`.
 | 409 | `website_revision_conflict` | a stale `expected_draft_revision`, a stale `expected_published_revision`, or a retry whose draft has moved |
 | 413 | `payload_too_large` | body over 64 KiB (the schema's worst case fits below it) |
 | 422 | `website_content_invalid` | content breaks the contract; `fields` maps each path to a reason |
-| 422 | `validation_failed` | a malformed `limit` or `cursor` |
+| 422 | `validation_failed` | an unreadable body, trailing data, an unknown request field, a revision outside its range, or a malformed `limit` or `cursor` |
 
 The three `website_*` codes are lowercase like every other domain code in the envelope enum.
 
