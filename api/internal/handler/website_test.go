@@ -257,6 +257,9 @@ func TestWebsiteStrictBody(t *testing.T) {
 	if fields := errorBody(t, both).Fields; fields["locales.id.home.hero_body"] == "" {
 		t.Errorf("missing and too long together: fields = %v, want hero_body too", fields)
 	}
+	if got, want := errorBody(t, both).Fields["locales.id.programs.tni.fees"], websiteReason(service.ReasonWebsiteRequired); got != want {
+		t.Errorf("missing optional field reason = %q, want %q", got, want)
+	}
 	expect("blank required field", put(req(contentWith(draft, func(id map[string]any) { id["home"].(map[string]any)["hero_title"] = "   " }))), 422, "website_content_invalid", "locales.id.home.hero_title")
 	expect("one over the limit", put(req(contentWith(draft, func(id map[string]any) { id["home"].(map[string]any)["hero_title"] = strings.Repeat("a", 91) }))), 422, "website_content_invalid", "locales.id.home.hero_title")
 	expect("missing revision", put(map[string]any{"content": draft}), 422, "validation_failed", "expected_draft_revision")
