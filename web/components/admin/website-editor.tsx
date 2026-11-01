@@ -69,7 +69,7 @@ function writeField(c: WebsiteContent, f: FieldRef, value: string): WebsiteConte
   return next;
 }
 
-const sameContent = (a: WebsiteContent, b: WebsiteContent) => allFields.every((f) => readField(a, f) === readField(b, f));
+const sameContent = (a: WebsiteContent, b: WebsiteContent) => allFields.every((f) => readField(a, f).trim() === readField(b, f).trim());
 
 // Code points, like the server: an emoji counts once.
 export const codePoints = (value: string) => Array.from(value.trim()).length;
@@ -103,7 +103,7 @@ type PublishState =
   | { status: "failed"; message?: string; requestId?: string }
   | { status: "success"; revision: number; changed: boolean | null };
 type LoadState = { status: "loading" | "error" | "denied" | "ready" };
-type HistoryState = { status: "loading" | "error" | "ready"; items: WebsitePublication[]; next: string | null; more: boolean };
+type HistoryState = { status: "loading" | "error" | "ready"; items: WebsitePublication[]; next: string | null; more: boolean; moreFailed: boolean };
 
 export const previewHref = (slot?: ProgramSlot) => (slot ? `/admin/website/preview?program=${slot}` : "/admin/website/preview");
 
@@ -161,7 +161,7 @@ export function WebsiteEditorProvider({ children }: { children: React.ReactNode 
   const [save, setSave] = useState<SaveState>({ status: "idle" });
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
   const [publishState, setPublishState] = useState<PublishState>({ status: "idle" });
-  const [history, setHistory] = useState<HistoryState>({ status: "loading", items: [], next: null, more: false });
+  const [history, setHistory] = useState<HistoryState>({ status: "loading", items: [], next: null, more: false, moreFailed: false });
   const [contentLocale, setContentLocale] = useState<Locale>(uiLocale);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
@@ -185,9 +185,9 @@ export function WebsiteEditorProvider({ children }: { children: React.ReactNode 
     return api.website
       .history({ limit: HISTORY_PAGE, cursor })
       .then((page) =>
-        setHistory((h) => ({ status: "ready", items: cursor ? [...h.items, ...page.items] : page.items, next: page.next_cursor, more: false })),
+        setHistory((h) => ({ status: "ready", items: cursor ? [...h.items, ...page.items] : page.items, next: page.next_cursor, more: false, moreFailed: false })),
       )
-      .catch(() => setHistory((h) => ({ ...h, status: cursor ? "ready" : "error", more: false })));
+      .catch(() => setHistory((h) => ({ ...h, status: cursor ? "ready" : "error", more: false, moreFailed: !!cursor })));
   }, []);
 
   const loadWorkbench = useCallback(() => {
@@ -400,12 +400,12 @@ export function WebsiteEditorProvider({ children }: { children: React.ReactNode 
 
   const loadMoreHistory = useCallback(() => {
     if (!history.next) return;
-    setHistory((h) => ({ ...h, more: true }));
+    setHistory((h) => ({ ...h, more: true, moreFailed: false }));
     void loadHistoryPage(history.next);
   }, [history.next, loadHistoryPage]);
 
   const retryHistory = useCallback(() => {
-    setHistory({ status: "loading", items: [], next: null, more: false });
+    setHistory({ status: "loading", items: [], next: null, more: false, moreFailed: false });
     void loadHistoryPage();
   }, [loadHistoryPage]);
 
@@ -757,9 +757,14 @@ export function HistoryPanel() {
       ) : (
         <>
           <DataTable columns={columns} rows={history.items} rowKey={(r) => String(r.published_revision)} />
+          {history.moreFailed && (
+            <p role="alert" className="text-label text-danger">
+              {t.historyMoreError}
+            </p>
+          )}
           {history.next && (
             <Button variant="secondary" size="sm" isDisabled={history.more} onPress={loadMoreHistory}>
-              {t.historyMore}
+              {history.moreFailed ? t.retry : t.historyMore}
             </Button>
           )}
         </>

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -80,11 +81,8 @@ func (h *Handler) SaveWebsite(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if fields := missingOptionalFields(body); len(fields) > 0 {
-		return httpx.New(http.StatusUnprocessableEntity, codeWebsiteInvalid, websiteInvalid).WithFields(fields)
-	}
 	workbench, err := h.website.Save(c.Request().Context(), scope, principal,
-		service.SaveWebsiteInput{ExpectedDraftRevision: req.ExpectedDraftRevision, Content: req.Content})
+		service.SaveWebsiteInput{ExpectedDraftRevision: req.ExpectedDraftRevision, Content: req.Content, MissingFields: missingOptionalFields(body)})
 	if err != nil {
 		return websiteError(err)
 	}
@@ -140,10 +138,42 @@ func websiteBody(c echo.Context, dst any) ([]byte, error) {
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil || dec.Decode(&struct{}{}) != io.EOF {
+	if err := dec.Decode(dst); err != nil || dec.Decode(&struct{}{}) != io.EOF || !exactKeys(body, reflect.TypeOf(dst).Elem()) {
 		return nil, httpx.Validation(websiteBodyUnread, map[string]string{"body": invalidFormat})
 	}
 	return body, nil
+}
+
+// exactKeys rejects object keys that only match a struct field case-insensitively, which encoding/json accepts.
+func exactKeys(raw []byte, t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Struct:
+		var obj map[string]json.RawMessage
+		if json.Unmarshal(raw, &obj) != nil {
+			return true
+		}
+		tags := map[string]reflect.Type{}
+		for i := 0; i < t.NumField(); i++ {
+			tags[strings.Split(t.Field(i).Tag.Get("json"), ",")[0]] = t.Field(i).Type
+		}
+		for key, value := range obj {
+			ft, ok := tags[key]
+			if !ok || !exactKeys(value, ft) {
+				return false
+			}
+		}
+	case reflect.Map:
+		var obj map[string]json.RawMessage
+		if json.Unmarshal(raw, &obj) != nil {
+			return true
+		}
+		for _, value := range obj {
+			if !exactKeys(value, t.Elem()) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // missingOptionalFields finds optional program texts that are absent or null; Go decoding cannot tell them from empty.

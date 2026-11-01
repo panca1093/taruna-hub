@@ -129,6 +129,7 @@ func (w *websiteContent) locale(prefix string, in model.WebsiteLocale) model.Web
 type SaveWebsiteInput struct {
 	ExpectedDraftRevision int64
 	Content               model.WebsiteContent
+	MissingFields         map[string]string
 }
 
 type PublishWebsiteInput struct {
@@ -200,6 +201,17 @@ func (s *WebsiteService) Save(ctx context.Context, scope HostScope, principal mo
 		return model.WebsiteWorkbench{}, &InputError{Fields: map[string]string{"expected_draft_revision": ReasonWebsiteRevision}}
 	}
 	content, err := normalizeWebsiteContent(in.Content)
+	var input *InputError
+	if errors.As(err, &input) || len(in.MissingFields) > 0 {
+		fields := map[string]string{}
+		if input != nil {
+			fields = input.Fields
+		}
+		for path, reason := range in.MissingFields {
+			fields[path] = reason
+		}
+		return model.WebsiteWorkbench{}, &InputError{Fields: fields}
+	}
 	if err != nil {
 		return model.WebsiteWorkbench{}, err
 	}

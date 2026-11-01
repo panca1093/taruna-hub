@@ -54,6 +54,7 @@ const id = {
   historyLoading: "Memuat riwayat…",
   historyError: "Riwayat publikasi tidak bisa dimuat.",
   historyMore: "Muat lagi",
+  historyMoreError: "Riwayat berikutnya tidak bisa dimuat.",
 
   homeTitle: "Edit beranda",
   homeDescription: "Ubah pesan utama, lalu lihat tampilannya sebelum terbit.",
@@ -208,6 +209,7 @@ const en: WebsiteDict = {
   historyLoading: "Loading history…",
   historyError: "Publication history could not be loaded.",
   historyMore: "Load more",
+  historyMoreError: "The next page of history could not be loaded.",
 
   homeTitle: "Edit home",
   homeDescription: "Change the main message, then see how it looks before publishing.",

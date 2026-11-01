@@ -405,7 +405,7 @@ function Footer({ t }: { t: LandingDict }) {
             <Logo plate size="md" />
             <p className="mt-4 text-label text-muted">{t.footerTagline}</p>
           </div>
-          <nav aria-label="Footer" className="flex flex-wrap content-start gap-x-8 gap-y-3 text-caption text-muted">
+          <nav aria-label={t.footerNavLabel} className="flex flex-wrap content-start gap-x-8 gap-y-3 text-caption text-muted">
             {links.map(([href, label]) => (
               <Link key={href} href={href} className="hover:text-foreground">
                 {label}

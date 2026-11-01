@@ -243,6 +243,20 @@ func TestWebsiteStrictBody(t *testing.T) {
 	expect("null optional field", put(req(contentWith(draft, func(id map[string]any) {
 		id["programs"].(map[string]any)["polri"].(map[string]any)["contact"] = nil
 	}))), 422, "website_content_invalid", "locales.id.programs.polri.contact")
+	expect("wrong key casing", put(req(contentWith(draft, func(id map[string]any) {
+		home := id["home"].(map[string]any)
+		home["HERO_TITLE"] = home["hero_title"]
+		delete(home, "hero_title")
+	}))), 422, "validation_failed", "body")
+	expect("wrong top-level casing", put(map[string]any{"Expected_Draft_Revision": 1, "content": draft}), 422, "validation_failed", "body")
+	both := put(req(contentWith(draft, func(id map[string]any) {
+		delete(id["programs"].(map[string]any)["tni"].(map[string]any), "fees")
+		id["home"].(map[string]any)["hero_body"] = strings.Repeat("a", 400)
+	})))
+	expect("missing and too long together", both, 422, "website_content_invalid", "locales.id.programs.tni.fees")
+	if fields := errorBody(t, both).Fields; fields["locales.id.home.hero_body"] == "" {
+		t.Errorf("missing and too long together: fields = %v, want hero_body too", fields)
+	}
 	expect("blank required field", put(req(contentWith(draft, func(id map[string]any) { id["home"].(map[string]any)["hero_title"] = "   " }))), 422, "website_content_invalid", "locales.id.home.hero_title")
 	expect("one over the limit", put(req(contentWith(draft, func(id map[string]any) { id["home"].(map[string]any)["hero_title"] = strings.Repeat("a", 91) }))), 422, "website_content_invalid", "locales.id.home.hero_title")
 	expect("missing revision", put(map[string]any{"content": draft}), 422, "validation_failed", "expected_draft_revision")

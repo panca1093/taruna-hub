@@ -7,7 +7,9 @@ contract and the invariants; the wire shapes are in `api/openapi.yaml` and the p
 
 **Status:** the contract is defined (OpenAPI, typed client `api.website.*`, `normalizeWebsiteContent` and
 its tests) and the API is built: migration `000022_website_content`, the repository, `WebsiteService` and
-the five endpoints. The portal editor (`/admin/website/*`), its review and the protected draft preview are built; the browser→API→database proof and the public `/programs/[slug]` routes are not done yet.
+the five endpoints. The portal editor (`/admin/website/*`), its review and the protected draft preview are built; the rose landing and the public `/programs/[slug]` routes are built and proven browser → API →
+PostgreSQL (2026-11-01). Open, as in PLAN P11b: G4 launch content, a failed-publish UI demo, the Student
+preview-route browser check and the DESIGN §10 sweep.
 
 ## Owner decisions
 
@@ -39,7 +41,8 @@ is never accepted.
 | each program | `schedule`, `location`, `fees`, `contact` | 160 each | no |
 
 - Text is trimmed at both ends before it is validated, diffed or stored. Length counts Unicode code
-  points, not UTF-8 bytes and not JS UTF-16 units, so an emoji is one.
+  points, not UTF-8 bytes and not JS UTF-16 units, so an emoji is one. The client (JS `trim`) and the
+  server (Go `TrimSpace`) trim differently for U+FEFF and U+0085; the server's verdict wins.
 - A required text cannot be blank after trimming. An optional field is always a present string; empty
   means the information is pending, and absent or null is a validation error.
 - Everything is plain text. There is no HTML, markdown, script or automatic linkification; React

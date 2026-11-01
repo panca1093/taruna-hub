@@ -117,6 +117,7 @@ const id = {
   ctaBody: "Kenali program bimbel atau temukan latihan mandiri yang sesuai tujuanmu.",
 
   footerLinks: { programs: "Bimbel & diklat", catalog: "Pilih latihan", howItWorks: "Cara kerja", faq: "Tanya jawab", login: "Masuk", register: "Buat akun" },
+  footerNavLabel: "Navigasi kaki halaman",
   footerRights: "© 2026 Taruna Eduka. Semua hak dilindungi.",
   footerPoweredBy: "Powered by Smart and Simple Solution",
   footerTagline: "Pusat Diklat TNI, POLRI, dan Kedinasan.",
@@ -237,6 +238,7 @@ const en: typeof id = {
   ctaBody: "Explore a training program or find self-paced practice that fits your goal.",
 
   footerLinks: { programs: "Training programs", catalog: "Choose practice", howItWorks: "How it works", faq: "Questions", login: "Sign in", register: "Create account" },
+  footerNavLabel: "Footer",
   footerRights: "© 2026 Taruna Eduka. All rights reserved.",
   footerPoweredBy: "Powered by Smart and Simple Solution",
   footerTagline: "TNI, POLRI, and Civil Service Training Center.",
