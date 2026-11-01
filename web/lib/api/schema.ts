@@ -6085,6 +6085,300 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/website": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The published website content
+         * @description Unauthenticated, host-resolved to the configured tenant exactly like `GET /api/v1/tenant`. Returns the
+         *     last published whole-site snapshot only: no draft, no history, no actor ids. Before the first
+         *     publication it answers `404` with `website_not_published`; the page then falls back to its static copy.
+         *
+         *     The response carries `Cache-Control: no-store`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The published snapshot */
+                200: {
+                    headers: {
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PublishedWebsite"];
+                    };
+                };
+                /** @description Nothing has been published yet (`website_not_published`), or the configured tenant is missing or inactive */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/website": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The website workbench
+         * @description Admin only; Operator and Student answer `403`. The first read creates the row lazily with reviewed
+         *     default copy (`draft_revision` 1, `published_revision` 0, nothing published); two first readers create
+         *     one row. `published` is the published content for the before/after diff, or null before the first publication.
+         *
+         *     The response carries `Cache-Control: no-store`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The saved draft with both revision numbers */
+                200: {
+                    headers: {
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WebsiteWorkbench"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+            };
+        };
+        /**
+         * Save the draft
+         * @description Admin only. The body is capped at 64 KiB (`413` above it) and unknown fields, locales or program slots are
+         *     refused. The server normalizes (trims) the complete content, then validates it against the content contract.
+         *
+         *     `expected_draft_revision` is compared under a row lock before any write; a stale value answers `409`
+         *     `website_revision_conflict` and overwrites nothing. Content equal to the stored draft is a no-op that
+         *     keeps revision, time and actor; changed content increments `draft_revision` exactly once. Saving never
+         *     touches the published content or revision. A tenant, role, actor or timestamp in the body is never trusted.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SaveWebsiteRequest"];
+                };
+            };
+            responses: {
+                /** @description The latest workbench after the save */
+                200: {
+                    headers: {
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WebsiteWorkbench"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                /** @description The draft moved since `expected_draft_revision` (`website_revision_conflict`) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The body is larger than 64 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The content breaks the contract (`website_content_invalid`); `fields` maps each path to a reason */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/website/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish the draft as one whole-site snapshot
+         * @description Admin only. There is no per-page publication. Under one row lock the server compares both expected
+         *     revisions, validates the draft, copies the entire draft into the published content and appends one history
+         *     record in the same transaction; nothing external is called inside it. The first publication is revision 1, a
+         *     later changed one increments the published revision once, and `draft_revision` is unchanged.
+         *
+         *     A draft equal to the published content is a no-op: `changed` is false and no history is written. A retry after
+         *     a lost response with the same `expected_draft_revision` that was already published returns that recorded
+         *     publication unchanged, even when `expected_published_revision` is now stale. If the draft has moved on, the
+         *     answer is `409` `website_revision_conflict`; a newer unseen draft is never published on retry. Two concurrent
+         *     publishes of the same draft produce one history record, and a database failure leaves the published content,
+         *     revision and history unchanged.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PublishWebsiteRequest"];
+                };
+            };
+            responses: {
+                /** @description The publication, new or the recorded one being retried */
+                200: {
+                    headers: {
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WebsitePublication"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                /** @description A revision no longer matches (`website_revision_conflict`) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The body is larger than 64 KiB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description The draft breaks the content contract (`website_content_invalid`) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/website/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Publication history
+         * @description Admin only. Immutable publication metadata, newest first, with a deterministic cursor. The records are an
+         *     audit trail, not a rollback archive, and are never pruned in v1. The response carries `Cache-Control: no-store`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Defaults to 20, between 1 and 50. */
+                    limit?: number;
+                    /** @description The `next_cursor` of the previous page; opaque. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of publication records */
+                200: {
+                    headers: {
+                        "Cache-Control"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WebsitePublicationList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6879,7 +7173,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready" | "website_not_published" | "website_revision_conflict" | "website_content_invalid";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -7969,6 +8263,99 @@ export interface components {
         };
         KecermatanStaffResultDetail: components["schemas"]["KecermatanStaffResult"] & {
             kolom: components["schemas"]["KecermatanKolomResult"][];
+        };
+        WebsiteHome: {
+            /** @description Plain text. Counted in Unicode code points after trimming. */
+            hero_title: string;
+            hero_body: string;
+            program_cta: string;
+            practice_cta: string;
+        };
+        WebsiteProgram: {
+            title: string;
+            summary: string;
+            /** @description Present but may be empty; empty means the information is pending. */
+            schedule: string;
+            location: string;
+            /** @description Public informational text, never a checkout amount or price authority. */
+            fees: string;
+            contact: string;
+        };
+        /** @description Exactly three stable marketing slots; not curriculum program ids. */
+        WebsitePrograms: {
+            tni: components["schemas"]["WebsiteProgram"];
+            polri: components["schemas"]["WebsiteProgram"];
+            kedinasan: components["schemas"]["WebsiteProgram"];
+        };
+        WebsiteLocale: {
+            home: components["schemas"]["WebsiteHome"];
+            programs: components["schemas"]["WebsitePrograms"];
+        };
+        /**
+         * @description Plain-text marketing content, both locales required. Text is trimmed and counted in Unicode code points,
+         *     never rendered as HTML, markdown or links.
+         */
+        WebsiteContent: {
+            /** @enum {integer} */
+            schema_version: 1;
+            locales: {
+                id: components["schemas"]["WebsiteLocale"];
+                en: components["schemas"]["WebsiteLocale"];
+            };
+        };
+        WebsiteWorkbench: {
+            draft: components["schemas"]["WebsiteContent"];
+            /** Format: int64 */
+            draft_revision: number;
+            /**
+             * Format: int64
+             * @description 0 before the first publication. Compare revisions for concurrency, never timestamps.
+             */
+            published_revision: number;
+            /** @description The published content for the before/after diff; null before the first publication. */
+            published: components["schemas"]["WebsiteContent"] | null;
+            /** Format: date-time */
+            updated_at: string;
+            /**
+             * Format: uuid
+             * @description The staff user who last saved a change; null until someone has.
+             */
+            updated_by: string | null;
+        };
+        PublishedWebsite: {
+            content: components["schemas"]["WebsiteContent"];
+            /** Format: int64 */
+            published_revision: number;
+            /** Format: date-time */
+            published_at: string;
+        };
+        SaveWebsiteRequest: {
+            /** Format: int64 */
+            expected_draft_revision: number;
+            content: components["schemas"]["WebsiteContent"];
+        };
+        PublishWebsiteRequest: {
+            /** Format: int64 */
+            expected_draft_revision: number;
+            /** Format: int64 */
+            expected_published_revision: number;
+        };
+        WebsitePublication: {
+            /** Format: int64 */
+            published_revision: number;
+            /** Format: int64 */
+            source_draft_revision: number;
+            /** Format: date-time */
+            published_at: string;
+            /** Format: uuid */
+            published_by: string;
+            /** @description False when the draft equalled the published content; nothing was written. */
+            changed: boolean;
+        };
+        WebsitePublicationList: {
+            items: components["schemas"]["WebsitePublication"][];
+            /** @description Null on the last page. */
+            next_cursor: string | null;
         };
     };
     responses: {

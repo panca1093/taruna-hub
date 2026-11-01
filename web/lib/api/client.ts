@@ -56,6 +56,14 @@ export type AttemptList = components["schemas"]["AttemptList"];
 export type AnswerAck = components["schemas"]["AnswerAck"];
 export type AnswerBody = components["schemas"]["AnswerRequest"];
 export type Settings = components["schemas"]["Settings"];
+export type WebsiteContent = components["schemas"]["WebsiteContent"];
+export type WebsiteWorkbench = components["schemas"]["WebsiteWorkbench"];
+export type PublishedWebsite = components["schemas"]["PublishedWebsite"];
+export type WebsitePublication = components["schemas"]["WebsitePublication"];
+export type WebsitePublicationList = components["schemas"]["WebsitePublicationList"];
+export type SaveWebsiteBody = components["schemas"]["SaveWebsiteRequest"];
+export type PublishWebsiteBody = components["schemas"]["PublishWebsiteRequest"];
+export type WebsiteHistoryFilters = { limit?: number; cursor?: string };
 export type Violation = components["schemas"]["Violation"];
 export type ViolationType = components["schemas"]["ViolationType"];
 export type ViolationBody = components["schemas"]["ViolationRequest"];
@@ -683,6 +691,17 @@ export const api = {
       authed<KecermatanStaffResultList>(`/api/v1/admin/kecermatan-results${queryOf(filters)}` as keyof paths),
     get: (id: string) =>
       authed<KecermatanStaffResultDetail>(`/api/v1/admin/kecermatan-results/${id}` as keyof paths),
+  },
+
+  /** Marketing content: `published` is public, the rest is the Admin workbench (draft, save, publish, history). */
+  website: {
+    published: () => request<PublishedWebsite>("/api/v1/website"),
+    workbench: () => authed<WebsiteWorkbench>("/api/v1/admin/website"),
+    save: (body: SaveWebsiteBody) => mutate<WebsiteWorkbench>("PUT", "/api/v1/admin/website", body),
+    publish: (body: PublishWebsiteBody) =>
+      mutate<WebsitePublication>("POST", "/api/v1/admin/website/publish", body),
+    history: (filters: WebsiteHistoryFilters = {}) =>
+      authed<WebsitePublicationList>(`/api/v1/admin/website/history${queryOf(filters)}` as keyof paths),
   },
 
   /** D04: the scoring weights new attempts freeze. Admin only. */
