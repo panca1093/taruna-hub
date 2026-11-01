@@ -193,7 +193,7 @@ func missingOptionalFields(body []byte) map[string]string {
 		for slot, program := range l.Programs {
 			for _, field := range []string{"schedule", "location", "fees", "contact"} {
 				if raw, ok := program[field]; !ok || string(raw) == "null" {
-					fields["locales."+locale+".programs."+slot+"."+field] = websiteReason(service.ReasonWebsiteRequired)
+					fields["locales."+locale+".programs."+slot+"."+field] = service.ReasonWebsiteRequired
 				}
 			}
 		}
