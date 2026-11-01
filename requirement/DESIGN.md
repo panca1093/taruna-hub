@@ -10,7 +10,7 @@ This document describes the visual language already implemented in `web/` and ho
 
 The workspace combines a warm cream canvas, plum ink, compact controls, quiet cards and a rose accent (owner decision 2026-10-31, handoff `PALETTE-DECISION.md`). Student, admin and auth share these tokens; a dark plum sidebar anchors both shells. Its signature element is the countdown/progress ring, now plum to rose. Operational pages use restrained color so status, numbers, and actions are easy to scan.
 
-**Visual parity pass (2026-10-31).** The workspace now follows the handoff prototype (`docs/handoffs/2026-10-31-student-workspace/prototype`) for shell, type, radii, shadows, icons and component anatomy: a floating rounded plum icon rail, a borderless 82px topbar, Geist display headings at weight 550 with negative tracking, Inter 14px body, 10/16/21/23px radii, a soft low-alpha shadow, and lucide icons at stroke 1.65. Where the prototype and older text in this file disagree on looks, the prototype wins. The marketing landing stays on `.palette-classic` and is opted out of every change below (type base, radii, component restyle, icon stroke).
+**Visual parity pass (2026-10-31).** The workspace now follows the handoff prototype (`docs/handoffs/2026-10-31-student-workspace/prototype`) for shell, type, radii, shadows, icons and component anatomy: a floating rounded plum icon rail, a borderless 82px topbar, Geist display headings at weight 550 with negative tracking, Inter 14px body, 10/16/21/23px radii, a soft low-alpha shadow, and lucide icons at stroke 1.65. Where the prototype and older text in this file disagree on looks, the prototype wins. The public landing now uses the same rose tokens and restyle (2026-11-01); see §6.9 Public marketing patterns.
 
 Guidelines:
 
@@ -40,7 +40,7 @@ Guidelines:
 | `accent` | `0.442 0.063 341.6` → #6B455D | `0.819 0.056 346.8` → #E0B6CB | Primary action and links (plum in light, pale rose in dark) |
 | `accent-2` | `0.643 0.058 346.7` → #A87F94 | `0.715 0.07 341.1` → #C292B0 | Lighter rose ring endpoint |
 | `accent-foreground` | `0.985 0.005 78` → cream | `0.2 0.02 335` → dark plum | Text on solid accent |
-| `success` | `0.495 0.061 163.4` → muted prototype green | `0.814 0.064 153.3` → pale green | Completed / confirmed (`.palette-classic` keeps `#00AC67` with a dark ink) |
+| `success` | `0.495 0.061 163.4` → muted prototype green | `0.814 0.064 153.3` → pale green | Completed / confirmed |
 | `success-foreground` | `0.985 0.005 78` → cream | `0.2 0.02 155` → dark green ink | Text on solid success (light ink on the dark green, ≥4.5:1) |
 | `warning` | `0.7723 0.1585 73.7` → `#F0A31B` | `0.8022 0.1451 76.6` → `#F3B040` | Pending / attention |
 | `warning-foreground` | `0.2242 0.019 267` → `#181B25` | `0.16 0.01 267` → `#0B0D12` | Text on solid warning |
@@ -65,7 +65,7 @@ Each numeric triplet is wrapped in `oklch(...)` in CSS. Success, warning and dan
 | `surface-foreground`, `overlay-foreground`, `default-foreground`, `segment-foreground` | Alias `foreground` | Text on the corresponding surface |
 | `surface-secondary-foreground`, `surface-tertiary-foreground` | Alias `foreground` | Secondary surface text |
 | `field-background` | Light `surface`; dark `surface-secondary` | Inputs |
-| `.palette-classic` | Scoped class restoring the pre-rose indigo values for `background`, `surface*`, `accent*`, `ring-*`, `border`, `separator`, `muted` | Opt-out for surfaces that must not be rebranded (public landing). Not used by the workspace. Also re-declares the `var()`-derived tokens (`*-foreground`, `field-*`, `focus`, `link`) so they resolve against the classic values. Portalled HeroUI overlays (popover, modal, dropdown) render outside the scope and keep the rose palette, so the landing must not open overlays that expect classic colors |
+| `.palette-classic` | Scoped class restoring the pre-rose indigo values for `background`, `surface*`, `accent*`, `ring-*`, `border`, `separator`, `muted` | Opt-out for a surface that must not be rebranded. No surface uses it since the landing moved to rose; keep it only until a later audit removes it. Also re-declares the `var()`-derived tokens (`*-foreground`, `field-*`, `focus`, `link`) so they resolve against the classic values. Portalled HeroUI overlays render outside the scope and keep the rose palette |
 | `field-foreground`, `field-placeholder`, `field-border` | `foreground`, `muted`, `border` | Field content and chrome |
 | `segment` | Light white; dark `surface-tertiary` | Segmented controls |
 | `focus`, `link` | Alias `accent` | Focus indication and links |
@@ -191,7 +191,7 @@ The base `--radius` stays 6px for HeroUI internals. Workspace surfaces use these
 | `rounded-rail` | 27px | The floating rail |
 | `rounded-full` | pill | Avatars, filter pills |
 
-The HeroUI restyle in `@layer components` applies these to `.button`, `.input`, `.select__trigger`, `.chip`, `.card`, `.modal__dialog`, dropdown and popover. It sits in the components layer so a caller's utility class (`rounded-full`, `p-6`) still wins. Elements inside `.palette-classic` keep the old values.
+The HeroUI restyle in `@layer components` applies these to `.button`, `.input`, `.select__trigger`, `.chip`, `.card`, `.modal__dialog`, dropdown and popover. It sits in the components layer so a caller's utility class (`rounded-full`, `p-6`) still wins. Elements inside a `.palette-classic` scope, if one is ever used, keep the old values.
 
 ### 4.3 Borders and shadows
 
@@ -332,7 +332,7 @@ Student result rows are bordered 6px-radius links with 14px horizontal / 10px ve
 
 Reuse the [status badge components](../web/components/status-badge.tsx) so status translation and color mapping stay consistent. Chips use `size="sm"` (11px), weight 500, and the `rounded-chip` 7px radius. `StatusChip` (tone + optional dot) covers statuses without a typed badge.
 
-**Icon rule.** Icons are `lucide-react`. The prototype's 19-icon SVG sprite is a hand-drawn lucide-style set (same 24px grid, round caps and joins, 1.65 stroke), so no sprite is ported. `globals.css` forces `stroke-width: 1.65` on every `svg.lucide` outside the landing; do not pass `strokeWidth` (a `stroke-*` utility still wins if truly needed). Sizes come from `Icon` in `components/icon.tsx`: `rail` 22px, `nav` 21px, `md` 20px, `sm` 16px (buttons, kickers), `xs` 14px (arrows, chevrons), `hero` 34px (empty state). Student nav icons: Dashboard `LayoutDashboard`, Tryout `BookOpen`, Katalog `LayoutGrid`. Decorative icons should be hidden from assistive technology; actionable icons need names. Do not use the same checkmark to imply both payment confirmation and exam correctness without a label.
+**Icon rule.** Icons are `lucide-react`. The prototype's 19-icon SVG sprite is a hand-drawn lucide-style set (same 24px grid, round caps and joins, 1.65 stroke), so no sprite is ported. `globals.css` forces `stroke-width: 1.65` on every `svg.lucide`; do not pass `strokeWidth` (a `stroke-*` utility still wins if truly needed). Sizes come from `Icon` in `components/icon.tsx`: `rail` 22px, `nav` 21px, `md` 20px, `sm` 16px (buttons, kickers), `xs` 14px (arrows, chevrons), `hero` 34px (empty state). Student nav icons: Dashboard `LayoutDashboard`, Tryout `BookOpen`, Katalog `LayoutGrid`. Decorative icons should be hidden from assistive technology; actionable icons need names. Do not use the same checkmark to imply both payment confirmation and exam correctness without a label.
 
 ### 6.6 Dialogs and drawers
 
@@ -400,6 +400,18 @@ Reuse these before writing page-local markup. All are small, prop-driven, and to
 Layout utilities in `globals.css` replace arbitrary grid values: `grid-cols-detail` (main + 17.5rem aside), `grid-cols-hero-pair`, `grid-cols-wallet`, `grid-cols-score`, `max-w-popover`. Use them with `lg:`/`md:` variants; do not write `grid-cols-[...]` in components.
 
 Tinted tokens added for these: `bg-peach`, `bg-accent-soft`, `text-rose` / `bg-rose`, `bg-success-soft` with `text-success-soft-foreground` (prototype green), `bg-rail-active`, `bg-sidebar-hover`, `logo-plate`.
+
+### 6.9 Public marketing patterns
+
+The landing (`app/page.tsx` → `components/marketing/website-view.tsx`) follows the approved rose-journey prototype. `WebsiteView` is presentation only: published and draft preview share it, it never fetches, and `view` is `"home"` or a program slot (`tni|polri|kedinasan`); `ProgramDetail` and `HeroPreview` are exported for the portal editor's inert side preview.
+
+- **Type and width.** Hero `text-landing-hero` (clamp 44–68px), section titles `text-landing-h2`, card titles `text-landing-h3`, all Geist 550 at -0.04em; body Inter. Content width `max-w-landing` (1240px) with `px-5` / `sm:px-10`. Sections use `py-16 sm:py-20`.
+- **Hero stage.** `HeroExamPreview`: a `bg-peach` `rounded-rail` stage with a faint `border-rose` inner outline, holding a `rounded-card` surface with `shadow-soft`. Two tabs (Bimbel & diklat, Tryout & Kecermatan) follow the WAI-ARIA tabs pattern (arrow, Home, End, roving tabindex). Exercises are labelled illustrations: choices highlight but nothing is graded, no key exists. One entrance animation (`animate-stage-in`), none under reduced motion.
+- **Equal paths.** The two hero CTAs and the two closing CTAs are the same `primary` `lg` button in a two-column grid; they stack equally on mobile. Entry cards share size and padding; only the surface tint differs (`bg-surface` vs `bg-accent-soft`).
+- **Programs.** Three fixed slots (tni, polri, kedinasan) from published content. Empty optional fields show "Menunggu informasi resmi". No inquiry CTA. Fees are informational; package prices come only from the catalog.
+- **Data states.** Website content and catalog load, empty and fail independently. Loading uses skeletons, never sample data. Missing or failed CMS shows the reviewed dictionary hero/CTA plus an "information unavailable" state with retry. A draft is never read on the public route.
+- **Workspace band.** `bg-sidebar` `rounded-rail` with a labelled illustration of the student dashboard; values are dashes, never invented numbers.
+- **No** statistics, testimonials, coach names, official schedules or contacts, "cheapest"/HOTS claims, guarantees, student-PDF or instant-review promises, and no public `/portal` link.
 
 ## 7. How to build a dashboard
 
@@ -497,6 +509,16 @@ Built 2026-10-31 from the [workspace handoff](../docs/handoffs/2026-10-31-studen
 - **Wallet.** The header trigger opens `WalletPopover`, a modal showing the exact balance, recent entries and links. Top-up never happens inside it: "Isi saldo" navigates to `/student/wallet/topup`, which replaces itself with the status page after creation.
   - Amounts are whole-rupiah digit strings, and the minimum always comes from the server.
 - **Idempotency in the UI.** Keep one key per logical purchase or top-up, replaced only when the payload changes or after a definite failure. An unknown create outcome locks the inputs and retries with the same key.
+
+### 7.4c Portal website editor (Kelola Website)
+
+Admin-only routes under `/admin/website` share one `WebsiteEditorProvider` (layout) so unsaved local input survives tab changes; `components/admin/website-editor.tsx` holds the shared pieces.
+
+- **Frame.** `WebsiteFrame` = `AppShell` + underline tab nav (Ringkasan, Beranda, Program bimbel, Publikasi) + a status strip (tone chip, published and draft revision, last save). `WebsiteGate` renders loading, failure and access-denied before any child.
+- **Editor.** Form panel beside a sticky inert live preview on `lg`, stacked below. `ContentField` shows a code-point counter (`n / max`, danger past the limit) and the field error; the content-language toggle is separate from the UI language.
+- **Feedback.** `SaveFeedback` banners (`Banner`: danger, warning, success) for invalid, failed, checking (unknown network outcome, refetching) and conflict; local input is never cleared. Reload after a conflict goes through a confirm-discard modal.
+- **Dirty guard.** `beforeunload` plus an in-app link interceptor opening a leave-confirm modal for links outside `/admin/website`.
+- **Review.** Before/after rows for every changed field in both locales and every slot, one acknowledgement checkbox, one publish button, disabled until saved, a diff exists and the box is ticked.
 
 ### 7.5 Specify data states before connecting the API
 

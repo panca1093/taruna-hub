@@ -57,6 +57,8 @@ tags:
     description: The student's kecermatan attempts - credits, server-timed kolom, answers, results and review - and the staff results list
   - name: monitoring
     description: Tryout violation evidence the student's browser reports, and the staff view of active sessions and timelines
+  - name: website
+    description: Marketing website content - the public published snapshot and the Admin draft, save, publish and history workbench
 
 paths:
   /healthz:
@@ -4446,6 +4448,218 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/website:
+    get:
+      tags: [website]
+      summary: The published website content
+      description: |
+        Unauthenticated, host-resolved to the configured tenant exactly like `GET /api/v1/tenant`. Returns the
+        last published whole-site snapshot only: no draft, no history, no actor ids. Before the first
+        publication it answers `404` with `website_not_published`; the page then falls back to its static copy.
+
+        The response carries `Cache-Control: no-store`.
+      responses:
+        "200":
+          description: The published snapshot
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublishedWebsite"
+        "404":
+          description: Nothing has been published yet (`website_not_published`), or the configured tenant is missing or inactive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/admin/website:
+    get:
+      tags: [website]
+      summary: The website workbench
+      description: |
+        Admin only; Operator and Student answer `403`. The first read creates the row lazily with reviewed
+        default copy (`draft_revision` 1, `published_revision` 0, nothing published); two first readers create
+        one row. `published` is the published content for the before/after diff, or null before the first publication.
+
+        The response carries `Cache-Control: no-store`.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The saved draft with both revision numbers
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebsiteWorkbench"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [website]
+      summary: Save the draft
+      description: |
+        Admin only. The body is capped at 64 KiB (`413` above it) and unknown fields, locales or program slots are
+        refused. The server normalizes (trims) the complete content, then validates it against the content contract.
+
+        `expected_draft_revision` is compared under a row lock before any write; a stale value answers `409`
+        `website_revision_conflict` and overwrites nothing. Content equal to the stored draft is a no-op that
+        keeps revision, time and actor; changed content increments `draft_revision` exactly once. Saving never
+        touches the published content or revision. A tenant, role, actor or timestamp in the body is never trusted.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveWebsiteRequest"
+      responses:
+        "200":
+          description: The latest workbench after the save
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebsiteWorkbench"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: The draft moved since `expected_draft_revision` (`website_revision_conflict`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: The body is larger than 64 KiB
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: The content breaks the contract (`website_content_invalid`); `fields` maps each path to a reason
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/admin/website/publish:
+    post:
+      tags: [website]
+      summary: Publish the draft as one whole-site snapshot
+      description: |
+        Admin only. There is no per-page publication. Under one row lock the server compares both expected
+        revisions, validates the draft, copies the entire draft into the published content and appends one history
+        record in the same transaction; nothing external is called inside it. The first publication is revision 1, a
+        later changed one increments the published revision once, and `draft_revision` is unchanged.
+
+        A draft equal to the published content is a no-op: `changed` is false and no history is written. A retry after
+        a lost response with the same `expected_draft_revision` that was already published returns that recorded
+        publication unchanged, even when `expected_published_revision` is now stale. If the draft has moved on, the
+        answer is `409` `website_revision_conflict`; a newer unseen draft is never published on retry. Two concurrent
+        publishes of the same draft produce one history record, and a database failure leaves the published content,
+        revision and history unchanged.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishWebsiteRequest"
+      responses:
+        "200":
+          description: The publication, new or the recorded one being retried
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebsitePublication"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: A revision no longer matches (`website_revision_conflict`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: The body is larger than 64 KiB
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: The draft breaks the content contract (`website_content_invalid`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/admin/website/history:
+    get:
+      tags: [website]
+      summary: Publication history
+      description: |
+        Admin only. Immutable publication metadata, newest first, with a deterministic cursor. The records are an
+        audit trail, not a rollback archive, and are never pruned in v1. The response carries `Cache-Control: no-store`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          description: Defaults to 20, between 1 and 50.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page; opaque.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One page of publication records
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebsitePublicationList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -5904,6 +6118,9 @@ components:
                 - kecermatan_kolom_not_running
                 - kecermatan_answer_locked
                 - kecermatan_result_not_ready
+                - website_not_published
+                - website_revision_conflict
+                - website_content_invalid
             message:
               type: string
               description: Human-readable, Indonesian, safe to show to end users.
@@ -8140,6 +8357,217 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/KecermatanKolomResult"
+
+    WebsiteHome:
+      type: object
+      additionalProperties: false
+      required: [hero_title, hero_body, program_cta, practice_cta]
+      properties:
+        hero_title:
+          type: string
+          minLength: 1
+          maxLength: 90
+          description: Plain text. Counted in Unicode code points after trimming.
+        hero_body:
+          type: string
+          minLength: 1
+          maxLength: 360
+        program_cta:
+          type: string
+          minLength: 1
+          maxLength: 36
+        practice_cta:
+          type: string
+          minLength: 1
+          maxLength: 36
+
+    WebsiteProgram:
+      type: object
+      additionalProperties: false
+      required: [title, summary, schedule, location, fees, contact]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 80
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 320
+        schedule:
+          type: string
+          maxLength: 160
+          description: Present but may be empty; empty means the information is pending.
+        location:
+          type: string
+          maxLength: 160
+        fees:
+          type: string
+          maxLength: 160
+          description: Public informational text, never a checkout amount or price authority.
+        contact:
+          type: string
+          maxLength: 160
+
+    WebsitePrograms:
+      type: object
+      additionalProperties: false
+      description: Exactly three stable marketing slots; not curriculum program ids.
+      required: [tni, polri, kedinasan]
+      properties:
+        tni:
+          $ref: "#/components/schemas/WebsiteProgram"
+        polri:
+          $ref: "#/components/schemas/WebsiteProgram"
+        kedinasan:
+          $ref: "#/components/schemas/WebsiteProgram"
+
+    WebsiteLocale:
+      type: object
+      additionalProperties: false
+      required: [home, programs]
+      properties:
+        home:
+          $ref: "#/components/schemas/WebsiteHome"
+        programs:
+          $ref: "#/components/schemas/WebsitePrograms"
+
+    WebsiteContent:
+      type: object
+      additionalProperties: false
+      description: |
+        Plain-text marketing content, both locales required. Text is trimmed and counted in Unicode code points,
+        never rendered as HTML, markdown or links.
+      required: [schema_version, locales]
+      properties:
+        schema_version:
+          type: integer
+          enum: [1]
+        locales:
+          type: object
+          additionalProperties: false
+          required: [id, en]
+          properties:
+            id:
+              $ref: "#/components/schemas/WebsiteLocale"
+            en:
+              $ref: "#/components/schemas/WebsiteLocale"
+
+    WebsiteWorkbench:
+      type: object
+      additionalProperties: false
+      required: [draft, draft_revision, published_revision, published, updated_at, updated_by]
+      properties:
+        draft:
+          $ref: "#/components/schemas/WebsiteContent"
+        draft_revision:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        published_revision:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: 0 before the first publication. Compare revisions for concurrency, never timestamps.
+        published:
+          allOf:
+            - $ref: "#/components/schemas/WebsiteContent"
+          nullable: true
+          description: The published content for the before/after diff; null before the first publication.
+        updated_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+          format: uuid
+          nullable: true
+          description: The staff user who last saved a change; null until someone has.
+
+    PublishedWebsite:
+      type: object
+      additionalProperties: false
+      required: [content, published_revision, published_at]
+      properties:
+        content:
+          $ref: "#/components/schemas/WebsiteContent"
+        published_revision:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        published_at:
+          type: string
+          format: date-time
+
+    SaveWebsiteRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_draft_revision, content]
+      properties:
+        expected_draft_revision:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        content:
+          $ref: "#/components/schemas/WebsiteContent"
+
+    PublishWebsiteRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_draft_revision, expected_published_revision]
+      properties:
+        expected_draft_revision:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        expected_published_revision:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+
+    WebsitePublication:
+      type: object
+      additionalProperties: false
+      required: [published_revision, source_draft_revision, published_at, published_by, changed]
+      properties:
+        published_revision:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        source_draft_revision:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+        published_at:
+          type: string
+          format: date-time
+        published_by:
+          type: string
+          format: uuid
+        changed:
+          type: boolean
+          description: False when the draft equalled the published content; nothing was written.
+
+    WebsitePublicationList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebsitePublication"
+        next_cursor:
+          type: string
+          nullable: true
+          description: Null on the last page.
 
   parameters:
     KecermatanTestId:

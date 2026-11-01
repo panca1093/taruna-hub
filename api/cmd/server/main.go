@@ -122,7 +122,7 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, products, wallets, assets, orders, runtime, results, monitoring, itemPackages, kecermatan, handler.AuthOptions{
 		SecureCookies: !cfg.IsDevelopment(),
 		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
-	}).WithKecermatanRuntime(kecermatanRuntime).WithTopups(topups).WithPayments(payments)
+	}).WithKecermatanRuntime(kecermatanRuntime).WithTopups(topups).WithPayments(payments).WithWebsite(service.NewWebsiteService(pool, repository.NewWebsiteRepository(pool)))
 
 	e := echo.New()
 	e.HideBanner = true

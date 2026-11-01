@@ -38,6 +38,7 @@ type Handler struct {
 	kecRuntime    *service.KecermatanRuntimeService
 	topups        *service.TopupService
 	payments      *service.PaymentService
+	website       *service.WebsiteService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
@@ -88,6 +89,13 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1 := e.Group("/api/v1")
 	v1.Use(apiMiddleware...)
 	v1.GET("/tenant", h.Tenant)
+
+	// The website CMS is Admin-only (G1); the public read is the published snapshot and nothing else.
+	v1.GET("/website", h.Website, httpx.NoStore())
+	v1.GET("/admin/website", h.WebsiteWorkbench, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
+	v1.PUT("/admin/website", h.SaveWebsite, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
+	v1.POST("/admin/website/publish", h.PublishWebsite, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
+	v1.GET("/admin/website/history", h.WebsiteHistory, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 
 	// NoStore is first on every auth route so a rejection carries it too.
 	v1.POST("/auth/login", h.Login, httpx.NoStore())
