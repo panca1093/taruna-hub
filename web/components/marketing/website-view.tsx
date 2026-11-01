@@ -73,12 +73,12 @@ export function HeroCopy({ home, loading, t }: { home?: WebsiteLocaleContent["ho
           <p className="mt-6 max-w-md text-base leading-relaxed text-muted">{home?.hero_body ?? t.fallbackHeroBody}</p>
         </>
       )}
-      <div className="mt-8 grid max-w-md grid-cols-2 gap-3">
-        <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 min-w-0 text-center break-words">
+      <div className="mt-8 grid max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
+        <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
           {home?.program_cta ?? t.fallbackProgramCta}
           <ArrowRight className="size-4 shrink-0" aria-hidden />
         </LinkButton>
-        <LinkButton href="/catalog" variant="primary" size="lg" className="h-auto min-h-12 min-w-0 text-center break-words">
+        <LinkButton href="/catalog" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
           {home?.practice_cta ?? t.fallbackPracticeCta}
           <ArrowRight className="size-4 shrink-0" aria-hidden />
         </LinkButton>
@@ -305,11 +305,11 @@ function HomeView({ content, contentState, catalog, t, onRetryContent, onRetryCa
             <h2 className="font-display text-landing-h2 mx-auto max-w-xl text-balance text-foreground">{t.ctaHeading}</h2>
             <p className="mx-auto mt-5 mb-7 max-w-lg text-small text-foreground">{t.ctaBody}</p>
             <div className="mx-auto grid max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
-              <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 min-w-0">
+              <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
                 {home?.program_cta ?? t.fallbackProgramCta}
                 <ArrowRight className="size-4 shrink-0" aria-hidden />
               </LinkButton>
-              <LinkButton href="/catalog" variant="primary" size="lg" className="h-auto min-h-12 min-w-0">
+              <LinkButton href="/catalog" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
                 {home?.practice_cta ?? t.fallbackPracticeCta}
                 <ArrowRight className="size-4 shrink-0" aria-hidden />
               </LinkButton>

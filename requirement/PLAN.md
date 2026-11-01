@@ -406,7 +406,7 @@ For every slice, use this verification loop:
 
 ### P11b — Website CMS and rose landing
 
-**Status:** in progress — contract only so far: the OpenAPI schemas and paths, the typed client and the content validator (`normalizeWebsiteContent`) are defined; persistence, endpoints, portal editor, protected preview and the public landing are not built. P04 and P11 keep their own status · **Size:** L · **Depends:** P03, P11
+**Status:** in progress — contract, migration `000022`, `WebsiteService`, the five endpoints, the portal editor/review/protected preview, the rose landing and public `/programs/[slug]` are built and proven browser → API → PostgreSQL on 2026-11-01. Open: G4 launch content, a failed-publish UI demo, the Student preview-route browser check and the full DESIGN §10 sweep (EN locale, keyboard, contrast) for the editor pages. P04 and P11 keep their own status · **Size:** L · **Depends:** P03, P11
 
 **Outcome:** An Admin edits structured bilingual marketing content, saves a private draft, previews it, reviews a before/after diff and publishes one whole-site snapshot; visitors see the published content on a warm rose landing next to the real catalog.
 
@@ -425,15 +425,18 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Admin saves a new headline, the private preview shows the saved revision, anonymous public still shows the old content; the review shows ID and EN and every program diff; publish makes a fresh public load match the committed revision with exactly one history row.
+- [x] Admin saves a new headline, the private preview shows the saved revision, anonymous public still shows the old content; the review shows ID and EN and every program diff; publish makes a fresh public load match the committed revision with exactly one history row.
 - [ ] Anonymous is refused `401` and Student/Operator `403` on every protected endpoint and on the preview route.
-- [ ] Strict body: unknown field, locale or slot, a blank required text, every limit at +1 (code points, emoji included) and a body over 64 KiB are refused; a tenant, role or actor in the body is never trusted.
-- [ ] Concurrent first reads create one row; save is a no-op when content is equal, increments the draft revision once when changed and answers a conflict on a stale revision without overwriting.
-- [ ] Publish is atomic: a database failure leaves content, revision and history unchanged; equal draft and published is a no-op with `changed=false` and no history; two concurrent publishes of one draft write one record.
-- [ ] Lost-response retry with the same source draft returns the recorded publication; a moved draft answers a conflict and never publishes the unseen edit.
+  - API: all four protected endpoints 401/403/403 verified live; preview route verified for anonymous (redirect to portal login) and Operator (access denied) in the browser, Student not yet.
+- [x] Strict body: unknown field, locale or slot, a blank required text, every limit at +1 (code points, emoji included) and a body over 64 KiB are refused; a tenant, role or actor in the body is never trusted.
+- [x] Concurrent first reads create one row; save is a no-op when content is equal, increments the draft revision once when changed and answers a conflict on a stale revision without overwriting.
+- [x] Publish is atomic: a database failure leaves content, revision and history unchanged; equal draft and published is a no-op with `changed=false` and no history; two concurrent publishes of one draft write one record.
+- [x] Lost-response retry with the same source draft returns the recorded publication; a moved draft answers a conflict and never publishes the unseen edit.
 - [ ] Two editors conflict with local edits preserved; a failed publish keeps the old public version; HTML in any field renders as inert text.
-- [ ] Public `GET /website` before the first publication answers `website_not_published` and the landing shows its static fallback; the public, protected and preview responses are `no-store` and carry no draft, actor ids or history.
+  - Conflict with preserved local edits and inert HTML verified in the browser; failed publish is covered only by `TestWebsitePublishAtomic`, not shown in the UI.
+- [x] Public `GET /website` before the first publication answers `website_not_published` and the landing shows its static fallback; the public, protected and preview responses are `no-store` and carry no draft, actor ids or history.
 - [ ] Browser checks pass at 320/390/768/1024/1440 px, light and dark, ID and EN, keyboard focus, contrast and reduced motion, with no horizontal overflow.
+  - Landing and `/programs/tni` checked at all five widths in light and dark with reduced motion and no overflow; EN locale, keyboard focus, contrast measurement and the editor pages at narrow widths are not checked yet.
 
 **Decision / verification gate:** G4 blocks real publication and launch. Draft preview is a private Admin route, not a share link; lead inbox, enrollment, media library, SEO, scheduled publish and rollback are out of scope.
 
