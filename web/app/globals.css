@@ -94,6 +94,22 @@
   --text-nano: 0.5625rem;
   --text-nano--line-height: 1.5;
 
+  /* Public marketing type (prototype landing.css): Geist display, 550, -0.04em */
+  --text-landing-hero: clamp(2.75rem, 4.4vw, 4.25rem);
+  --text-landing-hero--line-height: 1.08;
+  --text-landing-hero--letter-spacing: -0.04em;
+  --text-landing-hero--font-weight: 550;
+  --text-landing-h2: clamp(1.9375rem, 3vw, 2.75rem);
+  --text-landing-h2--line-height: 1.1;
+  --text-landing-h2--letter-spacing: -0.04em;
+  --text-landing-h2--font-weight: 550;
+  --text-landing-h3: 1.5rem;
+  --text-landing-h3--line-height: 1.15;
+  --text-landing-h3--letter-spacing: -0.03em;
+  --text-landing-h3--font-weight: 550;
+  --container-landing: 77.5rem;
+  --container-hero-title: 16ch;
+
   /* Radii: control 10, tile 16, card 21, hero 23, rail 27 */
   --radius-chip: 0.4375rem;
   --radius-control: 0.625rem;
@@ -254,8 +270,8 @@
   --shadow-tint-strong: oklch(0 0 0 / 40%);
 }
 
-/* Opt-out scope for surfaces that must keep the pre-rose indigo identity
-   (the public marketing landing). Put the class on the page's root element. */
+/* Opt-out scope for a surface that must keep the pre-rose indigo identity.
+   No surface uses it now: the public landing moved to the rose tokens. */
 .palette-classic {
   --background: oklch(0.9812 0.0025 258);
   --foreground: oklch(0.2242 0.019 267);
@@ -336,7 +352,7 @@
 /* ---------------------------------------------------------------------- */
 /* Workspace type base. Headings use Geist at weight 550 with the         */
 /* prototype's tracking; utilities (text-*, font-*) still override these. */
-/* The landing (.palette-classic) keeps its own typography.               */
+/* A .palette-classic scope, if one is ever used, keeps its own typography. */
 /* ---------------------------------------------------------------------- */
 
 @layer base {
@@ -372,7 +388,7 @@
 /* ---------------------------------------------------------------------- */
 /* HeroUI restyle to the prototype's button / field / card / chip anatomy. */
 /* Inside @layer components so callers' utility classes still win. The    */
-/* landing (.palette-classic) opts out and keeps the old HeroUI look.     */
+/* a .palette-classic scope would opt out and keep the old HeroUI look.   */
 /* ---------------------------------------------------------------------- */
 
 @layer components {
@@ -478,6 +494,24 @@
   color: transparent;
 }
 
+/* One entrance for the hero stage; reduced motion gets none. */
+@keyframes stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-stage-in {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: stage-in 0.5s ease both;
+  }
+}
+
 @utility bg-gradient-ring {
   background: linear-gradient(135deg, var(--ring-start), var(--ring-end));
 }
@@ -509,6 +543,29 @@
 
 @utility grid-cols-hero-pair {
   grid-template-columns: minmax(0, 1.28fr) minmax(0, 0.9fr);
+}
+
+@utility grid-cols-workspace-band {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+}
+
+@utility grid-cols-faq {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+}
+
+@utility grid-cols-package-row {
+  grid-template-columns: 3rem minmax(0, 1fr);
+}
+
+@utility grid-cols-package-row-wide {
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto 6rem;
+}
+
+@utility summary-plain {
+  list-style: none;
+  &::-webkit-details-marker {
+    display: none;
+  }
 }
 
 @utility grid-cols-wallet {

@@ -10,9 +10,9 @@ import { usePublicNavT } from "@/lib/i18n/dict/public-nav";
 export function PublicNav() {
   const t = usePublicNavT();
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-surface/85 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-5">
-        <Logo />
+    <header className="sticky top-0 z-30 border-b border-border bg-background">
+      <div className="mx-auto flex h-topbar max-w-landing items-center gap-6 px-5 sm:px-10">
+        <Logo plate size="md" />
         <nav className="hidden items-center gap-6 text-sm font-medium text-muted md:flex">
           <Link href="/catalog" className="transition-colors hover:text-foreground">
             {t.catalog}
@@ -20,7 +20,7 @@ export function PublicNav() {
           <Link href="/#cara-kerja" className="transition-colors hover:text-foreground">
             {t.howItWorks}
           </Link>
-          <Link href="/#program" className="transition-colors hover:text-foreground">
+          <Link href="/#programs" className="transition-colors hover:text-foreground">
             {t.programs}
           </Link>
         </nav>
