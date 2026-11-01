@@ -13,6 +13,7 @@ decisions behind them stay in `requirement/` (PRD, ARCHITECTURE, PLAN), and the 
 | Question bank: four types in immutable versions | P07a | [questions.md](questions.md) |
 | Tryouts: drafts, publishing and frozen assignments | P08 | [tryouts.md](tryouts.md) |
 | Products and the public catalog | P11 | [products.md](products.md) |
+| Website CMS: bilingual marketing content, draft, preview and whole-site publish | P11b | [website-cms.md](website-cms.md) |
 | Wallet ledger, balance projection and staff adjustments | P12 | [wallet.md](wallet.md) |
 | Assets: private image uploads and short-lived downloads | P06 | [assets.md](assets.md) |
 | Orders, checkout and enrollments | P13 | [orders.md](orders.md) |

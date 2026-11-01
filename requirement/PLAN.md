@@ -69,6 +69,7 @@ Sizes are relative risk/work (M/L/XL), **not promised days or money**. A slice c
 | [P09](#p09) | Kecermatan item packages | L | P05, P06 |
 | [P10](#p10) | Kecermatan builder and deterministic generator | L | P09 |
 | [P11](#p11) | Catalog, products and tenant landing | M | P04, P08, P10 |
+| [P11b](#p11b) | Website CMS and rose landing (extension) | L | P03, P11 |
 | [P12](#p12) | Wallet ledger and staff adjustments | M | P03, P04 |
 | [P13](#p13) | Manual and wallet checkout with enrollment | L | P02, P06, P11, P12 |
 | [P14](#p14) | Gateway orders and top-ups | L | P13, P15 |
@@ -400,6 +401,41 @@ For every slice, use this verification loop:
 - [ ] Root CTAs target approved hosts and the landing download copy matches D11 — both wait on D06/D11; the "1.000+ siswa" claim was replaced with the real visible-tryout count.
 
 **Decision / verification gate:** D06 root featured-product ownership/domain routing; D11 landing download promise.
+
+<a id="p11b"></a>
+
+### P11b — Website CMS and rose landing
+
+**Status:** in progress — contract only so far: the OpenAPI schemas and paths, the typed client and the content validator (`normalizeWebsiteContent`) are defined; persistence, endpoints, portal editor, protected preview and the public landing are not built. P04 and P11 keep their own status · **Size:** L · **Depends:** P03, P11
+
+**Outcome:** An Admin edits structured bilingual marketing content, saves a private draft, previews it, reviews a before/after diff and publishes one whole-site snapshot; visitors see the published content on a warm rose landing next to the real catalog.
+
+**DB / backend / integration:** `website_content` (one row per configured tenant, draft and published JSONB with independent revisions) and append-only `website_publications`; `WebsiteService` owns normalization, revision and publish rules. Behavior: [docs/website-cms.md](../docs/website-cms.md).
+
+**Files / frontend:** `internal/{model,service,repository,handler}/website.go`, a numbered migration; `web/app/admin/website/*`, the public landing and marketing program routes, `lib/i18n/dict/website.ts`.
+
+**Interfaces:** `GET /api/v1/website` (public), `GET/PUT /api/v1/admin/website`, `POST /api/v1/admin/website/publish`, `GET /api/v1/admin/website/history`. Consumes the public catalog; marketing program slots (`tni`, `polri`, `kedinasan`) are not curriculum Programs.
+
+**Owner decisions (Saifullah Panca, 2026-11-01):**
+
+- G1 approved — Admin only for workbench read, save, preview, history and publish; Operator, Student and anonymous are denied.
+- G2 approved — one atomic whole-site snapshot publication; no per-page publish.
+- G3 approved — the content contract in `docs/website-cms.md` (schema_version 1, `id` + `en` both required, fixed limits and slots).
+- G4 **open** — owner-approved launch copy and official program/contact data (or an accepted visible "information pending" state). It blocks the first real publication and launch, not the build.
+
+**Acceptance scenarios:**
+
+- [ ] Admin saves a new headline, the private preview shows the saved revision, anonymous public still shows the old content; the review shows ID and EN and every program diff; publish makes a fresh public load match the committed revision with exactly one history row.
+- [ ] Anonymous is refused `401` and Student/Operator `403` on every protected endpoint and on the preview route.
+- [ ] Strict body: unknown field, locale or slot, a blank required text, every limit at +1 (code points, emoji included) and a body over 64 KiB are refused; a tenant, role or actor in the body is never trusted.
+- [ ] Concurrent first reads create one row; save is a no-op when content is equal, increments the draft revision once when changed and answers a conflict on a stale revision without overwriting.
+- [ ] Publish is atomic: a database failure leaves content, revision and history unchanged; equal draft and published is a no-op with `changed=false` and no history; two concurrent publishes of one draft write one record.
+- [ ] Lost-response retry with the same source draft returns the recorded publication; a moved draft answers a conflict and never publishes the unseen edit.
+- [ ] Two editors conflict with local edits preserved; a failed publish keeps the old public version; HTML in any field renders as inert text.
+- [ ] Public `GET /website` before the first publication answers `website_not_published` and the landing shows its static fallback; the public, protected and preview responses are `no-store` and carry no draft, actor ids or history.
+- [ ] Browser checks pass at 320/390/768/1024/1440 px, light and dark, ID and EN, keyboard focus, contrast and reduced motion, with no horizontal overflow.
+
+**Decision / verification gate:** G4 blocks real publication and launch. Draft preview is a private Admin route, not a share link; lead inbox, enrollment, media library, SEO, scheduled publish and rollback are out of scope.
 
 <a id="p12"></a>
 
