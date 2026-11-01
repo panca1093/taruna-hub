@@ -9,6 +9,7 @@ import {
   Gauge,
   Layers,
   LayoutGrid,
+  PanelsTopLeft,
   Shapes,
   LayoutDashboard,
   MonitorDot,
@@ -70,6 +71,7 @@ const adminGroups: NavGroup[] = [
       { href: "/admin/questions", label: "Bank Soal", icon: FileQuestion },
       { href: "/admin/products", label: "Produk", icon: Package },
       { href: "/admin/programs", label: "Program", icon: School, adminOnly: true },
+      { href: "/admin/website", label: "Kelola Website", icon: PanelsTopLeft, adminOnly: true },
     ],
   },
   {

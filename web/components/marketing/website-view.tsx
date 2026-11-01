@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, Plus, ShieldCheck, Star } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Plus, ShieldCheck, Star } from "lucide-react";
 import { Button } from "@heroui/react";
 import { Logo } from "../logo";
 import { LinkButton } from "../ui/link-button";
@@ -8,13 +8,21 @@ import type { PublicProduct, WebsiteContent } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { formatIDR } from "@/lib/format-money";
 import { landingDict, type LandingDict } from "@/lib/i18n/dict/landing";
+import { websiteDict } from "@/lib/i18n/dict/website";
 import type { Locale } from "@/lib/i18n/locale-context";
 
 export type WebsiteLocaleContent = WebsiteContent["locales"]["id"];
 export type Remote<T> = { status: "loading" } | { status: "error" } | { status: "ready"; data: T };
 
-/** "home" only for now; program detail views extend this union and the switch in WebsiteView. */
-export type WebsiteViewName = "home";
+export type WebsiteViewName = "home" | ProgramSlot;
+export type WebsiteProgramContent = WebsiteLocaleContent["programs"][ProgramSlot];
+
+export interface WebsiteHrefs {
+  home: string;
+  program: (slot: ProgramSlot) => string;
+}
+
+const publicHrefs: WebsiteHrefs = { home: "/#programs", program: (slot) => `/programs/${slot}` };
 
 export interface WebsiteViewProps {
   /** null means no published content: loading, missing or failed; `contentState` says which. */
@@ -28,6 +36,8 @@ export interface WebsiteViewProps {
   onRetryCatalog?: () => void;
   /** Draft mode only: the link back to the editor. */
   draftAction?: React.ReactNode;
+  /** Draft preview points program links at the protected preview instead of public routes. */
+  hrefs?: WebsiteHrefs;
 }
 
 const sectionPad = "px-5 py-16 sm:px-10 sm:py-20";
@@ -42,7 +52,55 @@ function Heading({ title, body, className }: { title: string; body?: string; cla
   );
 }
 
-function HomeView({ content, contentState, mode, catalog, t, onRetryContent, onRetryCatalog, draftAction }: WebsiteViewProps & { t: LandingDict }) {
+export function HeroCopy({ home, loading, t }: { home?: WebsiteLocaleContent["home"]; loading: boolean; t: LandingDict }) {
+  return (
+    <div className="min-w-0">
+      <p className="mb-6 flex items-center gap-2.5 text-label text-muted">
+        <span aria-hidden className="h-px w-8 bg-rose" />
+        {t.heroKicker}
+      </p>
+      {loading ? (
+        <div aria-busy="true" className="space-y-3">
+          <div className="h-14 w-4/5 rounded-control bg-surface-secondary motion-safe:animate-pulse" />
+          <div className="h-14 w-3/5 rounded-control bg-surface-secondary motion-safe:animate-pulse" />
+          <div className="mt-6 h-20 max-w-md rounded-control bg-surface-secondary motion-safe:animate-pulse" />
+        </div>
+      ) : (
+        <>
+          <h1 className="font-display text-landing-hero max-w-hero-title text-balance break-words whitespace-pre-line text-foreground">
+            {home?.hero_title ?? t.fallbackHeroTitle}
+          </h1>
+          <p className="mt-6 max-w-md text-base leading-relaxed text-muted">{home?.hero_body ?? t.fallbackHeroBody}</p>
+        </>
+      )}
+      <div className="mt-8 grid max-w-md grid-cols-2 gap-3">
+        <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 min-w-0 text-center break-words">
+          {home?.program_cta ?? t.fallbackProgramCta}
+          <ArrowRight className="size-4 shrink-0" aria-hidden />
+        </LinkButton>
+        <LinkButton href="/catalog" variant="primary" size="lg" className="h-auto min-h-12 min-w-0 text-center break-words">
+          {home?.practice_cta ?? t.fallbackPracticeCta}
+          <ArrowRight className="size-4 shrink-0" aria-hidden />
+        </LinkButton>
+      </div>
+    </div>
+  );
+}
+
+function DraftBanner({ t, action }: { t: LandingDict; action?: React.ReactNode }) {
+  return (
+    <div role="status" className="border-b border-border bg-accent-soft px-5 py-3 text-caption text-accent-soft-foreground sm:px-10">
+      <div className={cn(wrap, "flex flex-wrap items-center justify-between gap-3")}>
+        <p>
+          <strong className="font-semibold">{t.draftBanner}.</strong> {t.draftBannerBody}
+        </p>
+        {action}
+      </div>
+    </div>
+  );
+}
+
+function HomeView({ content, contentState, catalog, t, onRetryContent, onRetryCatalog, hrefs = publicHrefs }: WebsiteViewProps & { t: LandingDict }) {
   const home = content?.home;
   const loading = contentState === "loading";
   const programTitles = Object.fromEntries(
@@ -51,50 +109,10 @@ function HomeView({ content, contentState, mode, catalog, t, onRetryContent, onR
 
   return (
     <>
-      {mode === "draft" && (
-        <div role="status" className="border-b border-border bg-accent-soft px-5 py-3 text-caption text-accent-soft-foreground sm:px-10">
-          <div className={cn(wrap, "flex flex-wrap items-center justify-between gap-3")}>
-            <p>
-              <strong className="font-semibold">{t.draftBanner}.</strong> {t.draftBannerBody}
-            </p>
-            {draftAction}
-          </div>
-        </div>
-      )}
-
       <main id="main">
         <section className="px-5 sm:px-10">
           <div className={cn(wrap, "grid items-center gap-10 py-12 md:py-20 lg:grid-cols-2 lg:gap-16")}>
-            <div className="min-w-0">
-              <p className="mb-6 flex items-center gap-2.5 text-label text-muted">
-                <span aria-hidden className="h-px w-8 bg-rose" />
-                {t.heroKicker}
-              </p>
-              {loading ? (
-                <div aria-busy="true" className="space-y-3">
-                  <div className="h-14 w-4/5 rounded-control bg-surface-secondary motion-safe:animate-pulse" />
-                  <div className="h-14 w-3/5 rounded-control bg-surface-secondary motion-safe:animate-pulse" />
-                  <div className="mt-6 h-20 max-w-md rounded-control bg-surface-secondary motion-safe:animate-pulse" />
-                </div>
-              ) : (
-                <>
-                  <h1 className="font-display text-landing-hero max-w-hero-title text-balance break-words text-foreground">
-                    {home?.hero_title ?? t.fallbackHeroTitle}
-                  </h1>
-                  <p className="mt-6 max-w-md text-base leading-relaxed text-muted">{home?.hero_body ?? t.fallbackHeroBody}</p>
-                </>
-              )}
-              <div className="mt-8 grid max-w-md grid-cols-2 gap-3">
-                <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 min-w-0 text-center break-words">
-                  {home?.program_cta ?? t.fallbackProgramCta}
-                  <ArrowRight className="size-4 shrink-0" aria-hidden />
-                </LinkButton>
-                <LinkButton href="/catalog" variant="primary" size="lg" className="h-auto min-h-12 min-w-0 text-center break-words">
-                  {home?.practice_cta ?? t.fallbackPracticeCta}
-                  <ArrowRight className="size-4 shrink-0" aria-hidden />
-                </LinkButton>
-              </div>
-            </div>
+            <HeroCopy home={home} loading={loading} t={t} />
             <HeroExamPreview t={t} programTitles={programTitles} />
           </div>
 
@@ -169,7 +187,7 @@ function HomeView({ content, contentState, mode, catalog, t, onRetryContent, onR
                     [t.programFeesLabel, program.fees],
                   ] as const;
                   return (
-                    <Link key={slot} href={`/programs/${slot}`} className="group flex min-h-64 flex-col rounded-card border border-border bg-surface p-6">
+                    <Link key={slot} href={hrefs.program(slot)} className="group flex min-h-64 flex-col rounded-card border border-border bg-surface p-6">
                       <span className="mb-5 flex size-11 items-center justify-center rounded-control bg-peach text-accent">
                         {slot === "kedinasan" ? <BookOpen className="size-5" aria-hidden /> : <ShieldCheck className="size-5" aria-hidden />}
                       </span>
@@ -404,6 +422,75 @@ function Footer({ t }: { t: LandingDict }) {
   );
 }
 
+export function ProgramDetail({ program, locale, hrefs = publicHrefs, showBack = true }: { program: WebsiteProgramContent; locale: Locale; hrefs?: WebsiteHrefs; showBack?: boolean }) {
+  const t = landingDict(locale);
+  const w = websiteDict(locale);
+  const rows = [
+    [t.programScheduleLabel, program.schedule],
+    [t.programLocationLabel, program.location],
+    [t.programFeesLabel, program.fees],
+    [t.programContactLabel, program.contact],
+  ] as const;
+  return (
+    <div className={cn(wrap, "py-12 md:py-16")}>
+      {showBack && (
+        <Link href={hrefs.home} className="mb-8 inline-flex min-h-10 items-center gap-2 text-caption font-medium text-accent hover:underline">
+          <ArrowLeft className="size-4" aria-hidden />
+          {w.programViewBack}
+        </Link>
+      )}
+      <p className="mb-3 text-micro text-muted">{t.programKicker}</p>
+      <h1 className="font-display text-landing-h2 max-w-3xl text-balance break-words text-foreground">{program.title}</h1>
+      <p className="mt-5 max-w-2xl text-base leading-relaxed break-words whitespace-pre-line text-muted">{program.summary}</p>
+      <dl className="mt-10 grid gap-4 sm:grid-cols-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="min-w-0 rounded-card border border-border bg-surface p-5">
+            <dt className="text-label text-muted">{label}</dt>
+            <dd className="mt-1.5 text-small break-words whitespace-pre-line text-foreground">{value.trim() === "" ? t.programPending : value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-6 max-w-2xl text-micro leading-relaxed text-muted">{t.programsNote}</p>
+    </div>
+  );
+}
+
+/** Editor-side preview of the hero; inert so a stray click never leaves the editor. */
+export function HeroPreview({ home, locale }: { home: WebsiteLocaleContent["home"]; locale: Locale }) {
+  return (
+    <div inert className="rounded-hero bg-background p-6">
+      <HeroCopy home={home} loading={false} t={landingDict(locale)} />
+    </div>
+  );
+}
+
+function ProgramView({ content, contentState, view, locale, onRetryContent, hrefs = publicHrefs }: WebsiteViewProps & { view: ProgramSlot }) {
+  const t = landingDict(locale);
+  const program = content?.programs[view];
+  return (
+    <main id="main" className="px-5 sm:px-10">
+      {program ? (
+        <ProgramDetail program={program} locale={locale} hrefs={hrefs} />
+      ) : contentState === "loading" ? (
+        <div aria-busy="true" className={cn(wrap, "space-y-4 py-16")}>
+          <div className="h-12 w-3/5 rounded-control bg-surface-secondary motion-safe:animate-pulse" />
+          <div className="h-24 max-w-2xl rounded-control bg-surface-secondary motion-safe:animate-pulse" />
+        </div>
+      ) : (
+        <div role="status" className={cn(wrap, "py-16")}>
+          <p className="text-title text-foreground">{t.programsUnavailableTitle}</p>
+          <p className="mt-2 max-w-lg text-small text-muted">{t.programsUnavailableBody}</p>
+          {onRetryContent && (
+            <Button variant="secondary" size="sm" className="mt-4" onPress={onRetryContent}>
+              {t.programsRetry}
+            </Button>
+          )}
+        </div>
+      )}
+    </main>
+  );
+}
+
 export function WebsiteView(props: WebsiteViewProps) {
   const t = landingDict(props.locale);
   return (
@@ -411,7 +498,8 @@ export function WebsiteView(props: WebsiteViewProps) {
       <a href="#main" className="sr-only rounded-control bg-surface px-4 py-3 text-caption focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50">
         {t.skip}
       </a>
-      {props.view === "home" && <HomeView {...props} t={t} />}
+      {props.mode === "draft" && <DraftBanner t={t} action={props.draftAction} />}
+      {props.view === "home" ? <HomeView {...props} t={t} /> : <ProgramView {...props} view={props.view} />}
       <Footer t={t} />
     </div>
   );

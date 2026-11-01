@@ -7,8 +7,7 @@ contract and the invariants; the wire shapes are in `api/openapi.yaml` and the p
 
 **Status:** the contract is defined (OpenAPI, typed client `api.website.*`, `normalizeWebsiteContent` and
 its tests) and the API is built: migration `000022_website_content`, the repository, `WebsiteService` and
-the five endpoints. The portal editor, preview and the public landing are not built yet, so the sections
-on the web describe what they must do.
+the five endpoints. The portal editor (`/admin/website/*`), its review and the protected draft preview are built; the browser→API→database proof and the public `/programs/[slug]` routes are not done yet.
 
 ## Owner decisions
 

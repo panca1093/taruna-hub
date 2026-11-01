@@ -403,7 +403,7 @@ Tinted tokens added for these: `bg-peach`, `bg-accent-soft`, `text-rose` / `bg-r
 
 ### 6.9 Public marketing patterns
 
-The landing (`app/page.tsx` → `components/marketing/website-view.tsx`) follows the approved rose-journey prototype. `WebsiteView` is presentation only: published and draft preview share it, it never fetches, and `view: "home"` is the extension point for program detail pages.
+The landing (`app/page.tsx` → `components/marketing/website-view.tsx`) follows the approved rose-journey prototype. `WebsiteView` is presentation only: published and draft preview share it, it never fetches, and `view` is `"home"` or a program slot (`tni|polri|kedinasan`); `ProgramDetail` and `HeroPreview` are exported for the portal editor's inert side preview.
 
 - **Type and width.** Hero `text-landing-hero` (clamp 44–68px), section titles `text-landing-h2`, card titles `text-landing-h3`, all Geist 550 at -0.04em; body Inter. Content width `max-w-landing` (1240px) with `px-5` / `sm:px-10`. Sections use `py-16 sm:py-20`.
 - **Hero stage.** `HeroExamPreview`: a `bg-peach` `rounded-rail` stage with a faint `border-rose` inner outline, holding a `rounded-card` surface with `shadow-soft`. Two tabs (Bimbel & diklat, Tryout & Kecermatan) follow the WAI-ARIA tabs pattern (arrow, Home, End, roving tabindex). Exercises are labelled illustrations: choices highlight but nothing is graded, no key exists. One entrance animation (`animate-stage-in`), none under reduced motion.
@@ -509,6 +509,16 @@ Built 2026-10-31 from the [workspace handoff](../docs/handoffs/2026-10-31-studen
 - **Wallet.** The header trigger opens `WalletPopover`, a modal showing the exact balance, recent entries and links. Top-up never happens inside it: "Isi saldo" navigates to `/student/wallet/topup`, which replaces itself with the status page after creation.
   - Amounts are whole-rupiah digit strings, and the minimum always comes from the server.
 - **Idempotency in the UI.** Keep one key per logical purchase or top-up, replaced only when the payload changes or after a definite failure. An unknown create outcome locks the inputs and retries with the same key.
+
+### 7.4c Portal website editor (Kelola Website)
+
+Admin-only routes under `/admin/website` share one `WebsiteEditorProvider` (layout) so unsaved local input survives tab changes; `components/admin/website-editor.tsx` holds the shared pieces.
+
+- **Frame.** `WebsiteFrame` = `AppShell` + underline tab nav (Ringkasan, Beranda, Program bimbel, Publikasi) + a status strip (tone chip, published and draft revision, last save). `WebsiteGate` renders loading, failure and access-denied before any child.
+- **Editor.** Form panel beside a sticky inert live preview on `lg`, stacked below. `ContentField` shows a code-point counter (`n / max`, danger past the limit) and the field error; the content-language toggle is separate from the UI language.
+- **Feedback.** `SaveFeedback` banners (`Banner`: danger, warning, success) for invalid, failed, checking (unknown network outcome, refetching) and conflict; local input is never cleared. Reload after a conflict goes through a confirm-discard modal.
+- **Dirty guard.** `beforeunload` plus an in-app link interceptor opening a leave-confirm modal for links outside `/admin/website`.
+- **Review.** Before/after rows for every changed field in both locales and every slot, one acknowledgement checkbox, one publish button, disabled until saved, a diff exists and the box is ticked.
 
 ### 7.5 Specify data states before connecting the API
 
