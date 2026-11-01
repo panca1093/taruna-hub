@@ -2,7 +2,7 @@
 
 Lanjutkan redesign student workspace Taruna Eduka di repo `bimbel-tryout`, berdasarkan paket handoff ini. Owner meminta handoff untuk pekerjaan berikutnya; jangan menganggap paket ini sebagai bukti implementasi sudah selesai atau izin merge/deploy.
 
-1. Baca `AGENTS.md`, `web/AGENTS.md`, `docs/handoffs/2026-10-31-student-workspace/HANDOFF.md` dan `docs/handoffs/2026-10-31-student-workspace/PLAN.md`. Baca sumber requirement/domain yang ditunjuk sebelum mengubah perilaku.
+1. Baca `AGENTS.md`, `web/AGENTS.md`, `requirement/new-student-workspace/HANDOFF.md` dan `requirement/new-student-workspace/PLAN.md`. Baca sumber requirement/domain yang ditunjuk sebelum mengubah perilaku.
 2. Refresh status Git dan main, periksa diff lokal. Saat audit, branch `codex/student-dashboard-full-width` memiliki dua perubahan full-width belum di-commit; salinannya ada di `reference/full-width.patch`. Jangan reset pekerjaan ini atau apply patch dua kali. Gunakan branch/worktree terisolasi bila mulai implementasi.
 3. Jalankan prototype yang dibundel sesuai HANDOFF; review desktop/mobile dan kedua runtimes. Prototype adalah referensi visual dan flow, bukan implementasi otoritatif.
 4. Ikuti paket berurutan, satu slice/batas review setiap kali. Prioritaskan Tryout dan Kecermatan. Gunakan Go + Next/React/HeroUI existing, typed API dan token/i18n repo. Jangan memindahkan seluruh prototype menjadi aplikasi atau membawa scoring, saldo, timer, simulation control dan fake profile save ke production.

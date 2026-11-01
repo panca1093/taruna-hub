@@ -10,7 +10,7 @@ This document describes the visual language already implemented in `web/` and ho
 
 The workspace combines a warm cream canvas, plum ink, compact controls, quiet cards and a rose accent (owner decision 2026-10-31, handoff `PALETTE-DECISION.md`). Student, admin and auth share these tokens; a dark plum sidebar anchors both shells. Its signature element is the countdown/progress ring, now plum to rose. Operational pages use restrained color so status, numbers, and actions are easy to scan.
 
-**Visual parity pass (2026-10-31).** The workspace now follows the handoff prototype (`docs/handoffs/2026-10-31-student-workspace/prototype`) for shell, type, radii, shadows, icons and component anatomy: a floating rounded plum icon rail, a borderless 82px topbar, Geist display headings at weight 550 with negative tracking, Inter 14px body, 10/16/21/23px radii, a soft low-alpha shadow, and lucide icons at stroke 1.65. Where the prototype and older text in this file disagree on looks, the prototype wins. The public landing now uses the same rose tokens and restyle (2026-11-01); see §6.9 Public marketing patterns.
+**Visual parity pass (2026-10-31).** The workspace now follows the handoff prototype (`requirement/new-student-workspace/prototype`) for shell, type, radii, shadows, icons and component anatomy: a floating rounded plum icon rail, a borderless 82px topbar, Geist display headings at weight 550 with negative tracking, Inter 14px body, 10/16/21/23px radii, a soft low-alpha shadow, and lucide icons at stroke 1.65. Where the prototype and older text in this file disagree on looks, the prototype wins. The public landing now uses the same rose tokens and restyle (2026-11-01); see §6.9 Public marketing patterns.
 
 Guidelines:
 
@@ -487,7 +487,7 @@ The student overview reuses `AppShell` at the full available width beside the si
 
 ### 7.4b Student workspace flows
 
-Built 2026-10-31 from the [workspace handoff](../docs/handoffs/2026-10-31-student-workspace/HANDOFF.md). The prototype there is a visual reference only.
+Built 2026-10-31 from the [workspace handoff](new-student-workspace/HANDOFF.md). The prototype there is a visual reference only.
 
 - **Return intent.** A protected student page sends an anonymous user to `/login?next=<path>`. `next` is carried through register and verify-email. [`lib/return-intent.ts`](../web/lib/return-intent.ts) accepts only same-origin paths under `/student`, `/checkout` or `/catalog`, checked against the role of the user who signed in. Staff always land on their home.
 - **Practice hub.** `/student/tryouts` has two tabs, Tryout and Tes kecermatan. They use `role="tablist"`, an accent underline and a count pill, and the tab is local state rather than part of the URL.

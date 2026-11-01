@@ -12,7 +12,7 @@ Preview lokal yang dapat diklik untuk review visual dan flow, bukan aplikasi pro
 Dari root repo:
 
 ```bash
-python3 -m http.server 4182 --bind 127.0.0.1 --directory docs/handoffs/2026-10-31-student-workspace/prototype
+python3 -m http.server 4182 --bind 127.0.0.1 --directory requirement/new-student-workspace/prototype
 ```
 
 Buka `http://localhost:4182/admin/#/dashboard`. Jika memakai server bundle pada port 4181, buka `/admin/` pada server tersebut. Prototype siswa tetap di `/flow/`.

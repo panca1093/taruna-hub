@@ -15,7 +15,7 @@ Tidak dijalankan ulang: Go tests, Next typecheck/lint/build, browser/API/DB jour
 Cek integritas setelah menerima paket dari root checkout:
 
 ```bash
-shasum -a 256 -c docs/handoffs/2026-10-31-student-workspace/SHA256SUMS
+shasum -a 256 -c requirement/new-student-workspace/SHA256SUMS
 ```
 
 Preview portabel mengikuti instruksi di HANDOFF. Berkas manifest tidak mencatat dirinya sendiri.

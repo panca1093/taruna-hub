@@ -8,7 +8,7 @@ Owner memilih **rose hangat bersama untuk siswa dan admin** pada 31 Oktober 2026
 Portable entry (run from repository root):
 
 ```bash
-python3 -m http.server 4181 --bind 127.0.0.1 --directory docs/handoffs/2026-10-31-student-workspace/prototype
+python3 -m http.server 4181 --bind 127.0.0.1 --directory requirement/new-student-workspace/prototype
 ```
 
 Open http://localhost:4181/flow/#/dashboard. Read [HANDOFF.md](../../HANDOFF.md) before implementing: the real contract differs from some simulated payment/account flows.

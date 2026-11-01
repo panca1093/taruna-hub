@@ -10,7 +10,7 @@ Tanggal audit: 31 Oktober 2026. Status: proposal prototype + panduan implementas
 4. Kerjakan satu paket yang diotorisasi owner, dengan bukti verifikasi; jangan mengubah policy untuk menyamakan aplikasi dengan simulasi.
 
 ```bash
-python3 -m http.server 4181 --bind 127.0.0.1 --directory docs/handoffs/2026-10-31-student-workspace/prototype
+python3 -m http.server 4181 --bind 127.0.0.1 --directory requirement/new-student-workspace/prototype
 ```
 
 Buka `http://localhost:4181/flow/#/dashboard`. Menu footer **Coba tampilan** membuka pengaturan demo: akun aktif/baru, kuota habis, rose/blue, light/dark. Semua jawaban, saldo, status pembayaran dan timer hanya simulasi browser. Tidak ada panggilan API, SMTP, bank atau gateway. Jangan gunakan akun atau bukti transaksi asli.
