@@ -38,8 +38,9 @@ renderer is retried like any failure, so a rolling deploy where the worker is ol
 
 A cancelled or timed-out attempt on the last try (`attempt >= maxAttempts`) also ends the row as `failed` with
 `render_timeout`, written on a context that survives the cancellation. If the worker dies outright, the periodic
-reconcile in the worker calls `FailStale`, which marks every `queued` or `running` export untouched for longer than
-`ExportJobTimeout x ExportMaxAttempts + ExportStaleMargin` as `failed` with `worker_lost`, across tenants.
+reconcile in the worker calls `FailStale`, which marks every `running` export untouched for longer than
+`ExportJobTimeout x ExportMaxAttempts + ExportStaleMargin` as `failed` with `worker_lost`, across tenants. `queued`
+rows are never swept: River still holds their job, so a long worker outage or a backlog only delays them.
 
 ## Authorization
 

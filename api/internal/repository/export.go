@@ -138,11 +138,12 @@ func (r *ExportRepository) MarkAttemptFailed(ctx context.Context, tenantID, id u
 	return nil
 }
 
-// FailStale is cross-tenant on purpose: it is the worker's own sweep, never reachable from a request.
+// FailStale is cross-tenant on purpose: it is the worker's own sweep, never reachable from a request. Queued rows are
+// left alone: River still holds their job, and a long outage or backlog must not fail exports that never started.
 func (r *ExportRepository) FailStale(ctx context.Context, code string, olderThan time.Duration) (int, error) {
 	tag, err := r.db.Exec(ctx, `
 		UPDATE exports SET status = 'failed', error_code = $1, finished_at = now(), updated_at = now()
-		 WHERE status IN ('queued', 'running') AND updated_at < now() - make_interval(secs => $2)`,
+		 WHERE status = 'running' AND updated_at < now() - make_interval(secs => $2)`,
 		code, olderThan.Seconds())
 	if err != nil {
 		return 0, fmt.Errorf("fail stale exports: %w", err)

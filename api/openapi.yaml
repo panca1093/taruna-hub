@@ -2117,6 +2117,12 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`last_admin`: the account is the tenant's last active Admin and stays active."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           $ref: "#/components/responses/ValidationFailed"
 

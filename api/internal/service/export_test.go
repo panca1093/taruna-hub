@@ -306,14 +306,16 @@ func TestExportCancelledFinalAttemptEndsFailed(t *testing.T) {
 func TestExportFailStaleLeavesFreshRowsAlone(t *testing.T) {
 	h := newExportHarness(t)
 	ctx := context.Background()
-	old, fresh := h.request(t), h.request(t)
+	old, fresh, oldQueued := h.request(t), h.request(t), h.request(t)
 	for _, id := range []uuid.UUID{old.ID, fresh.ID} {
 		if _, err := h.pool.Exec(ctx, `UPDATE exports SET status = 'running' WHERE id = $1`, id); err != nil {
 			t.Fatalf("set running: %v", err)
 		}
 	}
-	if _, err := h.pool.Exec(ctx, `UPDATE exports SET updated_at = now() - interval '2 hours' WHERE id = $1`, old.ID); err != nil {
-		t.Fatalf("age row: %v", err)
+	for _, id := range []uuid.UUID{old.ID, oldQueued.ID} {
+		if _, err := h.pool.Exec(ctx, `UPDATE exports SET updated_at = now() - interval '2 hours' WHERE id = $1`, id); err != nil {
+			t.Fatalf("age row: %v", err)
+		}
 	}
 
 	n, err := h.svc.FailStale(ctx, time.Hour)
@@ -328,5 +330,8 @@ func TestExportFailStaleLeavesFreshRowsAlone(t *testing.T) {
 	}
 	if gotFresh.Status != model.ExportRunning {
 		t.Errorf("fresh = %+v, want still running", gotFresh)
+	}
+	if gotQueued, _ := h.svc.Get(ctx, s, p, oldQueued.ID); gotQueued.Status != model.ExportQueued {
+		t.Errorf("old queued = %+v, want still queued (River still holds its job)", gotQueued)
 	}
 }
