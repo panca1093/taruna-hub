@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ApiError, api } from "./api/client";
 
 /**
@@ -19,7 +19,8 @@ export function useServerClock() {
     return a ? a.server + (performance.now() - a.mono) : null;
   }, []);
 
-  return { sync, now };
+  // Callers list the clock in effect deps; a fresh object each render re-ran the subtest load on every render.
+  return useMemo(() => ({ sync, now }), [sync, now]);
 }
 
 export type AnswerState = "saved" | "pending";

@@ -329,7 +329,7 @@ For every slice, use this verification loop:
 
 ### P09 — Kecermatan item packages
 
-**Status:** in progress — API and admin page are built: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit under request-wide D09 budgets, full WebP decode, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, an ephemeral sample column, and `web/app/admin/item-packages` (list, detail, add dialog, sample dialog). The page is browser-unverified: it passed `tsc`, lint and `next build` only. Deferred: master packages and copy (D17) · **Size:** L · **Depends:** P05, P06
+**Status:** done, lean — API and admin page are built: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit under request-wide D09 budgets, full WebP decode, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, an ephemeral sample column, and `web/app/admin/item-packages` (list, detail, add dialog, sample dialog), driven browser → API → PostgreSQL on 2026-11-07. Open: a preview-credit check and a second browser for the emoji box. Deferred: master packages and copy (D17) · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff manage authorized symbol/image/emoji/shape sources with real preview and safe imports.
 
@@ -344,11 +344,11 @@ For every slice, use this verification loop:
 - [x] ZIP traversal/symlink/nested archive/oversize/corrupt/duplicate files produce per-element reasons; preview changes no live package.
       Service tests build each adversarial archive; the HTTP test proves a preview leaves rows and storage untouched. The extraction-size check also counts inflated bytes, but only the declared-size path has a fixture.
 - [ ] Confirmation inserts accepted elements only; master mutation by tenant and foreign-tenant package use are rejected.
-      Accepted-only commit and foreign-tenant `404` on every route are proven; there is no master package to mutate (D17), and "use by a foreign tenant's test" waits for P10.
+      Accepted-only commit and foreign-tenant `404` on every route are proven; master packages and foreign-tenant test use are out of MVP under D17, which also rules out cross-tenant tests.
 - [x] Used package delete/shrink below any referencing test threshold fails; existing frozen assets remain renderable.
       Proven with a fixture row in `kecermatan_test_packages` (HTTP and raw foreign-key deletes); P10 writes the real rows.
 - [ ] Emoji is catalog-only and consistent across devices; pasted emoji in symbols fails with guidance; preview does not consume quota.
-      Catalog-only, bundled Twemoji files and the emoji-in-symbol rejection are proven, and the sample column writes nothing; the page that renders emoji is built but not checked in a browser, and quota metering does not exist until P10/P11.
+      Browser 2026-11-07: all 30 emoji of a package load from the bundled `/emoji/*.svg` files, a pasted 😀 in a symbol preview is rejected with "Buat paket Emoji dan pilih dari katalog" while ★ and ♠ are accepted, and the sample column saves nothing. Open: no credit count was compared before and after a preview, and only one browser was used.
 
 **Decision / verification gate:** D02 (resolved: the Operator may mutate packages); D09 resolved 2026-10-28 (ZIP ≤200 files and ≤50MB extracted; Twemoji CC-BY 4.0 catalog with attribution). Master packages and copy are deferred (D17).
 
@@ -356,7 +356,7 @@ For every slice, use this verification loop:
 
 ### P10 — Kecermatan builder and deterministic generator
 
-**Status:** done, lean — standalone `kecermatan_tests` (frozen configuration + stored seed) with CRUD, package pinning under the package row lock, first-attempt lock guard, a bounded deterministic generator with N/2 replay, a staff column preview API, and the builder wired to the API with a package picker and a "Lihat contoh" sample-column modal (owner-approved 2026-10-28). Deferred: publish/unpublish (P11 decides), student exposure and per-attempt snapshots (P18), and multi-source `mix` selection UI (not in the mockup; existing mix sources are preserved on save); the browser demo was not run · **Size:** L · **Depends:** P09
+**Status:** done, lean — standalone `kecermatan_tests` (frozen configuration + stored seed) with CRUD, package pinning under the package row lock, first-attempt lock guard, a bounded deterministic generator with N/2 replay, a staff column preview API, and the builder wired to the API with a package picker and a "Lihat contoh" sample-column modal (owner-approved 2026-10-28). Deferred: publish/unpublish (P11 decides), student exposure and per-attempt snapshots (P18), and multi-source `mix` selection UI (not in the mockup; existing mix sources are preserved on save). Browser demo run 2026-11-07 (builder create, locked edit, sample column); delete refusal after a session and the number, symbol and image sources are not shown in the browser yet (see boxes) · **Size:** L · **Depends:** P09
 
 **Outcome:** Staff build valid tests and preview the repeated-column mechanism before publication.
 
@@ -375,7 +375,7 @@ For every slice, use this verification loop:
 - [x] Columns k and k+N/2 have identical references/questions/subset ordering, with separate answer keys per column identity.
       Generator replay test and HTTP preview (kolom 6 equals kolom 1 for one seed); keys are one row per kolom. Nothing is persisted per attempt until P18.
 - [ ] Reject edit/delete after a session exists; supported char/number/symbol/image/emoji/shape/mix sources render.
-      Edit/delete refusal is proven with a fixture stamp of `first_attempt_at`; no session exists until P18 writes it. Every source type generates through the API, but nothing renders in a browser (demo not run).
+      Browser 2026-11-07: a test with real P18 sessions opens read-only with Save disabled, and char, emoji, shape and a char+emoji mix render in the sample column and package pages. Open: delete refusal after a session and the number, symbol and image sources were not shown in the browser (no local image package).
 
 **Decision / verification gate:** D09 resolved 2026-10-28 (at most 50 kolom × 100 soal); generation policy is fixed by content snapshots, not a client RNG.
 
@@ -406,7 +406,7 @@ For every slice, use this verification loop:
 
 ### P11b — Website CMS and rose landing
 
-**Status:** in progress — contract, migration `000022`, `WebsiteService`, the five endpoints, the portal editor/review/protected preview, the rose landing and public `/programs/[slug]` are built and proven browser → API → PostgreSQL on 2026-11-01. Open: G4 launch content, a failed-publish UI demo, the Student preview-route browser check and the full DESIGN §10 sweep (EN locale, keyboard, contrast) for the editor pages. P04 and P11 keep their own status · **Size:** L · **Depends:** P03, P11
+**Status:** in progress — contract, migration `000022`, `WebsiteService`, the five endpoints, the portal editor/review/protected preview, the rose landing and public `/programs/[slug]` are built and proven browser → API → PostgreSQL on 2026-11-01. The publish-conflict UI demo and the Student preview-route check ran on 2026-11-07. Open: G4 launch content, a 26px overflow on `/admin/website/home` at 320px, and keyboard and contrast checks for the editor pages. P04 and P11 keep their own status · **Size:** L · **Depends:** P03, P11
 
 **Outcome:** An Admin edits structured bilingual marketing content, saves a private draft, previews it, reviews a before/after diff and publishes one whole-site snapshot; visitors see the published content on a warm rose landing next to the real catalog.
 
@@ -426,17 +426,17 @@ For every slice, use this verification loop:
 **Acceptance scenarios:**
 
 - [x] Admin saves a new headline, the private preview shows the saved revision, anonymous public still shows the old content; the review shows ID and EN and every program diff; publish makes a fresh public load match the committed revision with exactly one history row.
-- [ ] Anonymous is refused `401` and Student/Operator `403` on every protected endpoint and on the preview route.
-  - API: all four protected endpoints 401/403/403 verified live; preview route verified for anonymous (redirect to portal login) and Operator (access denied) in the browser, Student not yet.
+- [x] Anonymous is refused `401` and Student/Operator `403` on every protected endpoint and on the preview route.
+  - Re-checked 2026-11-07: all four endpoints 401/403/403; a signed-in Student on `/admin/website/preview` sees "Akses terbatas" and no `/admin/website` request is made.
 - [x] Strict body: unknown field, locale or slot, a blank required text, every limit at +1 (code points, emoji included) and a body over 64 KiB are refused; a tenant, role or actor in the body is never trusted.
 - [x] Concurrent first reads create one row; save is a no-op when content is equal, increments the draft revision once when changed and answers a conflict on a stale revision without overwriting.
 - [x] Publish is atomic: a database failure leaves content, revision and history unchanged; equal draft and published is a no-op with `changed=false` and no history; two concurrent publishes of one draft write one record.
 - [x] Lost-response retry with the same source draft returns the recorded publication; a moved draft answers a conflict and never publishes the unseen edit.
-- [ ] Two editors conflict with local edits preserved; a failed publish keeps the old public version; HTML in any field renders as inert text.
-  - Conflict with preserved local edits and inert HTML verified in the browser; failed publish is covered only by `TestWebsitePublishAtomic`, not shown in the UI.
+- [x] Two editors conflict with local edits preserved; a failed publish keeps the old public version; HTML in any field renders as inert text.
+  - The failed-publish part rests on `TestWebsitePublishAtomic`: a database failure leaves content, revision and history unchanged. Browser 2026-11-07 showed a publish conflict: with the review page open on draft r1, a second save moved the draft to r2, the stale page's publish answered `409`, nothing was published and the page reloaded r2 for a fresh review. No earlier public version existed locally.
 - [x] Public `GET /website` before the first publication answers `website_not_published` and the landing shows its static fallback; the public, protected and preview responses are `no-store` and carry no draft, actor ids or history.
 - [ ] Browser checks pass at 320/390/768/1024/1440 px, light and dark, ID and EN, keyboard focus, contrast and reduced motion, with no horizontal overflow.
-  - Landing and `/programs/tni` checked at all five widths in light and dark with reduced motion and no overflow; EN locale, keyboard focus, contrast measurement and the editor pages at narrow widths are not checked yet.
+  - Landing and `/programs/tni` checked at all five widths in light and dark with reduced motion and no overflow. 2026-11-07: the four editor pages render in EN and have no page overflow at 390/768, but `/admin/website/home` overflows by 26px at 320. Keyboard focus and contrast measurement are not checked yet.
 
 **Decision / verification gate:** G4 blocks real publication and launch. Draft preview is a private Admin route, not a share link; lead inbox, enrollment, media library, SEO, scheduled publish and rollback are out of scope.
 
@@ -467,7 +467,7 @@ For every slice, use this verification loop:
 
 ### P13 — Manual and wallet checkout with enrollment
 
-**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Kecermatan checkout and credit landed in P18. Gateway orders landed in P14. Deferred: browser demo (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
+**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Kecermatan checkout and credit landed in P18. Gateway orders landed in P14. Browser demo run 2026-11-07; open: the student orders list screen (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
 
 **Outcome:** Students purchase through manual transfer or wallet and receive the correct access after confirmation.
 
@@ -487,7 +487,7 @@ For every slice, use this verification loop:
 - [x] Bundle grants every purchased test; repeat kecermatan purchase preserves history on same enrollment; correct email/WA events enqueue atomically.
   - Bundle grants and atomic enqueue were proven in P13; P18 proves a repeat kecermatan purchase adds credits to the one enrollment row, a replayed key, a repeated confirm and a cancel add nothing, and a payment racing a completion lands on the same row consistently.
 - [ ] Real browser to API to database demo of the screens.
-  - The API flow was smoked over HTTP against a real database and storage; the screens pass `tsc` and lint but were not driven in a browser (no dev server was allowed in this run).
+  - 2026-11-07: insufficient-balance notice, manual checkout with proof upload (order pending, no grant), wallet checkout (one −75.000 ledger entry and one grant in the same transaction), admin proof view via a 60s presigned link and confirm (one grant), and both tryouts then listed under the student's tryouts. Open: the student orders list screen was not opened; individual order pages were.
 
 **Decision / verification gate:** D05 resolved (access over the tryout window, product sale window, reject repurchase of held tryouts, kecermatan credit added to one enrollment); D12 money policy; external delivery success is verified through P02.
 
@@ -522,7 +522,7 @@ For every slice, use this verification loop:
 
 ### P15 — Self-service manual top-up and review
 
-**Status:** done, lean — migration 000020, `topup_requests` with idempotent create, proof ownership, the server-checked Admin minimum, approve/reject through the one wallet path with notifications, and the student wallet, admin Top-up and Settings screens on the API ([docs/topups.md](../docs/topups.md)). The gateway extension landed in P14. Deferred: a browser demo (see boxes) · **Size:** M · **Depends:** P02, P06, P12
+**Status:** done, lean — migration 000020, `topup_requests` with idempotent create, proof ownership, the server-checked Admin minimum, approve/reject through the one wallet path with notifications, and the student wallet, admin Top-up and Settings screens on the API ([docs/topups.md](../docs/topups.md)). The gateway extension landed in P14. Browser demo run 2026-11-07 (see boxes) · **Size:** M · **Depends:** P02, P06, P12
 
 **Outcome:** Students request a top-up and staff approve or reject it with a complete audit trail.
 
@@ -542,8 +542,8 @@ For every slice, use this verification loop:
   - Student, staff and proof cases are proven over HTTP; no cross-tenant test by design (D17).
 - [x] Gateway extension uses the same business credit invariant while keeping provider evidence distinct.
   - P14: a gateway top-up credits through the same `Apply` path (one `topup`/request-id ledger source) and keeps its provider evidence in `payment_attempts` and `payment_events`.
-- [ ] Real browser to API to database demo of the screens.
-  - The API flow is proven by Postgres-backed tests and the screens pass `tsc`, lint and `next build`, but they were not driven in a browser (no dev server was allowed in this run).
+- [x] Real browser to API to database demo of the screens.
+  - 2026-11-07: Admin set the minimum to Rp20.000 in Settings; the student page showed it, refused Rp15.000, created a Rp25.000 manual request with proof (pending, balance unchanged, reopened after reload), and Admin approved it (+25.000 once) and rejected a second with its reason stored.
 
 **Decision / verification gate:** D12 resolved 2026-10-29 (whole rupiah, no upper bound, Admin-set minimum default Rp10.000); the admin top-up page follows the admin Orders page (owner-approved, no mockup). Listed before P14 in execution order despite stable numeric slice labels.
 
@@ -551,7 +551,7 @@ For every slice, use this verification loop:
 
 ### P16 — Tryout runtime and immediate basic result
 
-**Status:** in progress — API, deadline worker, scoring and the student screens are built and tested (migration 000014, [docs/tryout-runtime.md](../docs/tryout-runtime.md)); deferred: the browser-to-API-to-database demo and the ±5s synchronized-expiry load check · **Size:** XL · **Depends:** P08, P13
+**Status:** in progress — API, deadline worker, scoring and the student screens are built and tested (migration 000014, [docs/tryout-runtime.md](../docs/tryout-runtime.md)); the browser-to-API-to-database demo ran on 2026-11-07 and found and fixed a load-effect loop (`useServerClock` returned a new object each render, refetching the subtest ~100 times on open); deferred: the ±5s synchronized-expiry load check · **Size:** XL · **Depends:** P08, P13
 
 **Outcome:** Students complete repeatable tryouts with server timing, saved answers, stable shuffles and immediate persisted scores.
 
@@ -575,7 +575,7 @@ For every slice, use this verification loop:
 
 ### P17 — Tryout history, ranking and controlled review
 
-**Status:** in progress, lean (API, student result/review and admin results wired and tested; student dashboard reads the API with a scoped summary and real activity, with browser/API/database verification; Redis cache, result/review/admin browser demo and student history page changes deferred) · **Size:** L · **Depends:** P16
+**Status:** in progress, lean (API, student result/review and admin results wired and tested; student dashboard reads the API with a scoped summary and real activity, with browser/API/database verification; result, review and admin results driven in the browser on 2026-11-07; Redis cache and student history page changes deferred) · **Size:** L · **Depends:** P16
 
 **Outcome:** Students review all attempts and tenant-local average-based rankings without premature explanation access.
 
@@ -594,8 +594,8 @@ For every slice, use this verification loop:
 - [x] Before explanation release inspect raw API and asset links: no hidden key/explanation leaks; after release own completed attempt review succeeds.
 - [x] IRT threshold fixtures count approved distinct students/question revisions correctly; weighted scoring remains unchanged.
 
-- [ ] Browser demo of result, review and admin results pages.
-  - Open: no dev server or browser run in this slice; web checked by tsc, lint and build only.
+- [x] Browser demo of result, review and admin results pages.
+  - 2026-11-07: a two-subtest attempt shows 60/100 with per-subtest scores and rank 1/1 (one `tryout_results` row), the review shows each answer, the key and the explanation per subtest, and the admin results list reads the API.
 
 **Decision / verification gate:** D04 resolved 2026-10-28 (ties share a rank and skip: 1, 2, 2, 4; IRT counts distinct students per question version); current rank is distinguished from any historical result rank.
 
@@ -603,7 +603,7 @@ For every slice, use this verification loop:
 
 ### P18 — Kecermatan attempts, quota and full results
 
-**Status:** in progress — kecermatan products and credit checkout, atomic admission with per-attempt snapshots, the server timeline and deadline worker, write-once answers, the versioned scoring function with a recompute path, results, review, history and the staff results list are built and tested (migration 000019, [docs/kecermatan-runtime.md](../docs/kecermatan-runtime.md)); **D03 stays open**: the scoring is the owner's provisional version 1, not client-approved. Deferred: the browser-to-API-to-database demo, an HTTP/CLI trigger for the recompute · **Size:** XL · **Depends:** P10, P13
+**Status:** in progress — kecermatan products and credit checkout, atomic admission with per-attempt snapshots, the server timeline and deadline worker, write-once answers, the versioned scoring function with a recompute path, results, review, history and the staff results list are built and tested (migration 000019, [docs/kecermatan-runtime.md](../docs/kecermatan-runtime.md)); **D03 stays open**: the scoring is the owner's provisional version 1, not client-approved. Browser demo run 2026-11-07: Admin built a 10 × 1-minute test and a 2-attempt product, the student bought it with the wallet, answered column 1 (12 answers, all server-acknowledged), and the worker completed the attempt at its exact last deadline with no page open; one result row, one of two credits used, and the result and per-kolom review match the database. Deferred: an HTTP/CLI trigger for the recompute · **Size:** XL · **Depends:** P10, P13
 
 **Outcome:** Students consume purchased credits once, complete repeated timed columns, and inspect confirmed composite results/history.
 
@@ -630,7 +630,7 @@ For every slice, use this verification loop:
 
 ### P19 — Monitoring and violation timelines
 
-**Status:** in progress, lean (API, recording rules, staff monitoring page, violation timelines and student runtime reporting built and tested; browser demo and cross-tenant test deferred; time-extension control built but browser-unverified) · **Size:** M · **Depends:** P16, P17
+**Status:** in progress, lean (API, recording rules, staff monitoring page, violation timelines and student runtime reporting built and tested; monitoring, timeline and the time-extension control driven in the browser on 2026-11-07, and the warnings only with a stubbed Fullscreen API (real-device check open); cross-tenant test deferred by D17) · **Size:** M · **Depends:** P16, P17
 
 **Outcome:** Staff see active tryouts and retained violation history through 30-second polling.
 
@@ -645,7 +645,7 @@ For every slice, use this verification loop:
 - [x] Starting/completing session appears/disappears within a 30-second refresh; history remains after completion.
   - Service and HTTP tests prove the list is read from PostgreSQL, a session drops out on completion and its timeline stays reachable. The 30-second interval is in the page code, not browser-tested.
 - [ ] Fullscreen exit/detectable screenshot shows warning and records timestamp while timer keeps running.
-  - Open: server side is tested (server timestamp, session and subtest untouched, only while a subtest runs). The overlay and browser events were not exercised in a browser; no dev server was run.
+  - 2026-11-07: the overlays and the server-timestamped `tryout_session_violations` rows were shown with a stubbed Fullscreen API and a scripted PrintScreen keydown; the countdown kept running. Open: a real desktop/mobile fullscreen exit and a real screenshot shortcut are still unverified.
 - [ ] Tenant A cannot list B active/finished sessions or timeline by guessed ID.
   - Open: every query is tenant-scoped, and a guessed id answers 404 and students answer 403 (tested), but per D17 no cross-tenant test was written.
 - [x] Polling 50 active sessions meets ≤500ms p95 in the documented fixture; kecermatan has no violations or fullscreen enforcement.
@@ -653,10 +653,10 @@ For every slice, use this verification loop:
 
 **Decision / verification gate:** Fullscreen availability is browser-dependent; test supported desktop/mobile paths and explicitly describe best-effort behavior. Resolved 2026-10-28 (owner): a device without the Fullscreen API (e.g. iPhone Safari) may still take the tryout and records no violation. Includes the D10 per-student time extension control on the monitoring page.
 
-- [ ] Per-student time extension control on the monitoring page.
-  - Open: owner approved a "Tambah waktu" button and form modal in the session detail (2026-10-28) and it calls the P16 endpoint, which P16 tests cover; the control itself was checked by tsc, lint and build only, not in a browser.
+- [x] Per-student time extension control on the monitoring page.
+  - 2026-11-07: Admin added 5 minutes with a reason from the session detail; one `tryout_session_extensions` row (300s, reason, admin) was written and the student's countdown after reload matched the base deadline plus 300s within 2s.
 - [ ] Browser demo of student fullscreen/screenshot warnings, monitoring page and results detail.
-  - Open: web checked by tsc, lint and build only.
+  - 2026-11-07: the monitoring list showed the live session with its violation count, the session detail and the admin result detail both list the same five timestamped violations. Open: the student warnings were shown only with the stubbed Fullscreen API noted above.
 
 <a id="p20"></a>
 
