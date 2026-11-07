@@ -10,7 +10,7 @@ function HomeEditor() {
   return (
     <div className="space-y-5">
       <LocaleSwitch />
-      <div className="grid items-start gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <section className="space-y-5 rounded-card border border-border bg-surface p-6">
           <h2 className="font-display text-title text-foreground">{t.heroSection}</h2>
           <ContentField scope="home" fieldKey="hero_title" multiline rows={2} />
