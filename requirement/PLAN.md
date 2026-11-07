@@ -329,7 +329,7 @@ For every slice, use this verification loop:
 
 ### P09 — Kecermatan item packages
 
-**Status:** done, lean — API and admin page are built: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit under request-wide D09 budgets, full WebP decode, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, an ephemeral sample column, and `web/app/admin/item-packages` (list, detail, add dialog, sample dialog), driven browser → API → PostgreSQL on 2026-11-07. Deferred: master packages and copy (D17) · **Size:** L · **Depends:** P05, P06
+**Status:** done, lean — API and admin page are built: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit under request-wide D09 budgets, full WebP decode, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, an ephemeral sample column, and `web/app/admin/item-packages` (list, detail, add dialog, sample dialog), driven browser → API → PostgreSQL on 2026-11-07. Open: a preview-credit check and a second browser for the emoji box. Deferred: master packages and copy (D17) · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff manage authorized symbol/image/emoji/shape sources with real preview and safe imports.
 
@@ -356,7 +356,7 @@ For every slice, use this verification loop:
 
 ### P10 — Kecermatan builder and deterministic generator
 
-**Status:** done, lean — standalone `kecermatan_tests` (frozen configuration + stored seed) with CRUD, package pinning under the package row lock, first-attempt lock guard, a bounded deterministic generator with N/2 replay, a staff column preview API, and the builder wired to the API with a package picker and a "Lihat contoh" sample-column modal (owner-approved 2026-10-28). Deferred: publish/unpublish (P11 decides), student exposure and per-attempt snapshots (P18), and multi-source `mix` selection UI (not in the mockup; existing mix sources are preserved on save). Browser demo run 2026-11-07 (builder create, locked edit, sample column); the image source is not rendered yet (see boxes) · **Size:** L · **Depends:** P09
+**Status:** done, lean — standalone `kecermatan_tests` (frozen configuration + stored seed) with CRUD, package pinning under the package row lock, first-attempt lock guard, a bounded deterministic generator with N/2 replay, a staff column preview API, and the builder wired to the API with a package picker and a "Lihat contoh" sample-column modal (owner-approved 2026-10-28). Deferred: publish/unpublish (P11 decides), student exposure and per-attempt snapshots (P18), and multi-source `mix` selection UI (not in the mockup; existing mix sources are preserved on save). Browser demo run 2026-11-07 (builder create, locked edit, sample column); delete refusal after a session and the number, symbol and image sources are not shown in the browser yet (see boxes) · **Size:** L · **Depends:** P09
 
 **Outcome:** Staff build valid tests and preview the repeated-column mechanism before publication.
 
@@ -467,7 +467,7 @@ For every slice, use this verification loop:
 
 ### P13 — Manual and wallet checkout with enrollment
 
-**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Kecermatan checkout and credit landed in P18. Gateway orders landed in P14. Browser demo run 2026-11-07 (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
+**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Kecermatan checkout and credit landed in P18. Gateway orders landed in P14. Browser demo run 2026-11-07; open: the student orders list screen (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
 
 **Outcome:** Students purchase through manual transfer or wallet and receive the correct access after confirmation.
 
@@ -486,8 +486,8 @@ For every slice, use this verification loop:
   - Student, proof and role cases are proven; no cross-tenant test by design (D17).
 - [x] Bundle grants every purchased test; repeat kecermatan purchase preserves history on same enrollment; correct email/WA events enqueue atomically.
   - Bundle grants and atomic enqueue were proven in P13; P18 proves a repeat kecermatan purchase adds credits to the one enrollment row, a replayed key, a repeated confirm and a cancel add nothing, and a payment racing a completion lands on the same row consistently.
-- [x] Real browser to API to database demo of the screens.
-  - 2026-11-07: insufficient-balance notice, manual checkout with proof upload (order pending, no grant), wallet checkout (one −75.000 ledger entry and one grant in the same transaction), admin proof view via a 60s presigned link and confirm (one grant), and both tryouts then listed under the student's tryouts. The student orders list was not opened; individual order pages were.
+- [ ] Real browser to API to database demo of the screens.
+  - 2026-11-07: insufficient-balance notice, manual checkout with proof upload (order pending, no grant), wallet checkout (one −75.000 ledger entry and one grant in the same transaction), admin proof view via a 60s presigned link and confirm (one grant), and both tryouts then listed under the student's tryouts. Open: the student orders list screen was not opened; individual order pages were.
 
 **Decision / verification gate:** D05 resolved (access over the tryout window, product sale window, reject repurchase of held tryouts, kecermatan credit added to one enrollment); D12 money policy; external delivery success is verified through P02.
 
@@ -655,8 +655,8 @@ For every slice, use this verification loop:
 
 - [x] Per-student time extension control on the monitoring page.
   - 2026-11-07: Admin added 5 minutes with a reason from the session detail; one `tryout_session_extensions` row (300s, reason, admin) was written and the student's countdown after reload matched the base deadline plus 300s within 2s.
-- [x] Browser demo of student fullscreen/screenshot warnings, monitoring page and results detail.
-  - 2026-11-07: the monitoring list showed the live session with its violation count, the session detail and the admin result detail both list the same five timestamped violations; the student warnings were shown with the stubbed API noted above.
+- [ ] Browser demo of student fullscreen/screenshot warnings, monitoring page and results detail.
+  - 2026-11-07: the monitoring list showed the live session with its violation count, the session detail and the admin result detail both list the same five timestamped violations. Open: the student warnings were shown only with the stubbed Fullscreen API noted above.
 
 <a id="p20"></a>
 
