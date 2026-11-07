@@ -662,7 +662,7 @@ For every slice, use this verification loop:
 
 ### P20 — Asynchronous tryout PDF
 
-**Status:** planned · **Size:** M · **Depends:** P02, P06, P08
+**Status:** done, lean — shared `exports` jobs (migration 000023, queue `exports`, 60-second re-authorized download links; [docs/exports.md](../docs/exports.md)) and `POST /tryouts/{id}/pdf-exports` rendered by a Gotenberg 8.34 sidecar with file-only Chromium, embedded KaTeX and inlined images ([docs/tryout-pdf.md](../docs/tryout-pdf.md)); builder "Unduh PDF" action plus export status, driven browser → API → worker → PostgreSQL/MinIO on 2026-11-08. Open: a real worker-process restart and observed email delivery (see boxes). Student and kecermatan PDFs stay out (D11) · **Size:** M · **Depends:** P02, P06, P08
 
 **Outcome:** Authorized staff download a printable tryout with rendered math/images and no answers.
 
@@ -674,10 +674,14 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] PDF has title, subtest name/duration, numbering, original option order, images/math and school/date footer.
-- [ ] Inspect render input and output: no keys/explanations; shuffle settings do not change PDF order.
+- [x] PDF has title, subtest name/duration, numbering, original option order, images/math and school/date footer.
+  - 2026-11-08: the Tryout UTBK SMA PDF from the builder has the title, both subtests with durations, per-subtest numbering, options in stored order, typeset math and a "Taruna Eduka · date · Halaman n / 2" footer; a 7-page fixture with an inlined image renders legibly (`gotenberg_smoke_test.go`).
+- [x] Inspect render input and output: no keys/explanations; shuffle settings do not change PDF order.
+  - `TestTryoutPDFWorkerRendersStoredOrderWithoutKeys` (both randomize flags on; explanations, points and key ids absent from every file sent to Gotenberg); the demo PDF keeps stored order where the exam had shuffled it, and `pdftotext` finds none of the review explanations.
 - [ ] Worker restart completes/retries one artifact without cross-tenant download or arbitrary URL/file fetch.
+  - A re-delivered job on a ready export is a no-op, a converter 500 retries then fails visibly, another tenant's tryout fails without rendering, download links 404 across tenants, and Chromium blocked `http://` and `file:///etc/passwd` fetches. Open: no real worker process was killed mid-render.
 - [ ] Multi-page math/image fixture renders legibly; failure is visible; ready notification arrives.
+  - Multi-page render and visible `renderer_unavailable` failure are proven; the `export-ready` email is queued once per export (three rows in the demo), but local SMTP is unconfigured so delivery was not observed.
 
 **Decision / verification gate:** D11 scope/copy alignment. Student and kecermatan PDFs remain unapproved post-MVP/open requests.
 
@@ -685,7 +689,7 @@ For every slice, use this verification loop:
 
 ### P21 — Result dashboards and CSV/XLSX exports
 
-**Status:** planned · **Size:** M · **Depends:** P02, P06, P17, P18
+**Status:** done, lean — tryout results filter by tryout and program with the IRT flag, kecermatan results gain composites and remaining attempts, and `POST /results/exports` produces CSV/XLSX on the shared export jobs with one cut-off, numeric XLSX cells and formula neutralization ([docs/result-exports.md](../docs/result-exports.md)); driven in the browser on 2026-11-08. No kecermatan spreadsheet export (gate). Open: cross-tenant revoked-link case (D17) · **Size:** M · **Depends:** P02, P06, P17, P18
 
 **Outcome:** Staff filter results and download real spreadsheet reports for their tenant.
 
@@ -697,10 +701,14 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Filter tryout/program returns expected rows and IRT flag; kecermatan shows counts/composites/final score/date/quota.
-- [ ] CSV/XLSX use same tenant/report cut-off; XLSX numbers are numeric and text cannot execute formulas.
+- [x] Filter tryout/program returns expected rows and IRT flag; kecermatan shows counts/composites/final score/date/quota.
+  - `TestResultStaffListFiltersByProgram`, `TestResultExportFiltersByTryoutAndProgramAndFlagsIRT` and the kecermatan staff-list test (counts, composites, final score, date, remaining attempts, test/program filters); the results page and new kecermatan columns render in the browser.
+- [x] CSV/XLSX use same tenant/report cut-off; XLSX numbers are numeric and text cannot execute formulas.
+  - `TestResultExportCutOffExcludesLaterCompletionsAndFormatsAgree`, `TestNeutralizeFormula`; the demo CSV and XLSX hold the same two rows and the XLSX attempt/score/rank columns are numeric cells.
 - [ ] Tenant B cannot request/read A report or reuse A download link endpoint; revoked authorization blocks new link issuance.
-- [ ] Worker failure/retry leaves one logical report with visible status; large export does not block API request.
+  - A foreign tryout/program answers 404 on request and a foreign export id 404 on read and link; links are re-authorized per call (Student 403). Open: no cross-tenant revoked-authorization fixture, by D17.
+- [x] Worker failure/retry leaves one logical report with visible status; large export does not block API request.
+  - `TestResultExportRendererFailureIsRetriedThenFailed`, `TestResultExportBeyondTheRowCapFailsVisibly` (50,000-row cap, `too_many_rows`); rendering runs in the worker and the API answers 202 at once.
 
 **Decision / verification gate:** No additional kecermatan-export feature is inferred from the tryout export requirement.
 
@@ -708,7 +716,7 @@ For every slice, use this verification loop:
 
 ### P22 — Student operations and platform financial recap
 
-**Status:** planned · **Size:** M · **Depends:** P04, P13, P14, P17, P18
+**Status:** done, lean (tenant scope) — Admin/Operator account management per D02 with deactivate-only removal (D14 partial, 2026-11-07), orderless staff grants through the shared enrollment path, `audit_events` (migration 000024), and an Admin-only tenant revenue recap on the orders page ([docs/student-operations.md](../docs/student-operations.md)); driven in the browser on 2026-11-08. Deferred: the Platform Admin cross-tenant recap (D17) and retention/RPO (D14) · **Size:** M · **Depends:** P04, P13, P14, P17, P18
 
 **Outcome:** Staff administer agreed student capabilities/grants and Platform Admin sees cross-tenant summaries for manual revenue sharing.
 
@@ -720,10 +728,14 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] Approved Operator versus Admin CRUD matrix holds in UI and direct API; deletion/deactivation preserves financial/history links.
-- [ ] Manual grant without order records actor/reason and opens only intended test; enrollment listing reflects exact active access.
+- [x] Approved Operator versus Admin CRUD matrix holds in UI and direct API; deletion/deactivation preserves financial/history links.
+  - Role-matrix HTTP tests (anonymous 401, Student 403, Operator on student accounts/grants/access, 403 on staff accounts and the recap, foreign id 404) and deactivation tests (login, refresh and old token refused; orders, ledger and enrollment intact). Browser 2026-11-08: deactivating a student blocked its login (401) and reactivating restored it, each with an audit row.
+- [x] Manual grant without order records actor/reason and opens only intended test; enrollment listing reflects exact active access.
+  - Grant tests (one orderless `staff` grant with actor and reason, idempotent replay, six concurrent same-key requests → one grant). Browser: granting Tryout SMA Soshum added only that row ("Diberikan staf") to a student's access list, which matched the database for every order-sourced entry.
 - [ ] Tenant Admin sees own orders/revenue; Platform Admin sees counts/value per tenant/period without automated settlement.
+  - Tenant half done: the recap matched the database to the rupiah in the browser (7 orders, Rp243.000, by method and product, Asia/Jakarta days) and recap tests cover day boundaries and scope. Open: the Platform Admin half is deferred by D17.
 - [ ] Support grant/user/financial action keeps actual platform actor; count/report queries are scoped and paginated.
+  - Every account and grant action records actor id and role in `audit_events`, and list/recap queries are tenant-scoped and paginated. Open: platform support context does not exist (P04/D17).
 
 **Decision / verification gate:** D02 (resolved: the Operator may run student operations); D14 deletion/retention. No per-tenant merchant credentials or settlement engine.
 
