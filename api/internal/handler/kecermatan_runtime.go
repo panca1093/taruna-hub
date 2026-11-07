@@ -216,6 +216,8 @@ type kecStaffResultResponse struct {
 	Scores         kecScoresResponse `json:"scores"`
 	ScoringVersion int               `json:"scoring_version"`
 	CompletedAt    time.Time         `json:"completed_at"`
+	// RemainingAttempts is the student's unused credits on the test now.
+	RemainingAttempts int `json:"remaining_attempts"`
 }
 
 type kecStaffResultsResponse struct {
@@ -521,7 +523,7 @@ func kecStaffResultOf(r model.KecResultRow) kecStaffResultResponse {
 		ProgramID: r.ProgramID, ProgramCode: r.ProgramCode, AttemptNumber: r.AttemptNumber,
 		BenarTotal: r.BenarTotal, SalahTotal: r.SalahTotal, KosongTotal: r.KosongTotal,
 		Scores:         kecScoresResponse{Kecepatan: r.Kecepatan, Ketahanan: r.Ketahanan, Ketelitian: r.Ketelitian, NilaiAkhir: r.NilaiAkhir},
-		ScoringVersion: r.ScoringVersion, CompletedAt: r.CompletedAt,
+		ScoringVersion: r.ScoringVersion, CompletedAt: r.CompletedAt, RemainingAttempts: r.RemainingAttempts,
 	}
 }
 

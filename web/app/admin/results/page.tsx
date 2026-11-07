@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Button, toast } from "@heroui/react";
-import { AlertTriangle, BarChart3, CloudOff, Trophy, TriangleAlert } from "lucide-react";
+import { AlertTriangle, BarChart3, CloudOff, Download, Trophy, TriangleAlert } from "lucide-react";
+import { ExportStatus } from "@/components/admin/export-status";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
@@ -11,7 +12,7 @@ import { Icon } from "@/components/icon";
 import { StatusChip } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput } from "@/components/ui/form";
-import { api, errorText, type Leaderboard, type StaffResult, type TryoutSummary, type ViolationTimeline } from "@/lib/api/client";
+import { api, errorText, type Leaderboard, type Program, type StaffResult, type TryoutSummary, type ViolationTimeline } from "@/lib/api/client";
 import { useResultsT } from "@/lib/i18n/dict/results";
 
 const PAGE_SIZE = 50;
@@ -26,6 +27,10 @@ export default function ResultsPage() {
   const t = useResultsT();
   const [tryouts, setTryouts] = useState<TryoutSummary[]>([]);
   const [tryoutFilter, setTryoutFilter] = useState("all");
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [programFilter, setProgramFilter] = useState("all");
+  const [exportKey, setExportKey] = useState(0);
+  const [requesting, setRequesting] = useState<"csv" | "xlsx" | null>(null);
   const [rows, setRows] = useState<StaffResult[] | null>(null);
   const [total, setTotal] = useState(0);
   const [board, setBoard] = useState<Leaderboard | null>(null);
@@ -60,10 +65,11 @@ export default function ResultsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    api.tryouts
-      .list({ limit: 100 })
-      .then((page) => {
-        if (!cancelled) setTryouts(page.tryouts);
+    Promise.all([api.tryouts.list({ limit: 100 }), api.programs.list()])
+      .then(([page, programList]) => {
+        if (cancelled) return;
+        setTryouts(page.tryouts);
+        setPrograms(programList.programs);
       })
       .catch(() => {
         // The filter is a convenience; the list below still loads and reports its own failure.
@@ -77,7 +83,7 @@ export default function ResultsPage() {
     let cancelled = false;
     const tryoutId = tryoutFilter === "all" ? undefined : tryoutFilter;
     api.results
-      .list({ tryout_id: tryoutId, limit: PAGE_SIZE })
+      .list({ tryout_id: tryoutId, program_id: programFilter === "all" ? undefined : programFilter, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
         setRows(page.results);
@@ -97,7 +103,7 @@ export default function ResultsPage() {
     return () => {
       cancelled = true;
     };
-  }, [tryoutFilter, reloadKey]);
+  }, [tryoutFilter, programFilter, reloadKey]);
 
   const retry = () => {
     setRows(null);
@@ -112,11 +118,35 @@ export default function ResultsPage() {
     setTryoutFilter(next);
   };
 
+  const changeProgram = (next: string) => {
+    setRows(null);
+    setLoadFailed(false);
+    setProgramFilter(next);
+  };
+
+  const requestExport = async (format: "csv" | "xlsx") => {
+    setRequesting(format);
+    try {
+      await api.results.requestExport({
+        format,
+        tryout_id: tryoutFilter === "all" ? undefined : tryoutFilter,
+        program_id: programFilter === "all" ? undefined : programFilter,
+      });
+      setExportKey((key) => key + 1);
+      toast.success(t.exportRequested, { description: t.exportRequestedDescription });
+    } catch (err) {
+      toast.danger(t.exportErrorTitle, { description: errorText(err, t.exportErrorDescription) });
+    } finally {
+      setRequesting(null);
+    }
+  };
+
   const loadMore = async () => {
     setLoadingMore(true);
     try {
       const page = await api.results.list({
         tryout_id: tryoutFilter === "all" ? undefined : tryoutFilter,
+        program_id: programFilter === "all" ? undefined : programFilter,
         limit: PAGE_SIZE,
         offset: rows?.length ?? 0,
       });
@@ -133,6 +163,7 @@ export default function ResultsPage() {
   };
 
   const tryoutOptions = [{ id: "all", label: t.allTryouts }, ...tryouts.map((tr) => ({ id: tr.id, label: tr.title }))];
+  const programOptions = [{ id: "all", label: t.allPrograms }, ...programs.map((p) => ({ id: p.id, label: p.name }))];
 
   const columns: Column<StaffResult>[] = [
     {
@@ -174,9 +205,31 @@ export default function ResultsPage() {
   ];
 
   return (
-    <AppShell title={t.pageTitle} description={rows === null ? undefined : t.resultCount(total)}>
-      <div className="mb-4 max-w-xs">
-        <SelectInput options={tryoutOptions} selectedKey={tryoutFilter} onSelectionChange={(k) => changeTryout(k ?? "all")} />
+    <AppShell
+      title={t.pageTitle}
+      description={rows === null ? undefined : t.resultCount(total)}
+      actions={
+        <div className="flex gap-2">
+          {(["csv", "xlsx"] as const).map((format) => (
+            <Button key={format} variant="secondary" size="sm" onPress={() => void requestExport(format)} isDisabled={requesting !== null}>
+              <Icon icon={Download} size="xs" /> {format === "csv" ? t.exportCsv : t.exportXlsx}
+            </Button>
+          ))}
+        </div>
+      }
+    >
+      <div className="mb-4 flex flex-wrap gap-3">
+        <div className="w-full max-w-xs">
+          <SelectInput label={t.fieldTryout} options={tryoutOptions} selectedKey={tryoutFilter} onSelectionChange={(k) => changeTryout(k ?? "all")} />
+        </div>
+        <div className="w-full max-w-xs">
+          <SelectInput label={t.fieldProgram} options={programOptions} selectedKey={programFilter} onSelectionChange={(k) => changeProgram(k ?? "all")} />
+        </div>
+      </div>
+
+      <div className="mb-6 flex flex-col gap-4">
+        <ExportStatus kind="tryout_results_csv" refreshKey={exportKey} />
+        <ExportStatus kind="tryout_results_xlsx" refreshKey={exportKey} />
       </div>
 
       {board && board.entries.length > 0 && (

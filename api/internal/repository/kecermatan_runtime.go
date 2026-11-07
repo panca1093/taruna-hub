@@ -398,18 +398,20 @@ func (r *KecermatanRuntimeRepository) ResultSessions(ctx context.Context, q dbtx
 
 const kecResultColumns = `r.session_id, r.tenant_id, r.user_id, u.name, r.test_id, t.title, t.program_id, pr.code, r.attempt_number,
 	r.benar_total, r.salah_total, r.kosong_total, r.kecepatan::float8, r.ketahanan::float8, r.ketelitian::float8,
-	r.nilai_akhir::float8, r.scoring_version, r.completed_at`
+	r.nilai_akhir::float8, r.scoring_version, r.completed_at,
+	GREATEST(COALESCE(e.attempts_purchased, 0) - COALESCE(e.attempts_used, 0), 0)`
 
 const kecResultFrom = ` FROM kecermatan_results r
 	JOIN users u ON u.id = r.user_id AND u.tenant_id = r.tenant_id
 	JOIN kecermatan_tests t ON t.id = r.test_id AND t.tenant_id = r.tenant_id
-	JOIN programs pr ON pr.id = t.program_id AND pr.tenant_id = t.tenant_id`
+	JOIN programs pr ON pr.id = t.program_id AND pr.tenant_id = t.tenant_id
+	LEFT JOIN enrollments e ON e.tenant_id = r.tenant_id AND e.user_id = r.user_id AND e.kecermatan_test_id = r.test_id`
 
 func scanKecResult(row pgx.Row) (model.KecResultRow, error) {
 	var r model.KecResultRow
 	err := row.Scan(&r.SessionID, &r.TenantID, &r.UserID, &r.StudentName, &r.TestID, &r.TestTitle, &r.ProgramID,
 		&r.ProgramCode, &r.AttemptNumber, &r.BenarTotal, &r.SalahTotal, &r.KosongTotal, &r.Kecepatan, &r.Ketahanan,
-		&r.Ketelitian, &r.NilaiAkhir, &r.ScoringVersion, &r.CompletedAt)
+		&r.Ketelitian, &r.NilaiAkhir, &r.ScoringVersion, &r.CompletedAt, &r.RemainingAttempts)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.KecResultRow{}, ErrNotFound
 	}

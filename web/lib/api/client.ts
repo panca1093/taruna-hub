@@ -179,6 +179,7 @@ export type AssetLink = components["schemas"]["AssetURL"];
 export type Export = components["schemas"]["Export"];
 export type ExportList = components["schemas"]["ExportList"];
 export type ExportDownloadLink = components["schemas"]["ExportDownloadLink"];
+export type ResultExportBody = components["schemas"]["ResultExportRequest"];
 
 /** Filters of `GET /api/v1/admin/results`; an absent field is not sent at all. */
 export type StaffResultFilters = Omit<
@@ -691,6 +692,8 @@ export const api = {
   results: {
     list: (filters: StaffResultFilters = {}) =>
       authed<StaffResultList>(`/api/v1/admin/results${queryOf(filters)}` as keyof paths),
+    /** 202 with the queued export; poll it through `exports.list`. */
+    requestExport: (body: ResultExportBody) => mutate<Export>("POST", "/api/v1/results/exports", body),
     leaderboard: (tryoutId: string, limit?: number) =>
       authed<Leaderboard>(
         `/api/v1/admin/tryouts/${tryoutId}/leaderboard${queryOf({ limit })}` as keyof paths,
