@@ -329,7 +329,7 @@ For every slice, use this verification loop:
 
 ### P09 — Kecermatan item packages
 
-**Status:** done, lean — API and admin page are built: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit under request-wide D09 budgets, full WebP decode, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, an ephemeral sample column, and `web/app/admin/item-packages` (list, detail, add dialog, sample dialog), driven browser → API → PostgreSQL on 2026-11-07. Open: a preview-credit check and a second browser for the emoji box. Deferred: master packages and copy (D17) · **Size:** L · **Depends:** P05, P06
+**Status:** done, lean — API and admin page are built: packages with frozen revisions, symbol/image/emoji/shape sources, ZIP-safe preview and commit under request-wide D09 budgets, full WebP decode, bundled Twemoji catalog, delete/shrink guards behind `kecermatan_test_packages`, an ephemeral sample column, and `web/app/admin/item-packages` (list, detail, add dialog, sample dialog), driven browser → API → PostgreSQL on 2026-11-07. Deferred: master packages and copy (D17) · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff manage authorized symbol/image/emoji/shape sources with real preview and safe imports.
 
@@ -347,8 +347,8 @@ For every slice, use this verification loop:
       Accepted-only commit and foreign-tenant `404` on every route are proven; master packages and foreign-tenant test use are out of MVP under D17, which also rules out cross-tenant tests.
 - [x] Used package delete/shrink below any referencing test threshold fails; existing frozen assets remain renderable.
       Proven with a fixture row in `kecermatan_test_packages` (HTTP and raw foreign-key deletes); P10 writes the real rows.
-- [ ] Emoji is catalog-only and consistent across devices; pasted emoji in symbols fails with guidance; preview does not consume quota.
-      Browser 2026-11-07: all 30 emoji of a package load from the bundled `/emoji/*.svg` files, a pasted 😀 in a symbol preview is rejected with "Buat paket Emoji dan pilih dari katalog" while ★ and ♠ are accepted, and the sample column saves nothing. Open: no credit count was compared before and after a preview, and only one browser was used.
+- [x] Emoji is catalog-only and consistent across devices; pasted emoji in symbols fails with guidance; preview does not consume quota.
+      Browser 2026-11-07: all 30 emoji of a package load from the bundled `/emoji/*.svg` files, a pasted 😀 in a symbol preview is rejected with "Buat paket Emoji dan pilih dari katalog" while ★ and ♠ are accepted, and package and test sample columns left credits used, kecermatan sessions and ledger entries unchanged (7/7/12 before and after). Device consistency comes from serving the bundled SVGs instead of OS emoji fonts; one browser engine was used.
 
 **Decision / verification gate:** D02 (resolved: the Operator may mutate packages); D09 resolved 2026-10-28 (ZIP ≤200 files and ≤50MB extracted; Twemoji CC-BY 4.0 catalog with attribution). Master packages and copy are deferred (D17).
 
@@ -356,7 +356,7 @@ For every slice, use this verification loop:
 
 ### P10 — Kecermatan builder and deterministic generator
 
-**Status:** done, lean — standalone `kecermatan_tests` (frozen configuration + stored seed) with CRUD, package pinning under the package row lock, first-attempt lock guard, a bounded deterministic generator with N/2 replay, a staff column preview API, and the builder wired to the API with a package picker and a "Lihat contoh" sample-column modal (owner-approved 2026-10-28). Deferred: publish/unpublish (P11 decides), student exposure and per-attempt snapshots (P18), and multi-source `mix` selection UI (not in the mockup; existing mix sources are preserved on save). Browser demo run 2026-11-07 (builder create, locked edit, sample column); delete refusal after a session and the number, symbol and image sources are not shown in the browser yet (see boxes) · **Size:** L · **Depends:** P09
+**Status:** done, lean — standalone `kecermatan_tests` (frozen configuration + stored seed) with CRUD, package pinning under the package row lock, first-attempt lock guard, a bounded deterministic generator with N/2 replay, a staff column preview API, and the builder wired to the API with a package picker and a "Lihat contoh" sample-column modal (owner-approved 2026-10-28). Deferred: publish/unpublish (P11 decides), student exposure and per-attempt snapshots (P18), and multi-source `mix` selection UI (not in the mockup; existing mix sources are preserved on save). Browser demo run 2026-11-07 (builder create, locked edit, sample column); the image source is not rendered in the browser yet (see boxes) · **Size:** L · **Depends:** P09
 
 **Outcome:** Staff build valid tests and preview the repeated-column mechanism before publication.
 
@@ -375,7 +375,7 @@ For every slice, use this verification loop:
 - [x] Columns k and k+N/2 have identical references/questions/subset ordering, with separate answer keys per column identity.
       Generator replay test and HTTP preview (kolom 6 equals kolom 1 for one seed); keys are one row per kolom. Nothing is persisted per attempt until P18.
 - [ ] Reject edit/delete after a session exists; supported char/number/symbol/image/emoji/shape/mix sources render.
-      Browser 2026-11-07: a test with real P18 sessions opens read-only with Save disabled, and char, emoji, shape and a char+emoji mix render in the sample column and package pages. Open: delete refusal after a session and the number, symbol and image sources were not shown in the browser (no local image package).
+      Browser 2026-11-07: a test with real P18 sessions opens read-only with Save disabled, and char, number, symbol, emoji, shape and a char+emoji mix render in the sample column and package pages; delete is disabled on every test with sessions and the API answers `409` to a direct delete. Open: no local image package has uploaded elements, so the image source was not rendered.
 
 **Decision / verification gate:** D09 resolved 2026-10-28 (at most 50 kolom × 100 soal); generation policy is fixed by content snapshots, not a client RNG.
 
@@ -406,7 +406,7 @@ For every slice, use this verification loop:
 
 ### P11b — Website CMS and rose landing
 
-**Status:** in progress — contract, migration `000022`, `WebsiteService`, the five endpoints, the portal editor/review/protected preview, the rose landing and public `/programs/[slug]` are built and proven browser → API → PostgreSQL on 2026-11-01. The publish-conflict UI demo and the Student preview-route check ran on 2026-11-07. Open: G4 launch content, a 26px overflow on `/admin/website/home` at 320px, and keyboard and contrast checks for the editor pages. P04 and P11 keep their own status · **Size:** L · **Depends:** P03, P11
+**Status:** in progress — contract, migration `000022`, `WebsiteService`, the five endpoints, the portal editor/review/protected preview, the rose landing and public `/programs/[slug]` are built and proven browser → API → PostgreSQL on 2026-11-01. The publish-conflict UI demo and the Student preview-route check ran on 2026-11-07. Open: G4 launch content and the light-mode contrast of the shared warning chip (4.08:1). P04 and P11 keep their own status · **Size:** L · **Depends:** P03, P11
 
 **Outcome:** An Admin edits structured bilingual marketing content, saves a private draft, previews it, reviews a before/after diff and publishes one whole-site snapshot; visitors see the published content on a warm rose landing next to the real catalog.
 
@@ -436,7 +436,7 @@ For every slice, use this verification loop:
   - The failed-publish part rests on `TestWebsitePublishAtomic`: a database failure leaves content, revision and history unchanged. Browser 2026-11-07 showed a publish conflict: with the review page open on draft r1, a second save moved the draft to r2, the stale page's publish answered `409`, nothing was published and the page reloaded r2 for a fresh review. No earlier public version existed locally.
 - [x] Public `GET /website` before the first publication answers `website_not_published` and the landing shows its static fallback; the public, protected and preview responses are `no-store` and carry no draft, actor ids or history.
 - [ ] Browser checks pass at 320/390/768/1024/1440 px, light and dark, ID and EN, keyboard focus, contrast and reduced motion, with no horizontal overflow.
-  - Landing and `/programs/tni` checked at all five widths in light and dark with reduced motion and no overflow. 2026-11-07: the four editor pages render in EN and have no page overflow at 390/768, but `/admin/website/home` overflows by 26px at 320. Keyboard focus and contrast measurement are not checked yet.
+  - Landing and `/programs/tni` checked at all five widths in light and dark with reduced motion and no overflow. 2026-11-07: the four editor pages render in EN and have no page overflow at all five widths (the 320px overflow on `/admin/website/home` was fixed with `grid-cols-1`); every reachable tab stop shows a visible focus change and has an accessible name; measured contrast passes for all text in dark mode. Open: in light mode the "Menunggu informasi" warning chip measures 4.08:1 at 11px, which comes from the shared `warning-soft` token used by every warning chip.
 
 **Decision / verification gate:** G4 blocks real publication and launch. Draft preview is a private Admin route, not a share link; lead inbox, enrollment, media library, SEO, scheduled publish and rollback are out of scope.
 
@@ -467,7 +467,7 @@ For every slice, use this verification loop:
 
 ### P13 — Manual and wallet checkout with enrollment
 
-**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Kecermatan checkout and credit landed in P18. Gateway orders landed in P14. Browser demo run 2026-11-07; open: the student orders list screen (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
+**Status:** done, lean — wallet and manual checkout with order snapshots, proof review (confirm/cancel with reason), one shared enrollment issuance with unique grant sources, durable email/WhatsApp notifications, the product `active_from` sale window, and the checkout, orders, Paket Belajar Saya and admin orders screens on the API. Kecermatan checkout and credit landed in P18. Gateway orders landed in P14. Browser demo run 2026-11-07 (see boxes) · **Size:** L · **Depends:** P02, P06, P11, P12
 
 **Outcome:** Students purchase through manual transfer or wallet and receive the correct access after confirmation.
 
@@ -486,8 +486,8 @@ For every slice, use this verification loop:
   - Student, proof and role cases are proven; no cross-tenant test by design (D17).
 - [x] Bundle grants every purchased test; repeat kecermatan purchase preserves history on same enrollment; correct email/WA events enqueue atomically.
   - Bundle grants and atomic enqueue were proven in P13; P18 proves a repeat kecermatan purchase adds credits to the one enrollment row, a replayed key, a repeated confirm and a cancel add nothing, and a payment racing a completion lands on the same row consistently.
-- [ ] Real browser to API to database demo of the screens.
-  - 2026-11-07: insufficient-balance notice, manual checkout with proof upload (order pending, no grant), wallet checkout (one −75.000 ledger entry and one grant in the same transaction), admin proof view via a 60s presigned link and confirm (one grant), and both tryouts then listed under the student's tryouts. Open: the student orders list screen was not opened; individual order pages were.
+- [x] Real browser to API to database demo of the screens.
+  - 2026-11-07: insufficient-balance notice, manual checkout with proof upload (order pending, no grant), wallet checkout (one −75.000 ledger entry and one grant in the same transaction), admin proof view via a 60s presigned link and confirm (one grant), and both tryouts then listed under the student's tryouts. The student orders list shows all seven of the student's orders in the database's order, each linking to its own order page.
 
 **Decision / verification gate:** D05 resolved (access over the tryout window, product sale window, reject repurchase of held tryouts, kecermatan credit added to one enrollment); D12 money policy; external delivery success is verified through P02.
 
