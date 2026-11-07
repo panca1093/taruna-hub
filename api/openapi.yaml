@@ -37,8 +37,14 @@ tags:
     description: The student's own balance and immutable ledger
   - name: students
     description: Tenant students, their wallets and staff adjustments
+  - name: users
+    description: Tenant account administration - create, edit, deactivate and reactivate, by role (D02, D14)
+  - name: reports
+    description: The tenant Admin's revenue recap - confirmed orders and approved top-ups, never a settlement
   - name: assets
     description: Private image uploads, finalization and short-lived download links
+  - name: exports
+    description: Durable PDF, CSV and XLSX artifacts rendered by background jobs, their progress and authorized downloads
   - name: orders
     description: Wallet and manual-transfer checkout, order review by staff, and the access an order opens
   - name: topups
@@ -1349,6 +1355,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /api/v1/tryouts/{id}/pdf-exports:
+    post:
+      tags: [tryouts, exports]
+      summary: Request the printable PDF of a tryout
+      description: |
+        Admin and Operator only; a Student answers `403`. Answers `202` with the `Export` to poll through
+        `GET /api/v1/exports/{id}` and download through `POST /api/v1/exports/{id}/download-link`. The file lists
+        the tryout's subtests, questions and options in the order the admin stored them (shuffle settings are
+        ignored) with images and typeset math, and never carries answer keys, explanations or points. Its `params`
+        are `{tryout_id, revision}`: the PDF describes that definition revision, and a render that finds the tryout
+        at another revision fails with `error_code` `tryout_changed`. Other failure codes are `tryout_not_found`,
+        `pdf_too_large`, `renderer_unavailable` and `render_failed`. `503` with code `pdf_unavailable` means no PDF
+        converter is configured on this deployment, and no job is queued. Drafts can be exported too.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: The queued export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Export"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: No PDF converter is configured (`pdf_unavailable`) or the export service is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
   /api/v1/products:
     get:
       tags: [products]
@@ -1864,6 +1912,346 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdjustmentResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/users:
+    get:
+      tags: [users]
+      summary: The tenant's accounts, deactivated ones included
+      description: |
+        Admin and Operator (D02). Newest first, at most 100 per page. `role` is `student`, `operator`, `admin` or
+        `staff` (operators and admins together). Left out, an Admin sees every role and an Operator sees students.
+        An Operator who asks for a staff role answers `403`. `active` narrows to active or deactivated accounts;
+        a deactivated account stays listed so its history stays reachable. `q` is a case-insensitive substring of
+        name, email or phone; `%` and `_` are literal. Accounts of another tenant, and Platform Admins, are absent.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [student, operator, admin, staff]
+        - name: active
+          in: query
+          schema:
+            type: boolean
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of accounts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    post:
+      tags: [users]
+      summary: Create an account
+      description: |
+        Admin and Operator may create a `student`; only an Admin may create an `operator` or `admin` (`403`
+        otherwise). The creator sets the first password (8-72 characters). `email` is required; `phone` is
+        optional and normalised to E.164. An email or phone already used in the tenant answers `409` with the
+        field. The action is audited with the actor.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: The new account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/users/{id}:
+    get:
+      tags: [users]
+      summary: One account
+      description: |
+        Admin and Operator; an Operator reaches student accounts only and gets `403` for a staff id. An id of
+        another tenant, or one that is not an account, answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [users]
+      summary: Edit an account's name, email and phone
+      description: |
+        Same role rules as the read. All three fields are sent; an empty `phone` clears it. A changed email drops
+        the verification, since its owner has not proved the new address. Editing never changes the role, the
+        password or the active flag. Audited only when something changed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: The account as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/users/{id}/deactivate:
+    post:
+      tags: [users]
+      summary: Deactivate an account
+      description: |
+        D14: accounts are deactivated, never deleted. Same role rules as the read. The account can no longer sign
+        in (login answers the same `401` as a wrong password), every live refresh session is revoked in the same
+        transaction and its access token stops working on the next request. Orders, ledger entries, enrollments and
+        results stay linked. A `reason` (1-500 characters) is required and audited with the actor. Repeating the
+        call on an inactive account answers `200` and writes nothing. Deactivating yourself answers `403`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountReasonRequest"
+      responses:
+        "200":
+          description: The account as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`last_admin`: the account is the tenant's last active Admin and stays active."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/admin/users/{id}/reactivate:
+    post:
+      tags: [users]
+      summary: Reactivate an account
+      description: |
+        Same rules as deactivation. Login works again with the old password; sessions revoked earlier stay revoked.
+        Repeating the call on an active account answers `200` and writes nothing.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountReasonRequest"
+      responses:
+        "200":
+          description: The account as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/students/{id}/enrollments:
+    get:
+      tags: [students]
+      summary: Everything one student holds
+      description: |
+        Admin and Operator. Tryouts and kecermatan credits, newest first. `active` is the server's answer at the
+        time of the read: a published tryout inside its own window, or a kecermatan test with credits left.
+        `source_type` says how access was first opened, `order` or `staff`. An id of another tenant, or of
+        somebody who is not a student, answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          description: Defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: One page of the student's access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentAccessList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/students/{id}/grants:
+    post:
+      tags: [students]
+      summary: Grant access without an order
+      description: |
+        Admin or Operator (D02). Opens exactly one published tryout (`tryout_id`), or adds `attempts` credits to one
+        kecermatan test (`kecermatan_test_id`), through the same issuance a purchase uses. `reason` is required and
+        stored with the actor on the grant and in the audit trail.
+
+        `idempotency_key` (8-64 characters, `[A-Za-z0-9_-]`) is the grant source: the same key with the same body
+        answers `200` with the original access and grants nothing, and the same key with another student, test or
+        credit answers `409`. The first call answers `201`. A tryout the student already holds answers `409` with
+        code `already_owned`; kecermatan credits always add. An unknown or unpublished tryout, or a test of another
+        tenant, answers `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GrantAccessRequest"
+      responses:
+        "201":
+          description: The access the grant opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentAccess"
+        "200":
+          description: The original access for this idempotency key, nothing written
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudentAccess"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2480,6 +2868,62 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /api/v1/admin/reports/revenue:
+    get:
+      tags: [reports]
+      summary: The tenant's revenue recap
+      description: |
+        Admin only; an Operator answers `403`. Confirmed orders and approved top-ups of this tenant for an inclusive
+        range of Asia/Jakarta days, aggregated by PostgreSQL in one snapshot. Totals are exact decimal strings.
+        An order counts on the day it was confirmed and a top-up on the day it was approved. `days` is paginated,
+        newest first, and only holds days with activity; the totals above it always cover the whole range.
+
+        A wallet-paid order is funded by earlier top-ups, so orders and top-ups are two views of money and must not
+        be added together. This is a report, not a settlement: nothing here moves money or holds merchant credentials.
+        With no `from` and `to`, the last 30 days are shown. The range is at most 366 days.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          description: First day, `YYYY-MM-DD` in Asia/Jakarta.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          description: Last day, inclusive, `YYYY-MM-DD` in Asia/Jakarta.
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          description: Days per page; defaults to 50, at most 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: The recap
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevenueRecap"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
   /api/v1/topups:
     post:
       tags: [topups]
@@ -2838,6 +3282,117 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/exports:
+    get:
+      tags: [exports]
+      summary: List the tenant's exports
+      description: |
+        Admin and Operator only (D02: a role guard). Every export of the configured tenant, newest first. `kind`
+        narrows to one kind. The file itself is read through `POST /api/v1/exports/{id}/download-link` once the
+        export is `ready`. Exports are created by the endpoint of the slice that owns the kind (tryout PDF,
+        results CSV or XLSX), which answers `202` with an `Export`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/ExportKind"
+        - name: limit
+          in: query
+          description: Defaults to 20, at most 50.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        "200":
+          description: The exports, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/exports/{id}:
+    get:
+      tags: [exports]
+      summary: One export and its progress
+      description: |
+        Admin and Operator only. Poll it while `status` is `queued` or `running`. A failed export keeps its
+        `error_code`. An id of another tenant, an unknown id and a malformed id all answer the same `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Export"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/exports/{id}/download-link:
+    post:
+      tags: [exports]
+      summary: A short-lived download link for a ready export
+      description: |
+        Admin and Operator only; authorizes on every call. The link is a presigned GET valid for 60 seconds, saving
+        the file under `file_name`, so ask again instead of keeping it. The response is `Cache-Control: no-store`.
+        An export that is not `ready` answers `409` with code `export_not_ready`. `503` means object storage is not
+        configured on this deployment.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The presigned link and when it stops working
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportDownloadLink"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The export is not `ready` (`export_not_ready`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           $ref: "#/components/responses/Unavailable"
 
@@ -3404,6 +3959,12 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: program_id
+          in: query
+          description: Narrows to the tryouts of one program; combines with `tryout_id`.
+          schema:
+            type: string
+            format: uuid
         - name: q
           in: query
           schema:
@@ -3433,6 +3994,43 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/results/exports:
+    post:
+      tags: [results]
+      summary: Request a CSV or XLSX report of tryout results
+      description: |
+        Admin and Operator (D02: a role guard). Records a durable export of the tenant's completed tryout attempts,
+        optionally narrowed to one tryout and/or program, and answers `202` with the `Export` to poll through
+        `GET /api/v1/exports`. The report holds the results completed at or before the request moment (`cut_off_at`),
+        so a CSV and an XLSX requested together describe the same rows and a later completion is not in either. A
+        tryout or program that is not the tenant's is `404`. There is no kecermatan report. The body refuses unknown
+        fields.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResultExportRequest"
+      responses:
+        "202":
+          description: Accepted; the export is queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Export"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          $ref: "#/components/responses/Unavailable"
 
   /api/v1/admin/tryouts/{id}/leaderboard:
     get:
@@ -6040,6 +6638,256 @@ components:
           description: The projection after the adjustment, a canonical decimal string.
           example: "50000.00"
 
+    AdminUser:
+      type: object
+      additionalProperties: false
+      required: [id, name, email, phone, role, is_active, balance, email_verified, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [student, operator, admin]
+        is_active:
+          type: boolean
+          description: False once deactivated; the account cannot sign in but stays in every history.
+        balance:
+          type: string
+          description: The wallet projection, a canonical decimal string; "0.00" for staff.
+          example: "150000.00"
+        email_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    AdminUserList:
+      type: object
+      additionalProperties: false
+      required: [users, total]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+        total:
+          type: integer
+
+    CreateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [name, email, password, role]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          description: Optional; Indonesian local forms are rewritten to E.164.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+        role:
+          type: string
+          enum: [student, operator, admin]
+
+    UpdateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [name, email]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          description: Empty clears the phone.
+
+    AccountReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+
+    GrantAccessRequest:
+      type: object
+      additionalProperties: false
+      required: [reason, idempotency_key]
+      description: Exactly one of `tryout_id` and `kecermatan_test_id`; `attempts` goes with the latter only.
+      properties:
+        tryout_id:
+          type: string
+          format: uuid
+          nullable: true
+        kecermatan_test_id:
+          type: string
+          format: uuid
+          nullable: true
+        attempts:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Credits to add to a kecermatan test; leave out for a tryout.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        idempotency_key:
+          type: string
+          minLength: 8
+          maxLength: 64
+          pattern: "^[A-Za-z0-9_-]+$"
+
+    StudentAccess:
+      type: object
+      additionalProperties: false
+      required: [enrollment_id, kind, test_id, title, active_from, active_until, attempts_purchased, attempts_used,
+                 active, source_type, created_at]
+      properties:
+        enrollment_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [tryout, kecermatan]
+        test_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        active_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: A tryout's own start; null for kecermatan.
+        active_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: A tryout's own end (D05a); null for kecermatan.
+        attempts_purchased:
+          type: integer
+          nullable: true
+          description: Total kecermatan credits; null for a tryout.
+        attempts_used:
+          type: integer
+        active:
+          type: boolean
+          description: Server answer at read time - published tryout inside its window, or credits left.
+        source_type:
+          type: string
+          enum: [order, staff]
+        created_at:
+          type: string
+          format: date-time
+
+    StudentAccessList:
+      type: object
+      additionalProperties: false
+      required: [access, total]
+      properties:
+        access:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentAccess"
+        total:
+          type: integer
+
+    RevenueTotal:
+      type: object
+      additionalProperties: false
+      required: [count, total]
+      properties:
+        count:
+          type: integer
+        total:
+          type: string
+          description: Exact decimal string.
+          example: "350000.35"
+
+    RevenueBucket:
+      type: object
+      additionalProperties: false
+      required: [key, count, total]
+      properties:
+        key:
+          type: string
+        count:
+          type: integer
+        total:
+          type: string
+          example: "250000.25"
+
+    RevenueDay:
+      type: object
+      additionalProperties: false
+      required: [date, orders, orders_total, topups, topups_total]
+      properties:
+        date:
+          type: string
+          format: date
+        orders:
+          type: integer
+        orders_total:
+          type: string
+        topups:
+          type: integer
+        topups_total:
+          type: string
+
+    RevenueRecap:
+      type: object
+      additionalProperties: false
+      required: [from, to, orders, by_payment_method, by_product_type, topups_approved, days, days_total]
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        orders:
+          $ref: "#/components/schemas/RevenueTotal"
+        by_payment_method:
+          type: array
+          description: Confirmed orders grouped by `manual`, `wallet` or `gateway`; absent methods are left out.
+          items:
+            $ref: "#/components/schemas/RevenueBucket"
+        by_product_type:
+          type: array
+          description: Confirmed orders grouped by `individual`, `bundle` or `kecermatan`.
+          items:
+            $ref: "#/components/schemas/RevenueBucket"
+        topups_approved:
+          $ref: "#/components/schemas/RevenueTotal"
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueDay"
+        days_total:
+          type: integer
+          description: Days with activity in the range, before pagination.
+
     Asset:
       type: object
       required: [id, purpose, content_type, size_bytes, status]
@@ -6064,6 +6912,93 @@ components:
           enum: [staged, final]
 
     AssetURL:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url:
+          type: string
+          description: A presigned GET; it carries its own credentials, so never log or store it.
+        expires_at:
+          type: string
+          format: date-time
+
+    ResultExportRequest:
+      type: object
+      additionalProperties: false
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [csv, xlsx]
+        tryout_id:
+          type: string
+          format: uuid
+        program_id:
+          type: string
+          format: uuid
+
+    ExportKind:
+      type: string
+      enum: [tryout_pdf, tryout_results_csv, tryout_results_xlsx]
+
+    Export:
+      type: object
+      description: |
+        A durable artifact request. `queued` and `running` are in progress, `ready` has a file, `failed` ends with an
+        `error_code`. The storage key is never exposed.
+      required: [id, kind, status, params, requested_by, cut_off_at, file_name, content_type, size_bytes, error_code, created_at, finished_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/ExportKind"
+        status:
+          type: string
+          enum: [queued, running, ready, failed]
+        params:
+          type: object
+          additionalProperties: true
+          description: What the owning slice asked for; shape depends on `kind`.
+        requested_by:
+          type: string
+          format: uuid
+        cut_off_at:
+          type: string
+          format: date-time
+          description: The instant the data was fixed; a late render still describes this moment.
+        file_name:
+          type: string
+          nullable: true
+          description: Null until the export is ready.
+        content_type:
+          type: string
+          nullable: true
+        size_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        error_code:
+          type: string
+          description: Empty unless an attempt failed; the last attempt's code stays while it is retried.
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ExportList:
+      type: object
+      required: [exports]
+      properties:
+        exports:
+          type: array
+          items:
+            $ref: "#/components/schemas/Export"
+
+    ExportDownloadLink:
       type: object
       required: [url, expires_at]
       properties:
@@ -6121,6 +7056,9 @@ components:
                 - website_not_published
                 - website_revision_conflict
                 - website_content_invalid
+                - pdf_unavailable
+                - export_not_ready
+                - last_admin
             message:
               type: string
               description: Human-readable, Indonesian, safe to show to end users.
@@ -8299,7 +9237,7 @@ components:
       type: object
       additionalProperties: false
       required: [session_id, student_id, student_name, test_id, test_title, program_id, program_code, attempt_number,
-                 benar_total, salah_total, kosong_total, scores, scoring_version, completed_at]
+                 benar_total, salah_total, kosong_total, scores, scoring_version, completed_at, remaining_attempts]
       properties:
         session_id:
           type: string
@@ -8334,6 +9272,9 @@ components:
         completed_at:
           type: string
           format: date-time
+        remaining_attempts:
+          type: integer
+          description: The student's unused credits on this test now, not at completion time.
 
     KecermatanStaffResultList:
       type: object

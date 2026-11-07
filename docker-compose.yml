@@ -46,6 +46,30 @@ services:
       timeout: 3s
       retries: 20
 
+  # Renders the tryout PDF (P20). Chromium reads only the files the worker uploads: the allow-list admits the
+  # temp dir Gotenberg writes them to, and the IP denials close every network destination.
+  gotenberg:
+    image: gotenberg/gotenberg:8.34.0
+    command:
+      - gotenberg
+      - --chromium-allow-list=^file:///tmp/.*
+      - --chromium-deny-list=^(?!file:///tmp/).*
+      - --chromium-deny-private-ips
+      - --chromium-deny-public-ips
+      - --api-timeout=60s
+      - --api-body-limit=64MB
+      - --chromium-max-queue-size=10
+      - --chromium-restart-after=50
+    # Host port shifted off 3000, which the web app uses.
+    ports:
+      - "${GOTENBERG_PORT:-3020}:3000"
+    mem_limit: 1536m
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   migrate:
     image: migrate/migrate:v4.18.1
     command: ["-path", "/migrations", "-database", "postgres://tryout:tryout@postgres:5432/tryout?sslmode=disable", "up"]
@@ -81,6 +105,7 @@ services:
       S3_SECRET_KEY: tryout123
       S3_BUCKET: tryout-assets
       S3_USE_SSL: "false"
+      GOTENBERG_URL: http://gotenberg:3000
       APP_URL: http://localhost:${WEB_PORT:-3000}
       CORS_ORIGINS: http://localhost:${WEB_PORT:-3000}
     ports:
@@ -106,7 +131,10 @@ services:
       - path: ./api/.env
         required: false
     environment: *app-env
-    depends_on: *app-deps
+    depends_on:
+      <<: *app-deps
+      gotenberg:
+        condition: service_healthy
 
   web:
     build:

@@ -178,10 +178,11 @@ func (r *ResultRepository) ReviewQuestions(ctx context.Context, q dbtx, tenantID
 
 // StaffResultFilter is already validated by the service.
 type StaffResultFilter struct {
-	TryoutID *uuid.UUID
-	Search   string
-	Limit    int
-	Offset   int
+	TryoutID  *uuid.UUID
+	ProgramID *uuid.UUID
+	Search    string
+	Limit     int
+	Offset    int
 }
 
 // StaffResults lists completed attempts, best current rank first, each with its student's current rank. The IRT flag
@@ -200,17 +201,17 @@ func (r *ResultRepository) StaffResults(ctx context.Context, q dbtx, tenantID uu
 		  JOIN users u ON u.id = r.user_id AND u.tenant_id = r.tenant_id
 		  JOIN tryouts t ON t.id = r.tryout_id AND t.tenant_id = r.tenant_id
 		  JOIN programs p ON p.id = t.program_id AND p.tenant_id = t.tenant_id
-		 WHERE r.tenant_id = $1 AND ($3 = '' OR u.name ILIKE $3 ESCAPE '\')`
+		 WHERE r.tenant_id = $1 AND ($3 = '' OR u.name ILIKE $3 ESCAPE '\') AND ($4::uuid IS NULL OR t.program_id = $4)`
 	cte := `WITH st AS (` + averageSQL + ` AND ($2::uuid IS NULL OR tryout_id = $2))`
 	var total int
-	if err := q.QueryRow(ctx, cte+` SELECT count(*)`+from, tenantID, f.TryoutID, search).Scan(&total); err != nil {
+	if err := q.QueryRow(ctx, cte+` SELECT count(*)`+from, tenantID, f.TryoutID, search, f.ProgramID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count staff results: %w", err)
 	}
 	rows, err := q.Query(ctx, cte+`
 		SELECT r.session_id, r.tryout_id, t.title, p.code, r.scoring_mode, r.user_id, u.name, r.attempt_number,
 		       r.score::float8, st.average::float8, st.rnk, st.participants, r.completed_at`+from+`
 		 ORDER BY CASE WHEN $2::uuid IS NULL THEN 0 ELSE st.rnk END, r.completed_at DESC, r.session_id
-		 LIMIT $4 OFFSET $5`, tenantID, f.TryoutID, search, f.Limit, f.Offset)
+		 LIMIT $5 OFFSET $6`, tenantID, f.TryoutID, search, f.ProgramID, f.Limit, f.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list staff results: %w", err)
 	}
@@ -292,4 +293,74 @@ func (r *ResultRepository) IRTUnderThreshold(ctx context.Context, q dbtx, tenant
 		out[id] = under
 	}
 	return out, rows.Err()
+}
+
+// ExportFilter selects the rows of a results export. Only results completed at or before CutOff count, for the rows
+// and for the ranking, so a late render describes the moment of the request.
+type ExportFilter struct {
+	TryoutID  *uuid.UUID
+	ProgramID *uuid.UUID
+	CutOff    time.Time
+	Limit     int
+}
+
+// ExportRows lists the completed attempts as of the cut-off, by tryout title, rank, student and completion. The
+// rank is the D04 rank (average of the student's attempts, ties share, next skips) over the same cut-off set.
+func (r *ResultRepository) ExportRows(ctx context.Context, q dbtx, tenantID uuid.UUID, f ExportFilter) ([]model.StaffResult, error) {
+	if tenantID == uuid.Nil {
+		return nil, ErrScopeRequired
+	}
+	rows, err := q.Query(ctx, `
+		WITH scoped AS (
+		    SELECT session_id, user_id, tryout_id, attempt_number, score, scoring_mode, completed_at
+		      FROM tryout_results
+		     WHERE tenant_id = $1 AND completed_at <= $4 AND ($2::uuid IS NULL OR tryout_id = $2)),
+		st AS (
+		    SELECT user_id, tryout_id, round(avg(score), 2) AS average,
+		           RANK() OVER (PARTITION BY tryout_id ORDER BY round(avg(score), 2) DESC) AS rnk,
+		           COUNT(*) OVER (PARTITION BY tryout_id) AS participants
+		      FROM scoped GROUP BY user_id, tryout_id)
+		SELECT r.session_id, r.tryout_id, t.title, p.code, r.scoring_mode, r.user_id, u.name, r.attempt_number,
+		       r.score::float8, st.average::float8, st.rnk, st.participants, r.completed_at
+		  FROM scoped r
+		  JOIN st ON st.user_id = r.user_id AND st.tryout_id = r.tryout_id
+		  JOIN users u ON u.id = r.user_id AND u.tenant_id = $1
+		  JOIN tryouts t ON t.id = r.tryout_id AND t.tenant_id = $1
+		  JOIN programs p ON p.id = t.program_id AND p.tenant_id = $1
+		 WHERE ($3::uuid IS NULL OR t.program_id = $3)
+		 ORDER BY t.title, r.tryout_id, st.rnk, u.name, r.user_id, r.completed_at, r.session_id
+		 LIMIT $5`, tenantID, f.TryoutID, f.ProgramID, f.CutOff, f.Limit)
+	if err != nil {
+		return nil, fmt.Errorf("list export rows: %w", err)
+	}
+	defer rows.Close()
+	out := []model.StaffResult{}
+	for rows.Next() {
+		var s model.StaffResult
+		if err := rows.Scan(&s.SessionID, &s.TryoutID, &s.TryoutTitle, &s.ProgramCode, &s.ScoringMode, &s.UserID,
+			&s.StudentName, &s.AttemptNumber, &s.Score, &s.Average, &s.Rank, &s.Participants, &s.CompletedAt); err != nil {
+			return nil, fmt.Errorf("scan export row: %w", err)
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// TryoutExists and ProgramExists let a create endpoint answer 404 for an id that is not this tenant's.
+func (r *ResultRepository) TryoutExists(ctx context.Context, q dbtx, tenantID, id uuid.UUID) (bool, error) {
+	if tenantID == uuid.Nil {
+		return false, ErrScopeRequired
+	}
+	var ok bool
+	err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tryouts WHERE tenant_id = $1 AND id = $2)`, tenantID, id).Scan(&ok)
+	return ok, err
+}
+
+func (r *ResultRepository) ProgramExists(ctx context.Context, q dbtx, tenantID, id uuid.UUID) (bool, error) {
+	if tenantID == uuid.Nil {
+		return false, ErrScopeRequired
+	}
+	var ok bool
+	err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM programs WHERE tenant_id = $1 AND id = $2)`, tenantID, id).Scan(&ok)
+	return ok, err
 }

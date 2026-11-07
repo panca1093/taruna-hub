@@ -413,6 +413,29 @@ func TestKecermatanCompletionConsumesOnceAndScores(t *testing.T) {
 		overview.Test.Purchased-overview.Test.Used != 2 || overview.Current != nil {
 		t.Errorf("overview = %+v err = %v, want one scored attempt and 2 credits left", overview, err)
 	}
+
+	admin := h.t.principal(tenant, model.RoleAdmin)
+	programID := test.ProgramID
+	for name, filter := range map[string]KecResultFilter{
+		"all": {}, "test": {TestID: &test.ID}, "program": {ProgramID: &programID},
+	} {
+		rows, total, err := h.rt.StaffResults(ctx, h.scope(tenant), admin, filter)
+		if err != nil || total != 1 || len(rows) != 1 {
+			t.Fatalf("staff results (%s) = %d of %d, err %v, want the one attempt", name, len(rows), total, err)
+		}
+		row := rows[0]
+		if row.RemainingAttempts != 2 || row.BenarTotal != 250 || row.SalahTotal != 100 || row.KosongTotal != 150 ||
+			row.NilaiAkhir != want.NilaiAkhir || row.Kecepatan != want.Kecepatan || row.CompletedAt.IsZero() || row.StudentName == "" {
+			t.Errorf("staff row (%s) = %+v, want counts, composites, final score, date and 2 attempts left", name, row)
+		}
+	}
+	other := uuid.New()
+	if rows, total, err := h.rt.StaffResults(ctx, h.scope(tenant), admin, KecResultFilter{ProgramID: &other}); err != nil || total != 0 || len(rows) != 0 {
+		t.Errorf("another program = %d of %d (err %v), want none", len(rows), total, err)
+	}
+	if rows, _, err := h.rt.StaffResults(ctx, h.scope(h.t.q.b), h.t.principal(h.t.q.b, model.RoleAdmin), KecResultFilter{}); err != nil || len(rows) != 0 {
+		t.Errorf("tenant B sees %d of tenant A's results (err %v), want none", len(rows), err)
+	}
 }
 
 func TestKecermatanExpiryRecordsKosongAndTimersNeverReset(t *testing.T) {

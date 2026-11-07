@@ -164,6 +164,22 @@ export type WalletStudentFilters = Omit<
 
 type AdjustmentBody = components["schemas"]["AdjustmentRequest"];
 
+export type AdminUser = components["schemas"]["AdminUser"];
+export type AdminUserList = components["schemas"]["AdminUserList"];
+export type CreateUserBody = components["schemas"]["CreateUserRequest"];
+export type UpdateUserBody = components["schemas"]["UpdateUserRequest"];
+export type StudentAccess = components["schemas"]["StudentAccess"];
+export type StudentAccessList = components["schemas"]["StudentAccessList"];
+export type GrantAccessBody = components["schemas"]["GrantAccessRequest"];
+export type RevenueRecap = components["schemas"]["RevenueRecap"];
+
+export type AdminUserFilters = Omit<
+  NonNullable<paths["/api/v1/admin/users"]["get"]["parameters"]["query"]>,
+  "limit" | "offset" | "active"
+> & { limit?: number; offset?: number; active?: boolean };
+
+export type RevenueFilters = NonNullable<paths["/api/v1/admin/reports/revenue"]["get"]["parameters"]["query"]>;
+
 export type Order = components["schemas"]["Order"];
 export type OrderList = components["schemas"]["OrderList"];
 export type Enrollment = components["schemas"]["Enrollment"];
@@ -176,6 +192,10 @@ export type TopupList = components["schemas"]["TopupList"];
 export type TopupBody = components["schemas"]["TopupCreateRequest"];
 export type Asset = components["schemas"]["Asset"];
 export type AssetLink = components["schemas"]["AssetURL"];
+export type Export = components["schemas"]["Export"];
+export type ExportList = components["schemas"]["ExportList"];
+export type ExportDownloadLink = components["schemas"]["ExportDownloadLink"];
+export type ResultExportBody = components["schemas"]["ResultExportRequest"];
 
 /** Filters of `GET /api/v1/admin/results`; an absent field is not sent at all. */
 export type StaffResultFilters = Omit<
@@ -294,7 +314,7 @@ const sessionPath = (id: string) => `/api/v1/my/tryout-sessions/${id}` as keyof 
 const catalogProductPath = (id: string) => `/api/v1/catalog/products/${id}` as keyof paths;
 
 /** Query string of a list request; empty values are dropped so the server sees no filter. */
-function queryOf(filters: Record<string, string | number | undefined>): string {
+function queryOf(filters: Record<string, string | number | boolean | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (value !== undefined && value !== "") params.set(key, String(value));
@@ -514,6 +534,31 @@ export const api = {
       authed<WalletEntryList>(`/api/v1/students/${id}/wallet/entries${queryOf(filters)}` as keyof paths),
     adjust: (id: string, body: AdjustmentBody) =>
       mutate<AdjustmentResult>("POST", `/api/v1/students/${id}/wallet/adjustments` as keyof paths, body),
+    /** Everything the student holds, with the server's answer on whether each is active now. */
+    access: (id: string, filters: Pick<AdminUserFilters, "limit" | "offset"> = {}) =>
+      authed<StudentAccessList>(`/api/v1/students/${id}/enrollments${queryOf(filters)}` as keyof paths),
+    /** Access without an order; the same key with the same body replays instead of granting twice. */
+    grant: (id: string, body: GrantAccessBody) =>
+      mutate<StudentAccess>("POST", `/api/v1/students/${id}/grants` as keyof paths, body),
+  },
+
+  /** Tenant accounts (D02/D14): an Operator reaches students only; deactivation keeps every history link. */
+  adminUsers: {
+    list: (filters: AdminUserFilters = {}) =>
+      authed<AdminUserList>(`/api/v1/admin/users${queryOf(filters)}` as keyof paths),
+    create: (body: CreateUserBody) => mutate<AdminUser>("POST", "/api/v1/admin/users", body),
+    update: (id: string, body: UpdateUserBody) =>
+      mutate<AdminUser>("PUT", `/api/v1/admin/users/${id}` as keyof paths, body),
+    deactivate: (id: string, reason: string) =>
+      mutate<AdminUser>("POST", `/api/v1/admin/users/${id}/deactivate` as keyof paths, { reason }),
+    reactivate: (id: string, reason: string) =>
+      mutate<AdminUser>("POST", `/api/v1/admin/users/${id}/reactivate` as keyof paths, { reason }),
+  },
+
+  /** The Admin's revenue recap: confirmed orders and approved top-ups, never a settlement. */
+  reports: {
+    revenue: (filters: RevenueFilters = {}) =>
+      authed<RevenueRecap>(`/api/v1/admin/reports/revenue${queryOf(filters)}` as keyof paths),
   },
 
   /** Checkout and the signed-in student's own orders and access. */
@@ -606,6 +651,15 @@ export const api = {
     url: (id: string) => authed<AssetLink>(`/api/v1/assets/${id}/url` as keyof paths),
   },
 
+  exports: {
+    list: (filters: { kind?: Export["kind"]; limit?: number } = {}) =>
+      authed<ExportList>(`/api/v1/exports${queryOf(filters)}` as keyof paths),
+    get: (id: string) => authed<Export>(`/api/v1/exports/${id}` as keyof paths),
+    /** 409 `export_not_ready` until the export is ready. */
+    downloadLink: (id: string) =>
+      mutate<ExportDownloadLink>("POST", `/api/v1/exports/${id}/download-link` as keyof paths),
+  },
+
   tryouts: {
     list: (filters: TryoutFilters = {}) =>
       authed<TryoutList>(`/api/v1/tryouts${queryOf(filters)}` as keyof paths),
@@ -615,6 +669,8 @@ export const api = {
     remove: (id: string) => mutate<void>("DELETE", tryoutPath(id)),
     publish: (id: string) => mutate<Tryout>("POST", `${tryoutPath(id)}/publish` as keyof paths),
     unpublish: (id: string) => mutate<Tryout>("POST", `${tryoutPath(id)}/unpublish` as keyof paths),
+    /** 202 with the queued export; 503 `pdf_unavailable` when no converter is configured. */
+    requestPdf: (id: string) => mutate<Export>("POST", `${tryoutPath(id)}/pdf-exports` as keyof paths),
     /** D10: Admin only, and the one change a locked tryout still accepts. */
     setGrace: (id: string, body: GraceBody) => mutate<Tryout>("PUT", `${tryoutPath(id)}/grace` as keyof paths, body),
   },
@@ -679,6 +735,8 @@ export const api = {
   results: {
     list: (filters: StaffResultFilters = {}) =>
       authed<StaffResultList>(`/api/v1/admin/results${queryOf(filters)}` as keyof paths),
+    /** 202 with the queued export; poll it through `exports.list`. */
+    requestExport: (body: ResultExportBody) => mutate<Export>("POST", "/api/v1/results/exports", body),
     leaderboard: (tryoutId: string, limit?: number) =>
       authed<Leaderboard>(
         `/api/v1/admin/tryouts/${tryoutId}/leaderboard${queryOf({ limit })}` as keyof paths,

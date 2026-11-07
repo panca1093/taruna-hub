@@ -74,15 +74,24 @@ func run() error {
 
 	// Only needed when S3_ENDPOINT is set; without it no asset was ever stored.
 	var assets *service.AssetService
+	var assetStorage *infra.Storage
 	if cfg.S3.Endpoint != "" {
 		storage, err := infra.NewStorage(cfg.S3)
 		if err != nil {
 			return err
 		}
+		assetStorage = storage
 		assets = service.NewAssetService(pool, repository.NewAssetRepository(pool), storage, 0)
 	}
 
-	client, err := infra.NewRiverWorker(pool, notifications, service.RetryDelay, logger)
+	var store service.ObjectStore
+	if assetStorage != nil {
+		store = assetStorage
+	}
+	exports := service.NewExportService(pool, repository.NewExportRepository(pool), store, inserter, notifications, logger)
+	registerExportRenderers(exports, exportDeps{pool: pool, store: store, logger: logger, gotenbergURL: cfg.GotenbergURL})
+
+	client, err := infra.NewRiverWorker(pool, notifications, service.RetryDelay, logger, infra.WithExports(exports))
 	if err != nil {
 		return err
 	}
@@ -90,7 +99,7 @@ func run() error {
 	if err := client.Start(context.Background()); err != nil {
 		return err
 	}
-	logger.Info("worker started", slog.String("env", cfg.Env), slog.String("queue", service.QueueNotifications))
+	logger.Info("worker started", slog.String("env", cfg.Env), slog.String("queues", service.QueueNotifications+","+service.QueueExports))
 
 	go func() {
 		ticker := time.NewTicker(reconcileInterval)
@@ -100,11 +109,11 @@ func run() error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				reconcile(ctx, notifications, assets, logger)
+				reconcile(ctx, notifications, assets, exports, logger)
 			}
 		}
 	}()
-	reconcile(ctx, notifications, assets, logger)
+	reconcile(ctx, notifications, assets, exports, logger)
 
 	runtime := service.NewRuntimeService(pool, repository.NewRuntimeRepository(pool))
 	kecermatanRepo := repository.NewKecermatanRepository(pool)
@@ -171,7 +180,7 @@ func sweepPayments(ctx context.Context, payments *service.PaymentService, logger
 	}
 }
 
-func reconcile(ctx context.Context, notifications *service.NotificationService, assets *service.AssetService, logger *slog.Logger) {
+func reconcile(ctx context.Context, notifications *service.NotificationService, assets *service.AssetService, exports *service.ExportService, logger *slog.Logger) {
 	failed, err := notifications.Reconcile(ctx)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("reconcile failed", slog.String("error", err.Error()))
@@ -179,6 +188,13 @@ func reconcile(ctx context.Context, notifications *service.NotificationService, 
 	}
 	if failed > 0 {
 		logger.Warn("reconciled orphaned notifications", slog.Int("count", failed))
+	}
+	stale, err := exports.FailStale(ctx, service.ExportJobTimeout*service.ExportMaxAttempts+service.ExportStaleMargin)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		logger.Error("fail stale exports failed", slog.String("error", err.Error()))
+	}
+	if stale > 0 {
+		logger.Warn("failed exports left unfinished by a lost worker", slog.Int("count", stale))
 	}
 	if assets == nil {
 		return

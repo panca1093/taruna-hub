@@ -1804,6 +1804,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tryouts/{id}/pdf-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request the printable PDF of a tryout
+         * @description Admin and Operator only; a Student answers `403`. Answers `202` with the `Export` to poll through
+         *     `GET /api/v1/exports/{id}` and download through `POST /api/v1/exports/{id}/download-link`. The file lists
+         *     the tryout's subtests, questions and options in the order the admin stored them (shuffle settings are
+         *     ignored) with images and typeset math, and never carries answer keys, explanations or points. Its `params`
+         *     are `{tryout_id, revision}`: the PDF describes that definition revision, and a render that finds the tryout
+         *     at another revision fails with `error_code` `tryout_changed`. Other failure codes are `tryout_not_found`,
+         *     `pdf_too_large`, `renderer_unavailable` and `render_failed`. `503` with code `pdf_unavailable` means no PDF
+         *     converter is configured on this deployment, and no job is queued. Drafts can be exported too.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The queued export */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Export"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description No PDF converter is configured (`pdf_unavailable`) or the export service is unavailable. */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/products": {
         parameters: {
             query?: never;
@@ -2474,6 +2534,407 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["AdjustmentResult"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's accounts, deactivated ones included
+         * @description Admin and Operator (D02). Newest first, at most 100 per page. `role` is `student`, `operator`, `admin` or
+         *     `staff` (operators and admins together). Left out, an Admin sees every role and an Operator sees students.
+         *     An Operator who asks for a staff role answers `403`. `active` narrows to active or deactivated accounts;
+         *     a deactivated account stays listed so its history stays reachable. `q` is a case-insensitive substring of
+         *     name, email or phone; `%` and `_` are literal. Accounts of another tenant, and Platform Admins, are absent.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    role?: "student" | "operator" | "admin" | "staff";
+                    active?: boolean;
+                    q?: string;
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of accounts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUserList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        /**
+         * Create an account
+         * @description Admin and Operator may create a `student`; only an Admin may create an `operator` or `admin` (`403`
+         *     otherwise). The creator sets the first password (8-72 characters). `email` is required; `phone` is
+         *     optional and normalised to E.164. An email or phone already used in the tenant answers `409` with the
+         *     field. The action is audited with the actor.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateUserRequest"];
+                };
+            };
+            responses: {
+                /** @description The new account */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUser"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One account
+         * @description Admin and Operator; an Operator reaches student accounts only and gets `403` for a staff id. An id of
+         *     another tenant, or one that is not an account, answers `404`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The account */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUser"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        /**
+         * Edit an account's name, email and phone
+         * @description Same role rules as the read. All three fields are sent; an empty `phone` clears it. A changed email drops
+         *     the verification, since its owner has not proved the new address. Editing never changes the role, the
+         *     password or the active flag. Audited only when something changed.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateUserRequest"];
+                };
+            };
+            responses: {
+                /** @description The account as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUser"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                409: components["responses"]["Conflict"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate an account
+         * @description D14: accounts are deactivated, never deleted. Same role rules as the read. The account can no longer sign
+         *     in (login answers the same `401` as a wrong password), every live refresh session is revoked in the same
+         *     transaction and its access token stops working on the next request. Orders, ledger entries, enrollments and
+         *     results stay linked. A `reason` (1-500 characters) is required and audited with the actor. Repeating the
+         *     call on an inactive account answers `200` and writes nothing. Deactivating yourself answers `403`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccountReasonRequest"];
+                };
+            };
+            responses: {
+                /** @description The account as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUser"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description `last_admin`: the account is the tenant's last active Admin and stays active. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate an account
+         * @description Same rules as deactivation. Login works again with the old password; sessions revoked earlier stay revoked.
+         *     Repeating the call on an active account answers `200` and writes nothing.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccountReasonRequest"];
+                };
+            };
+            responses: {
+                /** @description The account as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdminUser"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Everything one student holds
+         * @description Admin and Operator. Tryouts and kecermatan credits, newest first. `active` is the server's answer at the
+         *     time of the read: a published tryout inside its own window, or a kecermatan test with credits left.
+         *     `source_type` says how access was first opened, `order` or `staff`. An id of another tenant, or of
+         *     somebody who is not a student, answers `404`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of the student's access */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StudentAccessList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/students/{id}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant access without an order
+         * @description Admin or Operator (D02). Opens exactly one published tryout (`tryout_id`), or adds `attempts` credits to one
+         *     kecermatan test (`kecermatan_test_id`), through the same issuance a purchase uses. `reason` is required and
+         *     stored with the actor on the grant and in the audit trail.
+         *
+         *     `idempotency_key` (8-64 characters, `[A-Za-z0-9_-]`) is the grant source: the same key with the same body
+         *     answers `200` with the original access and grants nothing, and the same key with another student, test or
+         *     credit answers `409`. The first call answers `201`. A tryout the student already holds answers `409` with
+         *     code `already_owned`; kecermatan credits always add. An unknown or unpublished tryout, or a test of another
+         *     tenant, answers `404`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GrantAccessRequest"];
+                };
+            };
+            responses: {
+                /** @description The original access for this idempotency key, nothing written */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StudentAccess"];
+                    };
+                };
+                /** @description The access the grant opened */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StudentAccess"];
                     };
                 };
                 401: components["responses"]["Unauthorized"];
@@ -3311,6 +3772,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/reports/revenue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's revenue recap
+         * @description Admin only; an Operator answers `403`. Confirmed orders and approved top-ups of this tenant for an inclusive
+         *     range of Asia/Jakarta days, aggregated by PostgreSQL in one snapshot. Totals are exact decimal strings.
+         *     An order counts on the day it was confirmed and a top-up on the day it was approved. `days` is paginated,
+         *     newest first, and only holds days with activity; the totals above it always cover the whole range.
+         *
+         *     A wallet-paid order is funded by earlier top-ups, so orders and top-ups are two views of money and must not
+         *     be added together. This is a report, not a settlement: nothing here moves money or holds merchant credentials.
+         *     With no `from` and `to`, the last 30 days are shown. The range is at most 366 days.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description First day, `YYYY-MM-DD` in Asia/Jakarta. */
+                    from?: string;
+                    /** @description Last day, inclusive, `YYYY-MM-DD` in Asia/Jakarta. */
+                    to?: string;
+                    /** @description Days per page; defaults to 50, at most 100. */
+                    limit?: number;
+                    offset?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The recap */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RevenueRecap"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/topups": {
         parameters: {
             query?: never;
@@ -3768,6 +4287,159 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's exports
+         * @description Admin and Operator only (D02: a role guard). Every export of the configured tenant, newest first. `kind`
+         *     narrows to one kind. The file itself is read through `POST /api/v1/exports/{id}/download-link` once the
+         *     export is `ready`. Exports are created by the endpoint of the slice that owns the kind (tryout PDF,
+         *     results CSV or XLSX), which answers `202` with an `Export`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    kind?: components["schemas"]["ExportKind"];
+                    /** @description Defaults to 20, at most 50. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The exports, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExportList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One export and its progress
+         * @description Admin and Operator only. Poll it while `status` is `queued` or `running`. A failed export keeps its
+         *     `error_code`. An id of another tenant, an unknown id and a malformed id all answer the same `404`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The export */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Export"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{id}/download-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A short-lived download link for a ready export
+         * @description Admin and Operator only; authorizes on every call. The link is a presigned GET valid for 60 seconds, saving
+         *     the file under `file_name`, so ask again instead of keeping it. The response is `Cache-Control: no-store`.
+         *     An export that is not `ready` answers `409` with code `export_not_ready`. `503` means object storage is not
+         *     configured on this deployment.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The presigned link and when it stops working */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExportDownloadLink"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description The export is not `ready` (`export_not_ready`). */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                503: components["responses"]["Unavailable"];
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -4630,6 +5302,8 @@ export interface paths {
             parameters: {
                 query?: {
                     tryout_id?: string;
+                    /** @description Narrows to the tryouts of one program; combines with `tryout_id`. */
+                    program_id?: string;
                     q?: string;
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
@@ -4657,6 +5331,59 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/results/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a CSV or XLSX report of tryout results
+         * @description Admin and Operator (D02: a role guard). Records a durable export of the tenant's completed tryout attempts,
+         *     optionally narrowed to one tryout and/or program, and answers `202` with the `Export` to poll through
+         *     `GET /api/v1/exports`. The report holds the results completed at or before the request moment (`cut_off_at`),
+         *     so a CSV and an XLSX requested together describe the same rows and a later completion is not in either. A
+         *     tryout or program that is not the tenant's is `404`. There is no kecermatan report. The body refuses unknown
+         *     fields.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResultExportRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted; the export is queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Export"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -7146,6 +7873,129 @@ export interface components {
              */
             balance: string;
         };
+        AdminUser: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            email: string | null;
+            phone: string | null;
+            /** @enum {string} */
+            role: "student" | "operator" | "admin";
+            /** @description False once deactivated; the account cannot sign in but stays in every history. */
+            is_active: boolean;
+            /**
+             * @description The wallet projection, a canonical decimal string; "0.00" for staff.
+             * @example 150000.00
+             */
+            balance: string;
+            email_verified: boolean;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AdminUserList: {
+            users: components["schemas"]["AdminUser"][];
+            total: number;
+        };
+        CreateUserRequest: {
+            name: string;
+            /** Format: email */
+            email: string;
+            /** @description Optional; Indonesian local forms are rewritten to E.164. */
+            phone?: string;
+            password: string;
+            /** @enum {string} */
+            role: "student" | "operator" | "admin";
+        };
+        UpdateUserRequest: {
+            name: string;
+            /** Format: email */
+            email: string;
+            /** @description Empty clears the phone. */
+            phone?: string;
+        };
+        AccountReasonRequest: {
+            reason: string;
+        };
+        /** @description Exactly one of `tryout_id` and `kecermatan_test_id`; `attempts` goes with the latter only. */
+        GrantAccessRequest: {
+            /** Format: uuid */
+            tryout_id?: string | null;
+            /** Format: uuid */
+            kecermatan_test_id?: string | null;
+            /** @description Credits to add to a kecermatan test; leave out for a tryout. */
+            attempts?: number;
+            reason: string;
+            idempotency_key: string;
+        };
+        StudentAccess: {
+            /** Format: uuid */
+            enrollment_id: string;
+            /** @enum {string} */
+            kind: "tryout" | "kecermatan";
+            /** Format: uuid */
+            test_id: string;
+            title: string;
+            /**
+             * Format: date-time
+             * @description A tryout's own start; null for kecermatan.
+             */
+            active_from: string | null;
+            /**
+             * Format: date-time
+             * @description A tryout's own end (D05a); null for kecermatan.
+             */
+            active_until: string | null;
+            /** @description Total kecermatan credits; null for a tryout. */
+            attempts_purchased: number | null;
+            attempts_used: number;
+            /** @description Server answer at read time - published tryout inside its window, or credits left. */
+            active: boolean;
+            /** @enum {string} */
+            source_type: "order" | "staff";
+            /** Format: date-time */
+            created_at: string;
+        };
+        StudentAccessList: {
+            access: components["schemas"]["StudentAccess"][];
+            total: number;
+        };
+        RevenueTotal: {
+            count: number;
+            /**
+             * @description Exact decimal string.
+             * @example 350000.35
+             */
+            total: string;
+        };
+        RevenueBucket: {
+            key: string;
+            count: number;
+            /** @example 250000.25 */
+            total: string;
+        };
+        RevenueDay: {
+            /** Format: date */
+            date: string;
+            orders: number;
+            orders_total: string;
+            topups: number;
+            topups_total: string;
+        };
+        RevenueRecap: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            orders: components["schemas"]["RevenueTotal"];
+            /** @description Confirmed orders grouped by `manual`, `wallet` or `gateway`; absent methods are left out. */
+            by_payment_method: components["schemas"]["RevenueBucket"][];
+            /** @description Confirmed orders grouped by `individual`, `bundle` or `kecermatan`. */
+            by_product_type: components["schemas"]["RevenueBucket"][];
+            topups_approved: components["schemas"]["RevenueTotal"];
+            days: components["schemas"]["RevenueDay"][];
+            /** @description Days with activity in the range, before pagination. */
+            days_total: number;
+        };
         Asset: {
             /** Format: uuid */
             id: string;
@@ -7167,13 +8017,65 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
         };
+        ResultExportRequest: {
+            /** @enum {string} */
+            format: "csv" | "xlsx";
+            /** Format: uuid */
+            tryout_id?: string;
+            /** Format: uuid */
+            program_id?: string;
+        };
+        /** @enum {string} */
+        ExportKind: "tryout_pdf" | "tryout_results_csv" | "tryout_results_xlsx";
+        /**
+         * @description A durable artifact request. `queued` and `running` are in progress, `ready` has a file, `failed` ends with an
+         *     `error_code`. The storage key is never exposed.
+         */
+        Export: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ExportKind"];
+            /** @enum {string} */
+            status: "queued" | "running" | "ready" | "failed";
+            /** @description What the owning slice asked for; shape depends on `kind`. */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            requested_by: string;
+            /**
+             * Format: date-time
+             * @description The instant the data was fixed; a late render still describes this moment.
+             */
+            cut_off_at: string;
+            /** @description Null until the export is ready. */
+            file_name: string | null;
+            content_type: string | null;
+            /** Format: int64 */
+            size_bytes: number | null;
+            /** @description Empty unless an attempt failed; the last attempt's code stays while it is retried. */
+            error_code: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at: string | null;
+        };
+        ExportList: {
+            exports: components["schemas"]["Export"][];
+        };
+        ExportDownloadLink: {
+            /** @description A presigned GET; it carries its own credentials, so never log or store it. */
+            url: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
         ErrorEnvelope: {
             error: {
                 /**
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready" | "website_not_published" | "website_revision_conflict" | "website_content_invalid";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready" | "website_not_published" | "website_revision_conflict" | "website_content_invalid" | "pdf_unavailable" | "export_not_ready" | "last_admin";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -8256,6 +9158,8 @@ export interface components {
             scoring_version: number;
             /** Format: date-time */
             completed_at: string;
+            /** @description The student's unused credits on this test now, not at completion time. */
+            remaining_attempts: number;
         };
         KecermatanStaffResultList: {
             results: components["schemas"]["KecermatanStaffResult"][];

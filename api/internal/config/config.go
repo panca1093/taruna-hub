@@ -72,6 +72,8 @@ type Config struct {
 	S3         S3Config
 	Bank       BankConfig
 	Midtrans   MidtransConfig
+	// GotenbergURL is the PDF converter sidecar. Unset, tryout PDF requests answer 503 pdf_unavailable.
+	GotenbergURL string
 	// NotificationSealKey seals the codes and reset links queued for delivery. Required everywhere.
 	NotificationSealKey []byte
 	// AppURL is the web origin that links in emails point at; never taken from a request.
@@ -91,6 +93,7 @@ func Load() (Config, error) {
 		CORSOrigins:   split(env("CORS_ORIGINS", "http://localhost:3000")),
 		ShutdownGrace: 10 * time.Second,
 		TenantSlug:    strings.ToLower(env("TENANT_SLUG", "")),
+		GotenbergURL:  env("GOTENBERG_URL", ""),
 		SMTP: SMTPConfig{
 			Host:     env("SMTP_HOST", ""),
 			Port:     env("SMTP_PORT", "587"),

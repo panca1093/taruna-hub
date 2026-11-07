@@ -39,6 +39,10 @@ type Handler struct {
 	topups        *service.TopupService
 	payments      *service.PaymentService
 	website       *service.WebsiteService
+	exports       *service.ExportService
+	pdfConfigured bool
+	userAdmin     *service.UserAdminService
+	reports       *service.ReportService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
@@ -136,6 +140,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.DELETE("/tryouts/:id", h.DeleteTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/tryouts/:id/publish", h.PublishTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/tryouts/:id/unpublish", h.UnpublishTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/tryouts/:id/pdf-exports", h.RequestTryoutPDF, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 
 	// Products are tenant content like tryouts, so an Operator writes them too.
 	v1.GET("/products", h.ListProducts, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
@@ -206,6 +211,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/admin/tryout-sessions/:id/extensions", h.ExtendSession, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.PUT("/tryouts/:id/grace", h.SetTryoutGrace, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.GET("/admin/results", h.StaffResults, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/results/exports", h.RequestResultExport, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/tryouts/:id/leaderboard", h.TryoutLeaderboard, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/settings", h.Settings, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.PUT("/admin/settings", h.UpdateSettings, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
@@ -249,4 +255,11 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	// Any tenant user may upload; the purpose narrows who, and every read is re-authorized in the service.
 	v1.POST("/assets", h.UploadAsset, httpx.NoStore(), Authenticate(h.auth))
 	v1.GET("/assets/:id/url", h.AssetURL, httpx.NoStore(), Authenticate(h.auth))
+
+	// Exports are staff work (D02: role-only); the create endpoints live with each kind's slice.
+	v1.GET("/exports", h.ListExports, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.GET("/exports/:id", h.GetExport, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.POST("/exports/:id/download-link", h.ExportDownloadLink, httpx.NoStore(), Authenticate(h.auth), staff)
+
+	h.registerStudentOps(v1)
 }

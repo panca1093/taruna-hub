@@ -119,10 +119,17 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 	itemPackages := service.NewItemPackageService(pool, repository.NewItemPackageRepository(pool), assets)
 	kecermatan := service.NewKecermatanService(pool, repository.NewKecermatanRepository(pool), repository.NewItemPackageRepository(pool))
 	kecermatanRuntime := service.NewKecermatanRuntimeService(pool, repository.NewKecermatanRuntimeRepository(pool), kecermatan, repository.NewKecermatanRepository(pool))
+	var exports *service.ExportService
+	if exportInserter, err := infra.NewRiverInserter(pool, logger); err != nil {
+		logger.Error("export job inserter unavailable; export routes answer 503", slog.String("error", err.Error()))
+	} else {
+		exports = service.NewExportService(pool, repository.NewExportRepository(pool), store, exportInserter, notifications, logger)
+	}
 	h := handler.New(logger, handler.NewHealthHandler(pool), auth, account, curriculum, questions, tryouts, products, wallets, assets, orders, runtime, results, monitoring, itemPackages, kecermatan, handler.AuthOptions{
 		SecureCookies: !cfg.IsDevelopment(),
 		AllowedOrigin: httpx.OriginPolicy(cfg.CORSOrigins, cfg.IsDevelopment()),
-	}).WithKecermatanRuntime(kecermatanRuntime).WithTopups(topups).WithPayments(payments).WithWebsite(service.NewWebsiteService(pool, repository.NewWebsiteRepository(pool)))
+	}).WithKecermatanRuntime(kecermatanRuntime).WithTopups(topups).WithPayments(payments).WithWebsite(service.NewWebsiteService(pool, repository.NewWebsiteRepository(pool))).WithExports(exports).WithPDF(cfg.GotenbergURL != "").
+		WithStudentOps(service.NewUserAdminService(pool, users, sessions, orders), service.NewReportService(repository.NewReportRepository(pool)))
 
 	e := echo.New()
 	e.HideBanner = true

@@ -221,6 +221,13 @@ func (h *Handler) StaffResults(c echo.Context) error {
 		}
 		filter.TryoutID = &id
 	}
+	if raw := c.QueryParam("program_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			return httpx.Validation(incomplete, map[string]string{"program_id": invalidFormat})
+		}
+		filter.ProgramID = &id
+	}
 	rows, total, err := h.results.StaffResults(c.Request().Context(), scope, principal, filter)
 	if err != nil {
 		return resultError(err)
@@ -253,4 +260,40 @@ func resultError(err error) error {
 		return httpx.New(http.StatusConflict, codeExplanationsNotReleased, explanationsNotReleased)
 	}
 	return runtimeError(err)
+}
+
+type resultExportRequest struct {
+	Format    string     `json:"format"`
+	TryoutID  *uuid.UUID `json:"tryout_id"`
+	ProgramID *uuid.UUID `json:"program_id"`
+}
+
+const exportFormatRule = "Format harus csv atau xlsx."
+
+// RequestResultExport validates the report's scope, then hands the request to the shared export foundation.
+func (h *Handler) RequestResultExport(c echo.Context) error {
+	scope, principal, ok := runtimeCaller(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	var body resultExportRequest
+	if err := bindStrict(c, &body); err != nil {
+		return err
+	}
+	kind, ok := service.ExportKindOf(body.Format)
+	if !ok {
+		return httpx.Validation(incomplete, map[string]string{"format": exportFormatRule})
+	}
+	params, err := h.results.PrepareExport(c.Request().Context(), scope, principal, body.TryoutID, body.ProgramID)
+	if err != nil {
+		return resultExportError(err)
+	}
+	return h.acceptExport(c, kind, params)
+}
+
+func resultExportError(err error) error {
+	if errors.Is(err, service.ErrProgramNotFound) {
+		return httpx.NotFound(programNotFound)
+	}
+	return resultError(err)
 }

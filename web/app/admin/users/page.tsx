@@ -1,59 +1,120 @@
 "use client";
 
-import { useState } from "react";
-import { Button, toast } from "@heroui/react";
-import { Pencil, Plus, ShieldCheck, Trash2, UserCog } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Button } from "@heroui/react";
+import { CloudOff, Pencil, Plus, Power, Search, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
 import { DetailGrid, DetailItem } from "@/components/admin-detail";
+import { EmptyState } from "@/components/empty-state";
+import { FilterPills } from "@/components/filter-pills";
 import { Icon } from "@/components/icon";
 import { NoteBox } from "@/components/page-blocks";
 import { StatusChip } from "@/components/status-badge";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { FormModal } from "@/components/ui/form-modal";
-import { SelectInput, TextInput } from "@/components/ui/form";
-import { admins, formatDate, operators as initialOperators } from "@/lib/mock-data";
+import { TextInput } from "@/components/ui/form";
+import { api, errorText, type AdminUser } from "@/lib/api/client";
 import { useUser } from "@/lib/session-context";
 import { useUsersT } from "@/lib/i18n/dict/users";
-import type { AppUser, Role } from "@/lib/types";
+import { AccountFormModal, AccountStatusModal } from "./account-modals";
+
+const PAGE_SIZE = 50;
+const STAFF_ROLES: AdminUser["role"][] = ["operator", "admin"];
+
+type StatusFilter = "all" | "active" | "inactive";
 
 export default function UsersPage() {
   const t = useUsersT();
-  const roleOptions = [
-    { id: "operator", label: t.roleOperator },
-    { id: "admin", label: t.roleAdmin },
-  ];
   const sessionUser = useUser();
-  const [rows, setRows] = useState<AppUser[]>([...initialOperators, ...admins]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
-  const [detail, setDetail] = useState<AppUser | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", role: "operator" as Role });
+  const [rows, setRows] = useState<AdminUser[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
+  const [statusTarget, setStatusTarget] = useState<AdminUser | null>(null);
+  const [detail, setDetail] = useState<AdminUser | null>(null);
+
+  const roleLabel = (role: AdminUser["role"]) => (role === "admin" ? t.roleAdmin : t.roleOperator);
+  const activeFilter = status === "all" ? undefined : status === "active";
+
+  useEffect(() => {
+    let cancelled = false;
+    api.adminUsers
+      .list({ role: "staff", q: query, active: activeFilter, limit: PAGE_SIZE })
+      .then((page) => {
+        if (cancelled) return;
+        setRows(page.users);
+        setTotal(page.total);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [query, activeFilter, reloadKey]);
+
+  const reload = () => {
+    setRows(null);
+    setLoadFailed(false);
+    setMoreFailed("");
+    setReloadKey((key) => key + 1);
+  };
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    setMoreFailed("");
+    try {
+      const page = await api.adminUsers.list({
+        role: "staff",
+        q: query,
+        active: activeFilter,
+        limit: PAGE_SIZE,
+        offset: rows?.length ?? 0,
+      });
+      setRows((prev) => {
+        const seen = new Set((prev ?? []).map((row) => row.id));
+        return [...(prev ?? []), ...page.users.filter((row) => !seen.has(row.id))];
+      });
+      setTotal(page.total);
+    } catch (err) {
+      setMoreFailed(errorText(err, t.loadErrorDescription));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const replaceRow = (user: AdminUser) => {
+    setRows((prev) => prev?.map((row) => (row.id === user.id ? user : row)) ?? prev);
+    setDetail((prev) => (prev?.id === user.id ? user : prev));
+  };
 
   const openCreate = () => {
-    setForm({ name: "", email: "", role: "operator" });
-    setModalOpen(true);
+    setEditTarget(null);
+    setFormOpen(true);
   };
 
-  const handleSave = () => {
-    setRows((prev) => [
-      {
-        id: `u-staff-new-${Date.now()}`,
-        name: form.name,
-        email: form.email,
-        role: form.role,
-        createdAt: new Date().toISOString().slice(0, 10),
-        avatarColorFrom: "var(--accent)",
-        avatarColorTo: "var(--accent-2)",
-      },
-      ...prev,
-    ]);
-    toast.success(t.accountCreated(form.role === "admin" ? t.roleAdmin : t.roleOperator));
-    setModalOpen(false);
+  const openEdit = (user: AdminUser) => {
+    setDetail(null);
+    setEditTarget(user);
+    setFormOpen(true);
   };
 
-  const columns: Column<AppUser>[] = [
+  const statusChip = (user: AdminUser) => (
+    <StatusChip tone={user.is_active ? "success" : "neutral"} dot>
+      {user.is_active ? t.statusActive : t.statusInactive}
+    </StatusChip>
+  );
+
+  const columns: Column<AdminUser>[] = [
     {
       key: "name",
       header: t.colName,
@@ -62,7 +123,7 @@ export default function UsersPage() {
           <GradientAvatar user={u} size="sm" />
           <div>
             <p className="font-medium text-foreground">{u.name}</p>
-            <p className="text-label text-muted">{u.email}</p>
+            <p className="text-label text-muted">{u.email ?? "—"}</p>
           </div>
         </div>
       ),
@@ -70,11 +131,10 @@ export default function UsersPage() {
     {
       key: "role",
       header: t.colRole,
-      render: (u) => (
-        <StatusChip tone={u.role === "admin" ? "accent" : "neutral"}>{u.role === "admin" ? t.roleAdmin : t.roleOperator}</StatusChip>
-      ),
+      render: (u) => <StatusChip tone={u.role === "admin" ? "accent" : "neutral"}>{roleLabel(u.role)}</StatusChip>,
     },
-    { key: "createdAt", header: t.colCreated, render: (u) => formatDate(u.createdAt) },
+    { key: "status", header: t.colStatus, render: statusChip },
+    { key: "createdAt", header: t.colCreated, render: (u) => new Date(u.created_at).toLocaleDateString() },
     {
       key: "actions",
       header: "",
@@ -82,18 +142,19 @@ export default function UsersPage() {
       className: "text-right",
       render: (u) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="sm" isIconOnly>
+          <Button variant="ghost" size="sm" isIconOnly aria-label={t.editAction} onPress={() => openEdit(u)}>
             <Icon icon={Pencil} size="sm" />
           </Button>
           <Button
             variant="ghost"
             size="sm"
             isIconOnly
-            className="text-danger"
+            className={u.is_active ? "text-danger" : undefined}
+            aria-label={u.is_active ? t.deactivateConfirm : t.reactivateConfirm}
             isDisabled={u.id === sessionUser.id}
-            onPress={() => setDeleteTarget(u)}
+            onPress={() => setStatusTarget(u)}
           >
-            <Icon icon={Trash2} size="sm" />
+            <Icon icon={Power} size="sm" />
           </Button>
         </div>
       ),
@@ -104,50 +165,120 @@ export default function UsersPage() {
     <RequireRole roles={["admin"]} title={t.pageTitle} deniedMessage={t.deniedMessage}>
       <AppShell
         title={t.pageTitle}
-        description={t.pageDescription}
+        description={rows === null ? t.pageDescription : t.accountCount(total)}
         actions={
           <Button variant="primary" size="sm" onPress={openCreate}>
             <Icon icon={Plus} size="sm" /> {t.addAccount}
           </Button>
         }
       >
-        <DataTable columns={columns} rows={rows} rowKey={(u) => u.id} onRowClick={setDetail} />
-
-        <FormModal
-          isOpen={modalOpen}
-          onOpenChange={setModalOpen}
-          title={t.addStaffTitle}
-          footer={
-            <>
-              <Button variant="ghost" onPress={() => setModalOpen(false)}>
-                {t.cancel}
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <form
+            className="flex w-full max-w-md flex-wrap items-end gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setRows(null);
+              setLoadFailed(false);
+              setQuery(search.trim());
+            }}
+          >
+            <TextInput
+              className="w-full max-w-sm"
+              placeholder={t.searchPlaceholder}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <Button variant="secondary" size="sm" type="submit">
+              <Icon icon={Search} size="xs" /> {t.searchAction}
+            </Button>
+            {query !== "" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={() => {
+                  setSearch("");
+                  setRows(null);
+                  setQuery("");
+                }}
+              >
+                {t.searchClear}
               </Button>
-              <Button variant="primary" onPress={handleSave} isDisabled={!form.name || !form.email}>
-                {t.createAccount}
-              </Button>
-            </>
-          }
-        >
-          <TextInput label={t.fieldFullName} required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-          <TextInput label={t.fieldEmail} type="email" required value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
-          <SelectInput
-            label={t.fieldRole}
-            options={roleOptions}
-            selectedKey={form.role}
-            onSelectionChange={(k) => setForm((f) => ({ ...f, role: (k as Role) ?? "operator" }))}
+            )}
+          </form>
+          <FilterPills
+            ariaLabel={t.filterLabel}
+            value={status}
+            onChange={(next) => {
+              setRows(null);
+              setLoadFailed(false);
+              setStatus(next as StatusFilter);
+            }}
+            options={[
+              { id: "all", label: t.filterAll },
+              { id: "active", label: t.statusActive },
+              { id: "inactive", label: t.statusInactive },
+            ]}
           />
-          <NoteBox icon={form.role === "admin" ? ShieldCheck : UserCog}>{form.role === "admin" ? t.adminInfo : t.operatorInfo}</NoteBox>
-        </FormModal>
+        </div>
+
+        {loadFailed ? (
+          <EmptyState
+            icon={CloudOff}
+            title={t.loadErrorTitle}
+            description={t.loadErrorDescription}
+            action={
+              <Button variant="primary" size="sm" onPress={reload}>
+                {t.retry}
+              </Button>
+            }
+          />
+        ) : rows === null ? (
+          <p className="py-14 text-center text-caption text-muted">{t.loading}</p>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title={query === "" && status === "all" ? t.emptyTitle : t.noMatchTitle}
+            description={query === "" && status === "all" ? t.emptyDescription : t.noMatchDescription}
+          />
+        ) : (
+          <>
+            <DataTable columns={columns} rows={rows} rowKey={(u) => u.id} onRowClick={setDetail} />
+            {moreFailed !== "" && <p className="mt-3 text-center text-caption text-danger">{moreFailed}</p>}
+            {rows.length < total && (
+              <div className="mt-4 flex justify-center">
+                <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
+                  {loadingMore ? t.loadingMore : t.loadMore}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+
+        <AccountFormModal
+          isOpen={formOpen}
+          onOpenChange={setFormOpen}
+          target={editTarget}
+          roles={STAFF_ROLES}
+          onSaved={(user, created) => (created ? reload() : replaceRow(user))}
+        />
+        <AccountStatusModal target={statusTarget} onClose={() => setStatusTarget(null)} onDone={replaceRow} />
 
         <FormModal
           isOpen={!!detail}
           onOpenChange={(open) => !open && setDetail(null)}
           title={detail?.name ?? ""}
-          description={detail?.email}
+          description={detail?.email ?? ""}
           footer={
-            <Button variant="ghost" onPress={() => setDetail(null)}>
-              {t.close}
-            </Button>
+            <>
+              {detail && (
+                <Button variant="secondary" size="sm" onPress={() => openEdit(detail)}>
+                  <Icon icon={Pencil} size="xs" /> {t.editAction}
+                </Button>
+              )}
+              <Button variant="ghost" onPress={() => setDetail(null)}>
+                {t.close}
+              </Button>
+            </>
           }
         >
           {detail && (
@@ -156,44 +287,21 @@ export default function UsersPage() {
                 <GradientAvatar user={detail} size="lg" />
                 <div>
                   <p className="font-display text-title text-foreground">{detail.name}</p>
-                  <p className="text-label text-muted">{detail.email}</p>
+                  <p className="text-label text-muted">{detail.email ?? "—"}</p>
                 </div>
               </div>
               <DetailGrid className="border-t border-border pt-5">
                 <DetailItem label={t.colRole}>
-                  <StatusChip tone={detail.role === "admin" ? "accent" : "neutral"}>{detail.role === "admin" ? t.roleAdmin : t.roleOperator}</StatusChip>
+                  <StatusChip tone={detail.role === "admin" ? "accent" : "neutral"}>{roleLabel(detail.role)}</StatusChip>
                 </DetailItem>
-                <DetailItem label={t.colCreated}>{formatDate(detail.createdAt)}</DetailItem>
+                <DetailItem label={t.colStatus}>{statusChip(detail)}</DetailItem>
+                <DetailItem label={t.detailPhone}>{detail.phone ?? "—"}</DetailItem>
+                <DetailItem label={t.detailEmailVerified}>{detail.email_verified ? t.yes : t.no}</DetailItem>
+                <DetailItem label={t.colCreated}>{new Date(detail.created_at).toLocaleDateString()}</DetailItem>
               </DetailGrid>
-              <NoteBox icon={detail.role === "admin" ? ShieldCheck : UserCog}>{detail.role === "admin" ? t.adminInfo : t.operatorInfo}</NoteBox>
+              {detail.id === sessionUser.id && <NoteBox>{t.selfNote}</NoteBox>}
             </>
           )}
-        </FormModal>
-
-        <FormModal
-          isOpen={!!deleteTarget}
-          onOpenChange={(open) => !open && setDeleteTarget(null)}
-          title={t.deleteTitle}
-          description={deleteTarget?.name}
-          footer={
-            <>
-              <Button variant="ghost" onPress={() => setDeleteTarget(null)}>
-                {t.cancel}
-              </Button>
-              <Button
-                variant="danger"
-                onPress={() => {
-                  setRows((prev) => prev.filter((u) => u.id !== deleteTarget?.id));
-                  toast.success(t.accountDeleted);
-                  setDeleteTarget(null);
-                }}
-              >
-                {t.deleteConfirm}
-              </Button>
-            </>
-          }
-        >
-          <p className="text-small text-muted">{t.deleteDescription}</p>
         </FormModal>
       </AppShell>
     </RequireRole>
