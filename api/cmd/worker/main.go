@@ -89,7 +89,7 @@ func run() error {
 		store = assetStorage
 	}
 	exports := service.NewExportService(pool, repository.NewExportRepository(pool), store, inserter, notifications, logger)
-	registerExportRenderers(exports, exportDeps{pool: pool, store: store, logger: logger})
+	registerExportRenderers(exports, exportDeps{pool: pool, store: store, logger: logger, gotenbergURL: cfg.GotenbergURL})
 
 	client, err := infra.NewRiverWorker(pool, notifications, service.RetryDelay, logger, infra.WithExports(exports))
 	if err != nil {

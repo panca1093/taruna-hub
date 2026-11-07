@@ -628,6 +628,8 @@ export const api = {
     remove: (id: string) => mutate<void>("DELETE", tryoutPath(id)),
     publish: (id: string) => mutate<Tryout>("POST", `${tryoutPath(id)}/publish` as keyof paths),
     unpublish: (id: string) => mutate<Tryout>("POST", `${tryoutPath(id)}/unpublish` as keyof paths),
+    /** 202 with the queued export; 503 `pdf_unavailable` when no converter is configured. */
+    requestPdf: (id: string) => mutate<Export>("POST", `${tryoutPath(id)}/pdf-exports` as keyof paths),
     /** D10: Admin only, and the one change a locked tryout still accepts. */
     setGrace: (id: string, body: GraceBody) => mutate<Tryout>("PUT", `${tryoutPath(id)}/grace` as keyof paths, body),
   },

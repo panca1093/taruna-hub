@@ -40,6 +40,7 @@ type Handler struct {
 	payments      *service.PaymentService
 	website       *service.WebsiteService
 	exports       *service.ExportService
+	pdfConfigured bool
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
@@ -137,6 +138,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.DELETE("/tryouts/:id", h.DeleteTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/tryouts/:id/publish", h.PublishTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/tryouts/:id/unpublish", h.UnpublishTryout, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.POST("/tryouts/:id/pdf-exports", h.RequestTryoutPDF, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 
 	// Products are tenant content like tryouts, so an Operator writes them too.
 	v1.GET("/products", h.ListProducts, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
