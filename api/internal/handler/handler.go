@@ -41,6 +41,8 @@ type Handler struct {
 	website       *service.WebsiteService
 	exports       *service.ExportService
 	pdfConfigured bool
+	userAdmin     *service.UserAdminService
+	reports       *service.ReportService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
@@ -258,4 +260,6 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.GET("/exports", h.ListExports, httpx.NoStore(), Authenticate(h.auth), staff)
 	v1.GET("/exports/:id", h.GetExport, httpx.NoStore(), Authenticate(h.auth), staff)
 	v1.POST("/exports/:id/download-link", h.ExportDownloadLink, httpx.NoStore(), Authenticate(h.auth), staff)
+
+	h.registerStudentOps(v1)
 }

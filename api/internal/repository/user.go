@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -209,4 +211,273 @@ func duplicateUser(err error) error {
 		}
 	}
 	return ErrDuplicate
+}
+
+// UserFilter narrows the staff account list; Roles is never empty, so a read cannot reach a platform account.
+type UserFilter struct {
+	Roles  []model.Role
+	Search string
+	Active *bool
+	Limit  int
+	Offset int
+}
+
+// List pages one tenant's accounts newest first; `%` and `_` in the search match themselves.
+func (r *UserRepository) List(ctx context.Context, tenantID uuid.UUID, f UserFilter) ([]model.User, int, error) {
+	if tenantID == uuid.Nil {
+		return nil, 0, ErrScopeRequired
+	}
+	roles := make([]string, 0, len(f.Roles))
+	for _, role := range f.Roles {
+		roles = append(roles, string(role))
+	}
+	where := []string{"tenant_id = $1", "role = ANY($2)"}
+	args := []any{tenantID, roles}
+	if f.Search != "" {
+		args = append(args, likePattern(f.Search))
+		where = append(where, fmt.Sprintf(
+			`(name ILIKE $%d ESCAPE '\' OR email ILIKE $%d ESCAPE '\' OR phone ILIKE $%d ESCAPE '\')`,
+			len(args), len(args), len(args)))
+	}
+	if f.Active != nil {
+		args = append(args, *f.Active)
+		where = append(where, fmt.Sprintf("is_active = $%d", len(args)))
+	}
+	from := " FROM users WHERE " + strings.Join(where, " AND ")
+
+	var total int
+	if err := r.db.QueryRow(ctx, `SELECT count(*)`+from, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count users: %w", err)
+	}
+	args = append(args, f.Limit, f.Offset)
+	rows, err := r.db.Query(ctx, `SELECT `+userColumns+from+
+		fmt.Sprintf(` ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d`, len(args)-1, len(args)), args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+	out := make([]model.User, 0, f.Limit)
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("list users: %w", err)
+	}
+	return out, total, nil
+}
+
+// LockTx reads an account of this tenant and holds its row, so two staff actions on it run one at a time.
+func (r *UserRepository) LockTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID) (model.User, error) {
+	if tenantID == uuid.Nil {
+		return model.User{}, ErrScopeRequired
+	}
+	return scanUser(tx.QueryRow(ctx,
+		`SELECT `+userColumns+` FROM users WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, id))
+}
+
+// UpdateAccountTx rewrites the three editable fields. A changed email drops the verification, since the new
+// address was not proved by its owner.
+func (r *UserRepository) UpdateAccountTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, name string, email, phone *string, emailChanged bool) (model.User, error) {
+	if tenantID == uuid.Nil {
+		return model.User{}, ErrScopeRequired
+	}
+	return scanUser(tx.QueryRow(ctx, `
+		UPDATE users SET name = $3, email = $4, phone = $5,
+		       email_verified_at = CASE WHEN $6 THEN NULL ELSE email_verified_at END,
+		       email_code_hash = CASE WHEN $6 THEN NULL ELSE email_code_hash END,
+		       email_code_expires_at = CASE WHEN $6 THEN NULL ELSE email_code_expires_at END,
+		       email_code_attempts = CASE WHEN $6 THEN 0 ELSE email_code_attempts END
+		 WHERE tenant_id = $1 AND id = $2 RETURNING `+userColumns,
+		tenantID, id, name, email, phone, emailChanged))
+}
+
+// SetActiveTx flips the account flag; every order, ledger row and result keeps pointing at the row.
+func (r *UserRepository) SetActiveTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, active bool) (model.User, error) {
+	if tenantID == uuid.Nil {
+		return model.User{}, ErrScopeRequired
+	}
+	return scanUser(tx.QueryRow(ctx,
+		`UPDATE users SET is_active = $3 WHERE tenant_id = $1 AND id = $2 RETURNING `+userColumns, tenantID, id, active))
+}
+
+// InsertAuditTx records an action in the caller's transaction, so it exists exactly when the action does.
+func (r *UserRepository) InsertAuditTx(ctx context.Context, tx pgx.Tx, e model.AuditEvent) error {
+	if e.TenantID == uuid.Nil {
+		return ErrScopeRequired
+	}
+	detail, err := json.Marshal(e.Detail)
+	if err != nil || e.Detail == nil {
+		detail = []byte("{}")
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_events (tenant_id, actor_id, actor_role, action, target_type, target_id, reason, detail)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		e.TenantID, e.ActorID, e.ActorRole, e.Action, e.TargetType, e.TargetID, e.Reason, detail); err != nil {
+		return fmt.Errorf("insert audit event: %w", err)
+	}
+	return nil
+}
+
+// Audit lists one tenant's events for a target, newest first.
+func (r *UserRepository) Audit(ctx context.Context, tenantID, targetID uuid.UUID) ([]model.AuditEvent, error) {
+	if tenantID == uuid.Nil {
+		return nil, ErrScopeRequired
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT id, tenant_id, actor_id, actor_role, action, target_type, target_id, reason, detail, created_at
+		  FROM audit_events WHERE tenant_id = $1 AND target_id = $2 ORDER BY created_at DESC, id DESC`, tenantID, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("list audit events: %w", err)
+	}
+	defer rows.Close()
+	out := []model.AuditEvent{}
+	for rows.Next() {
+		var e model.AuditEvent
+		var detail []byte
+		if err := rows.Scan(&e.ID, &e.TenantID, &e.ActorID, &e.ActorRole, &e.Action, &e.TargetType, &e.TargetID,
+			&e.Reason, &detail, &e.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan audit event: %w", err)
+		}
+		if err := json.Unmarshal(detail, &e.Detail); err != nil {
+			return nil, fmt.Errorf("decode audit detail: %w", err)
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// StaffGrant is the earlier manual grant that used an idempotency key, if any.
+type StaffGrant struct {
+	EnrollmentID uuid.UUID
+	UserID       uuid.UUID
+	TryoutID     *uuid.UUID
+	TestID       *uuid.UUID
+	Attempts     *int
+}
+
+// LockGrantKeyTx serializes concurrent requests that carry the same idempotency key.
+func (r *UserRepository) LockGrantKeyTx(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID, key string) error {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, tenantID.String()+":staff-grant:"+key); err != nil {
+		return fmt.Errorf("lock grant key: %w", err)
+	}
+	return nil
+}
+
+func (r *UserRepository) FindStaffGrantTx(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID, key string) (StaffGrant, bool, error) {
+	if tenantID == uuid.Nil {
+		return StaffGrant{}, false, ErrScopeRequired
+	}
+	var g StaffGrant
+	err := tx.QueryRow(ctx, `
+		SELECT e.id, e.user_id, e.tryout_id, e.kecermatan_test_id, g.attempts
+		  FROM enrollment_grants g JOIN enrollments e ON e.id = g.enrollment_id AND e.tenant_id = g.tenant_id
+		 WHERE g.tenant_id = $1 AND g.source_type = 'staff' AND g.source_id = $2`, tenantID, key).
+		Scan(&g.EnrollmentID, &g.UserID, &g.TryoutID, &g.TestID, &g.Attempts)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return StaffGrant{}, false, nil
+	}
+	if err != nil {
+		return StaffGrant{}, false, fmt.Errorf("find staff grant: %w", err)
+	}
+	return g, true, nil
+}
+
+// GrantTargetExists reports whether the tryout or kecermatan test belongs to this tenant.
+func (r *UserRepository) GrantTargetExists(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, kind string) (bool, error) {
+	table := "tryouts"
+	extra := ""
+	if kind == model.AccessKecermatan {
+		table = "kecermatan_tests"
+	} else {
+		extra = " AND status = 'published'"
+	}
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM `+table+` WHERE tenant_id = $1 AND id = $2`+extra+`)`, tenantID, id).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("check grant target: %w", err)
+	}
+	return ok, nil
+}
+
+// HoldsTryoutTx reports whether the student already has an enrollment row for the tryout.
+func (r *UserRepository) HoldsTryoutTx(ctx context.Context, tx pgx.Tx, tenantID, userID, tryoutID uuid.UUID) (bool, error) {
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM enrollments WHERE tenant_id = $1 AND user_id = $2 AND tryout_id = $3)`,
+		tenantID, userID, tryoutID).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("check held tryout: %w", err)
+	}
+	return ok, nil
+}
+
+// Access lists everything one student holds, tryouts and kecermatan credits alike, newest first. The
+// first grant of each enrollment says how access was opened.
+func (r *UserRepository) Access(ctx context.Context, tenantID, userID uuid.UUID, now time.Time, limit, offset int) ([]model.StudentAccess, int, error) {
+	return r.access(ctx, tenantID, userID, nil, now, limit, offset)
+}
+
+// AccessOf reads one enrollment of the student, the shape a grant answers with.
+func (r *UserRepository) AccessOf(ctx context.Context, tenantID, userID, enrollmentID uuid.UUID, now time.Time) (model.StudentAccess, error) {
+	rows, _, err := r.access(ctx, tenantID, userID, &enrollmentID, now, 1, 0)
+	if err != nil {
+		return model.StudentAccess{}, err
+	}
+	if len(rows) == 0 {
+		return model.StudentAccess{}, ErrNotFound
+	}
+	return rows[0], nil
+}
+
+func (r *UserRepository) access(ctx context.Context, tenantID, userID uuid.UUID, enrollmentID *uuid.UUID, now time.Time, limit, offset int) ([]model.StudentAccess, int, error) {
+	if tenantID == uuid.Nil {
+		return nil, 0, ErrScopeRequired
+	}
+	var total int
+	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM enrollments WHERE tenant_id = $1 AND user_id = $2 AND ($3::uuid IS NULL OR id = $3)`,
+		tenantID, userID, enrollmentID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count access: %w", err)
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT e.id, e.tryout_id, e.kecermatan_test_id, coalesce(t.title, k.title, ''),
+		       t.status, t.active_from, t.active_until, e.attempts_purchased, e.attempts_used,
+		       coalesce((SELECT g.source_type FROM enrollment_grants g
+		                  WHERE g.enrollment_id = e.id AND g.tenant_id = e.tenant_id
+		                  ORDER BY g.created_at, g.id LIMIT 1), 'order'),
+		       e.created_at
+		  FROM enrollments e
+		  LEFT JOIN tryouts t ON t.id = e.tryout_id AND t.tenant_id = e.tenant_id
+		  LEFT JOIN kecermatan_tests k ON k.id = e.kecermatan_test_id AND k.tenant_id = e.tenant_id
+		 WHERE e.tenant_id = $1 AND e.user_id = $2 AND ($5::uuid IS NULL OR e.id = $5)
+		 ORDER BY e.created_at DESC, e.id DESC LIMIT $3 OFFSET $4`, tenantID, userID, limit, offset, enrollmentID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list access: %w", err)
+	}
+	defer rows.Close()
+	out := make([]model.StudentAccess, 0, limit)
+	for rows.Next() {
+		var a model.StudentAccess
+		var tryoutID, testID *uuid.UUID
+		var status *string
+		if err := rows.Scan(&a.EnrollmentID, &tryoutID, &testID, &a.Title, &status, &a.ActiveFrom, &a.ActiveUntil,
+			&a.AttemptsPurchased, &a.AttemptsUsed, &a.SourceType, &a.CreatedAt); err != nil {
+			return nil, 0, fmt.Errorf("scan access: %w", err)
+		}
+		if tryoutID != nil {
+			a.Kind, a.TestID = model.AccessTryout, *tryoutID
+			a.Active = status != nil && *status == model.TryoutPublished &&
+				(a.ActiveFrom == nil || !now.Before(*a.ActiveFrom)) && a.ActiveUntil != nil && now.Before(*a.ActiveUntil)
+		} else if testID != nil {
+			a.Kind, a.TestID = model.AccessKecermatan, *testID
+			a.Active = a.AttemptsPurchased != nil && a.AttemptsUsed < *a.AttemptsPurchased
+		}
+		out = append(out, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("list access: %w", err)
+	}
+	return out, total, nil
 }

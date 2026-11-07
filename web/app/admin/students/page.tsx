@@ -2,21 +2,28 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button, toast } from "@heroui/react";
-import { CloudOff, Search, Users, Wallet } from "lucide-react";
+import { CloudOff, Pencil, Plus, Power, Search, Users, Wallet } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
+import { FilterPills } from "@/components/filter-pills";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
+import { StatusChip } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput, TextInput, TextareaInput } from "@/components/ui/form";
-import { api, ApiError, errorText, type WalletEntry, type WalletStudent } from "@/lib/api/client";
+import { api, ApiError, errorText, type AdminUser, type WalletEntry } from "@/lib/api/client";
 import { formatIDR, formatSignedIDR } from "@/lib/format-money";
 import { useSession } from "@/lib/session-context";
 import { useStudentsT } from "@/lib/i18n/dict/students";
+import { AccountFormModal, AccountStatusModal } from "../users/account-modals";
+import { GrantAccessButton, GrantAccessModal, StudentAccessSection } from "./student-access";
 
 const PAGE_SIZE = 50;
 const LEDGER_SIZE = 20;
+const STUDENT_ROLES: AdminUser["role"][] = ["student"];
+
+type StatusFilter = "all" | "active" | "inactive";
 
 // A fresh key per submit attempt, reused on a retry so a network error cannot credit twice.
 function newIdempotencyKey(): string {
@@ -31,7 +38,7 @@ export default function StudentsPage() {
   const t = useStudentsT();
   const { role } = useSession();
 
-  const [rows, setRows] = useState<WalletStudent[] | null>(null);
+  const [rows, setRows] = useState<AdminUser[] | null>(null);
   const [total, setTotal] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -39,12 +46,19 @@ export default function StudentsPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
+  const [statusTarget, setStatusTarget] = useState<AdminUser | null>(null);
+  const [grantTarget, setGrantTarget] = useState<AdminUser | null>(null);
+  const [accessKey, setAccessKey] = useState(0);
+  const activeFilter = status === "all" ? undefined : status === "active";
 
-  const [detail, setDetail] = useState<WalletStudent | null>(null);
+  const [detail, setDetail] = useState<AdminUser | null>(null);
   const [detailEntries, setDetailEntries] = useState<WalletEntry[] | null>(null);
   const [detailFailed, setDetailFailed] = useState(false);
 
-  const [adjustTarget, setAdjustTarget] = useState<WalletStudent | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<AdminUser | null>(null);
   const [adjustType, setAdjustType] = useState<"credit" | "debit">("credit");
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
@@ -54,11 +68,11 @@ export default function StudentsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    api.students
-      .list({ q: query, limit: PAGE_SIZE })
+    api.adminUsers
+      .list({ role: "student", q: query, active: activeFilter, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
-        setRows(page.students);
+        setRows(page.users);
         setTotal(page.total);
       })
       .catch(() => {
@@ -67,7 +81,7 @@ export default function StudentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [query, reloadKey]);
+  }, [query, activeFilter, reloadKey]);
 
   const reload = (next: string) => {
     setRows(null);
@@ -84,10 +98,16 @@ export default function StudentsPage() {
     setLoadingMore(true);
     setMoreFailed("");
     try {
-      const page = await api.students.list({ q: query, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      const page = await api.adminUsers.list({
+        role: "student",
+        q: query,
+        active: activeFilter,
+        limit: PAGE_SIZE,
+        offset: rows?.length ?? 0,
+      });
       setRows((prev) => {
         const seen = new Set((prev ?? []).map((row) => row.id));
-        return [...(prev ?? []), ...page.students.filter((row) => !seen.has(row.id))];
+        return [...(prev ?? []), ...page.users.filter((row) => !seen.has(row.id))];
       });
       setTotal(page.total);
     } catch (err) {
@@ -108,12 +128,12 @@ export default function StudentsPage() {
     }
   };
 
-  const openDetail = (student: WalletStudent) => {
+  const openDetail = (student: AdminUser) => {
     setDetail(student);
     void loadLedger(student.id);
   };
 
-  const openAdjust = (student: WalletStudent) => {
+  const openAdjust = (student: AdminUser) => {
     setDetail(null);
     setAdjustTarget(student);
     setAdjustType("credit");
@@ -154,7 +174,24 @@ export default function StudentsPage() {
     }
   };
 
-  const columns: Column<WalletStudent>[] = [
+  const replaceRow = (user: AdminUser) => {
+    setRows((prev) => prev?.map((row) => (row.id === user.id ? user : row)) ?? prev);
+    setDetail((prev) => (prev?.id === user.id ? user : prev));
+  };
+
+  const openEdit = (student: AdminUser) => {
+    setDetail(null);
+    setEditTarget(student);
+    setFormOpen(true);
+  };
+
+  const statusChip = (student: AdminUser) => (
+    <StatusChip tone={student.is_active ? "success" : "neutral"} dot>
+      {student.is_active ? t.statusActive : t.statusInactive}
+    </StatusChip>
+  );
+
+  const columns: Column<AdminUser>[] = [
     {
       key: "name",
       header: t.colStudent,
@@ -170,6 +207,7 @@ export default function StudentsPage() {
     },
     { key: "phone", header: t.colPhone, render: (student) => <span className="text-muted">{student.phone ?? "—"}</span> },
     { key: "balance", header: t.colBalance, render: (student) => <span className="font-medium">{formatIDR(student.balance)}</span> },
+    { key: "status", header: t.colStatus, render: statusChip },
     { key: "joined", header: t.colJoined, render: (student) => joined(student.created_at) },
     {
       key: "actions",
@@ -179,9 +217,24 @@ export default function StudentsPage() {
       render: (student) => (
         <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
           {(role === "admin" || role === "operator") && (
-            <Button variant="ghost" size="sm" isIconOnly onPress={() => openAdjust(student)} aria-label={t.adjustTitle}>
-              <Icon icon={Wallet} size="xs" />
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" isIconOnly onPress={() => openAdjust(student)} aria-label={t.adjustTitle}>
+                <Icon icon={Wallet} size="xs" />
+              </Button>
+              <Button variant="ghost" size="sm" isIconOnly onPress={() => openEdit(student)} aria-label={t.editAction}>
+                <Icon icon={Pencil} size="xs" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                isIconOnly
+                className={student.is_active ? "text-danger" : undefined}
+                onPress={() => setStatusTarget(student)}
+                aria-label={t.statusAction}
+              >
+                <Icon icon={Power} size="xs" />
+              </Button>
+            </>
           )}
         </div>
       ),
@@ -189,7 +242,22 @@ export default function StudentsPage() {
   ];
 
   return (
-    <AppShell title={t.pageTitle} description={t.studentCount(total)}>
+    <AppShell
+      title={t.pageTitle}
+      description={t.studentCount(total)}
+      actions={
+        <Button
+          variant="primary"
+          size="sm"
+          onPress={() => {
+            setEditTarget(null);
+            setFormOpen(true);
+          }}
+        >
+          <Icon icon={Plus} size="sm" /> {t.addStudent}
+        </Button>
+      }
+    >
       <form
         className="mb-4 flex flex-wrap items-end gap-2"
         onSubmit={(event) => {
@@ -218,6 +286,21 @@ export default function StudentsPage() {
             {t.searchClear}
           </Button>
         )}
+        <FilterPills
+          className="ml-auto"
+          ariaLabel={t.filterLabel}
+          value={status}
+          onChange={(next) => {
+            setRows(null);
+            setLoadFailed(false);
+            setStatus(next as StatusFilter);
+          }}
+          options={[
+            { id: "all", label: t.filterAll },
+            { id: "active", label: t.statusActive },
+            { id: "inactive", label: t.statusInactive },
+          ]}
+        />
       </form>
 
       {loadFailed ? (
@@ -236,8 +319,8 @@ export default function StudentsPage() {
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Users}
-          title={query === "" ? t.emptyTitle : t.noMatchTitle}
-          description={query === "" ? t.emptyDescription : t.noMatchDescription}
+          title={query === "" && status === "all" ? t.emptyTitle : t.noMatchTitle}
+          description={query === "" && status === "all" ? t.emptyDescription : t.noMatchDescription}
         />
       ) : (
         <>
@@ -338,7 +421,18 @@ export default function StudentsPage() {
                 <dt className="mb-1 text-label text-muted">{t.detailPhone}</dt>
                 <dd className="font-medium text-foreground">{detail.phone ?? "—"}</dd>
               </div>
+              <div>
+                <dt className="mb-1 text-label text-muted">{t.colStatus}</dt>
+                <dd>{statusChip(detail)}</dd>
+              </div>
             </dl>
+            <div>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="font-display text-title">{t.accessTitle}</h3>
+                {(role === "admin" || role === "operator") && <GrantAccessButton onPress={() => setGrantTarget(detail)} />}
+              </div>
+              <StudentAccessSection key={`${detail.id}-${accessKey}`} student={detail} />
+            </div>
             <div>
               <h3 className="mb-3 font-display text-title">{t.detailLedgerTitle}</h3>
               {detailFailed ? (
@@ -380,6 +474,19 @@ export default function StudentsPage() {
           </>
         )}
       </FormModal>
+      <AccountFormModal
+        isOpen={formOpen}
+        onOpenChange={setFormOpen}
+        target={editTarget}
+        roles={STUDENT_ROLES}
+        onSaved={(user, created) => (created ? reload(query) : replaceRow(user))}
+      />
+      <AccountStatusModal target={statusTarget} onClose={() => setStatusTarget(null)} onDone={replaceRow} />
+      <GrantAccessModal
+        student={grantTarget}
+        onClose={() => setGrantTarget(null)}
+        onGranted={() => setAccessKey((key) => key + 1)}
+      />
     </AppShell>
   );
 }
