@@ -164,6 +164,22 @@ export type WalletStudentFilters = Omit<
 
 type AdjustmentBody = components["schemas"]["AdjustmentRequest"];
 
+export type AdminUser = components["schemas"]["AdminUser"];
+export type AdminUserList = components["schemas"]["AdminUserList"];
+export type CreateUserBody = components["schemas"]["CreateUserRequest"];
+export type UpdateUserBody = components["schemas"]["UpdateUserRequest"];
+export type StudentAccess = components["schemas"]["StudentAccess"];
+export type StudentAccessList = components["schemas"]["StudentAccessList"];
+export type GrantAccessBody = components["schemas"]["GrantAccessRequest"];
+export type RevenueRecap = components["schemas"]["RevenueRecap"];
+
+export type AdminUserFilters = Omit<
+  NonNullable<paths["/api/v1/admin/users"]["get"]["parameters"]["query"]>,
+  "limit" | "offset" | "active"
+> & { limit?: number; offset?: number; active?: boolean };
+
+export type RevenueFilters = NonNullable<paths["/api/v1/admin/reports/revenue"]["get"]["parameters"]["query"]>;
+
 export type Order = components["schemas"]["Order"];
 export type OrderList = components["schemas"]["OrderList"];
 export type Enrollment = components["schemas"]["Enrollment"];
@@ -294,7 +310,7 @@ const sessionPath = (id: string) => `/api/v1/my/tryout-sessions/${id}` as keyof 
 const catalogProductPath = (id: string) => `/api/v1/catalog/products/${id}` as keyof paths;
 
 /** Query string of a list request; empty values are dropped so the server sees no filter. */
-function queryOf(filters: Record<string, string | number | undefined>): string {
+function queryOf(filters: Record<string, string | number | boolean | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (value !== undefined && value !== "") params.set(key, String(value));
@@ -514,6 +530,31 @@ export const api = {
       authed<WalletEntryList>(`/api/v1/students/${id}/wallet/entries${queryOf(filters)}` as keyof paths),
     adjust: (id: string, body: AdjustmentBody) =>
       mutate<AdjustmentResult>("POST", `/api/v1/students/${id}/wallet/adjustments` as keyof paths, body),
+    /** Everything the student holds, with the server's answer on whether each is active now. */
+    access: (id: string, filters: Pick<AdminUserFilters, "limit" | "offset"> = {}) =>
+      authed<StudentAccessList>(`/api/v1/students/${id}/enrollments${queryOf(filters)}` as keyof paths),
+    /** Access without an order; the same key with the same body replays instead of granting twice. */
+    grant: (id: string, body: GrantAccessBody) =>
+      mutate<StudentAccess>("POST", `/api/v1/students/${id}/grants` as keyof paths, body),
+  },
+
+  /** Tenant accounts (D02/D14): an Operator reaches students only; deactivation keeps every history link. */
+  adminUsers: {
+    list: (filters: AdminUserFilters = {}) =>
+      authed<AdminUserList>(`/api/v1/admin/users${queryOf(filters)}` as keyof paths),
+    create: (body: CreateUserBody) => mutate<AdminUser>("POST", "/api/v1/admin/users", body),
+    update: (id: string, body: UpdateUserBody) =>
+      mutate<AdminUser>("PUT", `/api/v1/admin/users/${id}` as keyof paths, body),
+    deactivate: (id: string, reason: string) =>
+      mutate<AdminUser>("POST", `/api/v1/admin/users/${id}/deactivate` as keyof paths, { reason }),
+    reactivate: (id: string, reason: string) =>
+      mutate<AdminUser>("POST", `/api/v1/admin/users/${id}/reactivate` as keyof paths, { reason }),
+  },
+
+  /** The Admin's revenue recap: confirmed orders and approved top-ups, never a settlement. */
+  reports: {
+    revenue: (filters: RevenueFilters = {}) =>
+      authed<RevenueRecap>(`/api/v1/admin/reports/revenue${queryOf(filters)}` as keyof paths),
   },
 
   /** Checkout and the signed-in student's own orders and access. */

@@ -15,6 +15,8 @@ import { TextareaInput } from "@/components/ui/form";
 import { api, ApiError, errorText, type Order } from "@/lib/api/client";
 import { formatIDR } from "@/lib/format-money";
 import { useOrdersT } from "@/lib/i18n/dict/orders";
+import { useSession } from "@/lib/session-context";
+import { RevenueRecapSection } from "./revenue-recap";
 
 type Tab = Order["status"] | "all";
 
@@ -22,6 +24,7 @@ const PAGE_SIZE = 50;
 
 export default function OrdersPage() {
   const t = useOrdersT();
+  const { role } = useSession();
   const tabs: { key: Tab; label: string }[] = [
     { key: "all", label: t.tabAll },
     { key: "pending", label: t.tabPending },
@@ -196,6 +199,7 @@ export default function OrdersPage() {
 
   return (
     <AppShell title={t.pageTitle} description={t.pageDescription}>
+      {role === "admin" && <RevenueRecapSection />}
       <FilterPills
         className="mb-5"
         ariaLabel={t.pageTitle}
