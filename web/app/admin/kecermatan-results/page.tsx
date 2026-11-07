@@ -136,7 +136,17 @@ export default function KecermatanResultsPage() {
     { key: "test", header: t.colTest, render: (r) => r.test_title },
     { key: "attempt", header: t.colAttempt, render: (r) => <span className="text-muted">#{r.attempt_number}</span> },
     { key: "bsk", header: t.colBsk, render: (r) => <span className="font-mono text-label">{r.benar_total}/{r.salah_total}/{r.kosong_total}</span> },
+    {
+      key: "composites",
+      header: t.colComposites,
+      render: (r) => (
+        <span className="font-mono text-label">
+          {r.scores.kecepatan} / {r.scores.ketahanan} / {r.scores.ketelitian}
+        </span>
+      ),
+    },
     { key: "nilai", header: t.colFinalScore, render: (r) => <span className="font-mono font-semibold text-foreground">{r.scores.nilai_akhir}</span> },
+    { key: "quota", header: t.colQuota, render: (r) => <span className="font-mono text-label">{r.remaining_attempts}</span> },
     { key: "completedAt", header: t.colCompleted, render: (r) => formatDateTime(r.completed_at) },
   ];
 

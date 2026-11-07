@@ -4783,6 +4783,8 @@ export interface paths {
             parameters: {
                 query?: {
                     tryout_id?: string;
+                    /** @description Narrows to the tryouts of one program; combines with `tryout_id`. */
+                    program_id?: string;
                     q?: string;
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
@@ -4810,6 +4812,59 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/results/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a CSV or XLSX report of tryout results
+         * @description Admin and Operator (D02: a role guard). Records a durable export of the tenant's completed tryout attempts,
+         *     optionally narrowed to one tryout and/or program, and answers `202` with the `Export` to poll through
+         *     `GET /api/v1/exports`. The report holds the results completed at or before the request moment (`cut_off_at`),
+         *     so a CSV and an XLSX requested together describe the same rows and a later completion is not in either. A
+         *     tryout or program that is not the tenant's is `404`. There is no kecermatan report. The body refuses unknown
+         *     fields.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResultExportRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted; the export is queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Export"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -7320,6 +7375,14 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
         };
+        ResultExportRequest: {
+            /** @enum {string} */
+            format: "csv" | "xlsx";
+            /** Format: uuid */
+            tryout_id?: string;
+            /** Format: uuid */
+            program_id?: string;
+        };
         /** @enum {string} */
         ExportKind: "tryout_pdf" | "tryout_results_csv" | "tryout_results_xlsx";
         /**
@@ -8453,6 +8516,8 @@ export interface components {
             scoring_version: number;
             /** Format: date-time */
             completed_at: string;
+            /** @description The student's unused credits on this test now, not at completion time. */
+            remaining_attempts: number;
         };
         KecermatanStaffResultList: {
             results: components["schemas"]["KecermatanStaffResult"][];

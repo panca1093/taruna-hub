@@ -3517,6 +3517,12 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: program_id
+          in: query
+          description: Narrows to the tryouts of one program; combines with `tryout_id`.
+          schema:
+            type: string
+            format: uuid
         - name: q
           in: query
           schema:
@@ -3546,6 +3552,43 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "422":
           $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/results/exports:
+    post:
+      tags: [results]
+      summary: Request a CSV or XLSX report of tryout results
+      description: |
+        Admin and Operator (D02: a role guard). Records a durable export of the tenant's completed tryout attempts,
+        optionally narrowed to one tryout and/or program, and answers `202` with the `Export` to poll through
+        `GET /api/v1/exports`. The report holds the results completed at or before the request moment (`cut_off_at`),
+        so a CSV and an XLSX requested together describe the same rows and a later completion is not in either. A
+        tryout or program that is not the tenant's is `404`. There is no kecermatan report. The body refuses unknown
+        fields.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResultExportRequest"
+      responses:
+        "202":
+          description: Accepted; the export is queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Export"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          $ref: "#/components/responses/Unavailable"
 
   /api/v1/admin/tryouts/{id}/leaderboard:
     get:
@@ -6187,6 +6230,21 @@ components:
           type: string
           format: date-time
 
+    ResultExportRequest:
+      type: object
+      additionalProperties: false
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [csv, xlsx]
+        tryout_id:
+          type: string
+          format: uuid
+        program_id:
+          type: string
+          format: uuid
+
     ExportKind:
       type: string
       enum: [tryout_pdf, tryout_results_csv, tryout_results_xlsx]
@@ -8484,7 +8542,7 @@ components:
       type: object
       additionalProperties: false
       required: [session_id, student_id, student_name, test_id, test_title, program_id, program_code, attempt_number,
-                 benar_total, salah_total, kosong_total, scores, scoring_version, completed_at]
+                 benar_total, salah_total, kosong_total, scores, scoring_version, completed_at, remaining_attempts]
       properties:
         session_id:
           type: string
@@ -8519,6 +8577,9 @@ components:
         completed_at:
           type: string
           format: date-time
+        remaining_attempts:
+          type: integer
+          description: The student's unused credits on this test now, not at completion time.
 
     KecermatanStaffResultList:
       type: object

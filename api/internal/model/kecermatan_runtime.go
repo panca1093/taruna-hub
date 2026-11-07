@@ -116,4 +116,6 @@ type KecStudentTest struct {
 type KecResultRow struct {
 	KecResult
 	ProgramCode string
+	// RemainingAttempts is the student's unused credits on the test now, not at completion time.
+	RemainingAttempts int
 }

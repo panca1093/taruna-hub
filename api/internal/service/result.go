@@ -200,10 +200,11 @@ func (s *ResultService) Leaderboard(ctx context.Context, scope HostScope, princi
 }
 
 type StaffResultFilter struct {
-	TryoutID *uuid.UUID
-	Search   string
-	Limit    int
-	Offset   int
+	TryoutID  *uuid.UUID
+	ProgramID *uuid.UUID
+	Search    string
+	Limit     int
+	Offset    int
 }
 
 // StaffResults lists completed attempts for Admin and Operator. IRTWarning is set only on results of IRT-mode
@@ -222,7 +223,7 @@ func (s *ResultService) StaffResults(ctx context.Context, scope HostScope, princ
 		return nil, 0, &InputError{Fields: fields}
 	}
 	rows, total, err := s.repo.StaffResults(ctx, s.db, tenantID, repository.StaffResultFilter{
-		TryoutID: f.TryoutID, Search: f.Search, Limit: f.Limit, Offset: f.Offset,
+		TryoutID: f.TryoutID, ProgramID: f.ProgramID, Search: f.Search, Limit: f.Limit, Offset: f.Offset,
 	})
 	if err != nil {
 		return nil, 0, runtimeError(err)
