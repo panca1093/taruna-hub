@@ -3774,6 +3774,159 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's exports
+         * @description Admin and Operator only (D02: a role guard). Every export of the configured tenant, newest first. `kind`
+         *     narrows to one kind. The file itself is read through `POST /api/v1/exports/{id}/download-link` once the
+         *     export is `ready`. Exports are created by the endpoint of the slice that owns the kind (tryout PDF,
+         *     results CSV or XLSX), which answers `202` with an `Export`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    kind?: components["schemas"]["ExportKind"];
+                    /** @description Defaults to 20, at most 50. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The exports, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExportList"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                422: components["responses"]["ValidationFailed"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One export and its progress
+         * @description Admin and Operator only. Poll it while `status` is `queued` or `running`. A failed export keeps its
+         *     `error_code`. An id of another tenant, an unknown id and a malformed id all answer the same `404`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The export */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Export"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{id}/download-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A short-lived download link for a ready export
+         * @description Admin and Operator only; authorizes on every call. The link is a presigned GET valid for 60 seconds, saving
+         *     the file under `file_name`, so ask again instead of keeping it. The response is `Cache-Control: no-store`.
+         *     An export that is not `ready` answers `409` with code `export_not_ready`. `503` means object storage is not
+         *     configured on this deployment.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The presigned link and when it stops working */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExportDownloadLink"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description The export is not `ready` (`export_not_ready`). */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tryouts/{id}/grace": {
         parameters: {
             query?: never;
@@ -7162,6 +7315,50 @@ export interface components {
             status: "staged" | "final";
         };
         AssetURL: {
+            /** @description A presigned GET; it carries its own credentials, so never log or store it. */
+            url: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        /** @enum {string} */
+        ExportKind: "tryout_pdf" | "tryout_results_csv" | "tryout_results_xlsx";
+        /**
+         * @description A durable artifact request. `queued` and `running` are in progress, `ready` has a file, `failed` ends with an
+         *     `error_code`. The storage key is never exposed.
+         */
+        Export: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ExportKind"];
+            /** @enum {string} */
+            status: "queued" | "running" | "ready" | "failed";
+            /** @description What the owning slice asked for; shape depends on `kind`. */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Format: uuid */
+            requested_by: string;
+            /**
+             * Format: date-time
+             * @description The instant the data was fixed; a late render still describes this moment.
+             */
+            cut_off_at: string;
+            /** @description Null until the export is ready. */
+            file_name: string | null;
+            content_type: string | null;
+            /** Format: int64 */
+            size_bytes: number | null;
+            /** @description Empty unless an attempt failed; the last attempt's code stays while it is retried. */
+            error_code: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at: string | null;
+        };
+        ExportList: {
+            exports: components["schemas"]["Export"][];
+        };
+        ExportDownloadLink: {
             /** @description A presigned GET; it carries its own credentials, so never log or store it. */
             url: string;
             /** Format: date-time */

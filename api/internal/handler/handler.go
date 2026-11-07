@@ -39,6 +39,7 @@ type Handler struct {
 	topups        *service.TopupService
 	payments      *service.PaymentService
 	website       *service.WebsiteService
+	exports       *service.ExportService
 	secureCookies bool
 	allowedOrigin func(origin string) bool
 }
@@ -249,4 +250,9 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	// Any tenant user may upload; the purpose narrows who, and every read is re-authorized in the service.
 	v1.POST("/assets", h.UploadAsset, httpx.NoStore(), Authenticate(h.auth))
 	v1.GET("/assets/:id/url", h.AssetURL, httpx.NoStore(), Authenticate(h.auth))
+
+	// Exports are staff work (D02: role-only); the create endpoints live with each kind's slice.
+	v1.GET("/exports", h.ListExports, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.GET("/exports/:id", h.GetExport, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.POST("/exports/:id/download-link", h.ExportDownloadLink, httpx.NoStore(), Authenticate(h.auth), staff)
 }

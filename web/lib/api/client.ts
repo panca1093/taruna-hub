@@ -176,6 +176,9 @@ export type TopupList = components["schemas"]["TopupList"];
 export type TopupBody = components["schemas"]["TopupCreateRequest"];
 export type Asset = components["schemas"]["Asset"];
 export type AssetLink = components["schemas"]["AssetURL"];
+export type Export = components["schemas"]["Export"];
+export type ExportList = components["schemas"]["ExportList"];
+export type ExportDownloadLink = components["schemas"]["ExportDownloadLink"];
 
 /** Filters of `GET /api/v1/admin/results`; an absent field is not sent at all. */
 export type StaffResultFilters = Omit<
@@ -604,6 +607,15 @@ export const api = {
   assets: {
     uploadProof: (file: File) => uploadAsset(file, "payment_proof"),
     url: (id: string) => authed<AssetLink>(`/api/v1/assets/${id}/url` as keyof paths),
+  },
+
+  exports: {
+    list: (filters: { kind?: Export["kind"]; limit?: number } = {}) =>
+      authed<ExportList>(`/api/v1/exports${queryOf(filters)}` as keyof paths),
+    get: (id: string) => authed<Export>(`/api/v1/exports/${id}` as keyof paths),
+    /** 409 `export_not_ready` until the export is ready. */
+    downloadLink: (id: string) =>
+      mutate<ExportDownloadLink>("POST", `/api/v1/exports/${id}/download-link` as keyof paths),
   },
 
   tryouts: {

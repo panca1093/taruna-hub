@@ -39,6 +39,8 @@ tags:
     description: Tenant students, their wallets and staff adjustments
   - name: assets
     description: Private image uploads, finalization and short-lived download links
+  - name: exports
+    description: Durable PDF, CSV and XLSX artifacts rendered by background jobs, their progress and authorized downloads
   - name: orders
     description: Wallet and manual-transfer checkout, order review by staff, and the access an order opens
   - name: topups
@@ -2838,6 +2840,117 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/exports:
+    get:
+      tags: [exports]
+      summary: List the tenant's exports
+      description: |
+        Admin and Operator only (D02: a role guard). Every export of the configured tenant, newest first. `kind`
+        narrows to one kind. The file itself is read through `POST /api/v1/exports/{id}/download-link` once the
+        export is `ready`. Exports are created by the endpoint of the slice that owns the kind (tryout PDF,
+        results CSV or XLSX), which answers `202` with an `Export`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/ExportKind"
+        - name: limit
+          in: query
+          description: Defaults to 20, at most 50.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        "200":
+          description: The exports, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/exports/{id}:
+    get:
+      tags: [exports]
+      summary: One export and its progress
+      description: |
+        Admin and Operator only. Poll it while `status` is `queued` or `running`. A failed export keeps its
+        `error_code`. An id of another tenant, an unknown id and a malformed id all answer the same `404`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Export"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/exports/{id}/download-link:
+    post:
+      tags: [exports]
+      summary: A short-lived download link for a ready export
+      description: |
+        Admin and Operator only; authorizes on every call. The link is a presigned GET valid for 60 seconds, saving
+        the file under `file_name`, so ask again instead of keeping it. The response is `Cache-Control: no-store`.
+        An export that is not `ready` answers `409` with code `export_not_ready`. `503` means object storage is not
+        configured on this deployment.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The presigned link and when it stops working
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportDownloadLink"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The export is not `ready` (`export_not_ready`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           $ref: "#/components/responses/Unavailable"
 
@@ -6064,6 +6177,78 @@ components:
           enum: [staged, final]
 
     AssetURL:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url:
+          type: string
+          description: A presigned GET; it carries its own credentials, so never log or store it.
+        expires_at:
+          type: string
+          format: date-time
+
+    ExportKind:
+      type: string
+      enum: [tryout_pdf, tryout_results_csv, tryout_results_xlsx]
+
+    Export:
+      type: object
+      description: |
+        A durable artifact request. `queued` and `running` are in progress, `ready` has a file, `failed` ends with an
+        `error_code`. The storage key is never exposed.
+      required: [id, kind, status, params, requested_by, cut_off_at, file_name, content_type, size_bytes, error_code, created_at, finished_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/ExportKind"
+        status:
+          type: string
+          enum: [queued, running, ready, failed]
+        params:
+          type: object
+          additionalProperties: true
+          description: What the owning slice asked for; shape depends on `kind`.
+        requested_by:
+          type: string
+          format: uuid
+        cut_off_at:
+          type: string
+          format: date-time
+          description: The instant the data was fixed; a late render still describes this moment.
+        file_name:
+          type: string
+          nullable: true
+          description: Null until the export is ready.
+        content_type:
+          type: string
+          nullable: true
+        size_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        error_code:
+          type: string
+          description: Empty unless an attempt failed; the last attempt's code stays while it is retried.
+        created_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ExportList:
+      type: object
+      required: [exports]
+      properties:
+        exports:
+          type: array
+          items:
+            $ref: "#/components/schemas/Export"
+
+    ExportDownloadLink:
       type: object
       required: [url, expires_at]
       properties:
