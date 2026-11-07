@@ -77,6 +77,8 @@ Each numeric triplet is wrapped in `oklch(...)` in CSS. Success, warning and dan
 
 HeroUI supplies `*-soft`, `*-soft-foreground`, and hover tokens. These are theme-dependent color mixes, not additional hardcoded palettes. For example, `accent-soft` is accent at 15% against transparent in light mode and 12% in dark mode. Its appearance changes with the surface beneath it. Use `bg-accent-soft text-accent-soft-foreground` together; do not substitute solid-accent text colors on a soft background.
 
+`warning-soft-foreground` is overridden in light mode to `color-mix(in oklab, var(--warning) 40%, var(--foreground))`: HeroUI's default measured 4.08:1 on a card and 3.77:1 on the page background for 11px chip text, and the override measures 5.22:1 and 4.82:1. Dark mode pins HeroUI's own value (7.27:1 / 8.41:1), because an unlayered `:root` token would otherwise also win in dark.
+
 **Text on tinted surfaces.** On `bg-peach` and `bg-accent-soft` (hero Panels, order and top-up status banners), `text-muted` falls below 4.5:1. Use `text-foreground/80` for body and caption text there. `text-muted` stays for plain `surface` and `background`.
 
 ### 2.3 Status and category mapping

@@ -202,6 +202,8 @@
   --success: oklch(0.495 0.061 163.4);
   --success-soft: oklch(0.947 0.013 149.2);
   --success-soft-foreground: var(--success);
+  /* HeroUI's 80/70 mix measured 3.8–4.1:1 on warning-soft; 40% passes 4.5:1 on surface and background */
+  --warning-soft-foreground: color-mix(in oklab, var(--warning) 40%, var(--foreground));
   --rose: oklch(0.633 0.037 359.8);
   --logo-plate: oklch(0.96 0.015 70);
   --shadow-tint: oklch(0.333 0.021 342.4 / 3.5%);
@@ -264,6 +266,8 @@
   --success-foreground: oklch(0.2 0.02 155);
   --success-soft: oklch(0.336 0.032 156.5);
   --success-soft-foreground: var(--success);
+  /* Keeps HeroUI's dark value; the unlayered light override above would otherwise win here too */
+  --warning-soft-foreground: color-mix(in oklab, var(--warning) 80%, var(--foreground) 30%);
   --rose: oklch(0.704 0.048 346.1);
   --logo-plate: oklch(0.96 0.015 70);
   --shadow-tint: oklch(0 0 0 / 8%);
