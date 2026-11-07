@@ -74,15 +74,24 @@ func run() error {
 
 	// Only needed when S3_ENDPOINT is set; without it no asset was ever stored.
 	var assets *service.AssetService
+	var assetStorage *infra.Storage
 	if cfg.S3.Endpoint != "" {
 		storage, err := infra.NewStorage(cfg.S3)
 		if err != nil {
 			return err
 		}
+		assetStorage = storage
 		assets = service.NewAssetService(pool, repository.NewAssetRepository(pool), storage, 0)
 	}
 
-	client, err := infra.NewRiverWorker(pool, notifications, service.RetryDelay, logger)
+	var store service.ObjectStore
+	if assetStorage != nil {
+		store = assetStorage
+	}
+	exports := service.NewExportService(pool, repository.NewExportRepository(pool), store, inserter, notifications, logger)
+	registerExportRenderers(exports, exportDeps{pool: pool, store: store, logger: logger})
+
+	client, err := infra.NewRiverWorker(pool, notifications, service.RetryDelay, logger, infra.WithExports(exports))
 	if err != nil {
 		return err
 	}
@@ -90,7 +99,7 @@ func run() error {
 	if err := client.Start(context.Background()); err != nil {
 		return err
 	}
-	logger.Info("worker started", slog.String("env", cfg.Env), slog.String("queue", service.QueueNotifications))
+	logger.Info("worker started", slog.String("env", cfg.Env), slog.String("queues", service.QueueNotifications+","+service.QueueExports))
 
 	go func() {
 		ticker := time.NewTicker(reconcileInterval)

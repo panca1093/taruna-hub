@@ -224,6 +224,10 @@ func NewNotificationService(repo *repository.NotificationRepository, jobs JobIns
 			`Top-up {{.Get "code"}} ditolak - {{.Get "tenant_name"}}`,
 			"Halo {{.Get \"name\"}},\n\nTop-up {{.Get \"code\"}} sebesar {{.Get \"amount\"}} ditolak.\n" +
 				"Alasan: {{.Get \"reason\"}}\n\nSaldo dompet tidak berubah. Hubungi admin {{.Get \"tenant_name\"}} jika ada pertanyaan."},
+		{TemplateExportReady,
+			`Ekspor siap diunduh - {{.Get "tenant_name"}}`,
+			"Berkas {{.Get \"file_name\"}} ({{.Get \"kind\"}}) sudah siap.\n\n" +
+				"Buka halaman ekspor di panel admin {{.Get \"tenant_name\"}} untuk mengunduhnya. Tautan unduhan dibuat saat Anda menekan tombol Unduh."},
 	} {
 		if err := s.RegisterTemplate(t.name, t.subject, t.body); err != nil {
 			return nil, err
