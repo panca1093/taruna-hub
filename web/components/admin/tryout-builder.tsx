@@ -8,12 +8,14 @@ import { AppShell } from "@/components/app-shell";
 import { LatexText } from "@/components/latex";
 import { Panel } from "@/components/page-blocks";
 import { SummaryBox } from "@/components/admin/summary-box";
+import { ExportStatus } from "@/components/admin/export-status";
 import { DifficultyBadge, QuestionTypeBadge, TryoutStatusBadge } from "@/components/status-badge";
 import { SelectInput, SwitchInput, TextInput, TextareaInput } from "@/components/ui/form";
 import { QuestionPickerDrawer, type PickedQuestion } from "@/components/admin/question-picker-drawer";
 import { api, ApiError, errorText, type Program, type Tryout } from "@/lib/api/client";
 import type { ScoringMode } from "@/lib/types";
 import { useAdminTryoutBuilderT } from "@/lib/i18n/dict/admin-tryout-builder";
+import { useTryoutPdfT } from "@/lib/i18n/dict/tryout-pdf";
 
 interface SubtestDraft {
   key: string;
@@ -116,6 +118,9 @@ function frozenOf(tryout: Tryout): Record<string, string> {
 export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
   const router = useRouter();
   const t = useAdminTryoutBuilderT();
+  const pdfT = useTryoutPdfT();
+  const [pdfRequesting, setPdfRequesting] = useState(false);
+  const [pdfRefresh, setPdfRefresh] = useState(0);
   const isEditing = !!tryoutId;
 
   const [programs, setPrograms] = useState<Program[] | null>(null);
@@ -303,6 +308,20 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
     }
   };
 
+  const requestPdf = async () => {
+    if (!tryout) return;
+    setPdfRequesting(true);
+    try {
+      await api.tryouts.requestPdf(tryout.id);
+      setPdfRefresh((n) => n + 1);
+      toast.success(pdfT.toastQueued, { description: pdfT.toastQueuedDescription });
+    } catch (err) {
+      toast.danger(pdfT.toastFailed, { description: errorText(err, pdfT.failedFallback) });
+    } finally {
+      setPdfRequesting(false);
+    }
+  };
+
   if (loading) {
     return (
       <AppShell title={t.editTitle}>
@@ -337,6 +356,11 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
       actions={
         <div className="flex gap-2">
           {tryout && (
+            <Button variant="secondary" size="sm" isDisabled={saving || working || dirty || pdfRequesting} onPress={() => void requestPdf()}>
+              {pdfRequesting ? pdfT.requesting : pdfT.request}
+            </Button>
+          )}
+          {tryout && (
             <Button
               variant="secondary"
               size="sm"
@@ -361,6 +385,8 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
             {dirty && !locked && <span className="text-warning">{t.saveBeforeStatus}</span>}
           </div>
         )}
+
+        {tryout && <ExportStatus kind="tryout_pdf" refreshKey={pdfRefresh} />}
 
         <Panel as="section" className="flex flex-col gap-4">
           <h2 className="font-display text-heading-sm">{t.infoHeading}</h2>

@@ -1804,6 +1804,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tryouts/{id}/pdf-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request the printable PDF of a tryout
+         * @description Admin and Operator only; a Student answers `403`. Answers `202` with the `Export` to poll through
+         *     `GET /api/v1/exports/{id}` and download through `POST /api/v1/exports/{id}/download-link`. The file lists
+         *     the tryout's subtests, questions and options in the order the admin stored them (shuffle settings are
+         *     ignored) with images and typeset math, and never carries answer keys, explanations or points. Its `params`
+         *     are `{tryout_id, revision}`: the PDF describes that definition revision, and a render that finds the tryout
+         *     at another revision fails with `error_code` `tryout_changed`. Other failure codes are `tryout_not_found`,
+         *     `pdf_too_large`, `renderer_unavailable` and `render_failed`. `503` with code `pdf_unavailable` means no PDF
+         *     converter is configured on this deployment, and no job is queued. Drafts can be exported too.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The queued export */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Export"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+                /** @description No PDF converter is configured (`pdf_unavailable`) or the export service is unavailable. */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/products": {
         parameters: {
             query?: never;
