@@ -72,6 +72,7 @@ const id = {
   no: "Belum",
   editAction: "Ubah",
   selfNote: "Ini akun Anda; tidak dapat dinonaktifkan sendiri.",
+  lastAdmin: "Admin aktif terakhir tidak dapat dinonaktifkan. Aktifkan atau buat admin lain terlebih dahulu.",
 };
 
 const en: typeof id = {
@@ -144,6 +145,7 @@ const en: typeof id = {
   no: "Not yet",
   editAction: "Edit",
   selfNote: "This is your own account; you can't deactivate it.",
+  lastAdmin: "The last active admin can't be deactivated. Activate or create another admin first.",
 };
 
 export function useUsersT() {

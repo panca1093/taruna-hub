@@ -109,11 +109,11 @@ func run() error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				reconcile(ctx, notifications, assets, logger)
+				reconcile(ctx, notifications, assets, exports, logger)
 			}
 		}
 	}()
-	reconcile(ctx, notifications, assets, logger)
+	reconcile(ctx, notifications, assets, exports, logger)
 
 	runtime := service.NewRuntimeService(pool, repository.NewRuntimeRepository(pool))
 	kecermatanRepo := repository.NewKecermatanRepository(pool)
@@ -180,7 +180,7 @@ func sweepPayments(ctx context.Context, payments *service.PaymentService, logger
 	}
 }
 
-func reconcile(ctx context.Context, notifications *service.NotificationService, assets *service.AssetService, logger *slog.Logger) {
+func reconcile(ctx context.Context, notifications *service.NotificationService, assets *service.AssetService, exports *service.ExportService, logger *slog.Logger) {
 	failed, err := notifications.Reconcile(ctx)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("reconcile failed", slog.String("error", err.Error()))
@@ -188,6 +188,13 @@ func reconcile(ctx context.Context, notifications *service.NotificationService, 
 	}
 	if failed > 0 {
 		logger.Warn("reconciled orphaned notifications", slog.Int("count", failed))
+	}
+	stale, err := exports.FailStale(ctx, service.ExportJobTimeout*service.ExportMaxAttempts+service.ExportStaleMargin)
+	if err != nil && !errors.Is(err, context.Canceled) {
+		logger.Error("fail stale exports failed", slog.String("error", err.Error()))
+	}
+	if stale > 0 {
+		logger.Warn("failed exports left unfinished by a lost worker", slog.Int("count", stale))
 	}
 	if assets == nil {
 		return

@@ -279,6 +279,29 @@ func (r *UserRepository) LockTx(ctx context.Context, tx pgx.Tx, tenantID, id uui
 		`SELECT `+userColumns+` FROM users WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, id))
 }
 
+// LockTenantAdminsTx serializes admin deactivations of one tenant until the transaction ends.
+func (r *UserRepository) LockTenantAdminsTx(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID) error {
+	if tenantID == uuid.Nil {
+		return ErrScopeRequired
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1::text || ':admins', 0))`, tenantID); err != nil {
+		return fmt.Errorf("lock tenant admins: %w", err)
+	}
+	return nil
+}
+
+func (r *UserRepository) CountActiveAdminsTx(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID) (int, error) {
+	if tenantID == uuid.Nil {
+		return 0, ErrScopeRequired
+	}
+	var n int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM users WHERE tenant_id = $1 AND role = 'admin' AND is_active`, tenantID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count active admins: %w", err)
+	}
+	return n, nil
+}
+
 // UpdateAccountTx rewrites the three editable fields. A changed email drops the verification, since the new
 // address was not proved by its owner.
 func (r *UserRepository) UpdateAccountTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, name string, email, phone *string, emailChanged bool) (model.User, error) {

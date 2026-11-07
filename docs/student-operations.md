@@ -67,6 +67,9 @@ total, and a paginated list of days with activity, newest first. A wallet order 
 so the two totals are different views and are never summed. It is a report: no settlement, no merchant
 credentials.
 
+Wallet credits from staff-resolved gateway payment exceptions (`payment_exceptions` marked credited) are not
+counted in the recap; pending an owner decision.
+
 ## Screens
 
 - `/admin/users` (Admin): staff accounts, status filter, search, create/edit, deactivate/reactivate with reason.

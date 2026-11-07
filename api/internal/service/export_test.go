@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -276,5 +277,56 @@ func TestSafeFileName(t *testing.T) {
 		if got := safeFileName(in, job); got != want {
 			t.Errorf("safeFileName(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+type cancellingRenderer struct{ cancel context.CancelFunc }
+
+func (c cancellingRenderer) Render(ctx context.Context, _ model.Export) (ExportArtifact, error) {
+	c.cancel()
+	return ExportArtifact{}, ctx.Err()
+}
+
+func TestExportCancelledFinalAttemptEndsFailed(t *testing.T) {
+	h := newExportHarness(t)
+	e := h.request(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.svc.Register(testExportKind, cancellingRenderer{cancel: cancel})
+
+	if err := h.svc.Run(ctx, h.tenant.ID, e.ID, ExportMaxAttempts, ExportMaxAttempts); err == nil {
+		t.Fatal("cancelled run returned nil, want the context error")
+	}
+	got, _ := h.svc.Get(context.Background(), h.scope(h.tenant), h.principal(h.tenant, h.admin), e.ID)
+	if got.Status != model.ExportFailed || got.ErrorCode != "render_timeout" || got.FinishedAt == nil {
+		t.Errorf("export = %+v, want failed with render_timeout", got)
+	}
+}
+
+func TestExportFailStaleLeavesFreshRowsAlone(t *testing.T) {
+	h := newExportHarness(t)
+	ctx := context.Background()
+	old, fresh := h.request(t), h.request(t)
+	for _, id := range []uuid.UUID{old.ID, fresh.ID} {
+		if _, err := h.pool.Exec(ctx, `UPDATE exports SET status = 'running' WHERE id = $1`, id); err != nil {
+			t.Fatalf("set running: %v", err)
+		}
+	}
+	if _, err := h.pool.Exec(ctx, `UPDATE exports SET updated_at = now() - interval '2 hours' WHERE id = $1`, old.ID); err != nil {
+		t.Fatalf("age row: %v", err)
+	}
+
+	n, err := h.svc.FailStale(ctx, time.Hour)
+	if err != nil || n < 1 {
+		t.Fatalf("FailStale = %d, %v; want at least the aged row", n, err)
+	}
+	p, s := h.principal(h.tenant, h.admin), h.scope(h.tenant)
+	gotOld, _ := h.svc.Get(ctx, s, p, old.ID)
+	gotFresh, _ := h.svc.Get(ctx, s, p, fresh.ID)
+	if gotOld.Status != model.ExportFailed || gotOld.ErrorCode != "worker_lost" {
+		t.Errorf("old = %+v, want failed worker_lost", gotOld)
+	}
+	if gotFresh.Status != model.ExportRunning {
+		t.Errorf("fresh = %+v, want still running", gotFresh)
 	}
 }

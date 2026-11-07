@@ -8,7 +8,6 @@ import (
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
-	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
 const (
@@ -24,7 +23,7 @@ func (h *Handler) WithPDF(configured bool) *Handler {
 }
 
 // RequestTryoutPDF is the tryout PDF create endpoint. The tryout is read through the caller's tenant first, so a
-// foreign or unknown id is the same 404 as everywhere else, and its current revision is what the file describes.
+// foreign or unknown id is the same 404 as everywhere else.
 func (h *Handler) RequestTryoutPDF(c echo.Context) error {
 	if !h.pdfConfigured {
 		return httpx.New(http.StatusServiceUnavailable, CodePDFUnavailable, pdfUnavailable)
@@ -37,9 +36,9 @@ func (h *Handler) RequestTryoutPDF(c echo.Context) error {
 	if err != nil {
 		return httpx.NotFound(tryoutNotFound)
 	}
-	tryout, err := h.tryouts.Get(c.Request().Context(), scope, principal, id)
+	params, err := h.tryouts.PreparePDF(c.Request().Context(), scope, principal, id)
 	if err != nil {
 		return tryoutError(err)
 	}
-	return h.acceptExport(c, model.ExportTryoutPDF, service.TryoutPDFParams{TryoutID: tryout.ID, Revision: tryout.Revision})
+	return h.acceptExport(c, model.ExportTryoutPDF, params)
 }

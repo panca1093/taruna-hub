@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -135,6 +136,18 @@ func (r *ExportRepository) MarkAttemptFailed(ctx context.Context, tenantID, id u
 		return fmt.Errorf("mark export attempt failed: %w", err)
 	}
 	return nil
+}
+
+// FailStale is cross-tenant on purpose: it is the worker's own sweep, never reachable from a request.
+func (r *ExportRepository) FailStale(ctx context.Context, code string, olderThan time.Duration) (int, error) {
+	tag, err := r.db.Exec(ctx, `
+		UPDATE exports SET status = 'failed', error_code = $1, finished_at = now(), updated_at = now()
+		 WHERE status IN ('queued', 'running') AND updated_at < now() - make_interval(secs => $2)`,
+		code, olderThan.Seconds())
+	if err != nil {
+		return 0, fmt.Errorf("fail stale exports: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
 }
 
 // Requester returns what the ready notice needs; email is nil when the account has none.

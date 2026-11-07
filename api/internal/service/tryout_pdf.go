@@ -49,6 +49,16 @@ type TryoutPDFParams struct {
 	Revision int       `json:"revision"`
 }
 
+// PreparePDF reads the tryout through the caller's tenant, so a foreign or unknown id is the usual not-found, and
+// pins the current revision the file will describe.
+func (s *TryoutService) PreparePDF(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) (TryoutPDFParams, error) {
+	tryout, err := s.Get(ctx, scope, principal, id)
+	if err != nil {
+		return TryoutPDFParams{}, err
+	}
+	return TryoutPDFParams{TryoutID: tryout.ID, Revision: tryout.Revision}, nil
+}
+
 type TryoutPDFRenderer struct {
 	repo *repository.TryoutRepository
 	conv PDFConverter

@@ -36,6 +36,11 @@ nil. A renderer may return `*service.ExportError{Code, Err}` to choose the code 
 `render_failed`. Other codes: `upload_failed`, `storage_unavailable`, `no_renderer`, `internal_error`. A missing
 renderer is retried like any failure, so a rolling deploy where the worker is older than the API still recovers.
 
+A cancelled or timed-out attempt on the last try (`attempt >= maxAttempts`) also ends the row as `failed` with
+`render_timeout`, written on a context that survives the cancellation. If the worker dies outright, the periodic
+reconcile in the worker calls `FailStale`, which marks every `queued` or `running` export untouched for longer than
+`ExportJobTimeout x ExportMaxAttempts + ExportStaleMargin` as `failed` with `worker_lost`, across tenants.
+
 ## Authorization
 
 Admin and Operator only (D02, role-only). Student is `403`. Every call re-checks the principal against the

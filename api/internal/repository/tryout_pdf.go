@@ -15,8 +15,14 @@ import (
 // PrintTryout reads a tryout in the order the admin stored it, through the frozen version of each assignment.
 // The query names stem and option labels only; keys, explanations and option points are never selected.
 func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UUID) (model.PrintTryout, error) {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return model.PrintTryout{}, fmt.Errorf("begin print read: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+
 	var out model.PrintTryout
-	err := r.db.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`SELECT t.title, t.revision, n.name FROM tryouts t JOIN tenants n ON n.id = t.tenant_id
 		  WHERE t.tenant_id = $1 AND t.id = $2`, tenantID, id).Scan(&out.Title, &out.Revision, &out.TenantName)
 	if err != nil {
@@ -26,7 +32,7 @@ func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UU
 		return model.PrintTryout{}, fmt.Errorf("read print tryout: %w", err)
 	}
 
-	rows, err := r.db.Query(ctx, `
+	rows, err := tx.Query(ctx, `
 		SELECT s.id, s.name, s.duration_seconds, v.content,
 		       COALESCE((SELECT jsonb_agg(o.obj ->> 'label' ORDER BY o.ord)
 		                   FROM jsonb_array_elements(v.options) WITH ORDINALITY AS o(obj, ord)), '[]'::jsonb)

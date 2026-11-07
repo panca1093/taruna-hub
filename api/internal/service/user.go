@@ -148,6 +148,8 @@ var (
 	ErrUserForbidden = errors.New("account action not allowed for this role")
 	// ErrSelfDeactivation: an account cannot lock itself out.
 	ErrSelfDeactivation = errors.New("an account cannot deactivate itself")
+	// ErrLastAdmin: a tenant keeps at least one active Admin.
+	ErrLastAdmin        = errors.New("the last active admin cannot be deactivated")
 	ErrGrantKeyConflict = errors.New("idempotency key belongs to a different grant")
 	ErrGrantTarget      = errors.New("grant target not found")
 )
@@ -232,8 +234,20 @@ type GrantResult struct {
 	Replayed bool
 }
 
-func (s *UserAdminService) List(ctx context.Context, scope HostScope, principal model.Principal, in UserListInput) ([]model.User, int, error) {
+// staffTenant refuses a non-staff principal before any query, whatever the handler already checked.
+func (s *UserAdminService) staffTenant(scope HostScope, principal model.Principal) (uuid.UUID, error) {
 	tenantID, err := walletTenant(scope, principal)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if principal.Role != model.RoleAdmin && principal.Role != model.RoleOperator {
+		return uuid.Nil, ErrUserForbidden
+	}
+	return tenantID, nil
+}
+
+func (s *UserAdminService) List(ctx context.Context, scope HostScope, principal model.Principal, in UserListInput) ([]model.User, int, error) {
+	tenantID, err := s.staffTenant(scope, principal)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -259,7 +273,7 @@ func (s *UserAdminService) List(ctx context.Context, scope HostScope, principal 
 }
 
 func (s *UserAdminService) Get(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) (model.User, error) {
-	tenantID, err := walletTenant(scope, principal)
+	tenantID, err := s.staffTenant(scope, principal)
 	if err != nil {
 		return model.User{}, err
 	}
@@ -407,6 +421,11 @@ func (s *UserAdminService) setActive(ctx context.Context, scope HostScope, princ
 	}
 	var out model.User
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		if !active {
+			if err := s.users.LockTenantAdminsTx(ctx, tx, tenantID); err != nil {
+				return err
+			}
+		}
 		current, err := s.users.LockTx(ctx, tx, tenantID, id)
 		if err != nil {
 			return err
@@ -417,6 +436,15 @@ func (s *UserAdminService) setActive(ctx context.Context, scope HostScope, princ
 		out = current
 		if current.IsActive == active {
 			return nil
+		}
+		if !active && current.Role == model.RoleAdmin {
+			n, err := s.users.CountActiveAdminsTx(ctx, tx, tenantID)
+			if err != nil {
+				return err
+			}
+			if n <= 1 {
+				return ErrLastAdmin
+			}
 		}
 		out, err = s.users.SetActiveTx(ctx, tx, tenantID, id, active)
 		if err != nil {
@@ -439,7 +467,7 @@ func (s *UserAdminService) setActive(ctx context.Context, scope HostScope, princ
 
 // Access lists what one student holds right now.
 func (s *UserAdminService) Access(ctx context.Context, scope HostScope, principal model.Principal, studentID uuid.UUID, limit, offset int) ([]model.StudentAccess, int, error) {
-	tenantID, err := walletTenant(scope, principal)
+	tenantID, err := s.staffTenant(scope, principal)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -460,7 +488,7 @@ func (s *UserAdminService) Access(ctx context.Context, scope HostScope, principa
 // Grant opens one tryout, or adds kecermatan credits, for a student without an order. It goes through the
 // same issuance as a purchase; the idempotency key is the grant source, so a retry grants nothing twice.
 func (s *UserAdminService) Grant(ctx context.Context, scope HostScope, principal model.Principal, studentID uuid.UUID, in GrantInput) (GrantResult, error) {
-	tenantID, err := walletTenant(scope, principal)
+	tenantID, err := s.staffTenant(scope, principal)
 	if err != nil {
 		return GrantResult{}, err
 	}

@@ -17,6 +17,7 @@ import (
 const (
 	userNotFound     = "Akun tidak ditemukan."
 	userSelfRule     = "Anda tidak dapat menonaktifkan akun sendiri."
+	userLastAdmin    = "Admin aktif terakhir tidak dapat dinonaktifkan."
 	userRoleRule     = "Peran harus student, operator atau admin."
 	userReasonRule   = "Alasan wajib diisi, maksimal 500 karakter."
 	userKeyRule      = "Kunci idempotensi 8–64 karakter: huruf, angka, _ atau -."
@@ -272,6 +273,9 @@ func bindUser(c echo.Context, dst any) error {
 	return bindStrict(c, dst)
 }
 
+// CodeLastAdmin: deactivating this account would leave the tenant without an active Admin.
+const CodeLastAdmin httpx.Code = "last_admin"
+
 func userAdminError(err error) error {
 	var input *service.InputError
 	if errors.As(err, &input) {
@@ -290,6 +294,8 @@ func userAdminError(err error) error {
 		return httpx.Forbidden(roleDenied)
 	case errors.Is(err, service.ErrSelfDeactivation):
 		return httpx.Forbidden(userSelfRule)
+	case errors.Is(err, service.ErrLastAdmin):
+		return httpx.New(http.StatusConflict, CodeLastAdmin, userLastAdmin)
 	case errors.Is(err, service.ErrEmailTaken):
 		return httpx.Conflict(alreadyRegistered).WithFields(map[string]string{"email": emailTaken})
 	case errors.Is(err, service.ErrPhoneTaken):

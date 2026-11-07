@@ -40,6 +40,13 @@ const (
 	exportCodeStorage  = "storage_unavailable"
 	exportCodeNoRender = "no_renderer"
 	exportCodeInternal = "internal_error"
+	exportCodeTimeout  = "render_timeout"
+	exportCodeLost     = "worker_lost"
+
+	// ExportJobTimeout bounds one attempt; the worker sweep derives its stale cutoff from it.
+	ExportJobTimeout = 5 * time.Minute
+	// ExportStaleMargin covers River's retry backoff and clock slack on top of every attempt running to its limit.
+	ExportStaleMargin = 30 * time.Minute
 )
 
 var knownExportKinds = map[string]bool{
@@ -234,7 +241,7 @@ func (s *ExportService) Run(ctx context.Context, tenantID, exportID uuid.UUID, a
 	artifact, err := renderer.Render(ctx, job)
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return s.interrupted(ctx, job, final)
 		}
 		code := exportCodeRender
 		var coded *ExportError
@@ -250,13 +257,13 @@ func (s *ExportService) Run(ctx context.Context, tenantID, exportID uuid.UUID, a
 	key := fmt.Sprintf("%s/export/%s", job.TenantID, job.ID)
 	if err := s.store.Put(ctx, key, artifact.Data, artifact.ContentType); err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return s.interrupted(ctx, job, final)
 		}
 		return s.fail(ctx, job, exportCodeUpload, err, final)
 	}
 	if err := s.finish(ctx, job, key, artifact.ContentType, fileName, int64(len(artifact.Data))); err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return s.interrupted(ctx, job, final)
 		}
 		return s.fail(ctx, job, exportCodeInternal, err, final)
 	}
@@ -291,6 +298,21 @@ func (s *ExportService) finish(ctx context.Context, job model.Export, key, conte
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+// interrupted ends the export on the last attempt, because River will not call Run again.
+func (s *ExportService) interrupted(ctx context.Context, job model.Export, final bool) error {
+	if final {
+		if err := s.repo.MarkAttemptFailed(context.WithoutCancel(ctx), job.TenantID, job.ID, exportCodeTimeout, true); err != nil {
+			s.logger.Error("fail interrupted export", slog.String("export_id", job.ID.String()), slog.String("error", err.Error()))
+		}
+	}
+	return ctx.Err()
+}
+
+// FailStale ends exports a crashed worker left queued or running, across tenants.
+func (s *ExportService) FailStale(ctx context.Context, olderThan time.Duration) (int, error) {
+	return s.repo.FailStale(ctx, exportCodeLost, olderThan)
 }
 
 func (s *ExportService) fail(ctx context.Context, job model.Export, code string, cause error, final bool) error {

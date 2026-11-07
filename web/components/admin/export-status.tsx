@@ -88,7 +88,7 @@ export function ExportStatus({ kind, refreshKey }: { kind: Export["kind"]; refre
               <span className="truncate font-medium">{row.file_name ?? t.pendingFile}</span>
               <span className="text-label text-muted">
                 {formatDateTime(row.created_at)}
-                {row.status === "failed" && row.error_code ? ` · ${t.failedReason(row.error_code)}` : ""}
+                {row.status === "failed" && row.error_code ? ` · ${t.failedMessages[row.error_code] ?? t.failedReason(row.error_code)}` : ""}
               </span>
             </div>
             <div className="flex items-center gap-3">

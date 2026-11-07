@@ -180,8 +180,9 @@ function AccountStatusForm({
       onDone(user);
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? (err.fields?.reason ?? err.message) : t.loadErrorDescription);
-      toast.danger(t.actionFailed, { description: errorText(err, t.loadErrorDescription) });
+      const lastAdmin = err instanceof ApiError && err.code === "last_admin";
+      setError(lastAdmin ? t.lastAdmin : err instanceof ApiError ? (err.fields?.reason ?? err.message) : t.loadErrorDescription);
+      toast.danger(t.actionFailed, { description: lastAdmin ? t.lastAdmin : errorText(err, t.loadErrorDescription) });
     } finally {
       setSaving(false);
     }

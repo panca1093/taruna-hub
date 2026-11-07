@@ -21,7 +21,7 @@ const (
 	notificationMaxWorkers = 10
 	exportMaxWorkers       = 2
 	// exportTimeout bounds one render; River's own default would cut a large PDF at a minute.
-	exportTimeout  = 5 * time.Minute
+	exportTimeout  = service.ExportJobTimeout
 	snoozeDuration = 30 * time.Second
 	// hardStopGrace bounds the escalation once the graceful shutdown window is spent.
 	hardStopGrace = 5 * time.Second

@@ -7050,6 +7050,9 @@ components:
                 - website_not_published
                 - website_revision_conflict
                 - website_content_invalid
+                - pdf_unavailable
+                - export_not_ready
+                - last_admin
             message:
               type: string
               description: Human-readable, Indonesian, safe to show to end users.

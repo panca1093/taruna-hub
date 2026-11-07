@@ -17,6 +17,7 @@ import {
   type TryoutSummary,
 } from "@/lib/api/client";
 import { useStudentsT } from "@/lib/i18n/dict/students";
+import { useLocale } from "@/lib/i18n/locale-context";
 
 // A fresh key per submit attempt, reused on a retry so a network error cannot grant twice.
 function newIdempotencyKey(): string {
@@ -28,6 +29,9 @@ function newIdempotencyKey(): string {
 /** Remount it (change its key) to reload; state starts as loading. */
 export function StudentAccessSection({ student }: { student: AdminUser }) {
   const t = useStudentsT();
+  const { locale } = useLocale();
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(locale === "id" ? "id-ID" : "en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
   const [rows, setRows] = useState<StudentAccess[] | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -59,7 +63,7 @@ export function StudentAccessSection({ student }: { student: AdminUser }) {
               {row.kind === "tryout" ? t.accessKindTryout : t.accessKindKecermatan}
               {" · "}
               {row.kind === "tryout" && row.active_until
-                ? t.accessUntil(new Date(row.active_until).toLocaleDateString())
+                ? t.accessUntil(formatDate(row.active_until))
                 : t.accessCredits(row.attempts_used, row.attempts_purchased ?? 0)}
               {" · "}
               {t.accessSource[row.source_type] ?? row.source_type}
