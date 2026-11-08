@@ -39,17 +39,17 @@ web/                  Next.js 16 · React 19 · HeroUI v3 · Tailwind v4
   lib/mock-data.ts, demo-store.ts   mock layer, replaced slice by slice
 docs/                 implementation notes per area (how it behaves); app READMEs only say how to run
 requirement/          PRD, architecture, plan, reconciliation
-docker-compose.yml    Postgres, Redis, MinIO
+docker-compose.yml    Postgres, Redis, RustFS (S3)
 ```
 
 ## Run locally
 
-Default ports were already taken, so these are shifted: API **8081**, Postgres **5433**, Redis **6380**, MinIO **9002** (console 9003).
+Default ports were already taken, so these are shifted: API **8081**, Postgres **5433**, Redis **6380**, RustFS **9002**.
 
-Whole stack in Docker (needs `api/.env` with `JWT_SECRET` and `NOTIFICATION_SEAL_KEY`; compose overrides the database, Redis, MinIO and URL settings):
+Whole stack in Docker (needs `api/.env` with `JWT_SECRET` and `NOTIFICATION_SEAL_KEY`; compose overrides the database, Redis, storage and URL settings):
 
 ```bash
-docker compose up -d --build   # postgres, redis, minio, migrate, seed, api :8081, worker, web :3000
+docker compose up -d --build   # postgres, redis, rustfs, migrate, seed, api :8081, worker, web :3000
 ```
 
 Or run the API, worker and web natively for hot reload:
@@ -62,7 +62,7 @@ cd web && npm run dev    # web on :3000
 cd web && npm run gen:api   # after any openapi.yaml change
 ```
 
-Override host ports with `API_PORT`, `WEB_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `MINIO_PORT`; if `API_PORT` is not 8081, also set `NEXT_PUBLIC_API_URL=http://localhost:<API_PORT>` before building `web`.
+Override host ports with `API_PORT`, `WEB_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `STORAGE_PORT`; if `API_PORT` is not 8081, also set `NEXT_PUBLIC_API_URL=http://localhost:<API_PORT>` before building `web`.
 
 ## Slice workflow
 

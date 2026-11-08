@@ -1,0 +1,43 @@
+# Cloudflare terminates public TLS. This origin presents a Cloudflare Origin Certificate (SSL mode
+# "Full (strict)") and requires Cloudflare's Authenticated Origin Pulls client cert, so a request that
+# skips Cloudflare and hits the VPS IP directly fails the TLS handshake.
+{
+	auto_https off
+}
+
+(origin_tls) {
+	tls /certs/origin.pem /certs/origin-key.pem {
+		client_auth {
+			mode require_and_verify
+			trust_pool file /certs/cloudflare-origin-pull-ca.pem
+		}
+	}
+}
+
+{$DOMAIN}:443 {
+	import origin_tls
+	encode zstd gzip
+	request_body {
+		max_size 100MB
+	}
+	handle /api/* {
+		reverse_proxy api:8081
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+www.{$DOMAIN}:443 {
+	import origin_tls
+	redir https://{$DOMAIN}{uri} permanent
+}
+
+# Presigned links sign the Host header, which reverse_proxy passes through unchanged.
+files.{$DOMAIN}:443 {
+	import origin_tls
+	request_body {
+		max_size 100MB
+	}
+	reverse_proxy rustfs:9000
+}

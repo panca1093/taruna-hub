@@ -27,21 +27,20 @@ services:
       timeout: 3s
       retries: 20
 
-  # Stands in for GCS in production; question images and payment proofs land here.
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  # Stands in for GCS in production; question images and payment proofs land here. RustFS replaces MinIO, which stopped publishing images.
+  rustfs:
+    image: rustfs/rustfs:1.0.4
     environment:
-      MINIO_ROOT_USER: tryout
-      MINIO_ROOT_PASSWORD: tryout123
-    # Host ports shifted off the defaults; 9000/9001 are already taken on this machine.
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_ACCESS_KEY: tryout
+      RUSTFS_SECRET_KEY: tryout123
+    # Host port shifted off the default; 9000 is already taken on this machine.
     ports:
-      - "${MINIO_PORT:-9002}:9000"
-      - "${MINIO_CONSOLE_PORT:-9003}:9001"
+      - "${STORAGE_PORT:-9002}:9000"
     volumes:
-      - miniodata:/data
+      - rustfsdata:/data
     healthcheck:
-      test: ["CMD-SHELL", "mc ready local || curl -fsS http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -99,8 +98,8 @@ services:
       DATABASE_URL: postgres://tryout:tryout@postgres:5432/tryout?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       TENANT_SLUG: ${TENANT_SLUG:-taruna}
-      S3_ENDPOINT: minio:9000
-      S3_PUBLIC_ENDPOINT: localhost:${MINIO_PORT:-9002}
+      S3_ENDPOINT: rustfs:9000
+      S3_PUBLIC_ENDPOINT: localhost:${STORAGE_PORT:-9002}
       S3_ACCESS_KEY: tryout
       S3_SECRET_KEY: tryout123
       S3_BUCKET: tryout-assets
@@ -115,7 +114,7 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      minio:
+      rustfs:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8081/readyz"]
@@ -149,4 +148,4 @@ services:
 
 volumes:
   pgdata:
-  miniodata:
+  rustfsdata:

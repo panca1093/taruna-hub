@@ -39,6 +39,8 @@ type S3Config struct {
 	Region    string
 	// Browsers must reach presigned links; inside compose the API sees minio:9000, browsers localhost:9002.
 	PublicEndpoint string
+	// Behind a TLS proxy the API reaches MinIO over plain HTTP while browsers need https links.
+	PublicUseSSL bool
 }
 
 // BankConfig is where manual transfers are sent; the one tenant's account, never taken from a request.
@@ -201,6 +203,14 @@ func loadS3(development bool) (S3Config, error) {
 			return S3Config{}, fmt.Errorf("S3_USE_SSL must be true or false, got %q", raw)
 		}
 		s.UseSSL = ssl
+	}
+	s.PublicUseSSL = s.UseSSL
+	if raw := env("S3_PUBLIC_USE_SSL", ""); raw != "" {
+		ssl, err := strconv.ParseBool(raw)
+		if err != nil {
+			return S3Config{}, fmt.Errorf("S3_PUBLIC_USE_SSL must be true or false, got %q", raw)
+		}
+		s.PublicUseSSL = ssl
 	}
 	if s.Endpoint != "" && (s.AccessKey == "" || s.SecretKey == "" || s.Bucket == "") {
 		return S3Config{}, fmt.Errorf("S3_ACCESS_KEY, S3_SECRET_KEY and S3_BUCKET are required when S3_ENDPOINT is set")
