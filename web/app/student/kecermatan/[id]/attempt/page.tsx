@@ -148,7 +148,7 @@ function KolomScreen({
           <div role="group" aria-label={t.referenceLabel(kolom.number)} className="grid gap-1 sm:gap-3" style={columns(labels.length, units)}>
             {kolom.reference.map((item) => (
               <figure key={item.label} className="flex min-w-0 flex-col">
-                <figcaption className="font-mono text-2xl font-extrabold text-foreground">{item.label}</figcaption>
+                <figcaption className="font-mono text-base font-extrabold text-foreground sm:text-2xl">{item.label}</figcaption>
                 <div className="@container mt-1.5 flex flex-1 items-center justify-center rounded-tile border border-border bg-surface px-0 py-3 text-center sm:px-2">
                   <KecermatanItem elements={item.elements} fit className="item-fit font-extrabold" elementClassName="item-fit-el" />
                 </div>
@@ -175,7 +175,7 @@ function KolomScreen({
                     disabled={timeUp}
                     aria-label={t.answerAria(item.label)}
                     onClick={() => onAnswer(soal.number, item.label)}
-                    className="flex h-14 min-w-0 items-center justify-center rounded-tile border border-border bg-surface font-mono text-2xl font-extrabold text-foreground outline-none transition-colors hover:border-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 sm:h-16"
+                    className="flex h-12 min-w-0 items-center justify-center rounded-tile border border-border bg-surface font-mono text-base font-extrabold text-foreground outline-none transition-colors hover:border-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 sm:h-16 sm:text-2xl"
                   >
                     {item.label}
                   </button>
