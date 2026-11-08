@@ -93,7 +93,7 @@ jobs:
               sleep 2
             done
             for repo in ghcr.io/panca1093/taruna-hub-api ghcr.io/panca1093/taruna-hub-web; do
-              docker image ls "$repo" --format '{{.Tag}}' | grep -E '^[0-9a-f]{40}$' | grep -vx "$IMAGE_TAG" | tail -n +3 \
+              docker image ls "$repo" --format '{{.Tag}}' | { grep -E '^[0-9a-f]{40}$' || true; } | { grep -vx "$IMAGE_TAG" || true; } | tail -n +3 \
                 | xargs -r -I{} docker image rm "$repo:{}"
             done
             docker image prune -f

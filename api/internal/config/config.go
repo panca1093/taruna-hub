@@ -28,7 +28,7 @@ type SMTPConfig struct {
 	TLS      string
 }
 
-// S3Config is S3-compatible object storage: MinIO locally, GCS through its S3 interoperability in
+// S3Config is S3-compatible object storage: RustFS locally and on the VPS, GCS through its S3 interoperability in
 // production. An empty Endpoint means the asset routes answer 503 and nothing else is affected.
 type S3Config struct {
 	Endpoint  string
