@@ -60,7 +60,7 @@ when reached directly: without Cloudflare's client certificate the TLS handshake
 Put the three files from Cloudflare in `<app-dir>/certs/`, then:
 
 ```bash
-cp deploy/.env.example <app-dir>/.env   # copy from the repo, fill every empty value
+scp deploy/.env.example <ssh-user>@<vps>:<app-dir>/.env   # from a local clone (or paste it); then fill every empty value on the VPS
 chmod 600 <app-dir>/.env <app-dir>/certs/origin-key.pem
 ```
 
@@ -71,12 +71,13 @@ Nothing pushes to the VPS. Deploying is `./deploy.sh <version>` run on the serve
 **Bootstrap (once)**, in `<app-dir>` after §2:
 
 ```bash
-curl -fsSLo deploy.sh https://raw.githubusercontent.com/panca1093/taruna-hub/main/deploy/deploy.sh && chmod +x deploy.sh
+curl -fsSLo deploy.sh https://raw.githubusercontent.com/panca1093/taruna-hub/refs/tags/vX.Y.Z/deploy/deploy.sh && chmod +x deploy.sh
 ```
 
 **GHCR access.** If the `taruna-hub-api` and `taruna-hub-web` packages are public, nothing is needed. If
 private, run `docker login ghcr.io` once on the VPS with a classic personal access token scoped
-`read:packages` only.
+`read:packages` only. Packages under a personal account are likely private by default even from a public
+repo (uncertain): check Packages → visibility before the first deploy.
 
 **Release.** On `main` after CI is green: `git tag -a vX.Y.Z -m "release vX.Y.Z" && git push origin vX.Y.Z`.
 The **Images** run builds `taruna-hub-api` and `taruna-hub-web` tagged `vX.Y.Z` and the commit SHA (SHA only

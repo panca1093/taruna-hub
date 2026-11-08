@@ -14,7 +14,11 @@ IMAGE_TAG=$tag docker compose -f "$tmp/deploy/compose.yml" --project-directory .
 
 prev=none
 if [ -f .image-tag ]; then prev=$(sed -n 's/^IMAGE_TAG=//p' .image-tag); fi
-echo "rollback value: ./deploy.sh $prev"
+[ "$prev" = none ] || echo "rollback value: ./deploy.sh $prev"
+
+# The caddy bind mount pins the old inode, so a changed Caddyfile needs an explicit recreate.
+caddy_changed=0
+cmp -s "$tmp/deploy/Caddyfile" Caddyfile || caddy_changed=1
 
 # mv gives each file a new inode, so replacing deploy.sh while it runs is safe.
 mv "$tmp/deploy/compose.yml" "$tmp/deploy/Caddyfile" "$tmp/deploy/backup.sh" "$tmp/deploy/deploy.sh" .
@@ -24,18 +28,26 @@ mv "$tmp/api/migrations" migrations
 echo "IMAGE_TAG=$tag" > .image-tag
 
 if ! dc up -d --remove-orphans; then dc logs --tail 100 api migrate; exit 1; fi
+if [ "$caddy_changed" = 1 ]; then
+  echo "Caddyfile changed: recreating caddy"
+  dc up -d --force-recreate caddy
+else
+  echo "Caddyfile unchanged"
+fi
 for i in $(seq 1 60); do
   dc exec -T api wget -qO- http://localhost:8081/readyz >/dev/null 2>&1 && break
   [ "$i" = 60 ] && { dc logs --tail 100 api migrate; exit 1; }
   sleep 2
 done
 
-# Keeps the current and the 2 newest other versions; SHA-tagged images are never deployable, so they go.
+# Keeps the current and the 2 newest other final releases; pre-releases and SHA-tagged images are never rollback targets, so they go.
 for repo in ghcr.io/panca1093/taruna-hub-api ghcr.io/panca1093/taruna-hub-web; do
   tags=$(docker image ls "$repo" --format '{{.Tag}}')
+  others=$(printf '%s\n' "$tags" | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' || true; } | { grep -vx "$tag" || true; })
   {
     printf '%s\n' "$tags" | { grep -E '^[0-9a-f]{40}$' || true; }
-    printf '%s\n' "$tags" | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' || true; } | { grep -vx "$tag" || true; } | sort -rV | tail -n +3
+    printf '%s\n' "$others" | { grep -e '-' || true; }
+    printf '%s\n' "$others" | { grep -v -e '-' || true; } | sort -rV | tail -n +3
   } | xargs -r -I{} docker image rm "$repo:{}"
 done
 docker image prune -f
