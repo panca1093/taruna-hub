@@ -441,6 +441,14 @@ func TestWebsiteProgramVisibility(t *testing.T) {
 	if wb, err := h.web.Save(ctx, scope, h.admin1(), SaveWebsiteInput{ExpectedDraftRevision: 2, Content: shown}); err != nil || wb.DraftRevision != 3 {
 		t.Fatalf("a visibility-only change must be a new draft revision: %+v, %v", wb.DraftRevision, err)
 	}
+	second, err := h.publish(3, 1)
+	if err != nil || !second.Changed || second.PublishedRevision != 2 {
+		t.Fatalf("visibility-only publish = %+v, %v; want changed at published revision 2", second, err)
+	}
+	pub, err = h.web.Published(ctx, scope)
+	if err != nil || pub.PublishedRevision != 2 || !reflect.DeepEqual(pub.Content.ProgramVisibility, shown.ProgramVisibility) {
+		t.Fatalf("public read = %+v, %v; want revision 2 with every slot shown", pub, err)
+	}
 }
 
 func TestWebsiteProgramVisibilityBackfill(t *testing.T) {

@@ -73,6 +73,7 @@ static fallback, which shows every slot.
 Public effect of a hidden slot:
 - It disappears from the landing programs section, the hero illustration, the footer and nav program links;
   `/programs/<slot>` is `notFound`.
+- Known limitation: a hidden slot's page is rendered client-side after the published fetch, so it answers HTTP 200 with the not-found UI; search engines see a 200. An unknown slug is a real 404.
 - With no slot visible, the programs section, the hero program CTA (`/#programs`), the "Bimbel & diklat" entry
   card and the footer and nav program links are removed, and the hero illustration shows only the
   "Tryout & Kecermatan" panel, without a tablist.

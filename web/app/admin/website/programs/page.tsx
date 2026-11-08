@@ -33,7 +33,7 @@ function Slots() {
               </div>
               <SwitchInput
                 className="mt-4"
-                label={t.visibilityLabel}
+                label={t.visibilityLabelFor(t.programNames[slot])}
                 description={visible ? t.visibilityShown : t.visibilityHidden}
                 isSelected={visible}
                 onChange={(checked) => ed.setVisibility(slot, checked)}

@@ -7,6 +7,21 @@ import { api, type PublicProduct } from "@/lib/api/client";
 
 type ContentState = Remote<{ id: WebsiteLocaleContent; en: WebsiteLocaleContent }>;
 
+let publishedRequest: ReturnType<typeof api.website.published> | null = null;
+let publishedAt = 0;
+
+/** The page hook and the nav mount together and share one request; the short window keeps later navigations fresh. */
+function fetchPublished(fresh = false) {
+  if (fresh || !publishedRequest || Date.now() - publishedAt > 2000) {
+    publishedAt = Date.now();
+    publishedRequest = api.website.published();
+    publishedRequest.catch(() => {
+      publishedRequest = null;
+    });
+  }
+  return publishedRequest;
+}
+
 /** Published website content and catalog products for public pages; they load and fail independently. */
 export function usePublicWebsite() {
   const [website, setWebsite] = useState<ContentState>({ status: "loading" });
@@ -14,9 +29,8 @@ export function usePublicWebsite() {
   const [products, setProducts] = useState<Remote<PublicProduct[]>>({ status: "loading" });
 
   // WEBSITE_NOT_PUBLISHED and network errors both land on the static fallback; public pages never read a draft.
-  const loadWebsite = useCallback(() => {
-    return api.website
-      .published()
+  const loadWebsite = useCallback((fresh = false) => {
+    return fetchPublished(fresh)
       .then((page) => {
         setVisibility(page.content.program_visibility);
         setWebsite({ status: "ready", data: page.content.locales });
@@ -42,7 +56,7 @@ export function usePublicWebsite() {
     products,
     retryWebsite: () => {
       setWebsite({ status: "loading" });
-      void loadWebsite();
+      void loadWebsite(true);
     },
     retryProducts: () => {
       setProducts({ status: "loading" });
@@ -51,12 +65,11 @@ export function usePublicWebsite() {
   };
 }
 
-/** Whether the nav should link to the programs section; stays true until the published snapshot says every slot is hidden. */
+/** Whether the nav links to programs: unknown until the shared request settles, then false only when every slot is hidden. */
 export function useProgramsLinked() {
-  const [linked, setLinked] = useState(true);
+  const [linked, setLinked] = useState(false);
   useEffect(() => {
-    api.website
-      .published()
+    fetchPublished()
       .then((page) => setLinked(visibleSlots(page.content.program_visibility).length > 0))
       .catch(() => setLinked(true));
   }, []);
