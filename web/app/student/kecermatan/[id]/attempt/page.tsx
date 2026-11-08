@@ -145,8 +145,7 @@ function KolomScreen({
         )}
 
         <div className="mx-auto w-full max-w-200">
-          <p className="text-caption text-muted">{t.referenceLabel(kolom.number)}</p>
-          <div className="mt-4 grid gap-1 sm:gap-3" style={columns(labels.length, units)}>
+          <div role="group" aria-label={t.referenceLabel(kolom.number)} className="grid gap-1 sm:gap-3" style={columns(labels.length, units)}>
             {kolom.reference.map((item) => (
               <figure key={item.label} className="flex min-w-0 flex-col">
                 <figcaption className="font-mono text-2xl font-extrabold text-foreground">{item.label}</figcaption>
