@@ -28,12 +28,13 @@ const REFETCH_MS = 700;
 const sendKey = (kolom: number, soal: number) => `${kolom}:${soal}`;
 const mmss = (total: number) => `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 
-const REFERENCE_TEXT = "text-micro @item-xs:text-xs @item-sm:text-base @item-md:text-lg @item-lg:text-xl @item-xl:text-2xl";
-const REFERENCE_ELEMENT = "size-3! @item-sm:size-4! @item-md:size-5! @item-lg:size-6! @item-xl:size-7!";
-const SHOWN_TEXT = `${REFERENCE_TEXT} @item-2xl:text-3xl`;
-const SHOWN_ELEMENT = `${REFERENCE_ELEMENT} @item-2xl:size-9!`;
+const itemLength = (elements: Kolom["reference"][number]["elements"]) =>
+  elements.every((element) => element.kind === "char" || element.kind === "number" || element.kind === "symbol")
+    ? elements.reduce((sum, element) => sum + [...element.value].length, 0)
+    : elements.length;
 
-const columns = (count: number) => ({ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` });
+const columns = (count: number, itemLen?: number) =>
+  ({ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, ...(itemLen ? { "--item-len": itemLen } : {}) }) as React.CSSProperties;
 
 function ExamFrame({ children }: { children: React.ReactNode }) {
   return <div className="fixed inset-0 z-50 flex flex-col bg-background">{children}</div>;
@@ -84,6 +85,7 @@ function KolomScreen({
   const sending = kolomSends.filter(([, state]) => state === "sending").length;
   const confirmed = doneCount - unconfirmed - sending;
   const labels = kolom.reference.map((item) => item.label);
+  const itemLen = Math.max(1, ...kolom.reference.map((item) => itemLength(item.elements)));
 
   useEffect(() => {
     if (!soal || timeUp) return;
@@ -141,12 +143,12 @@ function KolomScreen({
 
         <div className="mx-auto w-full max-w-200">
           <p className="text-caption text-muted">{t.referenceLabel(kolom.number)}</p>
-          <div className="mt-4 grid gap-1 sm:gap-3" style={columns(labels.length)}>
+          <div className="mt-4 grid gap-1 sm:gap-3" style={columns(labels.length, itemLen)}>
             {kolom.reference.map((item) => (
               <figure key={item.label} className="flex min-w-0 flex-col">
                 <figcaption className="font-mono text-2xl font-extrabold text-foreground">{item.label}</figcaption>
                 <div className="@container mt-1.5 flex flex-1 items-center justify-center rounded-tile border border-border bg-surface px-0 py-3 text-center sm:px-2">
-                  <KecermatanItem elements={item.elements} fit className={cn("font-extrabold", REFERENCE_TEXT)} elementClassName={REFERENCE_ELEMENT} />
+                  <KecermatanItem elements={item.elements} fit className="item-fit font-extrabold" elementClassName="item-fit-el" />
                 </div>
               </figure>
             ))}
@@ -155,10 +157,10 @@ function KolomScreen({
           {soal ? (
             <>
               <h1 className="mt-7 font-display text-heading sm:text-hero">{t.soalPrompt}</h1>
-              <div className="mt-5 grid gap-1 sm:gap-3" style={columns(soal.shown.length)}>
+              <div className="mt-5 grid gap-1 sm:gap-3" style={columns(soal.shown.length, itemLen)}>
                 {soal.shown.map((label) => (
                   <div key={label} className="@container flex min-w-0 items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-0 py-5 sm:px-2 sm:py-5.5">
-                    <KecermatanItem elements={labelOf(label)?.elements ?? []} fit className={cn("font-extrabold", SHOWN_TEXT)} elementClassName={SHOWN_ELEMENT} />
+                    <KecermatanItem elements={labelOf(label)?.elements ?? []} fit className="item-fit item-fit-shown font-extrabold" elementClassName="item-fit-el" />
                   </div>
                 ))}
               </div>
