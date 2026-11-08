@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 
 const TEXT_KINDS = new Set(["char", "number", "symbol"]);
 
-/** One reference item as a student sees it: text kinds read as one string, other kinds draw each element. `fit` lets non-text items wrap between elements and drops the spaces between symbols when the card is narrow; a text run never splits, so callers size it with the `item-fit` classes. */
+/** One reference item as a student sees it: text kinds read as one string, other kinds draw each element. `fit` lets non-text items wrap between elements and drops the spaces between symbols; a text run never splits, so callers size it with the `item-fit` classes. */
 export function KecermatanItem({
   elements,
   className,
@@ -20,17 +20,7 @@ export function KecermatanItem({
 }) {
   if (elements.every((element) => TEXT_KINDS.has(element.kind))) {
     const isSymbol = elements[0]?.kind === "symbol";
-    const compact = elements.map((element) => element.value).join("");
-    if (fit && isSymbol) {
-      const spaced = elements.map((element) => element.value).join(" ");
-      return (
-        <span className={cn("font-mono tracking-tight whitespace-nowrap text-foreground", className)}>
-          <span className="item-fit-sym-spaced hidden @item-md:inline">{spaced}</span>
-          <span className="item-fit-sym @item-md:hidden">{compact}</span>
-        </span>
-      );
-    }
-    const text = isSymbol ? elements.map((element) => element.value).join(" ") : compact;
+    const text = elements.map((element) => element.value).join(isSymbol && !fit ? " " : "");
     return <span className={cn("font-mono tracking-tight whitespace-nowrap text-foreground", className)}>{text}</span>;
   }
   return (
