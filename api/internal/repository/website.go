@@ -82,7 +82,20 @@ func (r *WebsiteRepository) find(ctx context.Context, q queryer, tenantID uuid.U
 		}
 		row.Published = &content
 	}
+	row.Draft = withVisibility(row.Draft)
+	if row.Published != nil {
+		published := withVisibility(*row.Published)
+		row.Published = &published
+	}
 	return row, nil
+}
+
+// withVisibility reads a snapshot stored before the toggle existed as every slot shown.
+func withVisibility(c model.WebsiteContent) model.WebsiteContent {
+	if c.ProgramVisibility == nil {
+		c.ProgramVisibility = map[string]bool{"tni": true, "polri": true, "kedinasan": true}
+	}
+	return c
 }
 
 // InitializeTx creates the row once; a concurrent first reader waits on the key and then inserts nothing.

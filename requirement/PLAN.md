@@ -422,6 +422,7 @@ For every slice, use this verification loop:
 - G2 approved — one atomic whole-site snapshot publication; no per-page publish.
 - G3 approved — the content contract in `docs/website-cms.md` (schema_version 1, `id` + `en` both required, fixed limits and slots).
 - G4 **open** — owner-approved launch copy and official program/contact data (or an accepted visible "information pending" state). It blocks the first real publication and launch, not the build.
+- Follow-up approved 2026-11-08 — each of the three program slots can be hidden (`program_visibility`, draft then publish, both locales); with none visible the hero shows only the Tryout & Kecermatan panel and program links are removed. Migration `000025`; see `docs/website-cms.md`.
 
 **Acceptance scenarios:**
 

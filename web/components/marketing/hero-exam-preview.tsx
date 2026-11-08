@@ -9,6 +9,10 @@ import type { LandingDict } from "@/lib/i18n/dict/landing";
 
 export const programSlots = ["tni", "polri", "kedinasan"] as const;
 export type ProgramSlot = (typeof programSlots)[number];
+export type ProgramVisibility = Record<ProgramSlot, boolean>;
+
+/** Missing visibility (loading, no publication, failed fetch) means the static fallback: every slot shown. */
+export const visibleSlots = (visibility?: ProgramVisibility | null): ProgramSlot[] => programSlots.filter((slot) => visibility?.[slot] ?? true);
 
 type StageTab = "program" | "practice";
 type PracticeKind = "tryout" | "kecermatan";
@@ -38,29 +42,34 @@ function Badge({ selected, children }: { selected: boolean; children: React.Reac
 }
 
 /** Labelled illustration only: choices highlight but nothing is graded and no answer key exists here. */
-export function HeroExamPreview({ t, programTitles }: { t: LandingDict; programTitles: Record<ProgramSlot, string> }) {
+export function HeroExamPreview({ t, programTitles, slots }: { t: LandingDict; programTitles: Record<ProgramSlot, string>; slots: ProgramSlot[] }) {
   const baseId = useId();
   const tabRefs = useRef<Record<StageTab, HTMLButtonElement | null>>({ program: null, practice: null });
-  const [tab, setTab] = useState<StageTab>("program");
-  const [slot, setSlot] = useState<ProgramSlot>("tni");
+  const [pickedTab, setTab] = useState<StageTab>("program");
+  const [pickedSlot, setSlot] = useState<ProgramSlot>("tni");
   const [kind, setKind] = useState<PracticeKind>("tryout");
   const [choice, setChoice] = useState<number | null>(null);
+
+  const tabs: StageTab[] = slots.length > 0 ? stageTabs : ["practice"];
+  const tab = tabs.includes(pickedTab) ? pickedTab : tabs[0];
+  const slot = slots.includes(pickedSlot) ? pickedSlot : slots[0];
+  const single = tabs.length === 1;
 
   const tabLabels: Record<StageTab, string> = { program: t.stageTabProgram, practice: t.stageTabPractice };
   const tabId = (name: StageTab) => `${baseId}-tab-${name}`;
   const panelId = (name: StageTab) => `${baseId}-panel-${name}`;
 
   function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    const index = stageTabs.indexOf(tab);
+    const index = tabs.indexOf(tab);
     let next: number;
-    if (event.key === "ArrowRight") next = (index + 1) % stageTabs.length;
-    else if (event.key === "ArrowLeft") next = (index - 1 + stageTabs.length) % stageTabs.length;
+    if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
     else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = stageTabs.length - 1;
+    else if (event.key === "End") next = tabs.length - 1;
     else return;
     event.preventDefault();
-    setTab(stageTabs[next]);
-    tabRefs.current[stageTabs[next]]?.focus();
+    setTab(tabs[next]);
+    tabRefs.current[tabs[next]]?.focus();
   }
 
   function switchKind(next: PracticeKind) {
@@ -77,30 +86,37 @@ export function HeroExamPreview({ t, programTitles }: { t: LandingDict; programT
       </p>
 
       <div className="relative min-h-96 overflow-hidden rounded-card border border-border bg-surface shadow-soft">
-        <div role="tablist" aria-label={t.stageTabsLabel} className="flex gap-6 border-b border-border px-5 pt-3">
-          {stageTabs.map((name) => (
-            <button
-              key={name}
-              ref={(node) => {
-                tabRefs.current[name] = node;
-              }}
-              id={tabId(name)}
-              role="tab"
-              type="button"
-              aria-selected={tab === name}
-              aria-controls={panelId(name)}
-              tabIndex={tab === name ? 0 : -1}
-              onClick={() => setTab(name)}
-              onKeyDown={onTabKeyDown}
-              className={cn(
-                "-mb-px border-b-2 pt-2 pb-3.5 text-label outline-none focus-visible:ring-2 focus-visible:ring-focus sm:text-caption",
-                tab === name ? "border-accent font-medium text-accent" : "border-transparent text-muted",
-              )}
-            >
-              {tabLabels[name]}
-            </button>
-          ))}
-        </div>
+        {single ? (
+          // A lone tab is not a tablist; keep the label and expose the panel as a labelled group.
+          <p id={tabId("practice")} className="border-b border-border px-5 pt-3 pb-3.5 text-label font-medium text-accent sm:text-caption">
+            {tabLabels.practice}
+          </p>
+        ) : (
+          <div role="tablist" aria-label={t.stageTabsLabel} className="flex gap-6 border-b border-border px-5 pt-3">
+            {tabs.map((name) => (
+              <button
+                key={name}
+                ref={(node) => {
+                  tabRefs.current[name] = node;
+                }}
+                id={tabId(name)}
+                role="tab"
+                type="button"
+                aria-selected={tab === name}
+                aria-controls={panelId(name)}
+                tabIndex={tab === name ? 0 : -1}
+                onClick={() => setTab(name)}
+                onKeyDown={onTabKeyDown}
+                className={cn(
+                  "-mb-px border-b-2 pt-2 pb-3.5 text-label outline-none focus-visible:ring-2 focus-visible:ring-focus sm:text-caption",
+                  tab === name ? "border-accent font-medium text-accent" : "border-transparent text-muted",
+                )}
+              >
+                {tabLabels[name]}
+              </button>
+            ))}
+          </div>
+        )}
 
         {tab === "program" ? (
           <div id={panelId("program")} role="tabpanel" aria-labelledby={tabId("program")} tabIndex={0} className="p-5 outline-none sm:p-6">
@@ -112,7 +128,7 @@ export function HeroExamPreview({ t, programTitles }: { t: LandingDict; programT
               <BookOpen className="size-5 shrink-0 text-muted" aria-hidden />
             </div>
             <div className="grid gap-2.5">
-              {programSlots.map((name) => (
+              {slots.map((name) => (
                 <button
                   key={name}
                   type="button"
@@ -142,7 +158,7 @@ export function HeroExamPreview({ t, programTitles }: { t: LandingDict; programT
             </div>
           </div>
         ) : (
-          <div id={panelId("practice")} role="tabpanel" aria-labelledby={tabId("practice")} tabIndex={0} className="p-5 outline-none sm:p-6">
+          <div id={panelId("practice")} role={single ? "group" : "tabpanel"} aria-labelledby={tabId("practice")} tabIndex={single ? undefined : 0} className="p-5 outline-none sm:p-6">
             <div className="mb-4 flex gap-1.5" role="group" aria-label={t.stagePracticeSwitchLabel}>
               {(["tryout", "kecermatan"] as const).map((name) => (
                 <button

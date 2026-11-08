@@ -35,6 +35,7 @@ function Preview({ slot }: { slot: ProgramSlot | null }) {
       view={view}
       locale={ed.contentLocale}
       content={ed.workbench.draft.locales[ed.contentLocale]}
+      visibility={ed.workbench.draft.program_visibility}
       contentState="ready"
       catalog={{ products }}
       hrefs={hrefs}

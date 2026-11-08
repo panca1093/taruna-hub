@@ -12,43 +12,53 @@ import {
   previewHref,
   useWebsiteEditor,
   type DiffEntry,
+  type VisibilityDiffEntry,
 } from "@/components/admin/website-editor";
 import { Icon } from "@/components/icon";
 import { LinkButton } from "@/components/ui/link-button";
 import { useWebsiteT } from "@/lib/i18n/dict/website";
 
-function DiffRow({ entry }: { entry: DiffEntry }) {
+function DiffRow({ heading, before, after }: { heading: string; before: string; after: string }) {
   const t = useWebsiteT();
-  const group = entry.scope === "home" ? t.homeGroup : t.programGroup(t.programNames[entry.scope]);
-  const show = (v: string | null) => (v === null ? t.beforeNone : v.trim() === "" ? t.emptyValue : v);
   return (
     <li className="border-b border-border py-5 last:border-b-0">
-      <p className="text-caption font-medium text-foreground">
-        {group} · {t.localeNames[entry.locale]} · {t.fields[entry.key]}
-      </p>
+      <p className="text-caption font-medium text-foreground">{heading}</p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="min-w-0 p-3">
           <p className="text-micro text-muted">{t.before}</p>
-          <p className="mt-1.5 text-caption break-words whitespace-pre-line text-muted">{show(entry.before)}</p>
+          <p className="mt-1.5 text-caption break-words whitespace-pre-line text-muted">{before}</p>
         </div>
         <div className="min-w-0 rounded-tile bg-accent-soft p-3 text-accent-soft-foreground">
           <p className="text-micro">{t.after}</p>
-          <p className="mt-1.5 text-caption break-words whitespace-pre-line">{show(entry.after)}</p>
+          <p className="mt-1.5 text-caption break-words whitespace-pre-line">{after}</p>
         </div>
       </div>
     </li>
   );
 }
 
+function FieldDiffRow({ entry }: { entry: DiffEntry }) {
+  const t = useWebsiteT();
+  const group = entry.scope === "home" ? t.homeGroup : t.programGroup(t.programNames[entry.scope]);
+  const show = (v: string | null) => (v === null ? t.beforeNone : v.trim() === "" ? t.emptyValue : v);
+  return <DiffRow heading={`${group} · ${t.localeNames[entry.locale]} · ${t.fields[entry.key]}`} before={show(entry.before)} after={show(entry.after)} />;
+}
+
+function VisibilityDiffRow({ entry }: { entry: VisibilityDiffEntry }) {
+  const t = useWebsiteT();
+  const show = (v: boolean | null) => (v === null ? t.beforeNone : v ? t.visibilityShown : t.visibilityHidden);
+  return <DiffRow heading={`${t.programGroup(t.programNames[entry.slot])} · ${t.visibilityLabel}`} before={show(entry.before)} after={show(entry.after)} />;
+}
+
 function Review() {
   const t = useWebsiteT();
   const ed = useWebsiteEditor();
-  const { workbench: wb, diff, dirty, publishState: pub } = ed;
+  const { workbench: wb, diff, visibilityDiff, changeCount, dirty, publishState: pub } = ed;
   const pairKey = `${wb.draft_revision}:${wb.published_revision}`;
   const [ackedFor, setAckedFor] = useState<string | null>(null);
   const acked = ackedFor === pairKey;
   const inFlight = pub.status === "publishing" || pub.status === "checking" || ed.save.status === "saving" || ed.save.status === "checking";
-  const canPublish = !dirty && diff.length > 0 && acked && !inFlight;
+  const canPublish = !dirty && changeCount > 0 && acked && !inFlight;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -75,7 +85,7 @@ function Review() {
         </Banner>
       )}
 
-      {diff.length === 0 ? (
+      {changeCount === 0 ? (
         <section className="rounded-card border border-border bg-surface p-6">
           <h2 className="font-display text-title text-foreground">{t.noDiffTitle}</h2>
           <p className="mt-1 text-caption text-muted">{t.noDiffBody}</p>
@@ -83,14 +93,17 @@ function Review() {
       ) : (
         <section aria-labelledby="diff-heading" className="rounded-card border border-border bg-surface p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="diff-heading" className="font-display text-title text-foreground">{t.changeCount(diff.length)}</h2>
+            <h2 id="diff-heading" className="font-display text-title text-foreground">{t.changeCount(changeCount)}</h2>
             <span className="rounded-chip bg-accent-soft px-2.5 py-1 text-label text-accent-soft-foreground">
               {t.revisionPair(wb.draft_revision, wb.published_revision)}
             </span>
           </div>
           <ul className="mt-2">
+            {visibilityDiff.map((entry) => (
+              <VisibilityDiffRow key={`visibility.${entry.slot}`} entry={entry} />
+            ))}
             {diff.map((entry) => (
-              <DiffRow key={fieldPath(entry)} entry={entry} />
+              <FieldDiffRow key={fieldPath(entry)} entry={entry} />
             ))}
           </ul>
         </section>
@@ -102,7 +115,7 @@ function Review() {
             type="checkbox"
             className="size-4 accent-accent"
             checked={acked}
-            disabled={diff.length === 0 || dirty}
+            disabled={changeCount === 0 || dirty}
             onChange={(e) => setAckedFor(e.target.checked ? pairKey : null)}
           />
           {t.ack}

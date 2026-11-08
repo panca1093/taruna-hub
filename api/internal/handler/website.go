@@ -176,18 +176,24 @@ func exactKeys(raw []byte, t reflect.Type) bool {
 	return true
 }
 
-// missingOptionalFields finds optional program texts that are absent or null; Go decoding cannot tell them from empty.
+// missingOptionalFields finds optional program texts and visibility flags that are absent or null; Go decoding cannot tell them from empty or false.
 func missingOptionalFields(body []byte) map[string]string {
 	var shape struct {
 		Content struct {
 			Locales map[string]struct {
 				Programs map[string]map[string]json.RawMessage `json:"programs"`
 			} `json:"locales"`
+			ProgramVisibility map[string]json.RawMessage `json:"program_visibility"`
 		} `json:"content"`
 	}
 	fields := map[string]string{}
 	if json.Unmarshal(body, &shape) != nil {
 		return fields
+	}
+	for slot, raw := range shape.Content.ProgramVisibility {
+		if string(raw) == "null" {
+			fields["program_visibility."+slot] = service.ReasonWebsiteRequired
+		}
 	}
 	for locale, l := range shape.Content.Locales {
 		for slot, program := range l.Programs {
@@ -208,7 +214,7 @@ func websiteError(err error) error {
 		query := false
 		for path, reason := range input.Fields {
 			fields[path] = websiteReason(reason)
-			query = query || !strings.HasPrefix(path, "locales.") && path != "schema_version"
+			query = query || !strings.HasPrefix(path, "locales.") && !strings.HasPrefix(path, "program_visibility.") && path != "schema_version"
 		}
 		if query {
 			return httpx.Validation(incomplete, fields)

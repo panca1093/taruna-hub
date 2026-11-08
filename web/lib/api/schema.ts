@@ -9191,6 +9191,15 @@ export interface components {
             polri: components["schemas"]["WebsiteProgram"];
             kedinasan: components["schemas"]["WebsiteProgram"];
         };
+        /**
+         * @description Whether each fixed program slot is shown on the public site. One flag per slot for both locales; a hidden
+         *     slot keeps its required title and summary. Applies only once published, like every other content field.
+         */
+        WebsiteProgramVisibility: {
+            tni: boolean;
+            polri: boolean;
+            kedinasan: boolean;
+        };
         WebsiteLocale: {
             home: components["schemas"]["WebsiteHome"];
             programs: components["schemas"]["WebsitePrograms"];
@@ -9202,6 +9211,7 @@ export interface components {
         WebsiteContent: {
             /** @enum {integer} */
             schema_version: 1;
+            program_visibility: components["schemas"]["WebsiteProgramVisibility"];
             locales: {
                 id: components["schemas"]["WebsiteLocale"];
                 en: components["schemas"]["WebsiteLocale"];

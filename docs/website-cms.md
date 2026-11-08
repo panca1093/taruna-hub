@@ -27,6 +27,8 @@ Recorded by Saifullah Panca, 2026-11-01.
 `WebsiteContent` is `schema_version: 1` plus `locales` with exactly `id` and `en`, both required. Each
 locale has `home` and `programs`. `programs` has exactly three stable marketing slots: `tni`, `polri`,
 `kedinasan`. They are not curriculum Program ids and have no add, delete, reorder or slug editor.
+`program_visibility` sits at the content root next to `locales`: `{tni, polri, kedinasan}`, each a boolean, all three
+required (see [Program visibility](#program-visibility)).
 Unknown fields, locales and slots are refused (an unknown field is `validation_failed`, an unknown locale or slot `website_content_invalid`). A tenant, role, publisher or timestamp in a request body
 is never accepted.
 
@@ -55,9 +57,31 @@ is never accepted.
   program-interest CTA ships until a real inquiry channel is approved.
 - Prototype camelCase keys map to these snake_case fields; `heroCta` became `practice_cta`.
 
+### Program visibility
+
+Owner decision 2026-11-08: the three slots stay fixed, but each can be hidden. One flag per slot serves both
+locales and is part of the draft, so it goes live only on Publish, with the same revision and concurrency
+rules as any other content. Admin only, like the rest of the workbench. A missing, `null`, non-boolean or
+unknown key is refused (`program_visibility.<slot>` with `website_required` or `website_program_slot`, or
+`validation_failed` for a non-boolean). Title and summary stay required for a hidden slot.
+
+Content stored before the flag existed is read as every slot shown: migration `000025` backfills the draft and
+any published snapshot with all-true (revisions and history untouched), and the repository fills the same
+default on read, so the API always returns the field. Before the first publication the public site uses its
+static fallback, which shows every slot.
+
+Public effect of a hidden slot:
+- It disappears from the landing programs section, the hero illustration, the footer and nav program links;
+  `/programs/<slot>` is `notFound`.
+- With no slot visible, the programs section, the hero program CTA (`/#programs`), the "Bimbel & diklat" entry
+  card and the footer and nav program links are removed, and the hero illustration shows only the
+  "Tryout & Kecermatan" panel, without a tablist.
+- The draft preview and the editor side preview follow the draft's flags; opening a hidden slot's preview shows
+  the detail with a notice that visitors will get a not-found page.
+
 `normalizeWebsiteContent` in `internal/service/website.go` does the trimming and validation and returns
 every failing field at once as an `InputError` whose keys are dotted paths:
-`schema_version`, `locales.<id|en>`, `locales.<l>.home.<field>`, `locales.<l>.programs.<slot>` and
+`schema_version`, `program_visibility.<slot>`, `locales.<id|en>`, `locales.<l>.home.<field>`, `locales.<l>.programs.<slot>` and
 `locales.<l>.programs.<slot>.<field>`. Reasons: `website_required`, `website_too_long`,
 `website_schema_version`, `website_locale`, `website_program_slot`. The handler maps the error to
 `422 website_content_invalid`.

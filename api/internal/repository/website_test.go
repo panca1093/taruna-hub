@@ -16,7 +16,10 @@ func websiteDraft(title string) model.WebsiteContent {
 		Home:     model.WebsiteHome{HeroTitle: title, HeroBody: "B", ProgramCTA: "P", PracticeCTA: "L"},
 		Programs: map[string]model.WebsiteProgram{"tni": program, "polri": program, "kedinasan": program},
 	}
-	return model.WebsiteContent{SchemaVersion: 1, Locales: map[string]model.WebsiteLocale{"id": locale, "en": locale}}
+	return model.WebsiteContent{
+		SchemaVersion: 1, Locales: map[string]model.WebsiteLocale{"id": locale, "en": locale},
+		ProgramVisibility: map[string]bool{"tni": true, "polri": true, "kedinasan": true},
+	}
 }
 
 func TestWebsiteRepositoryScopedPersistence(t *testing.T) {

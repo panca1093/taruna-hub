@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -68,7 +69,21 @@ func normalizeWebsiteContent(content model.WebsiteContent) (model.WebsiteContent
 	if content.SchemaVersion != model.WebsiteSchemaVersion {
 		w.fields["schema_version"] = ReasonWebsiteSchema
 	}
-	out := model.WebsiteContent{SchemaVersion: content.SchemaVersion, Locales: map[string]model.WebsiteLocale{}}
+	out := model.WebsiteContent{SchemaVersion: content.SchemaVersion, Locales: map[string]model.WebsiteLocale{}, ProgramVisibility: map[string]bool{}}
+
+	for slot := range content.ProgramVisibility {
+		if !slices.Contains(websiteSlots, slot) {
+			w.fields["program_visibility."+slot] = ReasonWebsiteSlot
+		}
+	}
+	for _, slot := range websiteSlots {
+		visible, ok := content.ProgramVisibility[slot]
+		if !ok {
+			w.fields["program_visibility."+slot] = ReasonWebsiteRequired
+			continue
+		}
+		out.ProgramVisibility[slot] = visible
+	}
 
 	for key := range content.Locales {
 		if key != "id" && key != "en" {
@@ -400,7 +415,8 @@ func DefaultWebsiteContent() model.WebsiteContent {
 		}
 	}
 	return model.WebsiteContent{
-		SchemaVersion: model.WebsiteSchemaVersion,
+		SchemaVersion:     model.WebsiteSchemaVersion,
+		ProgramVisibility: map[string]bool{"tni": true, "polri": true, "kedinasan": true},
 		Locales: map[string]model.WebsiteLocale{
 			"id": locale(model.WebsiteHome{
 				HeroTitle:   "Persiapanmu, sesuai caramu.",

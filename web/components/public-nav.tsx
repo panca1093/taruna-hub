@@ -5,10 +5,12 @@ import { Logo } from "./logo";
 import { ThemeToggle } from "./theme-toggle";
 import { LanguageToggle } from "./language-toggle";
 import { LinkButton } from "./ui/link-button";
+import { useProgramsLinked } from "./marketing/use-public-website";
 import { usePublicNavT } from "@/lib/i18n/dict/public-nav";
 
 export function PublicNav() {
   const t = usePublicNavT();
+  const programsLinked = useProgramsLinked();
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background">
       <div className="mx-auto flex h-topbar max-w-landing items-center gap-6 px-5 sm:px-10">
@@ -20,9 +22,11 @@ export function PublicNav() {
           <Link href="/#cara-kerja" className="transition-colors hover:text-foreground">
             {t.howItWorks}
           </Link>
-          <Link href="/#programs" className="transition-colors hover:text-foreground">
-            {t.programs}
-          </Link>
+          {programsLinked && (
+            <Link href="/#programs" className="transition-colors hover:text-foreground">
+              {t.programs}
+            </Link>
+          )}
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <LanguageToggle />

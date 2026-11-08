@@ -243,6 +243,20 @@ func TestWebsiteStrictBody(t *testing.T) {
 	expect("null optional field", put(req(contentWith(draft, func(id map[string]any) {
 		id["programs"].(map[string]any)["polri"].(map[string]any)["contact"] = nil
 	}))), 422, "website_content_invalid", "locales.id.programs.polri.contact")
+	withVisibility := func(edit func(v map[string]any)) any {
+		c := contentWith(draft, func(map[string]any) {})
+		edit(c["program_visibility"].(map[string]any))
+		return c
+	}
+	expect("missing visibility key", put(req(withVisibility(func(v map[string]any) { delete(v, "polri") }))), 422, "website_content_invalid", "program_visibility.polri")
+	expect("null visibility flag", put(req(withVisibility(func(v map[string]any) { v["tni"] = nil }))), 422, "website_content_invalid", "program_visibility.tni")
+	expect("unknown visibility slot", put(req(withVisibility(func(v map[string]any) { v["akpol"] = true }))), 422, "website_content_invalid", "program_visibility.akpol")
+	expect("non-boolean visibility flag", put(req(withVisibility(func(v map[string]any) { v["tni"] = "yes" }))), 422, "validation_failed", "body")
+	expect("absent visibility object", put(req(func() any {
+		c := contentWith(draft, func(map[string]any) {})
+		delete(c, "program_visibility")
+		return c
+	}())), 422, "website_content_invalid", "program_visibility.tni")
 	expect("wrong key casing", put(req(contentWith(draft, func(id map[string]any) {
 		home := id["home"].(map[string]any)
 		home["HERO_TITLE"] = home["hero_title"]
@@ -290,5 +304,36 @@ func TestWebsiteStrictBody(t *testing.T) {
 	var other int
 	if err := f.pool.QueryRow(context.Background(), `SELECT count(*) FROM website_content WHERE tenant_id = $1`, f.tenantB.ID).Scan(&other); err != nil || other != 0 {
 		t.Errorf("a client-supplied tenant wrote %d rows for tenant B (err %v)", other, err)
+	}
+}
+
+func TestWebsiteProgramVisibilityRoundTrip(t *testing.T) {
+	f := newWebsiteHTTPFixture(t)
+	visibility := func(m map[string]any) map[string]any { return m["program_visibility"].(map[string]any) }
+
+	wb := f.workbench(t)
+	if v := visibility(wb["draft"].(map[string]any)); v["tni"] != true || v["polri"] != true || v["kedinasan"] != true {
+		t.Fatalf("default draft visibility = %v, want all true", v)
+	}
+
+	content := contentWith(wb["draft"].(map[string]any), func(map[string]any) {})
+	visibility(content)["polri"], visibility(content)["kedinasan"] = false, false
+	rec := f.call(http.MethodPut, "/api/v1/admin/website", map[string]any{"expected_draft_revision": 1, "content": content}, f.tokenAdminA)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save: %d %s", rec.Code, rec.Body.String())
+	}
+	if v := visibility(decodeMap(t, rec)["draft"].(map[string]any)); v["tni"] != true || v["polri"] != false || v["kedinasan"] != false {
+		t.Fatalf("saved draft visibility = %v", v)
+	}
+	if rec := f.call(http.MethodGet, "/api/v1/website", nil, ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("a saved visibility change is public before publishing: %d", rec.Code)
+	}
+
+	if rec := f.call(http.MethodPost, "/api/v1/admin/website/publish", map[string]any{"expected_draft_revision": 2, "expected_published_revision": 0}, f.tokenAdminA); rec.Code != http.StatusOK {
+		t.Fatalf("publish: %d %s", rec.Code, rec.Body.String())
+	}
+	pub := decodeMap(t, f.call(http.MethodGet, "/api/v1/website", nil, ""))
+	if v := visibility(pub["content"].(map[string]any)); v["tni"] != true || v["polri"] != false || v["kedinasan"] != false {
+		t.Fatalf("published visibility = %v, want the draft's flags", v)
 	}
 }

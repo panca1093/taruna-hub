@@ -16,7 +16,7 @@ export default function ProgramPage({ params }: { params: Promise<{ slug: string
 
 function ProgramDetail({ slot }: { slot: ProgramSlot }) {
   const { locale } = useLocale();
-  const { website, products, retryWebsite, retryProducts } = usePublicWebsite();
+  const { website, visibility, products, retryWebsite, retryProducts } = usePublicWebsite();
 
   return (
     <>
@@ -27,6 +27,7 @@ function ProgramDetail({ slot }: { slot: ProgramSlot }) {
         locale={locale}
         content={website.status === "ready" ? website.data[locale] : null}
         contentState={website.status === "ready" ? "ready" : website.status === "loading" ? "loading" : "unavailable"}
+        visibility={visibility}
         catalog={{ products }}
         onRetryContent={retryWebsite}
         onRetryCatalog={retryProducts}

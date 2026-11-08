@@ -7,7 +7,7 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 export default function HomePage() {
   const { locale } = useLocale();
-  const { website, products, retryWebsite, retryProducts } = usePublicWebsite();
+  const { website, visibility, products, retryWebsite, retryProducts } = usePublicWebsite();
 
   return (
     <>
@@ -18,6 +18,7 @@ export default function HomePage() {
         locale={locale}
         content={website.status === "ready" ? website.data[locale] : null}
         contentState={website.status === "ready" ? "ready" : website.status === "loading" ? "loading" : "unavailable"}
+        visibility={visibility}
         catalog={{ products }}
         onRetryContent={retryWebsite}
         onRetryCatalog={retryProducts}
