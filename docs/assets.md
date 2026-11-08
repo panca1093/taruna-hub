@@ -2,7 +2,7 @@
 
 A user uploads an image, the API proves it is one, stores the bytes in S3-compatible storage and keeps
 only metadata. Nobody reads an object except through a link the API signed a moment ago, after checking
-tenant and role again. MinIO stands in locally; production is GCS through its HMAC (S3 interoperability)
+tenant and role again. RustFS stands in locally; production is GCS through its HMAC (S3 interoperability)
 keys, so the adapter speaks plain S3 and nothing is GCS-specific.
 
     assets   id, tenant_id, purpose, object_key UNIQUE, content_type, size_bytes, status,
@@ -98,7 +98,7 @@ set, so the bucket stays private.
 
 ## Tests
 
-Storage is real MinIO, never a mock; the tests skip when `S3_ENDPOINT` is unset and CI starts MinIO.
+Storage is real S3-compatible storage (RustFS locally), never a mock; the tests skip when `S3_ENDPOINT` is unset, which is the case in CI (postgres and redis only).
 They cover: wrong type with the right extension, SVG, 5 MiB exactly and + 1 byte, a corrupt and a
 truncated PNG, oversize dimensions, no storage write for any rejected file, tenant B uploading with A's
 token, finalizing (through `FinalizeTx`) and downloading A's asset (`404`, state unchanged), client path/purpose/owner fields

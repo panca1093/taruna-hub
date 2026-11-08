@@ -37,9 +37,9 @@ type S3Config struct {
 	Bucket    string
 	UseSSL    bool
 	Region    string
-	// Browsers must reach presigned links; inside compose the API sees minio:9000, browsers localhost:9002.
+	// Browsers must reach presigned links; inside compose the API sees rustfs:9000, browsers localhost:9002.
 	PublicEndpoint string
-	// Behind a TLS proxy the API reaches MinIO over plain HTTP while browsers need https links.
+	// Behind a TLS proxy the API reaches RustFS over plain HTTP while browsers need https links.
 	PublicUseSSL bool
 }
 

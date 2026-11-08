@@ -45,7 +45,7 @@ Ubuntu 24.04 on the KVM 2.
 adduser deploy && usermod -aG sudo deploy        # then copy your SSH key to ~deploy/.ssh/authorized_keys
 curl -fsSL https://get.docker.com | sh && usermod -aG docker deploy
 ufw allow 22/tcp && ufw allow 443/tcp && ufw enable
-sudo mkdir -p /opt/taruna/certs && sudo chown -R deploy: /opt/taruna
+sudo mkdir -p /opt/taruna/certs /opt/taruna/backups && sudo chown -R deploy: /opt/taruna
 ```
 
 Turn off SSH password login (`PasswordAuthentication no` in `/etc/ssh/sshd_config`). Docker publishes
@@ -61,7 +61,7 @@ chmod 600 /opt/taruna/.env /opt/taruna/certs/origin-key.pem
 
 ## 3. GitHub (once)
 
-Repository **Settings → Environments → New environment** `production`, with secrets:
+Repository **Settings → Environments → New environment** `production`, restricted by a deployment-branch rule to `main` only, with secrets:
 
 | Secret | Value |
 |---|---|
@@ -77,7 +77,8 @@ stored on the server.
 **Actions → Deploy → Run workflow** on `main`, after CI is green. It builds `taruna-hub-api` and
 `taruna-hub-web` tagged with the commit SHA, copies `compose.yml`, `Caddyfile`, `backup.sh` and
 `migrations/` to `/opt/taruna`, runs migrations, restarts and waits for `/readyz`. The deployed tag is
-in `/opt/taruna/.image-tag`; to roll back, run the workflow on the older commit.
+in `/opt/taruna/.image-tag`; to roll back, run the workflow on the older commit. Migrations run while the
+old api/worker still serve, so each must stay backward-compatible with the previous release.
 
 Manual commands on the VPS always pass both env files:
 

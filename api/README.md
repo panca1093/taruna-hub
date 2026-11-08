@@ -102,3 +102,5 @@ BOOTSTRAP_PASSWORD=... go run ./cmd/bootstrap admin -platform -name "Root" -emai
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | with `S3_ENDPOINT` | Credentials and the private bucket |
 | `S3_USE_SSL` | no | `true` (default) outside development, `false` in it |
 | `S3_REGION` | no | Only when the server needs one |
+| `S3_PUBLIC_ENDPOINT` | no | Host browsers use for presigned links when it differs from `S3_ENDPOINT` (e.g. `files.example.com`) |
+| `S3_PUBLIC_USE_SSL` | no | `true` when a TLS proxy fronts the public endpoint but the API reaches storage over plain HTTP |

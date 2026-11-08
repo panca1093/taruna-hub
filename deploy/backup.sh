@@ -5,7 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 dc() { docker compose --env-file .env --env-file .image-tag "$@"; }
-. ./.env
+R2_BUCKET=$(grep -E '^R2_BUCKET=' .env | cut -d= -f2- | tr -d '"')
+[ -n "$R2_BUCKET" ] || { echo "R2_BUCKET is empty or missing in .env" >&2; exit 1; }
 
 stamp=$(date +%Y%m%d-%H%M%S)
 mkdir -p backups

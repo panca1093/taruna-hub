@@ -83,12 +83,17 @@ jobs:
             chmod +x backup.sh
             echo "IMAGE_TAG=$IMAGE_TAG" > .image-tag
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            docker compose --env-file .env --env-file .image-tag pull --quiet
+            dc() { docker compose --env-file .env --env-file .image-tag "$@"; }
+            dc pull --quiet
             docker logout ghcr.io
-            docker compose --env-file .env --env-file .image-tag up -d --remove-orphans
+            if ! dc up -d --remove-orphans; then dc logs --tail 100 api migrate; exit 1; fi
             for i in $(seq 1 60); do
-              docker compose --env-file .env --env-file .image-tag exec -T api wget -qO- http://localhost:8081/readyz >/dev/null 2>&1 && break
-              [ "$i" = 60 ] && { docker compose --env-file .env --env-file .image-tag logs --tail 100 api migrate; exit 1; }
+              dc exec -T api wget -qO- http://localhost:8081/readyz >/dev/null 2>&1 && break
+              [ "$i" = 60 ] && { dc logs --tail 100 api migrate; exit 1; }
               sleep 2
+            done
+            for repo in ghcr.io/panca1093/taruna-hub-api ghcr.io/panca1093/taruna-hub-web; do
+              docker image ls "$repo" --format '{{.Tag}}' | grep -E '^[0-9a-f]{40}$' | grep -vx "$IMAGE_TAG" | tail -n +3 \
+                | xargs -r -I{} docker image rm "$repo:{}"
             done
             docker image prune -f

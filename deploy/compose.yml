@@ -5,7 +5,6 @@ name: taruna
 x-app: &app
   image: ghcr.io/panca1093/taruna-hub-api:${IMAGE_TAG:?IMAGE_TAG is required}
   restart: unless-stopped
-  env_file: .env
   environment:
     APP_ENV: production
     DATABASE_URL: postgres://tryout:${POSTGRES_PASSWORD}@postgres:5432/tryout?sslmode=disable
@@ -20,6 +19,21 @@ x-app: &app
     GOTENBERG_URL: http://gotenberg:3000
     APP_URL: https://${DOMAIN}
     CORS_ORIGINS: https://${DOMAIN}
+    TENANT_SLUG: ${TENANT_SLUG:?TENANT_SLUG is required}
+    JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+    NOTIFICATION_SEAL_KEY: ${NOTIFICATION_SEAL_KEY:?NOTIFICATION_SEAL_KEY is required}
+    BANK_NAME: ${BANK_NAME:-}
+    BANK_ACCOUNT_NUMBER: ${BANK_ACCOUNT_NUMBER:-}
+    BANK_ACCOUNT_HOLDER: ${BANK_ACCOUNT_HOLDER:-}
+    MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY:-}
+    MIDTRANS_IS_PRODUCTION: ${MIDTRANS_IS_PRODUCTION:-}
+    MIDTRANS_NOTIFICATION_URL: ${MIDTRANS_NOTIFICATION_URL:-}
+    SMTP_HOST: ${SMTP_HOST:-}
+    SMTP_PORT: ${SMTP_PORT:-}
+    SMTP_USERNAME: ${SMTP_USERNAME:-}
+    SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    SMTP_FROM: ${SMTP_FROM:-}
+    SMTP_TLS: ${SMTP_TLS:-}
 
 services:
   caddy:

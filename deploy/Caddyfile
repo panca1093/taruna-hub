@@ -1,6 +1,6 @@
-# Cloudflare terminates public TLS. This origin presents a Cloudflare Origin Certificate (SSL mode
-# "Full (strict)") and requires Cloudflare's Authenticated Origin Pulls client cert, so a request that
-# skips Cloudflare and hits the VPS IP directly fails the TLS handshake.
+# Cloudflare terminates public TLS; this origin presents a Cloudflare Origin Certificate (Full strict).
+# Authenticated Origin Pulls uses a client cert shared by all Cloudflare customers, so it only blocks
+# requests that bypass Cloudflare and hit the VPS IP directly, not other Cloudflare zones.
 {
 	auto_https off
 }
