@@ -158,7 +158,7 @@ function KolomScreen({
 
           {soal ? (
             <>
-              <h1 className="mt-7 font-sans text-xl font-semibold text-foreground sm:text-2xl">{t.soalPrompt}</h1>
+              <h1 className="mt-7 font-sans text-xl font-semibold tracking-normal text-foreground sm:text-2xl">{t.soalPrompt}</h1>
               <div className="mt-5 grid gap-1 sm:gap-3" style={columns(soal.shown.length, units)}>
                 {soal.shown.map((label) => (
                   <div key={label} className="@container flex min-w-0 items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-0 py-5 sm:px-2 sm:py-5.5">
