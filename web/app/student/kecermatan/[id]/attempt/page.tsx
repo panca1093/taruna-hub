@@ -34,7 +34,7 @@ function ExamFrame({ children }: { children: React.ReactNode }) {
   return <div className="fixed inset-0 z-50 flex flex-col bg-background">{children}</div>;
 }
 
-function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: string; subtitle: string; timer: string; urgent: boolean; timerLabel: string }) {
+function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: string; subtitle?: string; timer: string; urgent: boolean; timerLabel: string }) {
   return (
     <header className="flex min-h-19.5 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 py-3.5 sm:min-h-22 sm:gap-5 sm:px-8 sm:py-4">
       <span className="logo-plate shrink-0">
@@ -42,7 +42,7 @@ function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: str
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-small font-semibold text-foreground">{title}</p>
-        <p className="mt-1 truncate text-micro text-muted">{subtitle}</p>
+        {subtitle && <p className="mt-1 truncate text-micro text-muted">{subtitle}</p>}
       </div>
       <ExamTimerPill role="timer" aria-label={timerLabel} time={timer} urgent={urgent} />
     </header>
@@ -99,7 +99,6 @@ function KolomScreen({
     <ExamFrame>
       <ExamHeader
         title={session.test_title}
-        subtitle={t.kolomProgress(kolom.number, session.kolom_count)}
         timer={remaining === null ? "--:--" : mmss(remaining)}
         urgent={urgent}
         timerLabel={t.timerLabel}
@@ -107,10 +106,11 @@ function KolomScreen({
 
       <div className="shrink-0 border-b border-border bg-surface px-4 pb-3 sm:px-8">
         <div className="mx-auto flex max-w-200 items-baseline justify-between gap-3">
-          <p aria-live="polite" className="font-mono text-small font-semibold text-foreground">
-            {t.soalProgress(soal ? soalIndex + 1 : kolom.soal.length, kolom.soal.length)}
+          <p className="min-w-0 text-small text-foreground">
+            <span className="font-mono font-semibold">{t.soalProgress(soal ? soalIndex + 1 : kolom.soal.length, kolom.soal.length)}</span>
+            {soal && <span className="text-muted"> · {t.chooseMissingLabel}</span>}
           </p>
-          <p className="text-label text-muted">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
+          <p className="shrink-0 text-label text-muted">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
         </div>
         <div className="mx-auto mt-2 flex max-w-200 gap-1.25" aria-hidden>
           {Array.from({ length: session.kolom_count }, (_, index) => (
@@ -141,7 +141,7 @@ function KolomScreen({
               <figure key={item.label} className="min-w-0">
                 <figcaption className="font-mono text-2xl font-extrabold text-foreground">{item.label}</figcaption>
                 <div className="mt-1.5 flex items-center justify-center rounded-tile border border-border bg-surface px-1 py-3 text-center sm:px-2">
-                  <KecermatanItem elements={item.elements} className="flex-wrap whitespace-normal break-all text-lg font-extrabold sm:text-2xl" elementClassName="size-6 sm:size-7" />
+                  <KecermatanItem elements={item.elements} wrap className="text-sm font-extrabold sm:text-2xl" elementClassName="size-4 sm:size-7" />
                 </div>
               </figure>
             ))}
@@ -150,11 +150,10 @@ function KolomScreen({
           {soal ? (
             <>
               <h1 className="mt-7 font-display text-heading sm:text-hero">{t.soalPrompt}</h1>
-              <p className="sr-only">{t.chooseMissingLabel}</p>
               <div className="mt-5 grid gap-2 sm:gap-3" style={columns(soal.shown.length)}>
                 {soal.shown.map((label) => (
                   <div key={label} className="flex min-w-0 items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-1 py-5 sm:px-2 sm:py-5.5">
-                    <KecermatanItem elements={labelOf(label)?.elements ?? []} className="flex-wrap whitespace-normal break-all text-xl font-extrabold sm:text-3xl" elementClassName="size-6 sm:size-9" />
+                    <KecermatanItem elements={labelOf(label)?.elements ?? []} wrap className="text-base font-extrabold sm:text-3xl" elementClassName="size-5 sm:size-9" />
                   </div>
                 ))}
               </div>
