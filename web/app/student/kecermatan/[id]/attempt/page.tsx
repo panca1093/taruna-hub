@@ -50,7 +50,7 @@ function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: str
         <Image src="/taruna-eduka-logo.png" alt="Taruna Eduka" width={750} height={250} className="h-8 w-auto sm:h-10" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-small font-semibold text-foreground">{title}</p>
+        <p className="truncate text-small font-semibold text-foreground sm:text-base">{title}</p>
         {subtitle && <p className="mt-1 truncate text-micro text-muted">{subtitle}</p>}
       </div>
       <ExamTimerPill role="timer" aria-label={timerLabel} time={timer} urgent={urgent} />
@@ -114,20 +114,20 @@ function KolomScreen({
         timerLabel={t.timerLabel}
       />
 
-      <div className="shrink-0 border-b border-border bg-surface px-4 pb-3 sm:px-8">
+      <div className="shrink-0 border-b border-border bg-surface px-4 py-2.5 sm:px-8 sm:py-3">
         <div className="mx-auto flex max-w-200 items-baseline justify-between gap-3">
-          <p className="min-w-0 text-small text-foreground">
+          <p className="min-w-0 text-small text-foreground sm:text-base">
             <span className="font-mono font-semibold">{t.soalProgress(soal ? soalIndex + 1 : kolom.soal.length, kolom.soal.length)}</span>
             {soal && <span className="text-muted"> · {t.chooseMissingLabel}</span>}
           </p>
-          <p className="shrink-0 text-label text-muted">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
+          <p className="shrink-0 text-label text-muted sm:text-small">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
         </div>
-        <div className="mx-auto mt-2 flex max-w-200 gap-1.25" aria-hidden>
+        <div className="mx-auto mt-1.5 flex max-w-200 gap-1.25 sm:mt-1.5" aria-hidden>
           {Array.from({ length: session.kolom_count }, (_, index) => (
-            <span key={index} className={cn("h-1 flex-1 rounded-full", index < kolom.number ? "bg-accent" : "bg-border")} />
+            <span key={index} className={cn("h-1.5 flex-1 rounded-full", index < kolom.number ? "bg-accent" : "bg-border")} />
           ))}
         </div>
-        <p className="mx-auto mt-1.5 max-w-200 text-label text-muted">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
+        <p className="mx-auto mt-1.5 max-w-200 text-label text-muted sm:mt-1.5 sm:text-small">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
       </div>
 
       <main className="mx-auto flex min-h-0 w-full max-w-290 flex-1 flex-col justify-center-safe overflow-y-auto px-4 py-6 text-center sm:px-6 sm:py-8">
