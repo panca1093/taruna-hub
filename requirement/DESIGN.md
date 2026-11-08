@@ -121,7 +121,7 @@ Observed type scale at a 16px root:
 | Modal title / large button | 16px / 24px (`text-base`) | Modal 600; button 500 |
 | KPI value | 24px / 32px (`text-2xl`) | Geist 600, tight tracking |
 | Tryout question / options (exam runtime) | 18px (`text-lg`) question, 16px (`text-base`) options | Inter 400; larger than dashboard body on client request |
-| Kecermatan items (exam runtime) | Reference 20px (`text-xl`); soal 24px, 30px at `sm`; answer keys 24px | Geist Mono 800, one line per box (boxes grow from a min width); images 24px on phones, 28px / 36px from `sm` |
+| Kecermatan items (exam runtime) | Reference 18px, 24px at `sm`; soal 20px, 30px at `sm`; reference labels and answer keys 24px | Geist Mono 800, boxes share equal columns and content wraps inside them; images 24px on phones, 28px / 36px from `sm` |
 | Landing hero title | 36px / 40px; 48px / 48px at `sm` | Geist 600, tight tracking |
 
 #### 3.1 Named type steps (prototype scale)
@@ -475,7 +475,7 @@ Import `AppShell` / `StatCard` from `@/components/...` and `Card` from `@heroui/
 | Monitoring | Admin monitoring | Emphasize status, current session context, and permitted intervention; include freshness and disconnected states in live integration |
 | Catalog / owned content | Catalog, student tryouts | Product cards, program labels, relevant entitlement/action; existing catalog grid uses 20px gaps and 1/2/3 columns |
 | Wallet / orders / profile | Student pages | Clear balance or record summary, readable history, scoped form sections; avoid unnecessary charts |
-| Exam attempt | Tryout subtest and kecermatan attempt | Focused question workspace, timer/progress, answer navigation, clear submission; preserve question content and critical controls on mobile |
+| Exam attempt | Tryout subtest and kecermatan attempt | Focused question workspace, timer/progress, answer navigation, clear submission; preserve question content and critical controls on mobile. Kecermatan attempt layout: a status bar under the header holds the soal counter, kolom segment bar, kolom summary and the server-confirmed count (subtle, `text-label text-muted`). The workspace is one column of `max-w-200` with three rows on a shared `repeat(n, minmax(0, 1fr))` grid (n = options per soal, 3 to 8): reference figures, shown items (n - 1 columns, same total width) and answer keys, so keys sit under their reference cards and edges line up at every width. Reference labels sit above the cards as `figcaption` in the answer-key style (mono 24px 800); shown items carry no label. Item content wraps inside its box instead of overflowing. Skip and the keyboard hint follow the answer row directly. |
 | Results | Tryout and kecermatan results | Score hierarchy, understandable status, breakdown, review content; distinguish absent results from a zero score |
 | Public / auth | Landing, login, register, checkout | Public navigation or focused form layout; reuse tokens and controls while preserving their different task |
 
