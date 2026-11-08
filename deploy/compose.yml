@@ -1,5 +1,5 @@
 # Production stack on the VPS (docs/deployment.md). Only Caddy publishes ports; everything else stays on
-# the compose network. Images come from GHCR, tagged by the deploy workflow through IMAGE_TAG.
+# the compose network. Images come from GHCR, tagged by deploy/deploy.sh through IMAGE_TAG.
 name: taruna
 
 x-app: &app
