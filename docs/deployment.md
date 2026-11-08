@@ -118,7 +118,7 @@ Restore, after a fresh stack is up:
 
 ```bash
 dc exec -T postgres pg_restore -U tryout -d tryout --clean --if-exists < backups/db-<stamp>.dump
-dc run --rm backup sync r2:$R2_BUCKET/assets storage:tryout-assets   # assets; R2_BUCKET from .env
+dc run --rm backup sync r2:<r2-bucket>/assets storage:tryout-assets   # <r2-bucket> = R2_BUCKET in .env
 ```
 
 Try a restore once before going live; an untested backup is not one.
