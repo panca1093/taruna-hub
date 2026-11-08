@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Run on the VPS from <app-dir>: ./deploy.sh <40-char commit sha> (docs/deployment.md).
+# Run on the VPS from <app-dir>: ./deploy.sh <version tag, e.g. v1.0.0> (docs/deployment.md).
 set -euo pipefail
-sha=${1:-}
-[[ $sha =~ ^[0-9a-f]{40}$ ]] || { echo "usage: ./deploy.sh <40-char commit sha>" >&2; exit 2; }
+tag=${1:-}
+[[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "usage: ./deploy.sh <version tag, e.g. v1.0.0>" >&2; exit 2; }
 dc() { docker compose --env-file .env --env-file .image-tag "$@"; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-curl -fsSL "https://codeload.github.com/panca1093/taruna-hub/tar.gz/$sha" | tar -xz -C "$tmp" --strip-components=1
+curl -fsSL "https://codeload.github.com/panca1093/taruna-hub/tar.gz/refs/tags/$tag" | tar -xz -C "$tmp" --strip-components=1
 
-# Pull before touching live files: a missing image fails here and leaves the running stack as it is.
-IMAGE_TAG=$sha docker compose -f "$tmp/deploy/compose.yml" --project-directory . --env-file .env pull --quiet
+# Pull before touching live files: a tag without images fails here and leaves the running stack as it is.
+IMAGE_TAG=$tag docker compose -f "$tmp/deploy/compose.yml" --project-directory . --env-file .env pull --quiet
 
 prev=none
 if [ -f .image-tag ]; then prev=$(sed -n 's/^IMAGE_TAG=//p' .image-tag); fi
@@ -21,7 +21,7 @@ mv "$tmp/deploy/compose.yml" "$tmp/deploy/Caddyfile" "$tmp/deploy/backup.sh" "$t
 chmod +x backup.sh deploy.sh
 rm -rf migrations
 mv "$tmp/api/migrations" migrations
-echo "IMAGE_TAG=$sha" > .image-tag
+echo "IMAGE_TAG=$tag" > .image-tag
 
 if ! dc up -d --remove-orphans; then dc logs --tail 100 api migrate; exit 1; fi
 for i in $(seq 1 60); do
@@ -30,10 +30,16 @@ for i in $(seq 1 60); do
   sleep 2
 done
 
+# Keeps the current and the 2 newest other versions; SHA-tagged images are never deployable, so they go.
 for repo in ghcr.io/panca1093/taruna-hub-api ghcr.io/panca1093/taruna-hub-web; do
-  docker image ls "$repo" --format '{{.Tag}}' | { grep -E '^[0-9a-f]{40}$' || true; } | { grep -vx "$sha" || true; } | tail -n +3 \
-    | xargs -r -I{} docker image rm "$repo:{}"
+  tags=$(docker image ls "$repo" --format '{{.Tag}}')
+  {
+    printf '%s\n' "$tags" | { grep -E '^[0-9a-f]{40}$' || true; }
+    printf '%s\n' "$tags" | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' || true; } | { grep -vx "$tag" || true; } | sort -rV | tail -n +3
+  } | xargs -r -I{} docker image rm "$repo:{}"
 done
 docker image prune -f
 
-echo "deployed $sha (previous: $prev)"
+# A version tag can be moved; the digest is the record of what actually runs.
+docker image inspect --format '{{index .RepoDigests 0}}' "ghcr.io/panca1093/taruna-hub-api:$tag"
+echo "deployed $tag (previous: $prev)"

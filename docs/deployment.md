@@ -22,7 +22,7 @@ credentials; this page writes them as `<ssh-user>` and `<app-dir>`.
 | `deploy/.env.example` | Template for `<app-dir>/.env` on the VPS |
 | `deploy/backup.sh` | Nightly Postgres dump + asset mirror to Cloudflare R2 |
 | `deploy/deploy.sh` | Run on the VPS: pull images, replace stack files, migrate, restart, prune |
-| `.github/workflows/images.yml` | Build and push GHCR images on manual run or `v*` tag; never touches the VPS |
+| `.github/workflows/images.yml` | Build and push GHCR images on `v*` tag (or manual run, SHA tag only); never touches the VPS |
 
 The API reaches RustFS over plain HTTP inside the network, but presigned links must be
 `https://files.tarunaedu.com`, so `S3_PUBLIC_USE_SSL=true` sets the scheme of those links on its own.
@@ -66,7 +66,7 @@ chmod 600 <app-dir>/.env <app-dir>/certs/origin-key.pem
 
 ## 3. Release and deploy
 
-Nothing pushes to the VPS. Deploying is `./deploy.sh <sha>` run on the server by the owner.
+Nothing pushes to the VPS. Deploying is `./deploy.sh <version>` run on the server by the owner.
 
 **Bootstrap (once)**, in `<app-dir>` after §2:
 
@@ -78,23 +78,25 @@ curl -fsSLo deploy.sh https://raw.githubusercontent.com/panca1093/taruna-hub/mai
 private, run `docker login ghcr.io` once on the VPS with a classic personal access token scoped
 `read:packages` only.
 
-**Release.** Run **Actions → Images → Run workflow** on `main` after CI is green, or push a `v*` tag. Both
-push `taruna-hub-api` and `taruna-hub-web` tagged with the full commit SHA; a `v*` tag adds the tag name too.
-Get the SHA from the run page or `git rev-parse origin/main`.
+**Release.** On `main` after CI is green: `git tag -a vX.Y.Z -m "release vX.Y.Z" && git push origin vX.Y.Z`.
+The **Images** run builds `taruna-hub-api` and `taruna-hub-web` tagged `vX.Y.Z` and the commit SHA (SHA only
+for traceability). Wait for it to finish. Never move or re-push an existing version tag. A manual **Run
+workflow** builds a SHA tag only; `deploy.sh` cannot deploy those.
 
 **Deploy.**
 
 ```bash
 ssh <ssh-user>@<vps>
-cd <app-dir> && ./deploy.sh <40-char sha>
+cd <app-dir> && ./deploy.sh vX.Y.Z
 ```
 
-The script downloads the repo at that SHA and pulls its images first, so a SHA without images fails with
+The script downloads the repo at that tag and pulls its images first, so a tag without images fails with
 the running stack untouched. Then it replaces `compose.yml`, `Caddyfile`, `backup.sh`, `deploy.sh` and
-`migrations/`, writes `.image-tag`, restarts, waits for `/readyz`, and keeps the last 3 SHA-tagged images.
-It prints the previous SHA as the rollback value.
+`migrations/`, writes `.image-tag`, restarts, waits for `/readyz`, prints the api image digest (a tag can
+be moved, the digest is the record) and keeps the current plus the 2 newest other versions. It prints the
+previous version as the rollback value.
 
-**Rollback.** `./deploy.sh <previous sha>`. Migrations are not rolled back; they run while the old
+**Rollback.** `./deploy.sh <previous version>`. Migrations are not rolled back; they run while the old
 api/worker still serve, so each must stay backward-compatible with the previous release.
 
 Manual commands on the VPS always pass both env files:

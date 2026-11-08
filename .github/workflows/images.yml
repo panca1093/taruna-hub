@@ -1,6 +1,7 @@
 name: Images
 
-# Builds images only. Deploying is a manual step on the VPS (docs/deployment.md).
+# Builds images only; deploying is a manual step on the VPS (docs/deployment.md).
+# Release = push a v* tag. workflow_dispatch builds a SHA tag only, which deploy.sh cannot deploy.
 on:
   workflow_dispatch:
   push:
