@@ -109,13 +109,6 @@
   --text-landing-h3--font-weight: 550;
   --container-landing: 77.5rem;
   --container-hero-title: 16ch;
-  /* Kecermatan item card content widths: room for five elements of 12/16/20/24/28/36px plus gaps */
-  --container-item-xs: 4.75rem;
-  --container-item-sm: 6rem;
-  --container-item-md: 7.25rem;
-  --container-item-lg: 8.5rem;
-  --container-item-xl: 9.75rem;
-  --container-item-2xl: 12.25rem;
 
   /* Radii: control 10, tile 16, card 21, hero 23, rail 27 */
   --radius-chip: 0.4375rem;
@@ -697,12 +690,21 @@ body {
 .auth-done a:hover, .auth-error a { text-decoration: underline; }
 .auth-done .auth-title { font-size: var(--text-hero); letter-spacing: -.8px; }
 
-/* Symbols fall back to wider fonts than the mono digits; at the narrowest item card they get one extra step down */
-.item-symbol-tight {
-  font-size: 0.7em;
+/* Kecermatan attempt items: one font-size for every item of a kolom, so size never hints at the answer.
+   --item-units is the widest reference item in em (mono char 0.6, symbol 1.25 for fallback fonts, emoji/shape/image 1,
+   0.25 gaps, 0.3 slack), set on the row by the page. Elements are sized in em so text and elements scale together. */
+.item-fit {
+  --fit-min: 0.375rem;
+  --fit-max: 2.5rem;
+  font-size: clamp(var(--fit-min), calc(98cqi / var(--item-units)), var(--fit-max));
 }
-@container (min-width: 4.75rem) {
-  .item-symbol-tight {
-    font-size: 1em;
-  }
+.item-fit-shown {
+  --fit-max: 3rem;
+}
+.item-fit-mixed {
+  gap: 0.25em;
+}
+.item-fit-el {
+  width: 1em;
+  height: 1em;
 }
