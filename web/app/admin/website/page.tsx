@@ -9,7 +9,7 @@ import { useWebsiteT } from "@/lib/i18n/dict/website";
 
 function Overview() {
   const t = useWebsiteT();
-  const { workbench: wb, diff } = useWebsiteEditor();
+  const { workbench: wb, changeCount } = useWebsiteEditor();
   return (
     <div className="space-y-8">
       {wb.published_revision === 0 && (
@@ -19,7 +19,7 @@ function Overview() {
       )}
       <MetricStrip>
         <Metric value={wb.published_revision === 0 ? "—" : `r${wb.published_revision}`} label={t.statPublished} />
-        <Metric value={String(wb.published_revision === 0 ? 0 : diff.length)} label={t.statChanges} />
+        <Metric value={String(wb.published_revision === 0 ? 0 : changeCount)} label={t.statChanges} />
         <Metric value={String(programSlots.length)} label={t.statPrograms} />
       </MetricStrip>
       <div className="grid gap-5 md:grid-cols-2">

@@ -2,6 +2,7 @@
 
 import { WebsiteFrame, ContentField, LocaleSwitch, SaveBar, SaveFeedback, useWebsiteEditor } from "@/components/admin/website-editor";
 import { HeroPreview } from "@/components/marketing/website-view";
+import { visibleSlots } from "@/components/marketing/hero-exam-preview";
 import { useWebsiteT } from "@/lib/i18n/dict/website";
 
 function HomeEditor() {
@@ -23,7 +24,7 @@ function HomeEditor() {
         </section>
         <section className="rounded-card border border-border bg-surface p-6 lg:sticky lg:top-6">
           <h2 className="mb-4 font-display text-title text-foreground">{t.previewTitle}</h2>
-          <HeroPreview home={ed.local.locales[ed.contentLocale].home} locale={ed.contentLocale} />
+          <HeroPreview home={ed.local.locales[ed.contentLocale].home} locale={ed.contentLocale} showProgramCta={visibleSlots(ed.local.program_visibility).length > 0} />
           <p className="mt-4 text-label text-muted">{t.previewNote}</p>
         </section>
       </div>

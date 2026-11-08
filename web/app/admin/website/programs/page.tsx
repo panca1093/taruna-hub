@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { WebsiteFrame, LocaleSwitch, useWebsiteEditor } from "@/components/admin/website-editor";
+import { WebsiteFrame, LocaleSwitch, SaveBar, SaveFeedback, useWebsiteEditor } from "@/components/admin/website-editor";
 import { StatusChip } from "@/components/status-badge";
+import { SwitchInput } from "@/components/ui/form";
 import { programSlots } from "@/components/marketing/hero-exam-preview";
 import { useWebsiteT } from "@/lib/i18n/dict/website";
 
@@ -19,6 +20,7 @@ function Slots() {
       <ul className="grid gap-5 md:grid-cols-3">
         {programSlots.map((slot) => {
           const program = ed.local.locales[locale].programs[slot];
+          const visible = ed.local.program_visibility[slot];
           const filled = optionalKeys.filter((k) => program[k].trim() !== "").length;
           return (
             <li key={slot} className="flex flex-col rounded-card border border-border bg-surface p-6">
@@ -29,6 +31,13 @@ function Slots() {
                 {filled < optionalKeys.length && <StatusChip tone="warning">{t.programPending}</StatusChip>}
                 <span>{t.programFilled(filled, optionalKeys.length)}</span>
               </div>
+              <SwitchInput
+                className="mt-4"
+                label={t.visibilityLabelFor(t.programNames[slot])}
+                description={visible ? t.visibilityShown : t.visibilityHidden}
+                isSelected={visible}
+                onChange={(checked) => ed.setVisibility(slot, checked)}
+              />
               <Link href={`/admin/website/programs/${slot}`} className="mt-auto flex min-h-11 items-center gap-2 pt-5 text-caption font-medium text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus">
                 {t.editProgram}
                 <ArrowRight className="size-4" aria-hidden />
@@ -37,6 +46,9 @@ function Slots() {
           );
         })}
       </ul>
+      <p className="text-label text-muted">{t.visibilityNote}</p>
+      <SaveFeedback />
+      <SaveBar />
     </div>
   );
 }

@@ -9363,6 +9363,21 @@ components:
         kedinasan:
           $ref: "#/components/schemas/WebsiteProgram"
 
+    WebsiteProgramVisibility:
+      type: object
+      additionalProperties: false
+      description: |
+        Whether each fixed program slot is shown on the public site. One flag per slot for both locales; a hidden
+        slot keeps its required title and summary. Applies only once published, like every other content field.
+      required: [tni, polri, kedinasan]
+      properties:
+        tni:
+          type: boolean
+        polri:
+          type: boolean
+        kedinasan:
+          type: boolean
+
     WebsiteLocale:
       type: object
       additionalProperties: false
@@ -9379,11 +9394,13 @@ components:
       description: |
         Plain-text marketing content, both locales required. Text is trimmed and counted in Unicode code points,
         never rendered as HTML, markdown or links.
-      required: [schema_version, locales]
+      required: [schema_version, locales, program_visibility]
       properties:
         schema_version:
           type: integer
           enum: [1]
+        program_visibility:
+          $ref: "#/components/schemas/WebsiteProgramVisibility"
         locales:
           type: object
           additionalProperties: false

@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, BookOpen, Plus, ShieldCheck, Star } from "lucide-react";
 import { Button } from "@heroui/react";
 import { Logo } from "../logo";
 import { LinkButton } from "../ui/link-button";
-import { HeroExamPreview, programSlots, type ProgramSlot } from "./hero-exam-preview";
+import { HeroExamPreview, programSlots, visibleSlots, type ProgramSlot, type ProgramVisibility } from "./hero-exam-preview";
 import type { PublicProduct, WebsiteContent } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { formatIDR } from "@/lib/format-money";
@@ -31,6 +32,8 @@ export interface WebsiteViewProps {
   locale: Locale;
   mode: "published" | "draft";
   view: WebsiteViewName;
+  /** null or absent is the static fallback (loading, unpublished, failed): every slot shown. */
+  visibility?: ProgramVisibility | null;
   catalog: { products: Remote<PublicProduct[]> };
   onRetryContent?: () => void;
   onRetryCatalog?: () => void;
@@ -52,7 +55,7 @@ function Heading({ title, body, className }: { title: string; body?: string; cla
   );
 }
 
-export function HeroCopy({ home, loading, t }: { home?: WebsiteLocaleContent["home"]; loading: boolean; t: LandingDict }) {
+export function HeroCopy({ home, loading, t, showProgramCta = true }: { home?: WebsiteLocaleContent["home"]; loading: boolean; t: LandingDict; showProgramCta?: boolean }) {
   return (
     <div className="min-w-0">
       <p className="mb-6 flex items-center gap-2.5 text-label text-muted">
@@ -73,11 +76,13 @@ export function HeroCopy({ home, loading, t }: { home?: WebsiteLocaleContent["ho
           <p className="mt-6 max-w-md text-base leading-relaxed text-muted">{home?.hero_body ?? t.fallbackHeroBody}</p>
         </>
       )}
-      <div className="mt-8 grid max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
-        <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
-          {home?.program_cta ?? t.fallbackProgramCta}
-          <ArrowRight className="size-4 shrink-0" aria-hidden />
-        </LinkButton>
+      <div className={cn("mt-8 grid max-w-md grid-cols-1 gap-3", showProgramCta && "sm:grid-cols-2")}>
+        {showProgramCta && (
+          <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
+            {home?.program_cta ?? t.fallbackProgramCta}
+            <ArrowRight className="size-4 shrink-0" aria-hidden />
+          </LinkButton>
+        )}
         <LinkButton href="/catalog" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
           {home?.practice_cta ?? t.fallbackPracticeCta}
           <ArrowRight className="size-4 shrink-0" aria-hidden />
@@ -100,9 +105,11 @@ function DraftBanner({ t, action }: { t: LandingDict; action?: React.ReactNode }
   );
 }
 
-function HomeView({ content, contentState, catalog, t, onRetryContent, onRetryCatalog, hrefs = publicHrefs }: WebsiteViewProps & { t: LandingDict }) {
+function HomeView({ content, contentState, catalog, t, visibility, onRetryContent, onRetryCatalog, hrefs = publicHrefs }: WebsiteViewProps & { t: LandingDict }) {
   const home = content?.home;
   const loading = contentState === "loading";
+  const shown = visibleSlots(visibility);
+  const hasPrograms = shown.length > 0;
   const programTitles = Object.fromEntries(
     programSlots.map((slot) => [slot, content?.programs[slot].title ?? t.programSlots[slot]]),
   ) as Record<ProgramSlot, string>;
@@ -112,8 +119,8 @@ function HomeView({ content, contentState, catalog, t, onRetryContent, onRetryCa
       <main id="main">
         <section className="px-5 sm:px-10">
           <div className={cn(wrap, "grid items-center gap-10 py-12 md:py-20 lg:grid-cols-2 lg:gap-16")}>
-            <HeroCopy home={home} loading={loading} t={t} />
-            <HeroExamPreview t={t} programTitles={programTitles} />
+            <HeroCopy home={home} loading={loading} t={t} showProgramCta={hasPrograms} />
+            <HeroExamPreview t={t} programTitles={programTitles} slots={shown} />
           </div>
 
           <ul className={cn(wrap, "flex flex-col justify-between gap-3 border-y border-border py-5 sm:flex-row sm:gap-5")}>
@@ -128,24 +135,26 @@ function HomeView({ content, contentState, catalog, t, onRetryContent, onRetryCa
 
         <section className={sectionPad}>
           <div className={wrap}>
-            <Heading title={t.chooseHeading} body={t.chooseBody} />
-            <div className="grid gap-6 md:grid-cols-2">
-              <Link
-                href="/#programs"
-                className="group flex min-h-80 flex-col rounded-hero border border-border bg-surface p-7 sm:p-8"
-              >
-                <span className="mb-8 flex items-center gap-2 text-label font-medium text-accent">
-                  <BookOpen className="size-4" aria-hidden />
-                  {t.entryProgramKicker}
-                </span>
-                <h3 className="font-display text-display-sm text-foreground">{t.entryProgramHeading}</h3>
-                <p className="mt-3 max-w-md text-small leading-relaxed text-muted">{t.entryProgramBody}</p>
-                <p className="mt-5 text-micro text-muted">{t.entryProgramMeta}</p>
-                <span className="mt-auto flex items-center gap-2 pt-6 text-caption font-medium text-accent group-hover:underline">
-                  {t.entryProgramCta}
-                  <ArrowRight className="size-4" aria-hidden />
-                </span>
-              </Link>
+            <Heading title={t.chooseHeading} body={hasPrograms ? t.chooseBody : undefined} />
+            <div className={cn("grid gap-6", hasPrograms && "md:grid-cols-2")}>
+              {hasPrograms && (
+                <Link
+                  href="/#programs"
+                  className="group flex min-h-80 flex-col rounded-hero border border-border bg-surface p-7 sm:p-8"
+                >
+                  <span className="mb-8 flex items-center gap-2 text-label font-medium text-accent">
+                    <BookOpen className="size-4" aria-hidden />
+                    {t.entryProgramKicker}
+                  </span>
+                  <h3 className="font-display text-display-sm text-foreground">{t.entryProgramHeading}</h3>
+                  <p className="mt-3 max-w-md text-small leading-relaxed text-muted">{t.entryProgramBody}</p>
+                  <p className="mt-5 text-micro text-muted">{t.entryProgramMeta}</p>
+                  <span className="mt-auto flex items-center gap-2 pt-6 text-caption font-medium text-accent group-hover:underline">
+                    {t.entryProgramCta}
+                    <ArrowRight className="size-4" aria-hidden />
+                  </span>
+                </Link>
+              )}
               <Link href="/catalog" className="group flex min-h-80 flex-col rounded-hero border border-accent-soft bg-accent-soft p-7 sm:p-8">
                 <span className="mb-8 flex items-center gap-2 text-label font-medium text-accent-soft-foreground">
                   <ShieldCheck className="size-4" aria-hidden />
@@ -163,57 +172,59 @@ function HomeView({ content, contentState, catalog, t, onRetryContent, onRetryCa
           </div>
         </section>
 
-        <section id="programs" className="scroll-mt-24 px-5 pb-16 sm:px-10 sm:pb-20">
-          <div className={wrap}>
-            <Heading title={t.programsHeading} body={t.programsBody} />
-            {contentState === "unavailable" ? (
-              <div role="status" className="rounded-card border border-border bg-surface p-6">
-                <p className="text-title text-foreground">{t.programsUnavailableTitle}</p>
-                <p className="mt-2 max-w-lg text-small text-muted">{t.programsUnavailableBody}</p>
-                {onRetryContent && (
-                  <Button variant="secondary" size="sm" className="mt-4" onPress={onRetryContent}>
-                    {t.programsRetry}
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="grid gap-5 md:grid-cols-3" aria-busy={loading}>
-                {programSlots.map((slot) => {
-                  const program = content?.programs[slot];
-                  if (!program) return <div key={slot} className="h-64 rounded-card bg-surface-secondary motion-safe:animate-pulse" />;
-                  const rows = [
-                    [t.programScheduleLabel, program.schedule],
-                    [t.programLocationLabel, program.location],
-                    [t.programFeesLabel, program.fees],
-                  ] as const;
-                  return (
-                    <Link key={slot} href={hrefs.program(slot)} className="group flex min-h-64 flex-col rounded-card border border-border bg-surface p-6">
-                      <span className="mb-5 flex size-11 items-center justify-center rounded-control bg-peach text-accent">
-                        {slot === "kedinasan" ? <BookOpen className="size-5" aria-hidden /> : <ShieldCheck className="size-5" aria-hidden />}
-                      </span>
-                      <p className="mb-2 text-micro text-muted">{t.programKicker}</p>
-                      <h3 className="font-display text-landing-h3 break-words text-foreground">{program.title}</h3>
-                      <p className="mt-3 text-label leading-relaxed break-words text-muted">{program.summary}</p>
-                      <dl className="mt-4 space-y-1.5 text-micro">
-                        {rows.map(([label, value]) => (
-                          <div key={label} className="flex gap-2">
-                            <dt className="shrink-0 text-muted">{label}</dt>
-                            <dd className="min-w-0 break-words text-foreground">{value.trim() === "" ? t.programPending : value}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                      <span className="mt-auto flex items-center gap-2 pt-5 text-caption font-medium text-accent group-hover:underline">
-                        {t.programLink}
-                        <ArrowRight className="size-4" aria-hidden />
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-            <p className="mt-5 max-w-2xl text-micro leading-relaxed text-muted">{t.programsNote}</p>
-          </div>
-        </section>
+        {hasPrograms && (
+          <section id="programs" className="scroll-mt-24 px-5 pb-16 sm:px-10 sm:pb-20">
+            <div className={wrap}>
+              <Heading title={t.programsHeading} body={t.programsBody} />
+              {contentState === "unavailable" ? (
+                <div role="status" className="rounded-card border border-border bg-surface p-6">
+                  <p className="text-title text-foreground">{t.programsUnavailableTitle}</p>
+                  <p className="mt-2 max-w-lg text-small text-muted">{t.programsUnavailableBody}</p>
+                  {onRetryContent && (
+                    <Button variant="secondary" size="sm" className="mt-4" onPress={onRetryContent}>
+                      {t.programsRetry}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid gap-5 md:grid-cols-3" aria-busy={loading}>
+                  {shown.map((slot) => {
+                    const program = content?.programs[slot];
+                    if (!program) return <div key={slot} className="h-64 rounded-card bg-surface-secondary motion-safe:animate-pulse" />;
+                    const rows = [
+                      [t.programScheduleLabel, program.schedule],
+                      [t.programLocationLabel, program.location],
+                      [t.programFeesLabel, program.fees],
+                    ] as const;
+                    return (
+                      <Link key={slot} href={hrefs.program(slot)} className="group flex min-h-64 flex-col rounded-card border border-border bg-surface p-6">
+                        <span className="mb-5 flex size-11 items-center justify-center rounded-control bg-peach text-accent">
+                          {slot === "kedinasan" ? <BookOpen className="size-5" aria-hidden /> : <ShieldCheck className="size-5" aria-hidden />}
+                        </span>
+                        <p className="mb-2 text-micro text-muted">{t.programKicker}</p>
+                        <h3 className="font-display text-landing-h3 break-words text-foreground">{program.title}</h3>
+                        <p className="mt-3 text-label leading-relaxed break-words text-muted">{program.summary}</p>
+                        <dl className="mt-4 space-y-1.5 text-micro">
+                          {rows.map(([label, value]) => (
+                            <div key={label} className="flex gap-2">
+                              <dt className="shrink-0 text-muted">{label}</dt>
+                              <dd className="min-w-0 break-words text-foreground">{value.trim() === "" ? t.programPending : value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        <span className="mt-auto flex items-center gap-2 pt-5 text-caption font-medium text-accent group-hover:underline">
+                          {t.programLink}
+                          <ArrowRight className="size-4" aria-hidden />
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="mt-5 max-w-2xl text-micro leading-relaxed text-muted">{t.programsNote}</p>
+            </div>
+          </section>
+        )}
 
         <section id="packages" className="px-5 pb-16 sm:px-10 sm:pb-20">
           <div className={wrap}>
@@ -304,11 +315,13 @@ function HomeView({ content, contentState, catalog, t, onRetryContent, onRetryCa
           <div className={cn(wrap, "rounded-rail bg-peach px-6 py-12 text-center sm:py-14")}>
             <h2 className="font-display text-landing-h2 mx-auto max-w-xl text-balance text-foreground">{t.ctaHeading}</h2>
             <p className="mx-auto mt-5 mb-7 max-w-lg text-small text-foreground">{t.ctaBody}</p>
-            <div className="mx-auto grid max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
-              <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
-                {home?.program_cta ?? t.fallbackProgramCta}
-                <ArrowRight className="size-4 shrink-0" aria-hidden />
-              </LinkButton>
+            <div className={cn("mx-auto grid max-w-md grid-cols-1 gap-3", hasPrograms && "sm:grid-cols-2")}>
+              {hasPrograms && (
+                <LinkButton href="/#programs" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
+                  {home?.program_cta ?? t.fallbackProgramCta}
+                  <ArrowRight className="size-4 shrink-0" aria-hidden />
+                </LinkButton>
+              )}
               <LinkButton href="/catalog" variant="primary" size="lg" className="h-auto min-h-12 w-full min-w-0 text-center break-words whitespace-normal">
                 {home?.practice_cta ?? t.fallbackPracticeCta}
                 <ArrowRight className="size-4 shrink-0" aria-hidden />
@@ -388,9 +401,9 @@ function Packages({ state, t, onRetry }: { state: Remote<PublicProduct[]>; t: La
   );
 }
 
-function Footer({ t }: { t: LandingDict }) {
+function Footer({ t, showPrograms }: { t: LandingDict; showPrograms: boolean }) {
   const links = [
-    ["/#programs", t.footerLinks.programs],
+    ...(showPrograms ? ([["/#programs", t.footerLinks.programs]] as const) : []),
     ["/catalog", t.footerLinks.catalog],
     ["/#cara-kerja", t.footerLinks.howItWorks],
     ["/#faq", t.footerLinks.faq],
@@ -456,21 +469,30 @@ export function ProgramDetail({ program, locale, hrefs = publicHrefs, showBack =
 }
 
 /** Editor-side preview of the hero; inert so a stray click never leaves the editor. */
-export function HeroPreview({ home, locale }: { home: WebsiteLocaleContent["home"]; locale: Locale }) {
+export function HeroPreview({ home, locale, showProgramCta }: { home: WebsiteLocaleContent["home"]; locale: Locale; showProgramCta: boolean }) {
   return (
     <div inert className="rounded-hero bg-background p-6">
-      <HeroCopy home={home} loading={false} t={landingDict(locale)} />
+      <HeroCopy home={home} loading={false} t={landingDict(locale)} showProgramCta={showProgramCta} />
     </div>
   );
 }
 
-function ProgramView({ content, contentState, view, locale, onRetryContent, hrefs = publicHrefs }: WebsiteViewProps & { view: ProgramSlot }) {
+function ProgramView({ content, contentState, view, locale, mode, visibility, onRetryContent, hrefs = publicHrefs }: WebsiteViewProps & { view: ProgramSlot }) {
   const t = landingDict(locale);
   const program = content?.programs[view];
+  const hidden = visibility?.[view] === false;
+  if (hidden && mode === "published") notFound();
   return (
     <main id="main" className="px-5 sm:px-10">
       {program ? (
-        <ProgramDetail program={program} locale={locale} hrefs={hrefs} />
+        <>
+          {hidden && (
+            <p role="status" className="mx-auto mt-8 max-w-landing rounded-tile border border-border bg-accent-soft p-4 text-caption text-accent-soft-foreground">
+              {websiteDict(locale).programHiddenNotice}
+            </p>
+          )}
+          <ProgramDetail program={program} locale={locale} hrefs={hrefs} />
+        </>
       ) : contentState === "loading" ? (
         <div aria-busy="true" className={cn(wrap, "space-y-4 py-16")}>
           <div className="h-12 w-3/5 rounded-control bg-surface-secondary motion-safe:animate-pulse" />
@@ -500,7 +522,7 @@ export function WebsiteView(props: WebsiteViewProps) {
       </a>
       {props.mode === "draft" && <DraftBanner t={t} action={props.draftAction} />}
       {props.view === "home" ? <HomeView {...props} t={t} /> : <ProgramView {...props} view={props.view} />}
-      <Footer t={t} />
+      <Footer t={t} showPrograms={visibleSlots(props.visibility).length > 0} />
     </div>
   );
 }

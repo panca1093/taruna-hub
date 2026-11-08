@@ -33,6 +33,8 @@ type WebsiteLocale struct {
 type WebsiteContent struct {
 	SchemaVersion int                      `json:"schema_version"`
 	Locales       map[string]WebsiteLocale `json:"locales"`
+	// ProgramVisibility is a map so a missing key stays distinguishable from false; one flag serves both locales.
+	ProgramVisibility map[string]bool `json:"program_visibility"`
 }
 
 type WebsiteWorkbench struct {

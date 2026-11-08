@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -68,7 +69,21 @@ func normalizeWebsiteContent(content model.WebsiteContent) (model.WebsiteContent
 	if content.SchemaVersion != model.WebsiteSchemaVersion {
 		w.fields["schema_version"] = ReasonWebsiteSchema
 	}
-	out := model.WebsiteContent{SchemaVersion: content.SchemaVersion, Locales: map[string]model.WebsiteLocale{}}
+	out := model.WebsiteContent{SchemaVersion: content.SchemaVersion, Locales: map[string]model.WebsiteLocale{}, ProgramVisibility: map[string]bool{}}
+
+	for slot := range content.ProgramVisibility {
+		if !slices.Contains(websiteSlots, slot) {
+			w.fields["program_visibility."+slot] = ReasonWebsiteSlot
+		}
+	}
+	for _, slot := range websiteSlots {
+		visible, ok := content.ProgramVisibility[slot]
+		if !ok {
+			w.fields["program_visibility."+slot] = ReasonWebsiteRequired
+			continue
+		}
+		out.ProgramVisibility[slot] = visible
+	}
 
 	for key := range content.Locales {
 		if key != "id" && key != "en" {
@@ -161,7 +176,7 @@ func (s *WebsiteService) Published(ctx context.Context, scope HostScope) (model.
 	if err != nil {
 		return model.PublishedWebsite{}, websiteStoreError(err)
 	}
-	return model.PublishedWebsite{Content: *row.Published, PublishedRevision: row.PublishedRevision, PublishedAt: *row.PublishedAt}, nil
+	return model.PublishedWebsite{Content: withVisibility(*row.Published), PublishedRevision: row.PublishedRevision, PublishedAt: *row.PublishedAt}, nil
 }
 
 // Workbench creates the row with the reviewed default draft on the first read; it never publishes.
@@ -334,7 +349,8 @@ func (s *WebsiteService) lock(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID
 	if err := s.repo.InitializeTx(ctx, tx, tenantID, DefaultWebsiteContent()); err != nil {
 		return repository.WebsiteRow{}, err
 	}
-	return s.repo.LockTx(ctx, tx, tenantID)
+	row, err := s.repo.LockTx(ctx, tx, tenantID)
+	return withRowVisibility(row), err
 }
 
 func (s *WebsiteService) inTx(ctx context.Context, fn func(pgx.Tx) error) error {
@@ -367,7 +383,26 @@ func websiteStoreError(err error) error {
 	return err
 }
 
+// withVisibility reads a snapshot stored before the toggle existed as every slot shown.
+func withVisibility(c model.WebsiteContent) model.WebsiteContent {
+	if c.ProgramVisibility == nil {
+		c.ProgramVisibility = map[string]bool{"tni": true, "polri": true, "kedinasan": true}
+	}
+	return c
+}
+
+// withRowVisibility applies the default to a stored row so every read path returns the field.
+func withRowVisibility(row repository.WebsiteRow) repository.WebsiteRow {
+	row.Draft = withVisibility(row.Draft)
+	if row.Published != nil {
+		published := withVisibility(*row.Published)
+		row.Published = &published
+	}
+	return row
+}
+
 func workbenchOf(row repository.WebsiteRow) model.WebsiteWorkbench {
+	row = withRowVisibility(row)
 	return model.WebsiteWorkbench{
 		Draft: row.Draft, DraftRevision: row.DraftRevision, PublishedRevision: row.PublishedRevision,
 		Published: row.Published, UpdatedAt: row.UpdatedAt, UpdatedBy: row.UpdatedBy,
@@ -400,7 +435,8 @@ func DefaultWebsiteContent() model.WebsiteContent {
 		}
 	}
 	return model.WebsiteContent{
-		SchemaVersion: model.WebsiteSchemaVersion,
+		SchemaVersion:     model.WebsiteSchemaVersion,
+		ProgramVisibility: map[string]bool{"tni": true, "polri": true, "kedinasan": true},
 		Locales: map[string]model.WebsiteLocale{
 			"id": locale(model.WebsiteHome{
 				HeroTitle:   "Persiapanmu, sesuai caramu.",

@@ -68,6 +68,11 @@ const id = {
   programPending: "Menunggu informasi",
   programFilled: (n: number, total: number) => `${n} dari ${total} info opsional terisi`,
   editProgram: "Edit program",
+  visibilityLabel: "Tampilkan di situs",
+  visibilityLabelFor: (name: string) => `Tampilkan program ${name} di situs`,
+  visibilityShown: "Tampil di situs setelah terbit.",
+  visibilityHidden: "Disembunyikan dari situs setelah terbit.",
+  visibilityNote: "Pengaturan ini berlaku untuk kedua bahasa dan baru tayang setelah diterbitkan. Jika semua program disembunyikan, bagian program dan tautannya hilang dari situs.",
   programEditTitle: (name: string) => `Program ${name}`,
   programEditDescription: "Informasi ini tampil di kartu program dan halaman detail.",
   allPrograms: "Semua program",
@@ -153,6 +158,7 @@ const id = {
   previewReturn: "Kembali ke editor",
   previewReturnProgram: "Kembali ke editor program",
   programViewBack: "Semua program",
+  programHiddenNotice: "Program ini disembunyikan. Setelah diterbitkan, pengunjung akan melihat halaman tidak ditemukan.",
 };
 
 type WebsiteDict = typeof id;
@@ -223,6 +229,11 @@ const en: WebsiteDict = {
   programPending: "Awaiting information",
   programFilled: (n, total) => `${n} of ${total} optional details filled`,
   editProgram: "Edit program",
+  visibilityLabel: "Show on the site",
+  visibilityLabelFor: (name) => `Show ${name} program on the site`,
+  visibilityShown: "Shown on the site once published.",
+  visibilityHidden: "Hidden from the site once published.",
+  visibilityNote: "This applies to both languages and goes live only after publishing. If every program is hidden, the programs section and its links disappear from the site.",
   programEditTitle: (name) => `${name} program`,
   programEditDescription: "This information appears on the program card and its detail page.",
   allPrograms: "All programs",
@@ -308,6 +319,7 @@ const en: WebsiteDict = {
   previewReturn: "Back to editor",
   previewReturnProgram: "Back to program editor",
   programViewBack: "All programs",
+  programHiddenNotice: "This program is hidden. Once published, visitors will see a page-not-found screen.",
 };
 
 export type { WebsiteDict };

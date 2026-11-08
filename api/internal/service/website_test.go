@@ -20,8 +20,9 @@ func validWebsiteLocale() model.WebsiteLocale {
 
 func validWebsiteContent() model.WebsiteContent {
 	return model.WebsiteContent{
-		SchemaVersion: model.WebsiteSchemaVersion,
-		Locales:       map[string]model.WebsiteLocale{"id": validWebsiteLocale(), "en": validWebsiteLocale()},
+		SchemaVersion:     model.WebsiteSchemaVersion,
+		Locales:           map[string]model.WebsiteLocale{"id": validWebsiteLocale(), "en": validWebsiteLocale()},
+		ProgramVisibility: map[string]bool{"tni": true, "polri": true, "kedinasan": true},
 	}
 }
 
@@ -158,6 +159,15 @@ func TestWebsiteContentValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("every slot hidden is valid and keeps its flags", func(t *testing.T) {
+		c := validWebsiteContent()
+		c.ProgramVisibility = map[string]bool{"tni": false, "polri": false, "kedinasan": false}
+		out, err := normalizeWebsiteContent(c)
+		if err != nil || len(out.ProgramVisibility) != 3 || out.ProgramVisibility["tni"] || out.ProgramVisibility["polri"] || out.ProgramVisibility["kedinasan"] {
+			t.Fatalf("visibility = %v err = %v", out.ProgramVisibility, err)
+		}
+	})
+
 	t.Run("HTML stays inert text", func(t *testing.T) {
 		c := validWebsiteContent()
 		setHome("id", func(h *model.WebsiteHome) { h.HeroTitle = `<script>alert(1)</script>` })(&c)
@@ -179,6 +189,9 @@ func TestWebsiteContentValidation(t *testing.T) {
 		{"unknown locale", func(c *model.WebsiteContent) { c.Locales["fr"] = validWebsiteLocale() }, "locales.fr"},
 		{"nil locales", func(c *model.WebsiteContent) { c.Locales = nil }, "locales.id"},
 		{"missing slot", func(c *model.WebsiteContent) { delete(c.Locales["id"].Programs, "polri") }, "locales.id.programs.polri"},
+		{"nil visibility", func(c *model.WebsiteContent) { c.ProgramVisibility = nil }, "program_visibility.tni"},
+		{"missing visibility key", func(c *model.WebsiteContent) { delete(c.ProgramVisibility, "kedinasan") }, "program_visibility.kedinasan"},
+		{"unknown visibility key", func(c *model.WebsiteContent) { c.ProgramVisibility["akpol"] = true }, "program_visibility.akpol"},
 		{"unknown slot", func(c *model.WebsiteContent) {
 			c.Locales["en"].Programs["akpol"] = model.WebsiteProgram{Title: "x", Summary: "y"}
 		}, "locales.en.programs.akpol"},

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"os"
 	"reflect"
 	"sync"
 	"testing"
@@ -407,5 +408,75 @@ func TestWebsiteHistoryPagination(t *testing.T) {
 	foreign, err := h.web.History(ctx, h.scope(h.other), h.principal(h.other, otherAdmin), WebsiteHistoryInput{})
 	if err != nil || len(foreign.Items) != 0 {
 		t.Errorf("another tenant's history = %+v, %v; want empty", foreign, err)
+	}
+}
+
+func TestWebsiteProgramVisibility(t *testing.T) {
+	h := newWebsiteHarness(t)
+	ctx, scope := context.Background(), h.scope(h.tenant)
+
+	if got := h.workbench(t).Draft.ProgramVisibility; !reflect.DeepEqual(got, map[string]bool{"tni": true, "polri": true, "kedinasan": true}) {
+		t.Fatalf("default visibility = %v, want every slot shown", got)
+	}
+
+	hidden := DefaultWebsiteContent()
+	hidden.ProgramVisibility = map[string]bool{"tni": true, "polri": false, "kedinasan": false}
+	saved, err := h.web.Save(ctx, scope, h.admin1(), SaveWebsiteInput{ExpectedDraftRevision: 1, Content: hidden})
+	if err != nil || saved.DraftRevision != 2 || saved.Draft.ProgramVisibility["polri"] {
+		t.Fatalf("save hidden = %+v, %v; want revision 2 with polri hidden", saved.Draft.ProgramVisibility, err)
+	}
+	if saved.Published != nil {
+		t.Error("saving a visibility change touched the published snapshot")
+	}
+	if _, err := h.publish(2, 0); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	pub, err := h.web.Published(ctx, scope)
+	if err != nil || !reflect.DeepEqual(pub.Content.ProgramVisibility, hidden.ProgramVisibility) {
+		t.Fatalf("published visibility = %v, %v; want the draft's flags", pub.Content.ProgramVisibility, err)
+	}
+
+	shown := hidden
+	shown.ProgramVisibility = map[string]bool{"tni": true, "polri": true, "kedinasan": true}
+	if wb, err := h.web.Save(ctx, scope, h.admin1(), SaveWebsiteInput{ExpectedDraftRevision: 2, Content: shown}); err != nil || wb.DraftRevision != 3 {
+		t.Fatalf("a visibility-only change must be a new draft revision: %+v, %v", wb.DraftRevision, err)
+	}
+	second, err := h.publish(3, 1)
+	if err != nil || !second.Changed || second.PublishedRevision != 2 {
+		t.Fatalf("visibility-only publish = %+v, %v; want changed at published revision 2", second, err)
+	}
+	pub, err = h.web.Published(ctx, scope)
+	if err != nil || pub.PublishedRevision != 2 || !reflect.DeepEqual(pub.Content.ProgramVisibility, shown.ProgramVisibility) {
+		t.Fatalf("public read = %+v, %v; want revision 2 with every slot shown", pub, err)
+	}
+}
+
+func TestWebsiteProgramVisibilityBackfill(t *testing.T) {
+	h := newWebsiteHarness(t)
+	ctx := context.Background()
+	h.workbench(t)
+	if _, err := h.publish(1, 0); err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+
+	strip := `UPDATE website_content SET draft = draft - 'program_visibility', published = published - 'program_visibility' WHERE tenant_id = $1`
+	if _, err := h.pool.Exec(ctx, strip, h.tenant.ID); err != nil {
+		t.Fatalf("strip: %v", err)
+	}
+	all := map[string]bool{"tni": true, "polri": true, "kedinasan": true}
+	if got := h.workbench(t); !reflect.DeepEqual(got.Draft.ProgramVisibility, all) || !reflect.DeepEqual(got.Published.ProgramVisibility, all) {
+		t.Fatalf("legacy rows read as %v / %v, want every slot shown", got.Draft.ProgramVisibility, got.Published)
+	}
+
+	up, err := os.ReadFile("../../migrations/000025_website_program_visibility.up.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	if _, err := h.pool.Exec(ctx, string(up)); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	var draft, published bool
+	if err := h.pool.QueryRow(ctx, `SELECT draft ? 'program_visibility', published ? 'program_visibility' FROM website_content WHERE tenant_id = $1`, h.tenant.ID).Scan(&draft, &published); err != nil || !draft || !published {
+		t.Fatalf("backfill draft=%v published=%v err=%v", draft, published, err)
 	}
 }

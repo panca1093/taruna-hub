@@ -69,7 +69,10 @@ function writeField(c: WebsiteContent, f: FieldRef, value: string): WebsiteConte
   return next;
 }
 
-const sameContent = (a: WebsiteContent, b: WebsiteContent) => allFields.every((f) => readField(a, f).trim() === readField(b, f).trim());
+const sameVisibility = (a: WebsiteContent, b: WebsiteContent) => programSlots.every((slot) => a.program_visibility[slot] === b.program_visibility[slot]);
+
+const sameContent = (a: WebsiteContent, b: WebsiteContent) =>
+  sameVisibility(a, b) && allFields.every((f) => readField(a, f).trim() === readField(b, f).trim());
 
 // Code points, like the server: an emoji counts once.
 export const codePoints = (value: string) => Array.from(value.trim()).length;
@@ -95,6 +98,18 @@ export function diffContent(published: WebsiteContent | null, draft: WebsiteCont
     .map((f) => ({ ...f, before: published ? readField(published, f) : null, after: readField(draft, f) }));
 }
 
+export interface VisibilityDiffEntry {
+  slot: ProgramSlot;
+  before: boolean | null;
+  after: boolean;
+}
+
+export function diffVisibility(published: WebsiteContent | null, draft: WebsiteContent): VisibilityDiffEntry[] {
+  return programSlots
+    .filter((slot) => !published || published.program_visibility[slot] !== draft.program_visibility[slot])
+    .map((slot) => ({ slot, before: published ? published.program_visibility[slot] : null, after: draft.program_visibility[slot] }));
+}
+
 type SaveState =
   | { status: "idle" | "saving" | "saved" | "invalid" | "conflict" | "checking" }
   | { status: "failed"; message?: string; requestId?: string };
@@ -114,12 +129,15 @@ interface Editor {
   clientErrors: Record<string, string>;
   fieldErrors: Record<string, string>;
   diff: DiffEntry[];
+  visibilityDiff: VisibilityDiffEntry[];
+  changeCount: number;
   save: SaveState;
   publishState: PublishState;
   history: HistoryState;
   contentLocale: Locale;
   setContentLocale: (l: Locale) => void;
   setField: (f: FieldRef, value: string) => void;
+  setVisibility: (slot: ProgramSlot, visible: boolean) => void;
   doSave: () => Promise<boolean>;
   saveAndPreview: (slot?: ProgramSlot) => Promise<void>;
   askReload: () => void;
@@ -208,6 +226,7 @@ export function WebsiteEditorProvider({ children }: { children: React.ReactNode 
   const clientErrors = useMemo(() => (local ? validate(local) : {}), [local]);
   const dirty = !!local && !!workbench && !sameContent(local, workbench.draft);
   const diff = useMemo(() => (workbench ? diffContent(workbench.published, workbench.draft) : []), [workbench]);
+  const visibilityDiff = useMemo(() => (workbench ? diffVisibility(workbench.published, workbench.draft) : []), [workbench]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -227,6 +246,11 @@ export function WebsiteEditorProvider({ children }: { children: React.ReactNode 
       document.removeEventListener("click", intercept, true);
     };
   }, [dirty]);
+
+  const setVisibility = useCallback((slot: ProgramSlot, visible: boolean) => {
+    setLocal((cur) => (cur ? { ...cur, program_visibility: { ...cur.program_visibility, [slot]: visible } } : cur));
+    setSave((s) => (s.status === "saved" || s.status === "invalid" || s.status === "failed" ? { status: "idle" } : s));
+  }, []);
 
   const setField = useCallback((f: FieldRef, value: string) => {
     setLocal((cur) => (cur ? writeField(cur, f, value) : cur));
@@ -425,12 +449,15 @@ export function WebsiteEditorProvider({ children }: { children: React.ReactNode 
           clientErrors,
           fieldErrors,
           diff,
+          visibilityDiff,
+          changeCount: diff.length + visibilityDiff.length,
           save,
           publishState,
           history,
           contentLocale,
           setContentLocale,
           setField,
+          setVisibility,
           doSave,
           saveAndPreview,
           askReload: () => setDiscardOpen(true),
@@ -539,7 +566,7 @@ function StatusStrip() {
         ? { tone: "warning" as const, text: t.statusUnsaved }
         : wb.published_revision === 0
           ? { tone: "accent" as const, text: t.statusNeverPublished }
-          : ed.diff.length === 0
+          : ed.changeCount === 0
             ? { tone: "success" as const, text: t.statusInSync }
             : { tone: "accent" as const, text: t.statusDraftAhead };
   return (
