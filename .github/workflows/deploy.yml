@@ -63,7 +63,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: deploy/compose.yml,deploy/Caddyfile,deploy/backup.sh,api/migrations
-          target: /opt/taruna
+          target: ${{ secrets.VPS_APP_DIR }}
           strip_components: 1
 
       - name: Pull and restart
@@ -72,14 +72,15 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APP_DIR: ${{ secrets.VPS_APP_DIR }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: IMAGE_TAG,GHCR_USER,GHCR_TOKEN
+          envs: IMAGE_TAG,GHCR_USER,GHCR_TOKEN,APP_DIR
           script: |
             set -euo pipefail
-            cd /opt/taruna
+            cd "${APP_DIR:?VPS_APP_DIR secret is empty}"
             chmod +x backup.sh
             echo "IMAGE_TAG=$IMAGE_TAG" > .image-tag
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin

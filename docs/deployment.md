@@ -11,11 +11,14 @@ browser ──https──▶ Cloudflare ──https + client cert──▶ Caddy
 postgres, redis, rustfs, gotenberg, worker: compose network only, no published ports
 ```
 
+The repository is public: never commit the VPS IP, SSH user or app path. They live only in the GitHub
+`production` secrets below; this page writes them as `<ssh-user>` and `<app-dir>`.
+
 | File | Role |
 |---|---|
 | `deploy/compose.yml` | Production services. No seed: accounts come from `bootstrap` |
 | `deploy/Caddyfile` | Reverse proxy, Cloudflare origin cert, Authenticated Origin Pulls |
-| `deploy/.env.example` | Template for `/opt/taruna/.env` on the VPS |
+| `deploy/.env.example` | Template for `<app-dir>/.env` on the VPS |
 | `deploy/backup.sh` | Nightly Postgres dump + asset mirror to Cloudflare R2 |
 | `.github/workflows/deploy.yml` | Manual deploy: build → push GHCR → copy stack files → restart |
 
@@ -42,21 +45,21 @@ The API reaches RustFS over plain HTTP inside the network, but presigned links m
 Ubuntu 24.04 on the KVM 2.
 
 ```bash
-adduser deploy && usermod -aG sudo deploy        # then copy your SSH key to ~deploy/.ssh/authorized_keys
-curl -fsSL https://get.docker.com | sh && usermod -aG docker deploy
+adduser <ssh-user> && usermod -aG sudo <ssh-user>   # then copy your SSH key to ~<ssh-user>/.ssh/authorized_keys
+curl -fsSL https://get.docker.com | sh && usermod -aG docker <ssh-user>
 ufw allow 22/tcp && ufw allow 443/tcp && ufw enable
-sudo mkdir -p /opt/taruna/certs /opt/taruna/backups && sudo chown -R deploy: /opt/taruna
+sudo mkdir -p <app-dir>/certs <app-dir>/backups && sudo chown -R <ssh-user>: <app-dir>
 ```
 
 Turn off SSH password login (`PasswordAuthentication no` in `/etc/ssh/sshd_config`). Docker publishes
 ports past `ufw`, so also add the same 22/443 rules in **hPanel → VPS → Firewall**. Port 443 is still safe
 when reached directly: without Cloudflare's client certificate the TLS handshake fails.
 
-Put the three files from Cloudflare in `/opt/taruna/certs/`, then:
+Put the three files from Cloudflare in `<app-dir>/certs/`, then:
 
 ```bash
-cp deploy/.env.example /opt/taruna/.env   # copy from the repo, fill every empty value
-chmod 600 /opt/taruna/.env /opt/taruna/certs/origin-key.pem
+cp deploy/.env.example <app-dir>/.env   # copy from the repo, fill every empty value
+chmod 600 <app-dir>/.env <app-dir>/certs/origin-key.pem
 ```
 
 ## 3. GitHub (once)
@@ -66,8 +69,9 @@ Repository **Settings → Environments → New environment** `production`, restr
 | Secret | Value |
 |---|---|
 | `VPS_HOST` | VPS IP |
-| `VPS_USER` | `deploy` |
-| `VPS_SSH_KEY` | A private key made only for deploys; its public half in `~deploy/.ssh/authorized_keys` |
+| `VPS_USER` | `<ssh-user>`, the non-root user from §2 |
+| `VPS_APP_DIR` | `<app-dir>`, absolute path of the stack folder |
+| `VPS_SSH_KEY` | A private key made only for deploys; its public half in `~<ssh-user>/.ssh/authorized_keys` |
 
 The workflow logs the VPS in to GHCR with the run's own short-lived token, so no personal access token is
 stored on the server.
@@ -76,14 +80,14 @@ stored on the server.
 
 **Actions → Deploy → Run workflow** on `main`, after CI is green. It builds `taruna-hub-api` and
 `taruna-hub-web` tagged with the commit SHA, copies `compose.yml`, `Caddyfile`, `backup.sh` and
-`migrations/` to `/opt/taruna`, runs migrations, restarts and waits for `/readyz`. The deployed tag is
-in `/opt/taruna/.image-tag`; to roll back, run the workflow on the older commit. Migrations run while the
+`migrations/` to `<app-dir>`, runs migrations, restarts and waits for `/readyz`. The deployed tag is
+in `<app-dir>/.image-tag`; to roll back, run the workflow on the older commit. Migrations run while the
 old api/worker still serve, so each must stay backward-compatible with the previous release.
 
 Manual commands on the VPS always pass both env files:
 
 ```bash
-cd /opt/taruna && alias dc='docker compose --env-file .env --env-file .image-tag'
+cd <app-dir> && alias dc='docker compose --env-file .env --env-file .image-tag'
 dc ps
 dc logs -f api worker
 ```
@@ -103,8 +107,8 @@ Create an R2 bucket `taruna-backup` and an R2 API token with Object Read & Write
 `R2_*` values in `.env`. Add a lifecycle rule on the bucket deleting `db/` objects after 30 days.
 
 ```bash
-crontab -e   # as deploy:
-15 2 * * * /opt/taruna/backup.sh >> /opt/taruna/backups/backup.log 2>&1
+crontab -e   # as <ssh-user>:
+15 2 * * * <app-dir>/backup.sh >> <app-dir>/backups/backup.log 2>&1
 ```
 
 Each run uploads `db/db-<stamp>.dump` and mirrors the asset bucket to `assets/`. The mirror deletes what
@@ -114,7 +118,7 @@ Restore, after a fresh stack is up:
 
 ```bash
 dc exec -T postgres pg_restore -U tryout -d tryout --clean --if-exists < backups/db-<stamp>.dump
-dc run --rm backup sync r2:$R2_BUCKET/assets storage:tryout-assets   # assets; R2_BUCKET from .env
+dc run --rm backup sync r2:<r2-bucket>/assets storage:tryout-assets   # <r2-bucket> = R2_BUCKET in .env
 ```
 
 Try a restore once before going live; an untested backup is not one.
