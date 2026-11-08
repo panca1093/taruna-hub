@@ -1,7 +1,8 @@
 # Production deployment
 
 One Hostinger VPS (KVM 2, 8 GB) runs the whole stack from `deploy/compose.yml`. Cloudflare sits in
-front for DNS, public TLS and caching. Images are built by GitHub Actions and pulled from GHCR.
+front for DNS, public TLS and caching. GitHub Actions only builds images into GHCR; the owner deploys by
+running a script on the VPS.
 
 ```
 browser ──https──▶ Cloudflare ──https + client cert──▶ Caddy :443 ─┬─ tarunaedu.com/api/*  → api:8081
@@ -11,8 +12,8 @@ browser ──https──▶ Cloudflare ──https + client cert──▶ Caddy
 postgres, redis, rustfs, gotenberg, worker: compose network only, no published ports
 ```
 
-The repository is public: never commit the VPS IP, SSH user or app path. They live only in the GitHub
-`production` secrets below; this page writes them as `<ssh-user>` and `<app-dir>`.
+The repository is public: never commit the VPS IP, SSH user or app path. GitHub holds no server
+credentials; this page writes them as `<ssh-user>` and `<app-dir>`.
 
 | File | Role |
 |---|---|
@@ -20,7 +21,8 @@ The repository is public: never commit the VPS IP, SSH user or app path. They li
 | `deploy/Caddyfile` | Reverse proxy, Cloudflare origin cert, Authenticated Origin Pulls |
 | `deploy/.env.example` | Template for `<app-dir>/.env` on the VPS |
 | `deploy/backup.sh` | Nightly Postgres dump + asset mirror to Cloudflare R2 |
-| `.github/workflows/deploy.yml` | Manual deploy: build → push GHCR → copy stack files → restart |
+| `deploy/deploy.sh` | Run on the VPS: pull images, replace stack files, migrate, restart, prune |
+| `.github/workflows/images.yml` | Build and push GHCR images on manual run or `v*` tag; never touches the VPS |
 
 The API reaches RustFS over plain HTTP inside the network, but presigned links must be
 `https://files.tarunaedu.com`, so `S3_PUBLIC_USE_SSL=true` sets the scheme of those links on its own.
@@ -62,27 +64,38 @@ cp deploy/.env.example <app-dir>/.env   # copy from the repo, fill every empty v
 chmod 600 <app-dir>/.env <app-dir>/certs/origin-key.pem
 ```
 
-## 3. GitHub (once)
+## 3. Release and deploy
 
-Repository **Settings → Environments → New environment** `production`, restricted by a deployment-branch rule to `main` only, with secrets:
+Nothing pushes to the VPS. Deploying is `./deploy.sh <sha>` run on the server by the owner.
 
-| Secret | Value |
-|---|---|
-| `VPS_HOST` | VPS IP |
-| `VPS_USER` | `<ssh-user>`, the non-root user from §2 |
-| `VPS_APP_DIR` | `<app-dir>`, absolute path of the stack folder |
-| `VPS_SSH_KEY` | A private key made only for deploys; its public half in `~<ssh-user>/.ssh/authorized_keys` |
+**Bootstrap (once)**, in `<app-dir>` after §2:
 
-The workflow logs the VPS in to GHCR with the run's own short-lived token, so no personal access token is
-stored on the server.
+```bash
+curl -fsSLo deploy.sh https://raw.githubusercontent.com/panca1093/taruna-hub/main/deploy/deploy.sh && chmod +x deploy.sh
+```
 
-## 4. Deploy
+**GHCR access.** If the `taruna-hub-api` and `taruna-hub-web` packages are public, nothing is needed. If
+private, run `docker login ghcr.io` once on the VPS with a classic personal access token scoped
+`read:packages` only.
 
-**Actions → Deploy → Run workflow** on `main`, after CI is green. It builds `taruna-hub-api` and
-`taruna-hub-web` tagged with the commit SHA, copies `compose.yml`, `Caddyfile`, `backup.sh` and
-`migrations/` to `<app-dir>`, runs migrations, restarts and waits for `/readyz`. The deployed tag is
-in `<app-dir>/.image-tag`; to roll back, run the workflow on the older commit. Migrations run while the
-old api/worker still serve, so each must stay backward-compatible with the previous release.
+**Release.** Run **Actions → Images → Run workflow** on `main` after CI is green, or push a `v*` tag. Both
+push `taruna-hub-api` and `taruna-hub-web` tagged with the full commit SHA; a `v*` tag adds the tag name too.
+Get the SHA from the run page or `git rev-parse origin/main`.
+
+**Deploy.**
+
+```bash
+ssh <ssh-user>@<vps>
+cd <app-dir> && ./deploy.sh <40-char sha>
+```
+
+The script downloads the repo at that SHA and pulls its images first, so a SHA without images fails with
+the running stack untouched. Then it replaces `compose.yml`, `Caddyfile`, `backup.sh`, `deploy.sh` and
+`migrations/`, writes `.image-tag`, restarts, waits for `/readyz`, and keeps the last 3 SHA-tagged images.
+It prints the previous SHA as the rollback value.
+
+**Rollback.** `./deploy.sh <previous sha>`. Migrations are not rolled back; they run while the old
+api/worker still serve, so each must stay backward-compatible with the previous release.
 
 Manual commands on the VPS always pass both env files:
 
@@ -101,7 +114,7 @@ dc run --rm api bootstrap tenant -slug taruna -name "Taruna Eduka"
 dc run --rm -e BOOTSTRAP_PASSWORD='…' api bootstrap admin -tenant taruna -name "…" -email "…"
 ```
 
-## 5. Backups
+## 4. Backups
 
 Create an R2 bucket `taruna-backup` and an R2 API token with Object Read & Write on it only, then fill the
 `R2_*` values in `.env`. Add a lifecycle rule on the bucket deleting `db/` objects after 30 days.
