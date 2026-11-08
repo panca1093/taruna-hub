@@ -109,6 +109,13 @@
   --text-landing-h3--font-weight: 550;
   --container-landing: 77.5rem;
   --container-hero-title: 16ch;
+  /* Kecermatan item card content widths: room for five elements of 12/16/20/24/28/36px plus gaps */
+  --container-item-xs: 4.75rem;
+  --container-item-sm: 6rem;
+  --container-item-md: 7.25rem;
+  --container-item-lg: 8.5rem;
+  --container-item-xl: 9.75rem;
+  --container-item-2xl: 12.25rem;
 
   /* Radii: control 10, tile 16, card 21, hero 23, rail 27 */
   --radius-chip: 0.4375rem;
