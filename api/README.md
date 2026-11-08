@@ -25,7 +25,7 @@ Change them in `docker-compose.yml` and `.env` if they clash on yours.
 | API | 8081 | 8080 is OrbStack |
 | Postgres | 5433 | |
 | Redis | 6380 | |
-| MinIO | 9002 (console 9003) | |
+| RustFS | 9002 | |
 
 ## The API contract
 
@@ -98,7 +98,9 @@ BOOTSTRAP_PASSWORD=... go run ./cmd/bootstrap admin -platform -name "Root" -emai
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | no | Optional AUTH credentials |
 | `SMTP_FROM` | with `SMTP_HOST` | Sender address |
 | `SMTP_TLS` | no | `starttls` (default), `tls`, or `none` (development only, and with credentials only against a loopback host) |
-| `S3_ENDPOINT` | no | S3-compatible host:port (MinIO, or `storage.googleapis.com` with HMAC keys). Unset means the asset routes answer `503` |
+| `S3_ENDPOINT` | no | S3-compatible host:port (RustFS, or `storage.googleapis.com` with HMAC keys). Unset means the asset routes answer `503` |
 | `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | with `S3_ENDPOINT` | Credentials and the private bucket |
 | `S3_USE_SSL` | no | `true` (default) outside development, `false` in it |
 | `S3_REGION` | no | Only when the server needs one |
+| `S3_PUBLIC_ENDPOINT` | no | Host browsers use for presigned links when it differs from `S3_ENDPOINT` (e.g. `files.example.com`) |
+| `S3_PUBLIC_USE_SSL` | no | `true` when a TLS proxy fronts the public endpoint but the API reaches storage over plain HTTP |

@@ -321,4 +321,25 @@ func TestS3ConfigValidation(t *testing.T) {
 			t.Error("an unparsable S3_USE_SSL was accepted, want an error")
 		}
 	})
+
+	t.Run("public ssl follows S3_USE_SSL unless set on its own", func(t *testing.T) {
+		base()
+		t.Setenv("S3_ENDPOINT", "minio:9000")
+		t.Setenv("S3_ACCESS_KEY", "k")
+		t.Setenv("S3_SECRET_KEY", "s")
+		t.Setenv("S3_BUCKET", "b")
+		t.Setenv("S3_USE_SSL", "false")
+		t.Setenv("S3_PUBLIC_USE_SSL", "")
+		if cfg, err := Load(); err != nil || cfg.S3.PublicUseSSL {
+			t.Errorf("unset: PublicUseSSL = %v, err = %v; want false, nil", cfg.S3.PublicUseSSL, err)
+		}
+		t.Setenv("S3_PUBLIC_USE_SSL", "true")
+		if cfg, err := Load(); err != nil || cfg.S3.UseSSL || !cfg.S3.PublicUseSSL {
+			t.Errorf("split: UseSSL = %v, PublicUseSSL = %v, err = %v; want false, true, nil", cfg.S3.UseSSL, cfg.S3.PublicUseSSL, err)
+		}
+		t.Setenv("S3_PUBLIC_USE_SSL", "maybe")
+		if _, err := Load(); err == nil {
+			t.Error("an unparsable S3_PUBLIC_USE_SSL was accepted, want an error")
+		}
+	})
 }

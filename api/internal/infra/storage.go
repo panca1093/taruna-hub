@@ -44,7 +44,7 @@ func NewStorage(cfg config.S3Config) (*Storage, error) {
 		}
 		presign, err = minio.New(cfg.PublicEndpoint, &minio.Options{
 			Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
-			Secure: cfg.UseSSL,
+			Secure: cfg.PublicUseSSL,
 			Region: region,
 		})
 		if err != nil {

@@ -1,0 +1,99 @@
+name: Deploy
+
+# Manual on purpose: production moves only when someone picks the commit (docs/deployment.md).
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  DOMAIN: tarunaedu.com
+  REGISTRY: ghcr.io/panca1093
+
+jobs:
+  build:
+    name: Build and push images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: api
+            context: api
+          - name: web
+            context: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ env.REGISTRY }}/taruna-hub-${{ matrix.name }}:${{ github.sha }}
+          # Same-origin: the browser and server renders both call https://DOMAIN/api.
+          build-args: |
+            NEXT_PUBLIC_API_URL=https://${{ env.DOMAIN }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy stack files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: deploy/compose.yml,deploy/Caddyfile,deploy/backup.sh,api/migrations
+          target: /opt/taruna
+          strip_components: 1
+
+      - name: Pull and restart
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: IMAGE_TAG,GHCR_USER,GHCR_TOKEN
+          script: |
+            set -euo pipefail
+            cd /opt/taruna
+            chmod +x backup.sh
+            echo "IMAGE_TAG=$IMAGE_TAG" > .image-tag
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            dc() { docker compose --env-file .env --env-file .image-tag "$@"; }
+            dc pull --quiet
+            docker logout ghcr.io
+            if ! dc up -d --remove-orphans; then dc logs --tail 100 api migrate; exit 1; fi
+            for i in $(seq 1 60); do
+              dc exec -T api wget -qO- http://localhost:8081/readyz >/dev/null 2>&1 && break
+              [ "$i" = 60 ] && { dc logs --tail 100 api migrate; exit 1; }
+              sleep 2
+            done
+            for repo in ghcr.io/panca1093/taruna-hub-api ghcr.io/panca1093/taruna-hub-web; do
+              docker image ls "$repo" --format '{{.Tag}}' | { grep -E '^[0-9a-f]{40}$' || true; } | { grep -vx "$IMAGE_TAG" || true; } | tail -n +3 \
+                | xargs -r -I{} docker image rm "$repo:{}"
+            done
+            docker image prune -f
