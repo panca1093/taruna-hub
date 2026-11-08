@@ -28,11 +28,13 @@ const REFETCH_MS = 700;
 const sendKey = (kolom: number, soal: number) => `${kolom}:${soal}`;
 const mmss = (total: number) => `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 
+const columns = (count: number) => ({ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` });
+
 function ExamFrame({ children }: { children: React.ReactNode }) {
   return <div className="fixed inset-0 z-50 flex flex-col bg-background">{children}</div>;
 }
 
-function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: string; subtitle: string; timer: string; urgent: boolean; timerLabel: string }) {
+function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: string; subtitle?: string; timer: string; urgent: boolean; timerLabel: string }) {
   return (
     <header className="flex min-h-19.5 shrink-0 items-center gap-3 border-b border-border bg-surface px-4 py-3.5 sm:min-h-22 sm:gap-5 sm:px-8 sm:py-4">
       <span className="logo-plate shrink-0">
@@ -40,7 +42,7 @@ function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: str
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-small font-semibold text-foreground">{title}</p>
-        <p className="mt-1 truncate text-micro text-muted">{subtitle}</p>
+        {subtitle && <p className="mt-1 truncate text-micro text-muted">{subtitle}</p>}
       </div>
       <ExamTimerPill role="timer" aria-label={timerLabel} time={timer} urgent={urgent} />
     </header>
@@ -97,11 +99,26 @@ function KolomScreen({
     <ExamFrame>
       <ExamHeader
         title={session.test_title}
-        subtitle={t.kolomProgress(kolom.number, session.kolom_count)}
         timer={remaining === null ? "--:--" : mmss(remaining)}
         urgent={urgent}
         timerLabel={t.timerLabel}
       />
+
+      <div className="shrink-0 border-b border-border bg-surface px-4 pb-3 sm:px-8">
+        <div className="mx-auto flex max-w-200 items-baseline justify-between gap-3">
+          <p className="min-w-0 text-small text-foreground">
+            <span className="font-mono font-semibold">{t.soalProgress(soal ? soalIndex + 1 : kolom.soal.length, kolom.soal.length)}</span>
+            {soal && <span className="text-muted"> · {t.chooseMissingLabel}</span>}
+          </p>
+          <p className="shrink-0 text-label text-muted">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
+        </div>
+        <div className="mx-auto mt-2 flex max-w-200 gap-1.25" aria-hidden>
+          {Array.from({ length: session.kolom_count }, (_, index) => (
+            <span key={index} className={cn("h-1 flex-1 rounded-full", index < kolom.number ? "bg-accent" : "bg-border")} />
+          ))}
+        </div>
+        <p className="mx-auto mt-1.5 max-w-200 text-label text-muted">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
+      </div>
 
       <main className="mx-auto flex min-h-0 w-full max-w-290 flex-1 flex-col justify-center-safe overflow-y-auto px-4 py-6 text-center sm:px-6 sm:py-8">
         {unconfirmed > 0 && (
@@ -117,36 +134,31 @@ function KolomScreen({
           </div>
         )}
 
-        <div>
+        <div className="mx-auto w-full max-w-200">
           <p className="text-caption text-muted">{t.referenceLabel(kolom.number)}</p>
-          <div className="mt-4 flex flex-wrap justify-center gap-2 sm:gap-3">
+          <div className="mt-4 grid gap-2 sm:gap-3" style={columns(labels.length)}>
             {kolom.reference.map((item) => (
-              <div key={item.label} className="min-w-24 rounded-tile border border-border bg-surface px-2 py-3 text-center sm:min-w-25 sm:px-4">
-                <p className="text-label text-muted">{item.label}</p>
-                <KecermatanItem elements={item.elements} className="mt-2 text-xl font-extrabold sm:text-2xl" elementClassName="size-6 sm:size-7" />
-              </div>
+              <figure key={item.label} className="min-w-0">
+                <figcaption className="font-mono text-2xl font-extrabold text-foreground">{item.label}</figcaption>
+                <div className="mt-1.5 flex items-center justify-center rounded-tile border border-border bg-surface px-1 py-3 text-center sm:px-2">
+                  <KecermatanItem elements={item.elements} wrap className="text-sm font-extrabold sm:text-2xl" elementClassName="size-4 sm:size-7" />
+                </div>
+              </figure>
             ))}
           </div>
-        </div>
 
-        {soal ? (
-          <>
-            <div className="mt-7">
-              <h1 className="font-display text-heading sm:text-hero">{t.soalPrompt}</h1>
-              <div className="mt-5 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:justify-center sm:gap-4">
+          {soal ? (
+            <>
+              <h1 className="mt-7 font-display text-heading sm:text-hero">{t.soalPrompt}</h1>
+              <div className="mt-5 grid gap-2 sm:gap-3" style={columns(soal.shown.length)}>
                 {soal.shown.map((label) => (
-                  <div key={label} className="flex items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-2.5 py-5 sm:min-w-42.5 sm:px-6 sm:py-5.5">
-                    <KecermatanItem elements={labelOf(label)?.elements ?? []} className="text-2xl font-extrabold sm:text-3xl" elementClassName="size-6 sm:size-9" />
+                  <div key={label} className="flex min-w-0 items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-1 py-5 sm:px-2 sm:py-5.5">
+                    <KecermatanItem elements={labelOf(label)?.elements ?? []} wrap className="text-base font-extrabold sm:text-3xl" elementClassName="size-5 sm:size-9" />
                   </div>
                 ))}
               </div>
-            </div>
 
-            <div className="mt-8">
-              <p className="text-caption text-muted">
-                {t.soalProgress(soalIndex + 1, kolom.soal.length)} · {t.chooseMissingLabel}
-              </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-2.5 sm:gap-3">
+              <div className="mt-8 grid gap-2 sm:gap-3" style={columns(labels.length)}>
                 {kolom.reference.map((item) => (
                   <button
                     key={item.label}
@@ -154,13 +166,13 @@ function KolomScreen({
                     disabled={timeUp}
                     aria-label={t.answerAria(item.label)}
                     onClick={() => onAnswer(soal.number, item.label)}
-                    className="flex h-14 w-24 items-center justify-center rounded-tile border border-border bg-surface font-mono text-2xl font-extrabold text-foreground outline-none transition-colors hover:border-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 sm:h-16 sm:w-25"
+                    className="flex h-14 min-w-0 items-center justify-center rounded-tile border border-border bg-surface font-mono text-2xl font-extrabold text-foreground outline-none transition-colors hover:border-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 sm:h-16"
                   >
                     {item.label}
                   </button>
                 ))}
               </div>
-              <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-label text-muted">
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-label text-muted">
                 <button
                   type="button"
                   disabled={timeUp}
@@ -171,29 +183,19 @@ function KolomScreen({
                 </button>
                 <span>{t.keyboardHint(labels[0] ?? "A", labels[labels.length - 1] ?? "E")}</span>
               </div>
-            </div>
-          </>
-        ) : (
-          <Panel tone="plain" radius="tile" className="mt-7 flex flex-col items-center">
-            <span className="inline-flex size-11 items-center justify-center rounded-full bg-success-soft text-success-soft-foreground">
-              <Icon icon={CheckCircle2} size="md" />
-            </span>
-            <p className="mt-4 font-display text-heading">{t.allAnswered}</p>
-            <p className="mt-2 text-caption text-muted">{t.waitingForTimer}</p>
-          </Panel>
-        )}
+            </>
+          ) : (
+            <Panel tone="plain" radius="tile" className="mt-7 flex flex-col items-center">
+              <span className="inline-flex size-11 items-center justify-center rounded-full bg-success-soft text-success-soft-foreground">
+                <Icon icon={CheckCircle2} size="md" />
+              </span>
+              <p className="mt-4 font-display text-heading">{t.allAnswered}</p>
+              <p className="mt-2 text-caption text-muted">{t.waitingForTimer}</p>
+            </Panel>
+          )}
+        </div>
 
         {timeUp && <p className="mt-4 text-caption font-medium text-warning-soft-foreground">{t.timeUp}</p>}
-
-        <div className="mt-7">
-          <div className="mx-auto flex max-w-150 gap-1.25" aria-hidden>
-            {Array.from({ length: session.kolom_count }, (_, index) => (
-              <span key={index} className={cn("h-1 flex-1 rounded-full", index < kolom.number ? "bg-accent" : "bg-border")} />
-            ))}
-          </div>
-          <p className="mt-3 text-caption text-muted">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
-          <p className="mt-0.5 text-label text-muted">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
-        </div>
       </main>
     </ExamFrame>
   );
