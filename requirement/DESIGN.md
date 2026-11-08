@@ -121,7 +121,7 @@ Observed type scale at a 16px root:
 | Modal title / large button | 16px / 24px (`text-base`) | Modal 600; button 500 |
 | KPI value | 24px / 32px (`text-2xl`) | Geist 600, tight tracking |
 | Tryout question / options (exam runtime) | 18px (`text-lg`) question, 16px (`text-base`) options | Inter 400; larger than dashboard body on client request |
-| Kecermatan items (exam runtime) | Sized by the card's own content width through container queries (`@item-xs` 76px to `@item-2xl` 196px, defined in `globals.css`): reference text 10px up to 24px, soal text up to 30px; answer keys and reference labels 24px | Geist Mono 800. A text run stays on one line and shrinks with the card, never splits. Emoji, shape and image elements scale 12px to 28px (36px for soal) and, only when even the smallest step cannot fit them, wrap between elements. Cards in a row share one height |
+| Kecermatan items (exam runtime) | Sized by the card's own content width through container queries (`@item-xs` 76px to `@item-2xl` 196px, defined in `globals.css`): reference text 10px up to 24px, soal text up to 30px; answer keys and reference labels 24px | Geist Mono 800. A text run (char, number or symbol items) stays on one line and shrinks with the card, never splits; symbol items are one run, spaced below the `@item-md` step they drop the spaces and get one extra step down (`.item-symbol-tight`, 0.7em) at the narrowest card, since symbol fonts run wider than mono digits. Emoji, shape and image elements scale 12px to 28px (36px for soal) and, only when even the smallest step cannot fit them, wrap between elements. Cards in a row share one height |
 | Landing hero title | 36px / 40px; 48px / 48px at `sm` | Geist 600, tight tracking |
 
 #### 3.1 Named type steps (prototype scale)

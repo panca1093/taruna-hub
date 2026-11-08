@@ -696,3 +696,13 @@ body {
 .auth-done a { margin-top: 4px; color: var(--accent); font-size: var(--text-small); font-weight: 500; }
 .auth-done a:hover, .auth-error a { text-decoration: underline; }
 .auth-done .auth-title { font-size: var(--text-hero); letter-spacing: -.8px; }
+
+/* Symbols fall back to wider fonts than the mono digits; at the narrowest item card they get one extra step down */
+.item-symbol-tight {
+  font-size: 0.7em;
+}
+@container (min-width: 4.75rem) {
+  .item-symbol-tight {
+    font-size: 1em;
+  }
+}

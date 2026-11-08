@@ -141,7 +141,7 @@ function KolomScreen({
 
         <div className="mx-auto w-full max-w-200">
           <p className="text-caption text-muted">{t.referenceLabel(kolom.number)}</p>
-          <div className="mt-4 grid gap-2 sm:gap-3" style={columns(labels.length)}>
+          <div className="mt-4 grid gap-1 sm:gap-3" style={columns(labels.length)}>
             {kolom.reference.map((item) => (
               <figure key={item.label} className="flex min-w-0 flex-col">
                 <figcaption className="font-mono text-2xl font-extrabold text-foreground">{item.label}</figcaption>
@@ -155,7 +155,7 @@ function KolomScreen({
           {soal ? (
             <>
               <h1 className="mt-7 font-display text-heading sm:text-hero">{t.soalPrompt}</h1>
-              <div className="mt-5 grid gap-2 sm:gap-3" style={columns(soal.shown.length)}>
+              <div className="mt-5 grid gap-1 sm:gap-3" style={columns(soal.shown.length)}>
                 {soal.shown.map((label) => (
                   <div key={label} className="@container flex min-w-0 items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-0 py-5 sm:px-2 sm:py-5.5">
                     <KecermatanItem elements={labelOf(label)?.elements ?? []} fit className={cn("font-extrabold", SHOWN_TEXT)} elementClassName={SHOWN_ELEMENT} />
@@ -163,7 +163,7 @@ function KolomScreen({
                 ))}
               </div>
 
-              <div className="mt-8 grid gap-2 sm:gap-3" style={columns(labels.length)}>
+              <div className="mt-8 grid gap-1 sm:gap-3" style={columns(labels.length)}>
                 {kolom.reference.map((item) => (
                   <button
                     key={item.label}
