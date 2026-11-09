@@ -50,7 +50,7 @@ function ExamHeader({ title, subtitle, timer, urgent, timerLabel }: { title: str
         <Image src="/taruna-eduka-logo.png" alt="Taruna Eduka" width={750} height={250} className="h-8 w-auto sm:h-10" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-small font-semibold text-foreground">{title}</p>
+        <p className="truncate text-small font-semibold text-foreground sm:text-base">{title}</p>
         {subtitle && <p className="mt-1 truncate text-micro text-muted">{subtitle}</p>}
       </div>
       <ExamTimerPill role="timer" aria-label={timerLabel} time={timer} urgent={urgent} />
@@ -114,20 +114,20 @@ function KolomScreen({
         timerLabel={t.timerLabel}
       />
 
-      <div className="shrink-0 border-b border-border bg-surface px-4 pb-3 sm:px-8">
+      <div className="shrink-0 border-b border-border bg-surface px-4 py-2.5 sm:px-8 sm:py-3">
         <div className="mx-auto flex max-w-200 items-baseline justify-between gap-3">
-          <p className="min-w-0 text-small text-foreground">
+          <p className="min-w-0 text-small text-foreground sm:text-base">
             <span className="font-mono font-semibold">{t.soalProgress(soal ? soalIndex + 1 : kolom.soal.length, kolom.soal.length)}</span>
             {soal && <span className="text-muted"> · {t.chooseMissingLabel}</span>}
           </p>
-          <p className="shrink-0 text-label text-muted">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
+          <p className="shrink-0 text-label text-muted sm:text-small">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
         </div>
-        <div className="mx-auto mt-2 flex max-w-200 gap-1.25" aria-hidden>
+        <div className="mx-auto mt-1.5 flex max-w-200 gap-1.25" aria-hidden>
           {Array.from({ length: session.kolom_count }, (_, index) => (
-            <span key={index} className={cn("h-1 flex-1 rounded-full", index < kolom.number ? "bg-accent" : "bg-border")} />
+            <span key={index} className={cn("h-1.5 flex-1 rounded-full", index < kolom.number ? "bg-accent" : "bg-border")} />
           ))}
         </div>
-        <p className="mx-auto mt-1.5 max-w-200 text-label text-muted">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
+        <p className="mx-auto mt-1.5 max-w-200 text-label text-muted sm:text-small">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
       </div>
 
       <main className="mx-auto flex min-h-0 w-full max-w-290 flex-1 flex-col justify-center-safe overflow-y-auto px-4 py-6 text-center sm:px-6 sm:py-8">
@@ -145,11 +145,10 @@ function KolomScreen({
         )}
 
         <div className="mx-auto w-full max-w-200">
-          <p className="text-caption text-muted">{t.referenceLabel(kolom.number)}</p>
-          <div className="mt-4 grid gap-1 sm:gap-3" style={columns(labels.length, units)}>
+          <div role="group" aria-label={t.referenceLabel(kolom.number)} className="grid gap-1 sm:gap-3" style={columns(labels.length, units)}>
             {kolom.reference.map((item) => (
               <figure key={item.label} className="flex min-w-0 flex-col">
-                <figcaption className="font-mono text-2xl font-extrabold text-foreground">{item.label}</figcaption>
+                <figcaption className="font-mono text-base font-extrabold text-foreground sm:text-2xl">{item.label}</figcaption>
                 <div className="@container mt-1.5 flex flex-1 items-center justify-center rounded-tile border border-border bg-surface px-0 py-3 text-center sm:px-2">
                   <KecermatanItem elements={item.elements} fit className="item-fit font-extrabold" elementClassName="item-fit-el" />
                 </div>
@@ -159,7 +158,7 @@ function KolomScreen({
 
           {soal ? (
             <>
-              <h1 className="mt-7 font-display text-heading sm:text-hero">{t.soalPrompt}</h1>
+              <h1 className="mt-7 font-sans text-xl font-semibold tracking-normal text-foreground sm:text-2xl">{t.soalPrompt}</h1>
               <div className="mt-5 grid gap-1 sm:gap-3" style={columns(soal.shown.length, units)}>
                 {soal.shown.map((label) => (
                   <div key={label} className="@container flex min-w-0 items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-0 py-5 sm:px-2 sm:py-5.5">
@@ -176,7 +175,7 @@ function KolomScreen({
                     disabled={timeUp}
                     aria-label={t.answerAria(item.label)}
                     onClick={() => onAnswer(soal.number, item.label)}
-                    className="flex h-14 min-w-0 items-center justify-center rounded-tile border border-border bg-surface font-mono text-2xl font-extrabold text-foreground outline-none transition-colors hover:border-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 sm:h-16"
+                    className="flex h-12 min-w-0 items-center justify-center rounded-tile border border-border bg-surface font-mono text-base font-extrabold text-foreground outline-none transition-colors hover:border-accent hover:bg-accent-soft focus-visible:ring-2 focus-visible:ring-focus disabled:pointer-events-none disabled:opacity-50 sm:h-16 sm:text-2xl"
                   >
                     {item.label}
                   </button>
