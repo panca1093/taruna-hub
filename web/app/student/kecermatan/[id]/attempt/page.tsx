@@ -122,12 +122,12 @@ function KolomScreen({
           </p>
           <p className="shrink-0 text-label text-muted sm:text-small">{t.syncStatus(Math.max(0, confirmed), sending)}</p>
         </div>
-        <div className="mx-auto mt-1.5 flex max-w-200 gap-1.25 sm:mt-1.5" aria-hidden>
+        <div className="mx-auto mt-1.5 flex max-w-200 gap-1.25" aria-hidden>
           {Array.from({ length: session.kolom_count }, (_, index) => (
             <span key={index} className={cn("h-1.5 flex-1 rounded-full", index < kolom.number ? "bg-accent" : "bg-border")} />
           ))}
         </div>
-        <p className="mx-auto mt-1.5 max-w-200 text-label text-muted sm:mt-1.5 sm:text-small">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
+        <p className="mx-auto mt-1.5 max-w-200 text-label text-muted sm:text-small">{t.kolomSummary(kolom.number, session.kolom_count, doneCount)}</p>
       </div>
 
       <main className="mx-auto flex min-h-0 w-full max-w-290 flex-1 flex-col justify-center-safe overflow-y-auto px-4 py-6 text-center sm:px-6 sm:py-8">
