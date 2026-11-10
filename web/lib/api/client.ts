@@ -466,6 +466,7 @@ export const api = {
   },
   me: () => authed<ApiUser>("/api/v1/me"),
   updateProfile: (body: UpdateProfileBody) => mutate<ApiUser>("PATCH", "/api/v1/me", body),
+  setAvatar: (avatar: string | null) => mutate<ApiUser>("PUT", "/api/v1/me/avatar", { avatar }),
   changePassword: (body: ChangePasswordBody) => mutate<void>("POST", "/api/v1/me/password", body),
   forgotPassword: (email: string) => post<void>("/api/v1/auth/password/forgot", { email }),
   resetPassword: (token: string, password: string) =>

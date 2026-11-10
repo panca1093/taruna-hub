@@ -437,7 +437,7 @@ function AccountMenu() {
           { id: "/student/wallet", label: shellT.walletTransactions, hint: shellT.walletHint, icon: Wallet },
           { id: "/student/orders", label: shellT.orders, hint: shellT.ordersHint, icon: Receipt },
         ]
-      : [];
+      : [{ id: "/admin/profile", label: shellT.profile, hint: shellT.profileHint, icon: User }];
 
   return (
     <Dropdown>

@@ -29,6 +29,17 @@ type User struct {
 	CreatedAt time.Time
 	// EmailVerifiedAt is nil until the owner proves the inbox, by a code or a password reset.
 	EmailVerifiedAt *time.Time
+	// AvatarKey is the built-in avatar the user picked; nil leaves the choice to the web app.
+	AvatarKey *string
+}
+
+// ValidAvatarKey reports whether key names one of the thirty-five built-in avatars, a01 to a35.
+func ValidAvatarKey(key string) bool {
+	if len(key) != 3 || key[0] != 'a' || key[1] < '0' || key[1] > '3' || key[2] < '0' || key[2] > '9' {
+		return false
+	}
+	n := int(key[1]-'0')*10 + int(key[2]-'0')
+	return n >= 1 && n <= 35
 }
 
 const (

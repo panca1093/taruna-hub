@@ -32,7 +32,7 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-const userColumns = `id, tenant_id, name, email, phone, password_hash, role, balance::text, created_at, is_active, email_verified_at`
+const userColumns = `id, tenant_id, name, email, phone, password_hash, role, balance::text, created_at, is_active, email_verified_at, avatar_key`
 
 func (r *UserRepository) FindByID(ctx context.Context, tenantID, id uuid.UUID) (model.User, error) {
 	if tenantID == uuid.Nil {
@@ -103,6 +103,14 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, tenantID, id uuid.UU
 	row := r.db.QueryRow(ctx,
 		`UPDATE users SET name = $3, phone = $4 WHERE tenant_id = $1 AND id = $2 RETURNING `+userColumns,
 		tenantID, id, name, phone)
+	return scanUser(row)
+}
+
+// SetAvatar stores the picked avatar, or clears it with nil; platform accounts have a null tenant.
+func (r *UserRepository) SetAvatar(ctx context.Context, tenantID *uuid.UUID, id uuid.UUID, key *string) (model.User, error) {
+	row := r.db.QueryRow(ctx,
+		`UPDATE users SET avatar_key = $3 WHERE id = $1 AND tenant_id IS NOT DISTINCT FROM $2 RETURNING `+userColumns,
+		id, tenantID, key)
 	return scanUser(row)
 }
 
@@ -187,7 +195,7 @@ type scannable interface {
 func scanUser(row scannable) (model.User, error) {
 	var u model.User
 	err := row.Scan(&u.ID, &u.TenantID, &u.Name, &u.Email, &u.Phone, &u.PasswordHash, &u.Role, &u.Balance, &u.CreatedAt, &u.IsActive,
-		&u.EmailVerifiedAt)
+		&u.EmailVerifiedAt, &u.AvatarKey)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.User{}, ErrNotFound
 	}

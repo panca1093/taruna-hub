@@ -14,6 +14,10 @@ type updateProfileRequest struct {
 	Phone string `json:"phone"`
 }
 
+type setAvatarRequest struct {
+	Avatar *string `json:"avatar"`
+}
+
 type changePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
@@ -40,6 +44,23 @@ func (h *Handler) UpdateMe(c echo.Context) error {
 		return err
 	}
 	updated, err := h.account.UpdateProfile(c.Request().Context(), scope, principal, req.Name, req.Phone)
+	if err != nil {
+		return accountError(c, err)
+	}
+	return c.JSON(http.StatusOK, newUserResponse(updated))
+}
+
+// SetAvatar stores the caller's pick from the built-in avatars; null goes back to the automatic one.
+func (h *Handler) SetAvatar(c echo.Context) error {
+	principal, signedIn := PrincipalFrom(c)
+	if !signedIn {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	var req setAvatarRequest
+	if err := bindStrict(c, &req); err != nil {
+		return err
+	}
+	updated, err := h.account.SetAvatar(c.Request().Context(), principal, req.Avatar)
 	if err != nil {
 		return accountError(c, err)
 	}

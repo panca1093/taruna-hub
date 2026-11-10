@@ -704,6 +704,55 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose the signed-in user's avatar
+         * @description Every role, including staff: unlike `PATCH /me` this changes nothing but the picture. `avatar` is one of
+         *     the thirty-five built-in keys `a01` to `a35`, or `null` to go back to the avatar the web app picks from the
+         *     name. Any other value is `422` with `fields.avatar`. The caller is the principal, so no id travels in the
+         *     path or body.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetAvatarRequest"];
+                };
+            };
+            responses: {
+                /** @description The updated caller */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["User"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                404: components["responses"]["NotFound"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/password": {
         parameters: {
             query?: never;
@@ -7181,6 +7230,14 @@ export interface components {
              */
             phone?: string;
         };
+        /**
+         * @description A built-in avatar, `a01` to `a35`; `null` when the user has not picked one.
+         * @example a03
+         */
+        AvatarKey: string | null;
+        SetAvatarRequest: {
+            avatar: components["schemas"]["AvatarKey"];
+        };
         ChangePasswordRequest: {
             /** Format: password */
             current_password: string;
@@ -7194,6 +7251,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            avatar: components["schemas"]["AvatarKey"];
             /** @description Null when the account was created with a phone number only. */
             email: string | null;
             /** @description Null when the account was created with an email only. */

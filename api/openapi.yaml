@@ -480,6 +480,37 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /api/v1/me/avatar:
+    put:
+      tags: [auth]
+      summary: Choose the signed-in user's avatar
+      description: |
+        Every role, including staff: unlike `PATCH /me` this changes nothing but the picture. `avatar` is one of
+        the thirty-five built-in keys `a01` to `a35`, or `null` to go back to the avatar the web app picks from the
+        name. Any other value is `422` with `fields.avatar`. The caller is the principal, so no id travels in the
+        path or body.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvatarRequest"
+      responses:
+        "200":
+          description: The updated caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
   /api/v1/me/password:
     post:
       tags: [auth]
@@ -5369,6 +5400,21 @@ components:
           description: Optional. Same forms as on register, stored as E.164. Empty clears it.
           example: 0812-3456-7890
 
+    AvatarKey:
+      type: string
+      nullable: true
+      pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+      description: A built-in avatar, `a01` to `a35`; `null` when the user has not picked one.
+      example: a03
+
+    SetAvatarRequest:
+      type: object
+      additionalProperties: false
+      required: [avatar]
+      properties:
+        avatar:
+          $ref: "#/components/schemas/AvatarKey"
+
     ChangePasswordRequest:
       type: object
       additionalProperties: false
@@ -5386,13 +5432,15 @@ components:
     User:
       type: object
       additionalProperties: false
-      required: [id, name, email, phone, role, email_verified]
+      required: [id, name, avatar, email, phone, role, email_verified]
       properties:
         id:
           type: string
           format: uuid
         name:
           type: string
+        avatar:
+          $ref: "#/components/schemas/AvatarKey"
         email:
           type: string
           nullable: true
