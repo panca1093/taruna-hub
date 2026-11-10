@@ -99,6 +99,13 @@ the stored counts; a revised formula becomes version 2 in `ScoreKecermatan`. It 
 The review returns the N/2 generated columns and, per kolom, the column it replayed and its stored answers, so an
 attempt is reproduced exactly.
 
+The overview's `progress` is the student's standing on the test: `nilai_gabungan` is the plain average of
+`nilai_akhir` over the five most recent completed attempts (fewer when fewer exist), `nilai_gabungan_previous` the
+same average before the latest attempt, and `kecepatan` / `ketahanan` / `ketelitian` the averages of those same
+attempts, all rounded to two decimals. It is computed on read from the stored results and is `null` before the
+first completion. The student result page shows this summary and each attempt's per-kolom counts; it no longer
+shows the review, though the `/review` route still exists.
+
 ## Known limits
 
 Image items: `GET /assets/{id}/url` also serves a student an `item_image` asset when their own attempt shows it: in an

@@ -1,65 +1,157 @@
 "use client";
 
 import { Suspense, use, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@heroui/react";
-import { ArrowRight, CloudOff } from "lucide-react";
+import { ArrowRight, ChevronDown, CloudOff, Crosshair, Gauge, Mountain, TrendingDown, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { ProgressLineChart } from "@/components/charts";
 import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/icon";
-import { KecermatanItem } from "@/components/kecermatan-item";
-import { NoteBox, Panel, SectionHeader } from "@/components/page-blocks";
-import { StatusChip } from "@/components/status-badge";
+import { NoteBox, Panel } from "@/components/page-blocks";
 import { LinkButton } from "@/components/ui/link-button";
-import { ApiError, api, type KecermatanOverview, type KecermatanReview } from "@/lib/api/client";
+import { ApiError, api, type KecermatanOverview, type KecermatanResult } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { useKecermatanResultT } from "@/lib/i18n/dict/kecermatan-result";
 
 type LoadState = "loading" | "ready" | "failed";
 
-const PAGE_SIZE = 10;
+const formatDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+function AttemptRecap({ sessionId }: { sessionId: string }) {
+  const t = useKecermatanResultT();
+  const [result, setResult] = useState<KecermatanResult | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.kecermatanRuntime
+      .result(sessionId)
+      .then((data) => {
+        if (!cancelled) setResult(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, reloadKey]);
+
+  if (failed) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 pb-5 text-caption text-muted" role="alert">
+        {t.attemptLoadError}
+        <Button
+          size="sm"
+          variant="secondary"
+          onPress={() => {
+            setFailed(false);
+            setReloadKey((key) => key + 1);
+          }}
+        >
+          {t.retry}
+        </Button>
+      </div>
+    );
+  }
+  if (!result) return <p className="pb-5 text-caption text-muted">{t.loadingAttempt}</p>;
+
+  const scores = [
+    { label: t.scoreKecepatan, value: result.scores.kecepatan },
+    { label: t.scoreKetelitian, value: result.scores.ketelitian },
+    { label: t.scoreKetahanan, value: result.scores.ketahanan },
+  ];
+  const cell = "border-b border-border px-2.5 py-3";
+
+  return (
+    <div className="grid items-start gap-7 pb-6 lg:grid-cols-detail">
+      <p className="flex flex-wrap gap-x-6 gap-y-1 text-small text-muted tabular-nums lg:col-span-2">
+        {scores.map((score) => (
+          <span key={score.label}>
+            {score.label} <strong className="font-semibold text-foreground">{score.value}</strong>
+          </span>
+        ))}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-64 border-collapse text-caption">
+          <thead>
+            <tr>
+              <th className={cn(cell, "text-left text-micro font-medium text-muted")}>{t.kolomColumn}</th>
+              <th className={cn(cell, "text-right text-micro font-medium text-muted")}>{t.benar}</th>
+              <th className={cn(cell, "text-right text-micro font-medium text-muted")}>{t.salah}</th>
+              <th className={cn(cell, "text-right text-micro font-medium text-muted")}>{t.kosong}</th>
+            </tr>
+          </thead>
+          <tbody className="tabular-nums">
+            {result.kolom.map((k) => (
+              <tr key={k.number}>
+                <td className={cn(cell, "text-left")}>{k.number}</td>
+                <td className={cn(cell, "text-right")}>{k.benar}</td>
+                <td className={cn(cell, "text-right")}>{k.salah}</td>
+                <td className={cn(cell, "text-right")}>{k.kosong}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="font-semibold tabular-nums">
+            <tr>
+              <td className="px-2.5 py-3 text-left">{t.total}</td>
+              <td className="px-2.5 py-3 text-right">{result.benar_total}</td>
+              <td className="px-2.5 py-3 text-right">{result.salah_total}</td>
+              <td className="px-2.5 py-3 text-right">{result.kosong_total}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div>
+        <p className="text-label text-muted">{t.correctPerKolomTitle}</p>
+        <div className="mt-3 flex h-34 items-end gap-1.5 sm:gap-2.5">
+          {result.kolom.map((k) => {
+            const total = k.benar + k.salah + k.kosong;
+            return (
+              <div key={k.number} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2 text-micro text-muted tabular-nums" title={t.barLabel(k.number, k.benar)}>
+                <span>{k.benar}</span>
+                <span className="flex min-h-0 w-full flex-1 items-end justify-center">
+                  <span className="block min-h-0.5 w-full max-w-9 rounded-t-chip bg-rose" style={{ height: `${total > 0 ? Math.max(2, (k.benar / total) * 100) : 2}%` }} />
+                </span>
+                <span>{k.number}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ResultContent({ testId }: { testId: string }) {
   const router = useRouter();
   const t = useKecermatanResultT();
   const attemptParam = useSearchParams().get("attempt");
-  const [review, setReview] = useState<KecermatanReview | null>(null);
   const [overview, setOverview] = useState<KecermatanOverview | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [reloadKey, setReloadKey] = useState(0);
-  const [kolomPick, setKolomPick] = useState(1);
-  const [page, setPage] = useState(0);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
-      const overviewRequest = api.kecermatanRuntime.overview(testId).catch(() => null);
-      let sessionId = attemptParam;
-      if (!sessionId) {
-        const current = await overviewRequest;
-        sessionId = current?.attempts.find((attempt) => attempt.status === "completed")?.session_id ?? null;
-      }
-      if (!sessionId) throw new ApiError(404, { code: "not_found", message: "" });
-      const [result, detail, list] = await Promise.all([
-        api.kecermatanRuntime.result(sessionId),
-        api.kecermatanRuntime.review(sessionId),
-        overviewRequest,
-      ]);
-      return { review: { ...detail, result: { ...detail.result, kolom: result.kolom } }, list };
-    };
-    load()
+    api.kecermatanRuntime
+      .overview(testId)
       .then((data) => {
         if (cancelled) return;
-        setReview(data.review);
-        setOverview(data.list);
-        setKolomPick(1);
-        setPage(0);
+        const completed = data.attempts.filter((attempt) => attempt.status === "completed");
+        if (!data.progress || completed.length === 0) {
+          router.replace(`/student/kecermatan/${testId}`);
+          return;
+        }
+        setOverview(data);
+        setOpenId(completed.find((attempt) => attempt.session_id === attemptParam)?.session_id ?? completed[0].session_id);
         setState("ready");
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        if (err instanceof ApiError && (err.status === 404 || err.code === "kecermatan_result_not_ready")) {
+        if (err instanceof ApiError && err.status === 404) {
           router.replace(`/student/kecermatan/${testId}`);
           return;
         }
@@ -94,7 +186,7 @@ function ResultContent({ testId }: { testId: string }) {
     );
   }
 
-  if (state === "loading" || !review) {
+  if (state === "loading" || !overview?.progress) {
     return (
       <AppShell title={t.pageTitle}>
         <p className="py-14 text-center text-sm text-muted">{t.loadingResult}</p>
@@ -102,228 +194,130 @@ function ResultContent({ testId }: { testId: string }) {
     );
   }
 
-  const { result } = review;
-  const counts = [
-    { label: t.benar, value: result.benar_total },
-    { label: t.salah, value: result.salah_total },
-    { label: t.kosong, value: result.kosong_total },
+  const { test, progress } = overview;
+  const completed = overview.attempts.filter((attempt) => attempt.status === "completed");
+  const counted = completed.slice(0, progress.attempts_counted);
+  const countedIds = new Set(counted.map((attempt) => attempt.session_id));
+  const delta = progress.nilai_gabungan_previous === null ? 0 : Math.round((progress.nilai_gabungan - progress.nilai_gabungan_previous) * 100) / 100;
+  const averages = [
+    { label: t.scoreKecepatan, value: progress.kecepatan, icon: Gauge, tile: "bg-viz-blue-soft", tone: "text-viz-blue" },
+    { label: t.scoreKetelitian, value: progress.ketelitian, icon: Crosshair, tile: "bg-viz-green-soft", tone: "text-viz-green" },
+    { label: t.scoreKetahanan, value: progress.ketahanan, icon: Mountain, tile: "bg-viz-amber-soft", tone: "text-viz-amber" },
   ];
-  const scoreCards = [
-    { label: t.scoreKecepatan, value: result.scores.kecepatan },
-    { label: t.scoreKetelitian, value: result.scores.ketelitian },
-    { label: t.scoreKetahanan, value: result.scores.ketahanan },
-  ];
-  const completedAttempts = overview?.attempts.filter((attempt) => attempt.status === "completed") ?? [];
-  const completedOn = new Date(result.completed_at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  const points = [...completed].reverse().map((attempt) => ({
+    key: attempt.session_id,
+    label: String(attempt.attempt_number),
+    value: attempt.nilai_akhir ?? 0,
+    counted: countedIds.has(attempt.session_id),
+  }));
+  const canStart = overview.current !== null || test.attempts_remaining > 0;
 
-  const picked = review.kolom.find((item) => item.number === kolomPick) ?? review.kolom[0];
-  const column = picked ? review.columns[picked.source_column - 1] : undefined;
-  const soalTotal = column?.soal.length ?? 0;
-  const pageCount = Math.max(1, Math.ceil(soalTotal / PAGE_SIZE));
-  const from = page * PAGE_SIZE;
-  const to = Math.min(soalTotal, from + PAGE_SIZE);
-  const statusLabel = { benar: t.statusBenar, salah: t.statusSalah, kosong: t.statusKosong };
-  const statusTone = { benar: "success", salah: "danger", kosong: "neutral" } as const;
-  const statTile = "rounded-tile border border-border bg-surface p-4 sm:p-5.5";
+  const selectFromChart = (sessionId: string) => {
+    setOpenId(sessionId);
+    document.getElementById(`attempt-${sessionId}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
 
   return (
     <AppShell
       title={t.heading}
-      description={`${result.test_title} · ${completedOn}`}
+      description={`${test.title} · ${t.attemptsDone(completed.length)}`}
       breadcrumb={[{ label: t.crumbDashboard, href: "/student" }, { label: t.crumbResult }]}
       actions={
-        <LinkButton href="#pembahasan" variant="primary">
-          {t.reviewCta} <Icon icon={ArrowRight} size="sm" />
-        </LinkButton>
+        canStart ? (
+          <LinkButton href={`/student/kecermatan/${testId}/attempt`} variant="primary">
+            {t.tryAgainCta} <Icon icon={ArrowRight} size="sm" />
+          </LinkButton>
+        ) : undefined
       }
     >
       <div className="space-y-6">
         <div className="grid gap-5 sm:gap-7.5 md:grid-cols-score">
           <Panel tone="peach" radius="hero" className="flex flex-col items-center justify-center text-center">
-            <p className="text-label text-foreground/80">{t.nilaiAkhirLabel(result.attempt_number)}</p>
-            <p className="my-5 font-display text-score tabular-nums">{result.scores.nilai_akhir}</p>
-            <p className="text-label text-foreground/80">{t.outOf100}</p>
-          </Panel>
-          <div className="grid content-start gap-4">
-            <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
-              {counts.map((item) => (
-                <div key={item.label} className={statTile}>
-                  <p className="font-display text-metric tabular-nums sm:text-hero">{item.value}</p>
-                  <p className="mt-1.5 text-micro text-muted">{item.label}</p>
-                </div>
-              ))}
-            </div>
-            <Panel>
-              <h2 className="font-display mb-3 text-heading-sm">{t.insightTitle}</h2>
-              <p className="text-caption leading-loose text-muted">{t.insightBody}</p>
-            </Panel>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
-          {scoreCards.map((item) => (
-            <div key={item.label} className={statTile}>
-              <p className="font-display text-metric tabular-nums sm:text-hero">{item.value}</p>
-              <p className="mt-1.5 text-micro text-muted">{item.label}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid items-start gap-7 lg:grid-cols-detail">
-          <Panel>
-            <h2 className="font-display mb-3 text-heading-sm">{t.perKolomTitle}</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-80 border-collapse text-caption">
-                <thead>
-                  <tr>
-                    <th className="border-b border-border px-2.5 py-3 text-left text-micro font-medium text-muted">{t.kolomColumn}</th>
-                    <th className="border-b border-border px-2.5 py-3 text-right text-micro font-medium text-muted">{t.benar}</th>
-                    <th className="border-b border-border px-2.5 py-3 text-right text-micro font-medium text-muted">{t.salah}</th>
-                    <th className="border-b border-border px-2.5 py-3 text-right text-micro font-medium text-muted">{t.kosong}</th>
-                  </tr>
-                </thead>
-                <tbody className="tabular-nums">
-                  {result.kolom.map((k) => (
-                    <tr key={k.number}>
-                      <td className="border-b border-border px-2.5 py-3.25 text-left">{k.number}</td>
-                      <td className="border-b border-border px-2.5 py-3.25 text-right">{k.benar}</td>
-                      <td className="border-b border-border px-2.5 py-3.25 text-right">{k.salah}</td>
-                      <td className="border-b border-border px-2.5 py-3.25 text-right">{k.kosong}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
-
-          <Panel>
-            <h2 className="font-display mb-3 text-heading-sm">{t.correctPerKolomTitle}</h2>
-            <div className="mt-4 flex h-34 items-end gap-1.5 sm:gap-2.5">
-              {result.kolom.map((k) => {
-                const total = k.benar + k.salah + k.kosong;
-                return (
-                  <div key={k.number} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2 text-micro text-muted tabular-nums" title={t.barLabel(k.number, k.benar)}>
-                    <span>{k.benar}</span>
-                    <span className="flex min-h-0 w-full flex-1 items-end justify-center">
-                      <span className="block min-h-0.5 w-full max-w-9 rounded-t-chip bg-rose" style={{ height: `${total > 0 ? Math.max(2, (k.benar / total) * 100) : 2}%` }} />
-                    </span>
-                    <span>{k.number}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {overview && <NoteBox className="mt-5">{t.quotaLeft(overview.test.attempts_remaining)}</NoteBox>}
-          </Panel>
-        </div>
-
-        {completedAttempts.length > 1 && (
-          <div>
-            <p className="mb-3 text-small font-medium">{t.historyTitle}</p>
-            <div className="flex flex-wrap gap-2">
-              {completedAttempts.map((attempt) => (
-                <Link
-                  key={attempt.session_id}
-                  href={`/student/kecermatan/${testId}/result?attempt=${attempt.session_id}`}
-                  aria-current={attempt.session_id === result.session_id ? "page" : undefined}
-                  className={cn(
-                    "inline-flex min-h-9 items-center rounded-full border px-3.5 text-label outline-none transition-colors focus-visible:ring-2 focus-visible:ring-focus",
-                    attempt.session_id === result.session_id
-                      ? "border-accent bg-accent text-accent-foreground"
-                      : "border-border bg-surface text-muted hover:text-foreground",
-                  )}
-                >
-                  {t.attemptLabel(attempt.attempt_number)} · {attempt.nilai_akhir}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {picked && column && (
-          <section id="pembahasan" className="scroll-mt-6 space-y-5">
-            <SectionHeader title={t.pembahasanTitle} />
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2.5 text-caption text-muted">
-                {t.chooseKolom}
-                <select
-                  value={picked.number}
-                  onChange={(event) => {
-                    setKolomPick(Number(event.target.value));
-                    setPage(0);
-                  }}
-                  className="min-h-10 rounded-control border border-border bg-surface px-3 text-small text-foreground outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                >
-                  {review.kolom.map((item) => (
-                    <option key={item.number} value={item.number}>
-                      {t.kolomLabel(item.number)} · {t.correctOfTotal(item.benar, item.benar + item.salah + item.kosong)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <span className="rounded-full border border-border bg-surface px-3 py-1.5 text-label text-muted">{t.rangeLabel(from + 1, to, soalTotal)}</span>
-            </div>
-
-            <Panel tone="canvas" radius="tile">
-              <p className="mb-3 text-label text-muted">{t.referenceTitle}</p>
-              <div className="flex flex-wrap gap-2">
-                {column.reference.map((item) => (
-                  <div key={item.label} className="min-w-20 rounded-tile border border-border bg-surface px-2 py-2.5 text-center">
-                    <p className="text-label text-muted">{item.label}</p>
-                    <KecermatanItem elements={item.elements} className="mt-1.5 text-lg font-extrabold" elementClassName="size-5" />
-                  </div>
-                ))}
-              </div>
-            </Panel>
-
-            <Panel>
-              {column.soal.slice(from, to).map((soal, offset) => {
-                const index = from + offset;
-                const given = picked.answers[index] ?? null;
-                const status = given === null ? "kosong" : given === soal.missing ? "benar" : "salah";
-                const labelItems = (label: string | null) => column.reference.find((item) => item.label === label)?.elements ?? [];
-                return (
-                  <article key={index} className="border-b border-border py-6 first:pt-0 last:border-0 last:pb-0">
-                    <StatusChip tone={statusTone[status]} className="mb-3">
-                      {statusLabel[status]}
-                    </StatusChip>
-                    <h3 className="text-small font-medium">{t.soalTitle(index + 1)}</h3>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-caption text-muted">
-                      {t.shownLabel}
-                      {soal.shown.map((label) => (
-                        <span key={label} className="rounded-chip border border-dashed border-rose px-2 py-1">
-                          <KecermatanItem elements={labelItems(label)} className="text-base font-extrabold" elementClassName="size-5" />
-                        </span>
-                      ))}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-caption text-muted">
-                      <p className="flex items-center gap-2">
-                        {t.yourAnswerLabel}
-                        <strong className="font-mono font-semibold text-foreground">{given ?? t.blankAnswer}</strong>
-                        {given && <KecermatanItem elements={labelItems(given)} className="text-sm" elementClassName="size-4" />}
-                      </p>
-                      <p className="flex items-center gap-2">
-                        {t.correctAnswerLabel}
-                        <strong className="font-mono font-semibold text-foreground">{soal.missing}</strong>
-                        <KecermatanItem elements={labelItems(soal.missing)} className="text-sm" elementClassName="size-4" />
-                      </p>
-                    </div>
-                  </article>
-                );
-              })}
-            </Panel>
-
-            {pageCount > 1 && (
-              <div className="flex flex-wrap items-center gap-3.5">
-                <Button size="sm" variant="secondary" isDisabled={page === 0} onPress={() => setPage((current) => current - 1)}>
-                  {t.prev}
-                </Button>
-                <Button size="sm" variant="primary" isDisabled={page >= pageCount - 1} onPress={() => setPage((current) => current + 1)}>
-                  {t.next}
-                </Button>
-              </div>
+            <p className="text-label text-foreground/80">{t.combinedLabel(progress.attempts_counted)}</p>
+            <p className="mt-5 mb-4 font-display text-score tabular-nums">{progress.nilai_gabungan}</p>
+            {delta !== 0 && (
+              <p className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-label font-medium whitespace-nowrap tabular-nums", delta > 0 ? "bg-viz-green-soft" : "bg-danger-soft")}>
+                <Icon icon={delta > 0 ? TrendingUp : TrendingDown} size="sm" className={delta > 0 ? "text-viz-green" : "text-danger"} />
+                {delta > 0 ? t.trendUp(delta) : t.trendDown(-delta)}
+              </p>
             )}
-          </section>
-        )}
+          </Panel>
+          <Panel>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+              <h2 className="font-display text-heading-sm">{t.chartTitle}</h2>
+              <p className="flex flex-wrap gap-x-4 gap-y-1 text-micro text-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="size-2 rounded-full bg-viz-blue" />
+                  {t.legendCounted}
+                </span>
+                {completed.length > counted.length && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="size-2 rounded-full border border-rose bg-surface" />
+                    {t.legendOlder}
+                  </span>
+                )}
+              </p>
+            </div>
+            <ProgressLineChart
+              className="mt-4"
+              points={points}
+              selectedKey={openId}
+              onSelect={selectFromChart}
+              pointLabel={(point) => t.chartPointLabel(Number(point.label), point.value)}
+            />
+          </Panel>
+        </div>
+
+        <div>
+          <p className="mb-3 text-small text-muted">{t.averagesCaption(progress.attempts_counted)}</p>
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+            {averages.map((item) => (
+              <div key={item.label} className={cn("rounded-tile p-4 sm:p-5.5", item.tile)}>
+                <Icon icon={item.icon} size="md" className={cn("mb-3", item.tone)} />
+                <p className="font-display text-metric tabular-nums sm:text-hero">{item.value}</p>
+                <p className="mt-1.5 text-small text-foreground/80">{item.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Panel>
+          <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="font-display text-heading-sm">{t.attemptsTitle}</h2>
+            <p className="text-caption text-muted">{t.attemptsHint}</p>
+          </div>
+          {completed.map((attempt) => {
+            const open = attempt.session_id === openId;
+            return (
+              <div key={attempt.session_id} id={`attempt-${attempt.session_id}`} className="scroll-mt-6 border-b border-border last:border-0">
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-controls={`recap-${attempt.session_id}`}
+                  onClick={() => setOpenId(open ? null : attempt.session_id)}
+                  className="flex w-full items-center gap-4 rounded-chip py-4 text-left text-caption outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                >
+                  <span className="min-w-0 flex-1">
+                    {t.attemptLabel(attempt.attempt_number)}
+                    {attempt.completed_at && <small className="mt-0.5 block text-micro text-muted">{formatDate(attempt.completed_at)}</small>}
+                  </span>
+                  {countedIds.has(attempt.session_id) && (
+                    <span className="hidden rounded-full bg-accent-soft px-2.5 py-0.5 text-micro text-accent-soft-foreground sm:inline">{t.countedChip}</span>
+                  )}
+                  <span className="font-display text-metric tabular-nums">{attempt.nilai_akhir}</span>
+                  <Icon icon={ChevronDown} size="sm" className={cn("text-muted transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+                </button>
+                {open && (
+                  <div id={`recap-${attempt.session_id}`}>
+                    <AttemptRecap sessionId={attempt.session_id} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </Panel>
+
+        <NoteBox>{t.quotaLeft(test.attempts_remaining)}</NoteBox>
 
         <div className="flex flex-wrap items-center gap-3.5">
           <LinkButton href={`/student/kecermatan/${testId}`} variant="secondary">

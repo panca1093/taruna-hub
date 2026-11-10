@@ -96,7 +96,6 @@ export type KecermatanKolom = components["schemas"]["KecermatanKolom"];
 export type KecermatanReference = components["schemas"]["KecermatanReference"];
 export type KecermatanRuntimeElement = components["schemas"]["KecermatanRuntimeElement"];
 export type KecermatanResult = components["schemas"]["KecermatanResult"];
-export type KecermatanReview = components["schemas"]["KecermatanReview"];
 export type KecermatanAnswerAck = components["schemas"]["KecermatanAnswerAck"];
 export type KecermatanStaffResult = components["schemas"]["KecermatanStaffResult"];
 export type KecermatanStaffResultList = components["schemas"]["KecermatanStaffResultList"];
@@ -717,7 +716,6 @@ export const api = {
         { answer },
       ),
     result: (id: string) => authed<KecermatanResult>(`/api/v1/my/kecermatan-sessions/${id}/result` as keyof paths),
-    review: (id: string) => authed<KecermatanReview>(`/api/v1/my/kecermatan-sessions/${id}/review` as keyof paths),
   },
 
   /** Staff monitoring: tryout sessions in progress, and any session's violation timeline (also after it ended). */

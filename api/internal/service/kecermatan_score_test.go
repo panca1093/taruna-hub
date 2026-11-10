@@ -4,6 +4,8 @@ import (
 	"errors"
 	"math"
 	"testing"
+
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
 func uniformKolom(n int, c KecermatanKolomCount) []KecermatanKolomCount {
@@ -167,5 +169,32 @@ func TestRound2(t *testing.T) {
 		if got := roundScore2(in); got != want || math.Signbit(got) {
 			t.Errorf("roundScore2(%v) = %v, want %v", in, got, want)
 		}
+	}
+}
+
+func TestKecProgressOf(t *testing.T) {
+	attempt := func(nilai float64) model.KecAttempt {
+		kec, tah, tel := nilai+1, nilai+2, nilai+3
+		return model.KecAttempt{NilaiAkhir: &nilai, Kecepatan: &kec, Ketahanan: &tah, Ketelitian: &tel}
+	}
+	if got := kecProgressOf([]model.KecAttempt{{}}); got != nil {
+		t.Fatalf("no completed attempt: got %+v, want nil", got)
+	}
+
+	first := kecProgressOf([]model.KecAttempt{{}, attempt(40)})
+	if first == nil || first.AttemptsCounted != 1 || first.NilaiGabungan != 40 || first.NilaiGabunganPrevious != nil {
+		t.Fatalf("one completed attempt: got %+v", first)
+	}
+
+	// Newest first: 72.3 … 55.6 are counted, 48.2 only feeds the previous window.
+	got := kecProgressOf([]model.KecAttempt{attempt(72.3), attempt(67.9), attempt(58.4), attempt(61), attempt(55.6), attempt(48.2)})
+	if got.AttemptsCounted != 5 || got.NilaiGabungan != 63.04 {
+		t.Fatalf("combined: got %d attempts, %v; want 5, 63.04", got.AttemptsCounted, got.NilaiGabungan)
+	}
+	if got.NilaiGabunganPrevious == nil || *got.NilaiGabunganPrevious != 58.22 {
+		t.Fatalf("previous: got %v, want 58.22", got.NilaiGabunganPrevious)
+	}
+	if got.Kecepatan != 64.04 || got.Ketahanan != 65.04 || got.Ketelitian != 66.04 {
+		t.Fatalf("composites: got %v/%v/%v", got.Kecepatan, got.Ketahanan, got.Ketelitian)
 	}
 }

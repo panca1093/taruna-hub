@@ -72,6 +72,7 @@ Each numeric triplet is wrapped in `oklch(...)` in CSS. Success, warning and dan
 | `ring-start`, `ring-end` | Same values as `accent`, `accent-2` (plum to rose) | Gradient identity |
 | `backdrop` | Light `oklch(0.2 0.02 335 / 45%)`; dark `oklch(0 0 0 / 65%)` | Modal / drawer dimming |
 | `bg-gradient-ring`, `text-gradient` | `linear-gradient(135deg, var(--ring-start), var(--ring-end))` | Supporting brand emphasis |
+| `viz-blue`, `viz-green`, `viz-amber` and their `-soft` pairs | Brighter data colours outside the rose palette, light and dark values in `globals.css` | Progress chart line/fill and metric tiles on the kecermatan result only. The strong colour is for marks and icons, never small text (below 4.5:1); text on a `-soft` tile uses `foreground` or `foreground/80` |
 | `bg-grid` | 1px `border` lines every 32px | Landing background |
 | Text selection | Accent at 30% mixed with transparent | Selected text |
 
@@ -367,8 +368,9 @@ Toasts are provided globally at `bottom end`. Use them for concise action outcom
 | `BarChart` | 160px area; 10px bar gaps; gradient bars; 10px mono labels; hover values | Compare categories; include readable values outside hover |
 | `DonutStat` | 140px diameter; 16px stroke; 20px legend gap; 12px labels/counts | Show a small set of part-to-whole statuses; always retain counts |
 | `Sparkline` | Default 160×40px; 2px accent line; fading fill | Supplement a KPI with a trend, not an unexplained standalone graph |
+| `ProgressLineChart` | 176px plot on a fixed 0–100 scale with 25-step grid lines; 3px `viz-blue` line with a fading area fill and 12px dots; the trailing `counted` points sit on a `viz-blue-soft` band, earlier ones are hollow `rose` dots on a dashed line; each point is a button with its value above and its label below | Show a score across ordered attempts. Values stay visible (above ten points only the counted ones); the same values must also appear as text near the chart |
 | `CountdownRing` | Default 120px; 8px stroke; clamps value to 0–100; rounded ends | Show explicit time/score/progress text and what it represents |
-| `KecermatanItem` | Inline; text kinds read as one mono string, emoji/shape/image draw each element at `size-5` via `ItemElementView` | One kecermatan reference or shown item in the attempt and the review; never show a missing-item marker |
+| `KecermatanItem` | Inline; text kinds read as one mono string, emoji/shape/image draw each element at `size-5` via `ItemElementView` | One kecermatan reference or shown item in the attempt; never show a missing-item marker |
 
 The ring uses `ring-start` → `ring-end`; `urgent` changes the stroke to danger. The caller determines urgency. Product timer policy must come from the exam specification, not a new visual threshold invented per screen.
 
@@ -505,6 +507,7 @@ Built 2026-10-31 from the [workspace handoff](new-student-workspace/HANDOFF.md).
   - Pending or offline answers say they are not yet saved, with an offline banner (`warning-soft`, `role="alert"`).
   - Kecermatan answers are write-once. When retries are exhausted, a persistent banner offers a manual resend. On a 409 the server's value wins and the page refetches.
 - **Attempt addressing.** Tryout and Kecermatan results, and tryout review, are addressed by `?attempt=<session_id>`.
+- **Kecermatan result.** `/student/kecermatan/:id/result` summarises every completed attempt of the test, not one attempt, and has no review (pembahasan). Order: `peach` hero card with the combined score (average of the last five completed attempts, from the API, shown without a "/ 100" suffix) and a trend chip for its change from the previous window (`viz-green-soft` with a `viz-green` icon when up, `danger-soft` with a `danger` icon when down); `ProgressLineChart` of `nilai_akhir` per attempt; three borderless tinted tiles (`viz-blue-soft`, `viz-green-soft`, `viz-amber-soft`, each with an icon in the strong colour and a 13px label) with the Kecepatan / Ketelitian / Ketahanan averages of the same attempts; then one disclosure row per attempt (button with `aria-expanded`, one open at a time, the latest or the `?attempt=` one open on load) holding that attempt's three scores, per-kolom Benar / Salah / Kosong table with totals, and the correct-per-kolom bars, loaded when opened.
   - A foreign or unknown id shows an unavailable state, and an unfinished attempt a not-ready state.
   - Held explanations show a held state, and keys are never requested before `explanations_released`.
 - **Payment method selector.** A radiogroup of full-width rows: radio dot, icon, title and one-line description. The selected row uses `border-accent bg-accent-soft`. An unavailable method is disabled with an explanation, or not rendered when the gateway reports 503.

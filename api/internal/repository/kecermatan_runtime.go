@@ -475,7 +475,8 @@ func (r *KecermatanRuntimeRepository) ListResults(ctx context.Context, tenantID 
 // Attempts is a student's history on one test, newest first.
 func (r *KecermatanRuntimeRepository) Attempts(ctx context.Context, q dbtx, tenantID, userID, testID uuid.UUID) ([]model.KecAttempt, error) {
 	rows, err := q.Query(ctx, `
-		SELECT s.id, s.attempt_number, s.status, s.started_at, s.completed_at, r.nilai_akhir::float8
+		SELECT s.id, s.attempt_number, s.status, s.started_at, s.completed_at, r.nilai_akhir::float8,
+		       r.kecepatan::float8, r.ketahanan::float8, r.ketelitian::float8
 		  FROM kecermatan_sessions s LEFT JOIN kecermatan_results r ON r.session_id = s.id
 		 WHERE s.tenant_id = $1 AND s.user_id = $2 AND s.test_id = $3
 		 ORDER BY s.attempt_number DESC`, tenantID, userID, testID)
@@ -486,7 +487,8 @@ func (r *KecermatanRuntimeRepository) Attempts(ctx context.Context, q dbtx, tena
 	out := []model.KecAttempt{}
 	for rows.Next() {
 		var a model.KecAttempt
-		if err := rows.Scan(&a.SessionID, &a.AttemptNumber, &a.Status, &a.StartedAt, &a.CompletedAt, &a.NilaiAkhir); err != nil {
+		if err := rows.Scan(&a.SessionID, &a.AttemptNumber, &a.Status, &a.StartedAt, &a.CompletedAt, &a.NilaiAkhir,
+			&a.Kecepatan, &a.Ketahanan, &a.Ketelitian); err != nil {
 			return nil, fmt.Errorf("scan kecermatan attempt: %w", err)
 		}
 		out = append(out, a)

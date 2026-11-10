@@ -6353,6 +6353,8 @@ export interface paths {
          * @description Student only. A test the student holds no credits for answers `404`. `current` is the attempt in progress
          *     (timeline already settled), `attempts` is the history newest first, `product_id` is a product the student
          *     can buy more attempts from, or `null` when none is on sale.
+         *     `progress` summarises the completed attempts: the combined score is the plain average of the `nilai_akhir`
+         *     of the five most recent completed attempts (fewer when fewer exist); `null` before the first completion.
          */
         get: {
             parameters: {
@@ -8998,8 +9000,23 @@ export interface components {
             /** @description Provisional composite (D03); `null` until completed. */
             nilai_akhir: number | null;
         };
+        /**
+         * @description Averages over the most recent completed attempts, at most five, each rounded to two decimals. They are
+         *     built on the provisional composite scores (D03).
+         */
+        KecermatanProgress: {
+            attempts_counted: number;
+            /** @description Average `nilai_akhir` of the counted attempts. */
+            nilai_gabungan: number;
+            /** @description The same average as it stood before the latest completed attempt; `null` on the first. */
+            nilai_gabungan_previous: number | null;
+            kecepatan: number;
+            ketahanan: number;
+            ketelitian: number;
+        };
         KecermatanOverview: {
             test: components["schemas"]["KecermatanStudentTest"];
+            progress: components["schemas"]["KecermatanProgress"] | null;
             current: components["schemas"]["KecermatanSession"] | null;
             attempts: components["schemas"]["KecermatanAttempt"][];
             /** Format: uuid */

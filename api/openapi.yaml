@@ -4743,6 +4743,8 @@ paths:
         Student only. A test the student holds no credits for answers `404`. `current` is the attempt in progress
         (timeline already settled), `attempts` is the history newest first, `product_id` is a product the student
         can buy more attempts from, or `null` when none is on sale.
+        `progress` summarises the completed attempts: the combined score is the plain average of the `nilai_akhir`
+        of the five most recent completed attempts (fewer when fewer exist); `null` before the first completion.
       security:
         - bearerAuth: []
       parameters:
@@ -8913,13 +8915,43 @@ components:
           nullable: true
           description: Provisional composite (D03); `null` until completed.
 
+    KecermatanProgress:
+      type: object
+      additionalProperties: false
+      required: [attempts_counted, nilai_gabungan, nilai_gabungan_previous, kecepatan, ketahanan, ketelitian]
+      description: |
+        Averages over the most recent completed attempts, at most five, each rounded to two decimals. They are
+        built on the provisional composite scores (D03).
+      properties:
+        attempts_counted:
+          type: integer
+          minimum: 1
+          maximum: 5
+        nilai_gabungan:
+          type: number
+          description: Average `nilai_akhir` of the counted attempts.
+        nilai_gabungan_previous:
+          type: number
+          nullable: true
+          description: The same average as it stood before the latest completed attempt; `null` on the first.
+        kecepatan:
+          type: number
+        ketahanan:
+          type: number
+        ketelitian:
+          type: number
+
     KecermatanOverview:
       type: object
       additionalProperties: false
-      required: [test, current, attempts, product_id]
+      required: [test, current, attempts, progress, product_id]
       properties:
         test:
           $ref: "#/components/schemas/KecermatanStudentTest"
+        progress:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/KecermatanProgress"
         current:
           nullable: true
           allOf:

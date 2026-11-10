@@ -92,6 +92,9 @@ type KecAttempt struct {
 	StartedAt     time.Time
 	CompletedAt   *time.Time
 	NilaiAkhir    *float64
+	Kecepatan     *float64
+	Ketahanan     *float64
+	Ketelitian    *float64
 }
 
 // KecStudentTest is what a student holds in one kecermatan test.

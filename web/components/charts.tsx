@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/cn";
 
@@ -101,6 +102,114 @@ export function DonutStat({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+interface ProgressPoint {
+  key: string;
+  label: string;
+  value: number;
+  counted: boolean;
+}
+
+/** Scores on a fixed 0-100 scale, oldest first; the trailing `counted` points sit on a tinted band. */
+export function ProgressLineChart({
+  points,
+  selectedKey,
+  onSelect,
+  pointLabel,
+  className,
+}: {
+  points: ProgressPoint[];
+  selectedKey?: string | null;
+  onSelect?: (key: string) => void;
+  pointLabel: (point: ProgressPoint) => string;
+  className?: string;
+}) {
+  const fillId = useId();
+  const last = points.length - 1;
+  const x = (i: number) => (last > 0 ? (i / last) * 100 : 50);
+  const y = (value: number) => 100 - Math.min(100, Math.max(0, value));
+  const firstCounted = points.findIndex((point) => point.counted);
+  const dense = points.length > 10;
+  const tickEvery = Math.ceil(points.length / 10);
+  const path = (from: number, to: number) =>
+    points
+      .slice(from, to + 1)
+      .map((point, offset) => `${x(from + offset)},${y(point.value)}`)
+      .join(" ");
+
+  return (
+    <div className={cn("flex gap-2 pt-6 pb-6", className)}>
+      <div className="relative h-44 w-6 shrink-0 text-micro text-muted tabular-nums" aria-hidden>
+        {[0, 25, 50, 75, 100].map((tick) => (
+          <span key={tick} className="absolute right-0 -translate-y-1/2" style={{ top: `${y(tick)}%` }}>
+            {tick}
+          </span>
+        ))}
+      </div>
+      <div className="relative h-44 min-w-0 flex-1">
+        {firstCounted >= 0 && (
+          <span
+            className="absolute -top-4 -right-1 -bottom-1 rounded-chip bg-viz-blue-soft"
+            style={{ left: firstCounted > 0 ? `calc(1rem + (100% - 2rem) * ${x(firstCounted - 0.5) / 100})` : "-0.25rem" }}
+          />
+        )}
+        {[0, 25, 50, 75, 100].map((tick) => (
+          <span key={tick} className="absolute inset-x-0 border-t border-border" style={{ top: `${y(tick)}%` }} />
+        ))}
+        <div className="absolute inset-y-0 right-4 left-4">
+          <svg className="absolute inset-0 size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+            {firstCounted > 0 && (
+              <polyline points={path(0, firstCounted)} fill="none" strokeWidth={2} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" className="stroke-rose" />
+            )}
+            <defs>
+              <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--viz-blue)" stopOpacity="0.28" />
+                <stop offset="100%" stopColor="var(--viz-blue)" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {firstCounted >= 0 && last > firstCounted && (
+              <polygon points={`${x(firstCounted)},100 ${path(firstCounted, last)} ${x(last)},100`} fill={`url(#${fillId})`} />
+            )}
+            {firstCounted >= 0 && (
+              <polyline points={path(firstCounted, last)} fill="none" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" className="stroke-viz-blue" />
+            )}
+          </svg>
+          {points.map((point, i) => (
+            <button
+              key={point.key}
+              type="button"
+              aria-label={pointLabel(point)}
+              aria-pressed={point.key === selectedKey}
+              onClick={() => onSelect?.(point.key)}
+              className="group absolute inset-y-0 w-8 -translate-x-1/2 outline-none"
+              style={{ left: `${x(i)}%` }}
+            >
+              <span
+                className={cn(
+                  "absolute left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full group-focus-visible:ring-2 group-focus-visible:ring-focus",
+                  point.counted ? "border-2 border-surface bg-viz-blue" : "border border-rose bg-surface",
+                  point.key === selectedKey && "ring-2 ring-viz-blue",
+                )}
+                style={{ top: `${y(point.value)}%` }}
+              />
+              {(!dense || point.counted) && (
+                <span
+                  className="absolute left-1/2 -translate-x-1/2 -translate-y-full pb-2 text-label font-medium whitespace-nowrap text-foreground tabular-nums"
+                  style={{ top: `${y(point.value)}%` }}
+                >
+                  {point.value}
+                </span>
+              )}
+              {(i % tickEvery === 0 || i === last) && (
+                <span className="absolute top-full left-1/2 -translate-x-1/2 pt-2 text-micro whitespace-nowrap text-muted tabular-nums">{point.label}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
