@@ -225,7 +225,7 @@ function ResultContent({ testId }: { testId: string }) {
       actions={
         canStart ? (
           <LinkButton href={`/student/kecermatan/${testId}/attempt`} variant="primary">
-            {t.tryAgainCta} <Icon icon={ArrowRight} size="sm" />
+            {overview.current !== null ? t.continueCta : t.tryAgainCta} <Icon icon={ArrowRight} size="sm" />
           </LinkButton>
         ) : undefined
       }
