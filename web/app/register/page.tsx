@@ -33,7 +33,7 @@ function RegisterForm() {
   const [pending, setPending] = useState(false);
   const edit = (key: string, set: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
     set(e.target.value);
-    setFields((f) => ({ ...f, [key]: "" }));
+    setFields((f) => ({ ...f, [key]: "", confirm: "" }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
