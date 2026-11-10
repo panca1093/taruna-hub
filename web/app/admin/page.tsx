@@ -10,6 +10,7 @@ import { Icon } from "@/components/icon";
 import { Metric, MetricStrip } from "@/components/metric-strip";
 import { Panel, TextLink } from "@/components/page-blocks";
 import { StatusChip } from "@/components/status-badge";
+import { cn } from "@/lib/cn";
 import { api, type ActiveSessionList, type OrderList, type TopupList } from "@/lib/api/client";
 import { formatIDR } from "@/lib/format-money";
 import { useLocale } from "@/lib/i18n/locale-context";
@@ -23,14 +24,15 @@ const TOPUP_ROWS = 2;
 type Block<T> = { data: T | null; failed: boolean; syncedAt: Date | null };
 const idle = { data: null, failed: false, syncedAt: null };
 
-function QueueRow({ icon, title, lines, href, action }: { icon: LucideIcon; title: string; lines: string[]; href: string; action: string }) {
+function QueueRow({ name, kind, tone, title, lines, href, action }: { name: string; kind: string; tone: "warning" | "success"; title: string; lines: string[]; href: string; action: string }) {
   return (
     <li className="flex items-start gap-3 border-t border-border py-4 first:border-t-0 first:pt-0">
-      <span className="grid size-9 shrink-0 place-items-center rounded-control bg-warning-soft text-warning-soft-foreground">
-        <Icon icon={icon} size="sm" />
-      </span>
+      <GradientAvatar user={{ name }} size="sm" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-small font-medium text-foreground">{title}</p>
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 flex-1 truncate text-small font-medium text-foreground">{title}</p>
+          <StatusChip tone={tone}>{kind}</StatusChip>
+        </div>
         {lines.map((line) => (
           <p key={line} className="mt-0.5 truncate text-label text-muted">
             {line}
@@ -44,10 +46,10 @@ function QueueRow({ icon, title, lines, href, action }: { icon: LucideIcon; titl
   );
 }
 
-function Shortcut({ icon, title, body, href, action }: { icon: LucideIcon; title: string; body: string; href: string; action: string }) {
+function Shortcut({ icon, tile, title, body, href, action }: { icon: LucideIcon; tile: string; title: string; body: string; href: string; action: string }) {
   return (
     <Panel radius="tile" padding="sm" className="flex items-center gap-4">
-      <span className="hidden size-10.5 shrink-0 place-items-center rounded-control bg-accent-soft text-accent sm:grid">
+      <span className={cn("hidden size-11 shrink-0 place-items-center rounded-control sm:grid", tile)}>
         <Icon icon={icon} size="md" />
       </span>
       <div className="min-w-0 flex-1">
@@ -129,9 +131,9 @@ export default function AdminDashboardPage() {
       }
     >
       <MetricStrip className="mb-6">
-        <Metric size="lg" icon={Activity} value={sessions.data ? String(sessions.data.total) : t.unavailable} label={t.kpiSessions} note={note(sessions, t.kpiSessionsNote)} />
-        <Metric size="lg" icon={Receipt} value={orders.data ? String(orders.data.total) : t.unavailable} label={t.kpiOrders} note={note(orders, t.kpiOrdersNote)} />
-        <Metric size="lg" icon={Wallet} value={topups.data ? String(topups.data.total) : t.unavailable} label={t.kpiTopups} note={note(topups, t.kpiTopupsNote)} />
+        <Metric size="lg" tone="blue" icon={Activity} value={sessions.data ? String(sessions.data.total) : t.unavailable} label={t.kpiSessions} note={note(sessions, t.kpiSessionsNote)} />
+        <Metric size="lg" tone="amber" icon={Receipt} value={orders.data ? String(orders.data.total) : t.unavailable} label={t.kpiOrders} note={note(orders, t.kpiOrdersNote)} />
+        <Metric size="lg" tone="green" icon={Wallet} value={topups.data ? String(topups.data.total) : t.unavailable} label={t.kpiTopups} note={note(topups, t.kpiTopupsNote)} />
       </MetricStrip>
 
       <div className="grid gap-6 xl:grid-cols-3">
@@ -206,12 +208,12 @@ export default function AdminDashboardPage() {
             <ul>
               {orders.failed && <li className="py-3 text-label text-warning">{orders.data ? t.syncStale : t.queueOrdersError}</li>}
               {pendingOrders.map((o) => (
-                <QueueRow key={o.id} icon={Receipt} title={o.student_name} lines={[o.product_title, formatIDR(o.price)]} href="/admin/orders" action={t.queueOrderAction} />
+                <QueueRow key={o.id} name={o.student_name} kind={t.queueKindOrder} tone="warning" title={o.student_name} lines={[o.product_title, formatIDR(o.price)]} href="/admin/orders" action={t.queueOrderAction} />
               ))}
               {orderRest > 0 && <li className="border-t border-border py-3 text-label text-muted">{t.queueOrderMore(orderRest)}</li>}
               {topups.failed && <li className="border-t border-border py-3 text-label text-warning first:border-t-0">{topups.data ? t.syncStale : t.queueTopupsError}</li>}
               {pendingTopups.map((p) => (
-                <QueueRow key={p.id} icon={Wallet} title={t.topupItem(p.student_name)} lines={[formatIDR(p.amount)]} href="/admin/topups" action={t.queueTopupAction} />
+                <QueueRow key={p.id} name={p.student_name} kind={t.queueKindTopup} tone="success" title={t.topupItem(p.student_name)} lines={[formatIDR(p.amount)]} href="/admin/topups" action={t.queueTopupAction} />
               ))}
               {topupRest > 0 && <li className="border-t border-border py-3 text-label text-muted">{t.queueTopupMore(topupRest)}</li>}
             </ul>
@@ -220,8 +222,8 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <Shortcut icon={Gauge} title={t.shortcutKecermatanTitle} body={t.shortcutKecermatanBody} href="/admin/kecermatan" action={t.shortcutKecermatanAction} />
-        <Shortcut icon={BarChart3} title={t.shortcutResultsTitle} body={t.shortcutResultsBody} href="/admin/results" action={t.shortcutResultsAction} />
+        <Shortcut icon={Gauge} tile="bg-viz-amber-soft text-viz-amber" title={t.shortcutKecermatanTitle} body={t.shortcutKecermatanBody} href="/admin/kecermatan" action={t.shortcutKecermatanAction} />
+        <Shortcut icon={BarChart3} tile="bg-viz-blue-soft text-viz-blue" title={t.shortcutResultsTitle} body={t.shortcutResultsBody} href="/admin/results" action={t.shortcutResultsAction} />
       </div>
     </AppShell>
   );

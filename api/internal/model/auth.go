@@ -31,6 +31,7 @@ type Principal struct {
 	Role      Role
 	// EmailVerified is a flag for the web app to surface; D01 never lets it block a login.
 	EmailVerified bool
+	AvatarKey     *string
 }
 
 // EmailCode is the outstanding verification code of one account; it never leaves the service.

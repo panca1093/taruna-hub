@@ -72,6 +72,7 @@ Each numeric triplet is wrapped in `oklch(...)` in CSS. Success, warning and dan
 | `ring-start`, `ring-end` | Same values as `accent`, `accent-2` (plum to rose) | Gradient identity |
 | `backdrop` | Light `oklch(0.2 0.02 335 / 45%)`; dark `oklch(0 0 0 / 65%)` | Modal / drawer dimming |
 | `bg-gradient-ring`, `text-gradient` | `linear-gradient(135deg, var(--ring-start), var(--ring-end))` | Supporting brand emphasis |
+| `viz-blue`, `viz-green`, `viz-amber` and their `-soft` pairs | Brighter data colours outside the rose palette, light and dark values in `globals.css` | Progress chart line/fill, metric tiles, tinted icon tiles and avatar discs (see §7.4c0). The strong colour is for marks and icons, never small text (below 4.5:1); text on a `-soft` tile uses `foreground` or `foreground/80` |
 | `bg-grid` | 1px `border` lines every 32px | Landing background |
 | Text selection | Accent at 30% mixed with transparent | Selected text |
 
@@ -139,10 +140,10 @@ Defined in `globals.css` (`@theme static`). Use these utilities; never `text-[13
 | `text-metric-xl` / `-lg` / `text-metric` | 42px / 35px / 21px | Wallet amount, chart summary, metric strip |
 | `text-score` | 70px, -3px | Result score |
 | `text-brand` | 34px, -3px, 650 | The rail "T." mark |
-| `text-small` | 13px | Descriptions, row text |
-| `text-caption` | 12px | Buttons, table cells, form labels, menu rows |
-| `text-label` | 11px | Breadcrumb, kicker, table header, chips |
-| `text-micro` / `text-nano` | 10px / 9px | Hints, tags, rail labels |
+| `text-small` | 15px | Descriptions, row text and row titles |
+| `text-caption` | 14px | Buttons, table cells, form labels, menu rows |
+| `text-label` | 13px | Breadcrumb, kicker, table header, chips |
+| `text-micro` / `text-nano` | 12px / 11px | Hints, tags, rail labels |
 
 Base rules (workspace only): `body` 14px / 1.5; `h1` = display, `h2` = heading, `h3` = title, all Geist 550. A `text-*` or `font-*` utility on the element overrides them.
 
@@ -229,7 +230,7 @@ Reuse [AppShell](../web/components/app-shell.tsx) for authenticated operational 
 | Rail brand | "T." mark (`text-brand`, dot in `sidebar-accent`) at the top, linking to the role home; expanded adds "Taruna Eduka" and a tagline |
 | Rail bottom | Theme control (moon/sun icon, label when expanded); student expanded also shows the "Selangkah lebih siap." note |
 | Collapsed sidebar (staff) | Ringkasan plus one module icon button per multi-item group (operations `MonitorDot`, content `Layers`, finance `Wallet`, system `SlidersHorizontal`; the icon never repeats a child icon), with one hairline between Ringkasan and the modules. The button takes `bg-rail-active` and the accent bar when the route is inside its group. Hover (150ms in, 200ms out) or click/Enter/Space opens a fixed flyout to the right of the rail (`rounded-menu bg-sidebar shadow-menu`) with the group name and its child links on the dashed tree; click (also on a hover-opened flyout) pins it and moves focus to the first link; hover is ignored on other groups while one is pinned, clicking another switches. Esc closes it from anywhere (focus returns to the button only if it was inside), as do outside click, navigation, window resize and any scroll; the panel is clamped inside the viewport. Button has `aria-expanded`, `aria-controls` and the group name as its label (a disclosure, not a menu: no `aria-haspopup`). |
-| Nav item (student) | Collapsed: icon over a `text-nano` label, `min-h-18` (72px), `rounded-tile`. Expanded: row, 50px high, 13px label |
+| Nav item (student) | Collapsed: icon over a `text-nano` label, `min-h-18` (72px), `rounded-tile`. Expanded: row, 50px high, 15px label (admin child rows 14px) |
 | Nav item (staff) | Row, 48px; group children use 40px rows under the dashed tree |
 | Student navigation | Exactly three items: Dashboard `/student`, Tryout `/student/tryouts` (also active on `/student/tryout/*` and `/student/kecermatan/*`), Katalog `/catalog`, as a flat list with no group header or tree connector |
 | Student mobile | No drawer. A floating bottom bar (`sidebar` surface, `rounded-hero`, 70px, 16px side inset) shows the same three destinations; main gets 112px bottom padding below `lg` |
@@ -367,8 +368,9 @@ Toasts are provided globally at `bottom end`. Use them for concise action outcom
 | `BarChart` | 160px area; 10px bar gaps; gradient bars; 10px mono labels; hover values | Compare categories; include readable values outside hover |
 | `DonutStat` | 140px diameter; 16px stroke; 20px legend gap; 12px labels/counts | Show a small set of part-to-whole statuses; always retain counts |
 | `Sparkline` | Default 160×40px; 2px accent line; fading fill | Supplement a KPI with a trend, not an unexplained standalone graph |
+| `ProgressLineChart` | 176px plot on a fixed 0–100 scale with 25-step grid lines; 3px `viz-blue` line with a fading area fill and 12px dots; the trailing `counted` points sit on a `viz-blue-soft` band, earlier ones are hollow `rose` dots on a dashed line; each point is a button with its value above and its label below | Show a score across ordered attempts. Values stay visible (above ten points only the counted ones); the same values must also appear as text near the chart |
 | `CountdownRing` | Default 120px; 8px stroke; clamps value to 0–100; rounded ends | Show explicit time/score/progress text and what it represents |
-| `KecermatanItem` | Inline; text kinds read as one mono string, emoji/shape/image draw each element at `size-5` via `ItemElementView` | One kecermatan reference or shown item in the attempt and the review; never show a missing-item marker |
+| `KecermatanItem` | Inline; text kinds read as one mono string, emoji/shape/image draw each element at `size-5` via `ItemElementView` | One kecermatan reference or shown item in the attempt; never show a missing-item marker |
 
 The ring uses `ring-start` → `ring-end`; `urgent` changes the stroke to danger. The caller determines urgency. Product timer policy must come from the exam specification, not a new visual threshold invented per screen.
 
@@ -378,7 +380,9 @@ Zero renders as an empty bar; small positive values keep a 4% minimum so they st
 
 Use the existing Taruna Eduka image assets through [Logo](../web/components/logo.tsx): full logo at 36px height; collapsed icon at 32px. Preserve aspect ratio and use legible assets for each surface. The current full logo is visually subdued on the dark sidebar; review a suitable dark-surface asset before release.
 
-[GradientAvatar](../web/components/gradient-avatar.tsx) uses initials over a user-color gradient: 28px small, 36px medium, 48px large. Avatar and product-cover colors are decorative identity, not permission or status indicators.
+[GradientAvatar](../web/components/gradient-avatar.tsx) shows one of thirty-five built-in flat-illustration avatars (`a01`…`a35`, files in `web/public/avatars/`) in a round disc: 34px small, 38px medium, 48px large, 80px extra large, plus `fill` for a parent-sized disc. A user's own pick comes from `User.avatar`. Without one the disc shows a person glyph on a tint picked from the name (`peach`, `viz-blue-soft`, `viz-green-soft`, `viz-amber-soft` or `accent-soft`): never a face the user did not choose, since a random face often mismatches the person. The name is the image's label. Keys are an API value: never renumber the files. The set was supplied by the owner as one 400px sheet and cut and upscaled to 192px, so the images are soft at the 80px size; replace the files with the original artwork when it is available, and confirm its licence before production. [AvatarPicker](../web/components/avatar-picker.tsx) is the radio grid of all thirty-five (5 columns on phones, 7 from `sm`), selected state `border-accent bg-accent-soft`; the caller owns saving.
+
+**Profile pages** (`/student/profile`, and `/admin/profile` for staff, reached from the account menu; both built from `components/profile-sections.tsx`). The account card shows the extra-large avatar, the name and an outline "Ganti avatar" button that opens the picker inline with "Simpan avatar" / "Batal". The password card is collapsed to one row ("Kata sandi akun" and an outline "Ubah kata sandi" button); the two fields appear only after that button is pressed, and "Batal" or a successful change closes and clears them. The staff page shows name, email, phone and role read-only, since an admin changes those under Akun Pengguna.
 
 ### 6.10 Shared visual helpers (visual parity pass)
 
@@ -481,6 +485,15 @@ Import `AppShell` / `StatCard` from `@/components/...` and `Card` from `@heroui/
 
 Use the richer landing visual treatment only where discovery/marketing is the goal. Detailed timing, ranking, payment, and entitlement rules remain product requirements.
 
+### 7.4c0 Client readability and colour pass (2026-11-10)
+
+Client feedback was that text was too small on every page and that pages lacked imagery and colour. Two rules follow from it:
+
+- **Type.** The five small steps were raised by 2px in `globals.css` (`text-small` 15, `text-caption` 14, `text-label` 13, `text-micro` 12, `text-nano` 11). Do not go below `text-micro` for anything a user must read; `text-nano` is for the collapsed rail label only. Titles of list rows use `text-small`.
+- **Colour.** A neutral icon tile may take a data tint when it helps tell items apart: `Metric` has a `tone` (`blue`, `green`, `amber`, `rose`), programme rows and score discs reuse the programme chip colours through `programTintClass` (still defined only in `status-badge.tsx`), kecermatan rows show the test's cover gradient, and people are shown with `GradientAvatar`. Tints are decorative identity, never status: a score disc is tinted by programme, not by how good the score is.
+
+Dashboards: the student greeting carries the user's avatar (`AppShell` `leading`), the two hero cards have a decorative disc with the card's icon in the top-right corner behind the text, and metric icons are tinted. The admin KPI icons are tinted, queue rows show the student's avatar with a "Pesanan" (warning) or "Top-up" (success) chip, and shortcut tiles use `viz-amber-soft` and `viz-blue-soft`.
+
 ### 7.4a Approved account entry and student overview
 
 Owner-approved on 2026-10-31. `AuthLayout` is the shared layout for login, registration, verification and recovery. Desktop has equal columns, a 24px gap, a 380px form and a restrained accent-tinted illustration panel. `/login` is the student entry (form right); staff enter `/portal` directly (form left), with no public portal link. `/login/staff` redirects to `/portal`. Below 800px the illustration panel is hidden and the form has at least 24px horizontal inset. Forms use 48px primary controls, visible labels, autofill semantics and an accessible password visibility control. Idle input boundaries mix `muted` at 75% with `surface`; focused/invalid borders retain their semantic state. Error text uses `danger` on `surface`, avoiding a tinted background that would lower text contrast.
@@ -505,6 +518,7 @@ Built 2026-10-31 from the [workspace handoff](new-student-workspace/HANDOFF.md).
   - Pending or offline answers say they are not yet saved, with an offline banner (`warning-soft`, `role="alert"`).
   - Kecermatan answers are write-once. When retries are exhausted, a persistent banner offers a manual resend. On a 409 the server's value wins and the page refetches.
 - **Attempt addressing.** Tryout and Kecermatan results, and tryout review, are addressed by `?attempt=<session_id>`.
+- **Kecermatan result.** `/student/kecermatan/:id/result` summarises every completed attempt of the test, not one attempt, and has no review (pembahasan). Order: `peach` hero card with the combined score (average of the last five completed attempts, from the API, shown without a "/ 100" suffix) and a trend chip for its change from the previous window (`viz-green-soft` with a `viz-green` icon when up, `danger-soft` with a `danger` icon when down); `ProgressLineChart` of `nilai_akhir` per attempt; three borderless tinted tiles (`viz-blue-soft`, `viz-green-soft`, `viz-amber-soft`, each with an icon in the strong colour and a 13px label) with the Kecepatan / Ketelitian / Ketahanan averages of the same attempts; then one disclosure row per attempt (button with `aria-expanded`, one open at a time, the latest or the `?attempt=` one open on load) holding that attempt's three scores, per-kolom Benar / Salah / Kosong table with totals, and the correct-per-kolom bars, loaded when opened.
   - A foreign or unknown id shows an unavailable state, and an unfinished attempt a not-ready state.
   - Held explanations show a held state, and keys are never requested before `explanations_released`.
 - **Payment method selector.** A radiogroup of full-width rows: radio dot, icon, title and one-line description. The selected row uses `border-accent bg-accent-soft`. An unavailable method is disabled with an explanation, or not rendered when the gateway reports 503.

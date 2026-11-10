@@ -93,6 +93,9 @@ const programColorMap: Record<ProgramCode, string> = {
   AKPOL: "bg-rose-500/12 text-rose-700 dark:text-rose-300",
 };
 
+/** The programme's chip colours for a decorative tile or disc, so one programme reads the same everywhere. */
+export const programTintClass = (code: string | undefined) => programColorMap[code as ProgramCode] ?? "bg-default text-default-foreground";
+
 export function ProgramBadge({ code }: { code: string }) {
   const color = programColorMap[code as ProgramCode] ?? "bg-default text-default-foreground";
   return (

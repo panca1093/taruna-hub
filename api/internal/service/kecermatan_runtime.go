@@ -91,7 +91,54 @@ type KecOverview struct {
 	Test      model.KecStudentTest
 	Current   *KecSessionView
 	Attempts  []model.KecAttempt
+	Progress  *KecProgress
 	ProductID *uuid.UUID
+}
+
+// KecProgress averages the most recent completed attempts of one test.
+type KecProgress struct {
+	AttemptsCounted       int
+	NilaiGabungan         float64
+	NilaiGabunganPrevious *float64
+	Kecepatan             float64
+	Ketahanan             float64
+	Ketelitian            float64
+}
+
+const kecProgressWindow = 5
+
+// kecProgressOf takes the history newest first, as the repository lists it.
+func kecProgressOf(attempts []model.KecAttempt) *KecProgress {
+	completed := make([]model.KecAttempt, 0, len(attempts))
+	for _, a := range attempts {
+		if a.NilaiAkhir != nil && a.Kecepatan != nil && a.Ketahanan != nil && a.Ketelitian != nil {
+			completed = append(completed, a)
+		}
+	}
+	if len(completed) == 0 {
+		return nil
+	}
+	mean := func(window []model.KecAttempt, pick func(model.KecAttempt) float64) float64 {
+		sum := 0.0
+		for _, a := range window {
+			sum += pick(a)
+		}
+		return roundScore2(sum / float64(len(window)))
+	}
+	nilai := func(a model.KecAttempt) float64 { return *a.NilaiAkhir }
+	window := completed[:min(kecProgressWindow, len(completed))]
+	out := &KecProgress{
+		AttemptsCounted: len(window),
+		NilaiGabungan:   mean(window, nilai),
+		Kecepatan:       mean(window, func(a model.KecAttempt) float64 { return *a.Kecepatan }),
+		Ketahanan:       mean(window, func(a model.KecAttempt) float64 { return *a.Ketahanan }),
+		Ketelitian:      mean(window, func(a model.KecAttempt) float64 { return *a.Ketelitian }),
+	}
+	if earlier := completed[1:]; len(earlier) > 0 {
+		previous := mean(earlier[:min(kecProgressWindow, len(earlier))], nilai)
+		out.NilaiGabunganPrevious = &previous
+	}
+	return out
 }
 
 // KecResultView is a completed attempt's authoritative counts and composite scores.
@@ -223,6 +270,7 @@ func (s *KecermatanRuntimeService) Overview(ctx context.Context, scope HostScope
 	if out.Attempts, err = s.repo.Attempts(ctx, s.db, tenantID, principal.UserID, testID); err != nil {
 		return KecOverview{}, kecError(err)
 	}
+	out.Progress = kecProgressOf(out.Attempts)
 	if id, err := s.repo.SellableProduct(ctx, tenantID, testID, s.now()); err == nil {
 		out.ProductID = &id
 	} else if !errors.Is(err, repository.ErrNotFound) {

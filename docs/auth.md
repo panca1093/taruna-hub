@@ -86,6 +86,7 @@ message that would arrive dead is expired instead of sent.
 | Route | Answer |
 |---|---|
 | `PATCH /me` | `200` and the updated user; body `{name, phone}`; students only, staff get `403` |
+| `PUT /me/avatar` | `200` and the updated user; body `{avatar}`: `a01`…`a35` or `null`; every role |
 | `POST /me/password` | `204`; body `{current_password, new_password}` |
 
 `PATCH /me` is student-only (`RequireRole(student)`): an admin or operator gets `403` and their row
@@ -93,6 +94,13 @@ is untouched, since the owner decision of 2026-10-31 covers students. `POST /me/
 authenticated principal. Neither names a user: the account is always the caller's, and unknown body
 fields are refused with `422 fields.body`. A student changes only the name and the phone; the email
 is read-only and changes stay with an admin.
+
+`PUT /me/avatar` is open to every role, staff included: it stores only the picture (`users.avatar_key`,
+migration 26), so the 2026-10-31 rule about staff profile fields does not apply (owner decision 2026-11-10).
+The thirty-five keys are validated in the service (`model.ValidAvatarKey`) and by a column check; the images
+live in the web app (`web/public/avatars/`), named by the same `a01`…`a35`. `null` clears the pick
+and the web app shows a neutral person placeholder. The pick is published on `User.avatar` (login,
+`/me`). Staff lists do not carry other users' picks yet, so a list shows the neutral placeholder.
 
 `name` is trimmed and 1 to 100 characters. `phone` is optional and goes through the same
 `NormalizePhone` as register. Uniqueness is left to the `(tenant, phone)` unique index, so saving the

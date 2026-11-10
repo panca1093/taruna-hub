@@ -387,3 +387,53 @@ func TestChangePasswordOverHTTP(t *testing.T) {
 }
 
 func victimID() string { return uuid.NewString() }
+
+func TestSetAvatarOverHTTP(t *testing.T) {
+	f := newAuthFixture(t, false)
+	e := f.echo(t)
+	host := f.host(f.active[0].Slug)
+	victim := f.newUser(t, model.RoleStudent, authTestPassword)
+
+	wantError(t, "no token", sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": "a03"}, nil),
+		http.StatusUnauthorized, httpx.CodeUnauthorized)
+
+	// Staff may pick an avatar although PATCH /me refuses them.
+	for _, role := range []model.Role{model.RoleStudent, model.RoleOperator, model.RoleAdmin} {
+		user := f.newUser(t, role, authTestPassword)
+		token := decodeTokenResponse(t, postJSON(e, host, "/api/v1/auth/login", credentials(*user.Email), nil)).AccessToken
+		bearer := map[string]string{echo.HeaderAuthorization: "Bearer " + token}
+
+		for _, bad := range []string{"a00", "a36", "A03", "a3", "../x"} {
+			wantError(t, string(role)+" "+bad, sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": bad}, bearer),
+				http.StatusUnprocessableEntity, httpx.CodeValidation, "avatar")
+		}
+		wantError(t, string(role)+" avatar missing", sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{}, bearer),
+			http.StatusUnprocessableEntity, httpx.CodeValidation, "avatar")
+		wantError(t, string(role)+" avatar not a string", sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": 5}, bearer),
+			http.StatusUnprocessableEntity, httpx.CodeValidation, "avatar")
+		wantError(t, string(role)+" id in the body", sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": "a03", "id": victim.ID}, bearer),
+			http.StatusUnprocessableEntity, httpx.CodeValidation, "body")
+
+		rec := sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": "a35"}, bearer)
+		var got userResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusOK {
+			t.Fatalf("%s set: status = %d body = %s err = %v, want 200", role, rec.Code, rec.Body.String(), err)
+		}
+		if got.ID != user.ID || got.Avatar == nil || *got.Avatar != "a35" {
+			t.Errorf("%s updated user = %+v, want the caller with avatar a35", role, got)
+		}
+		if me := getWithToken(e, host, "/api/v1/me", token); !strings.Contains(me.Body.String(), `"avatar":"a35"`) {
+			t.Errorf("%s me after the pick = %s, want avatar a35", role, me.Body.String())
+		}
+
+		rec = sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": nil}, bearer)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"avatar":null`) {
+			t.Errorf("%s clear: status = %d body = %s, want 200 with a null avatar", role, rec.Code, rec.Body.String())
+		}
+	}
+
+	var victimAvatar *string
+	if err := f.pool.QueryRow(context.Background(), `SELECT avatar_key FROM users WHERE id = $1`, victim.ID).Scan(&victimAvatar); err != nil || victimAvatar != nil {
+		t.Errorf("another user's avatar = %v, %v; want it untouched", victimAvatar, err)
+	}
+}

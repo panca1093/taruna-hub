@@ -704,6 +704,54 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose the signed-in user's avatar
+         * @description Every role, including staff: unlike `PATCH /me` this changes nothing but the picture. `avatar` is one of
+         *     the thirty-five built-in keys `a01` to `a35`, or `null` to clear the pick, after which the web app shows a
+         *     neutral placeholder. Any other value is `422` with `fields.avatar`. The caller is the principal, so no id travels in the
+         *     path or body.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetAvatarRequest"];
+                };
+            };
+            responses: {
+                /** @description The updated caller */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["User"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                422: components["responses"]["ValidationFailed"];
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/password": {
         parameters: {
             query?: never;
@@ -6353,6 +6401,8 @@ export interface paths {
          * @description Student only. A test the student holds no credits for answers `404`. `current` is the attempt in progress
          *     (timeline already settled), `attempts` is the history newest first, `product_id` is a product the student
          *     can buy more attempts from, or `null` when none is on sale.
+         *     `progress` summarises the completed attempts: the combined score is the plain average of the `nilai_akhir`
+         *     of the five most recent completed attempts (fewer when fewer exist); `null` before the first completion.
          */
         get: {
             parameters: {
@@ -7179,6 +7229,14 @@ export interface components {
              */
             phone?: string;
         };
+        /**
+         * @description A built-in avatar, `a01` to `a35`; `null` when the user has not picked one.
+         * @example a03
+         */
+        AvatarKey: string | null;
+        SetAvatarRequest: {
+            avatar: components["schemas"]["AvatarKey"];
+        };
         ChangePasswordRequest: {
             /** Format: password */
             current_password: string;
@@ -7192,6 +7250,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            avatar: components["schemas"]["AvatarKey"];
             /** @description Null when the account was created with a phone number only. */
             email: string | null;
             /** @description Null when the account was created with an email only. */
@@ -8998,8 +9057,23 @@ export interface components {
             /** @description Provisional composite (D03); `null` until completed. */
             nilai_akhir: number | null;
         };
+        /**
+         * @description Averages over the most recent completed attempts, at most five, each rounded to two decimals. They are
+         *     built on the provisional composite scores (D03).
+         */
+        KecermatanProgress: {
+            attempts_counted: number;
+            /** @description Average `nilai_akhir` of the counted attempts. */
+            nilai_gabungan: number;
+            /** @description The same average as it stood before the latest completed attempt; `null` on the first. */
+            nilai_gabungan_previous: number | null;
+            kecepatan: number;
+            ketahanan: number;
+            ketelitian: number;
+        };
         KecermatanOverview: {
             test: components["schemas"]["KecermatanStudentTest"];
+            progress: components["schemas"]["KecermatanProgress"] | null;
             current: components["schemas"]["KecermatanSession"] | null;
             attempts: components["schemas"]["KecermatanAttempt"][];
             /** Format: uuid */

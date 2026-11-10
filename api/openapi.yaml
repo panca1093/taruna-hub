@@ -480,6 +480,35 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /api/v1/me/avatar:
+    put:
+      tags: [auth]
+      summary: Choose the signed-in user's avatar
+      description: |
+        Every role, including staff: unlike `PATCH /me` this changes nothing but the picture. `avatar` is one of
+        the thirty-five built-in keys `a01` to `a35`, or `null` to clear the pick, after which the web app shows a
+        neutral placeholder. Any other value is `422` with `fields.avatar`. The caller is the principal, so no id travels in the
+        path or body.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAvatarRequest"
+      responses:
+        "200":
+          description: The updated caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
   /api/v1/me/password:
     post:
       tags: [auth]
@@ -4743,6 +4772,8 @@ paths:
         Student only. A test the student holds no credits for answers `404`. `current` is the attempt in progress
         (timeline already settled), `attempts` is the history newest first, `product_id` is a product the student
         can buy more attempts from, or `null` when none is on sale.
+        `progress` summarises the completed attempts: the combined score is the plain average of the `nilai_akhir`
+        of the five most recent completed attempts (fewer when fewer exist); `null` before the first completion.
       security:
         - bearerAuth: []
       parameters:
@@ -5367,6 +5398,21 @@ components:
           description: Optional. Same forms as on register, stored as E.164. Empty clears it.
           example: 0812-3456-7890
 
+    AvatarKey:
+      type: string
+      nullable: true
+      pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+      description: A built-in avatar, `a01` to `a35`; `null` when the user has not picked one.
+      example: a03
+
+    SetAvatarRequest:
+      type: object
+      additionalProperties: false
+      required: [avatar]
+      properties:
+        avatar:
+          $ref: "#/components/schemas/AvatarKey"
+
     ChangePasswordRequest:
       type: object
       additionalProperties: false
@@ -5384,13 +5430,15 @@ components:
     User:
       type: object
       additionalProperties: false
-      required: [id, name, email, phone, role, email_verified]
+      required: [id, name, avatar, email, phone, role, email_verified]
       properties:
         id:
           type: string
           format: uuid
         name:
           type: string
+        avatar:
+          $ref: "#/components/schemas/AvatarKey"
         email:
           type: string
           nullable: true
@@ -8913,13 +8961,43 @@ components:
           nullable: true
           description: Provisional composite (D03); `null` until completed.
 
+    KecermatanProgress:
+      type: object
+      additionalProperties: false
+      required: [attempts_counted, nilai_gabungan, nilai_gabungan_previous, kecepatan, ketahanan, ketelitian]
+      description: |
+        Averages over the most recent completed attempts, at most five, each rounded to two decimals. They are
+        built on the provisional composite scores (D03).
+      properties:
+        attempts_counted:
+          type: integer
+          minimum: 1
+          maximum: 5
+        nilai_gabungan:
+          type: number
+          description: Average `nilai_akhir` of the counted attempts.
+        nilai_gabungan_previous:
+          type: number
+          nullable: true
+          description: The same average as it stood before the latest completed attempt; `null` on the first.
+        kecepatan:
+          type: number
+        ketahanan:
+          type: number
+        ketelitian:
+          type: number
+
     KecermatanOverview:
       type: object
       additionalProperties: false
-      required: [test, current, attempts, product_id]
+      required: [test, current, attempts, progress, product_id]
       properties:
         test:
           $ref: "#/components/schemas/KecermatanStudentTest"
+        progress:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/KecermatanProgress"
         current:
           nullable: true
           allOf:

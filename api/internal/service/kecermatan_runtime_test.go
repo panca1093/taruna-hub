@@ -411,7 +411,11 @@ func TestKecermatanCompletionConsumesOnceAndScores(t *testing.T) {
 	overview, err := h.rt.Overview(ctx, h.scope(tenant), p, test.ID)
 	if err != nil || len(overview.Attempts) != 1 || overview.Attempts[0].NilaiAkhir == nil ||
 		overview.Test.Purchased-overview.Test.Used != 2 || overview.Current != nil {
-		t.Errorf("overview = %+v err = %v, want one scored attempt and 2 credits left", overview, err)
+		t.Fatalf("overview = %+v err = %v, want one scored attempt and 2 credits left", overview, err)
+	}
+	if p := overview.Progress; err == nil && (p == nil || p.AttemptsCounted != 1 ||
+		p.NilaiGabungan != *overview.Attempts[0].NilaiAkhir || p.NilaiGabunganPrevious != nil) {
+		t.Errorf("progress = %+v, want the single attempt's score and no previous average", p)
 	}
 
 	admin := h.t.principal(tenant, model.RoleAdmin)

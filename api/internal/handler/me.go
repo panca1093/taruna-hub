@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -12,6 +13,10 @@ import (
 type updateProfileRequest struct {
 	Name  string `json:"name"`
 	Phone string `json:"phone"`
+}
+
+type setAvatarRequest struct {
+	Avatar json.RawMessage `json:"avatar"`
 }
 
 type changePasswordRequest struct {
@@ -40,6 +45,34 @@ func (h *Handler) UpdateMe(c echo.Context) error {
 		return err
 	}
 	updated, err := h.account.UpdateProfile(c.Request().Context(), scope, principal, req.Name, req.Phone)
+	if err != nil {
+		return accountError(c, err)
+	}
+	return c.JSON(http.StatusOK, newUserResponse(updated))
+}
+
+// SetAvatar stores the caller's pick from the built-in avatars; null goes back to the automatic one.
+func (h *Handler) SetAvatar(c echo.Context) error {
+	principal, signedIn := PrincipalFrom(c)
+	if !signedIn {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	var req setAvatarRequest
+	if err := bindStrict(c, &req); err != nil {
+		return err
+	}
+	if len(req.Avatar) == 0 {
+		return httpx.Validation(incomplete, map[string]string{"avatar": required})
+	}
+	var avatar *string
+	if string(req.Avatar) != "null" {
+		var key string
+		if err := json.Unmarshal(req.Avatar, &key); err != nil {
+			return httpx.Validation(incomplete, map[string]string{"avatar": invalidFormat})
+		}
+		avatar = &key
+	}
+	updated, err := h.account.SetAvatar(c.Request().Context(), principal, avatar)
 	if err != nil {
 		return accountError(c, err)
 	}

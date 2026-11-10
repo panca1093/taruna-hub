@@ -8,6 +8,7 @@ import type { Role } from "./types";
 export interface SessionUser {
   id: string;
   name: string;
+  avatar: string | null;
   email: string | null;
   phone: string | null;
   /** Null for a role this app has no screens for (platform_admin). */
@@ -41,6 +42,7 @@ function toUser(u: ApiUser): SessionUser {
   return {
     id: u.id,
     name: u.name,
+    avatar: u.avatar,
     email: u.email,
     phone: u.phone,
     role: appRoles.includes(u.role) ? (u.role as Role) : null,

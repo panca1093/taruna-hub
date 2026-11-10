@@ -81,7 +81,17 @@ type kecOverviewResponse struct {
 	Test      kecStudentTestResponse `json:"test"`
 	Current   *kecSessionResponse    `json:"current"`
 	Attempts  []kecAttemptResponse   `json:"attempts"`
+	Progress  *kecProgressResponse   `json:"progress"`
 	ProductID *uuid.UUID             `json:"product_id"`
+}
+
+type kecProgressResponse struct {
+	AttemptsCounted       int      `json:"attempts_counted"`
+	NilaiGabungan         float64  `json:"nilai_gabungan"`
+	NilaiGabunganPrevious *float64 `json:"nilai_gabungan_previous"`
+	Kecepatan             float64  `json:"kecepatan"`
+	Ketahanan             float64  `json:"ketahanan"`
+	Ketelitian            float64  `json:"ketelitian"`
 }
 
 type kecElementResponse struct {
@@ -264,6 +274,11 @@ func (h *Handler) MyKecermatanTest(c echo.Context) error {
 	if view.Current != nil {
 		current := kecSessionOf(*view.Current)
 		body.Current = &current
+	}
+	if p := view.Progress; p != nil {
+		body.Progress = &kecProgressResponse{AttemptsCounted: p.AttemptsCounted, NilaiGabungan: p.NilaiGabungan,
+			NilaiGabunganPrevious: p.NilaiGabunganPrevious, Kecepatan: p.Kecepatan, Ketahanan: p.Ketahanan,
+			Ketelitian: p.Ketelitian}
 	}
 	for _, a := range view.Attempts {
 		body.Attempts = append(body.Attempts, kecAttemptResponse{

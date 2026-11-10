@@ -253,6 +253,21 @@ func (s *AccountService) UpdateProfile(ctx context.Context, scope HostScope, p m
 	return principalFor(user, p.SessionID), nil
 }
 
+// SetAvatar is open to every role: it changes the picture only, so the staff-profile rule does not apply.
+func (s *AccountService) SetAvatar(ctx context.Context, p model.Principal, key *string) (model.Principal, error) {
+	if key != nil && !model.ValidAvatarKey(*key) {
+		return model.Principal{}, &InputError{Fields: map[string]string{"avatar": ReasonInvalid}}
+	}
+	user, err := s.Users.SetAvatar(ctx, p.TenantID, p.UserID, key)
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		return model.Principal{}, ErrUnauthenticated
+	case err != nil:
+		return model.Principal{}, fmt.Errorf("set avatar: %w", err)
+	}
+	return principalFor(user, p.SessionID), nil
+}
+
 // ChangePassword needs the current password and ends every other session of the account, so a
 // stolen session does not outlive the change. The caller's own session stays signed in. Wrong
 // guesses share the login budget's size, counted under their own key so they never lock the login.
