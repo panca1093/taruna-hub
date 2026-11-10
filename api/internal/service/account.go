@@ -131,10 +131,41 @@ func deriveKey(secret []byte, purpose string) []byte {
 }
 
 type RegisterInput struct {
-	Name     string
-	Email    string
-	Phone    string
-	Password string
+	Name      string
+	Email     string
+	Phone     string
+	Password  string
+	Gender    string
+	BirthDate string
+}
+
+type ProfileInput struct {
+	Name      string
+	Phone     string
+	Gender    string
+	BirthDate string
+}
+
+// personalFields reads gender and birth date; empty leaves each nil, and anything unreadable lands in fields.
+func (s *AccountService) personalFields(rawGender, rawBirthDate string, fields map[string]string) (*string, *time.Time) {
+	var gender *string
+	switch g := strings.TrimSpace(rawGender); g {
+	case "":
+	case model.GenderMale, model.GenderFemale:
+		gender = &g
+	default:
+		fields["gender"] = ReasonInvalid
+	}
+	var birthDate *time.Time
+	if raw := strings.TrimSpace(rawBirthDate); raw != "" {
+		d, err := time.Parse(time.DateOnly, raw)
+		if err != nil || d.After(s.now()) || d.Year() < 1900 {
+			fields["birth_date"] = ReasonInvalid
+		} else {
+			birthDate = &d
+		}
+	}
+	return gender, birthDate
 }
 
 // Register creates the student and logs them in at once. D01: email is required, a phone is
@@ -159,6 +190,13 @@ func (s *AccountService) Register(ctx context.Context, scope HostScope, in Regis
 	}
 	if !validPassword(in.Password) {
 		fields["password"] = ReasonPassword
+	}
+	gender, birthDate := s.personalFields(in.Gender, in.BirthDate, fields)
+	if strings.TrimSpace(in.Gender) == "" {
+		fields["gender"] = ReasonInvalid
+	}
+	if strings.TrimSpace(in.BirthDate) == "" {
+		fields["birth_date"] = ReasonInvalid
 	}
 	if len(fields) > 0 {
 		return Tokens{}, &InputError{Fields: fields}
@@ -191,7 +229,7 @@ func (s *AccountService) Register(ctx context.Context, scope HostScope, in Regis
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		user, err = s.Users.CreateTx(ctx, tx, model.User{
 			TenantID: &tenantID, Name: name, Email: &email, Phone: phone,
-			PasswordHash: string(hash), Role: model.RoleStudent,
+			PasswordHash: string(hash), Role: model.RoleStudent, Gender: gender, BirthDate: birthDate,
 		})
 		switch {
 		case errors.Is(err, repository.ErrDuplicateEmail):
@@ -218,11 +256,12 @@ func (s *AccountService) Register(ctx context.Context, scope HostScope, in Regis
 	return tokens, nil
 }
 
-// UpdateProfile changes the caller's own name and phone; an empty phone clears it. The unique
-// constraint decides a duplicate, so saving the phone the account already holds is not a conflict.
-func (s *AccountService) UpdateProfile(ctx context.Context, scope HostScope, p model.Principal, rawName, rawPhone string) (model.Principal, error) {
+// UpdateProfile changes the caller's own name, phone, gender and birth date; an empty optional field clears it.
+// The unique constraint decides a duplicate, so saving the phone the account already holds is not a conflict.
+func (s *AccountService) UpdateProfile(ctx context.Context, scope HostScope, p model.Principal, in ProfileInput) (model.Principal, error) {
+	rawPhone := in.Phone
 	fields := map[string]string{}
-	name := strings.TrimSpace(rawName)
+	name := strings.TrimSpace(in.Name)
 	if name == "" || utf8.RuneCountInString(name) > maxNameRunes {
 		fields["name"] = ReasonInvalid
 	}
@@ -236,11 +275,12 @@ func (s *AccountService) UpdateProfile(ctx context.Context, scope HostScope, p m
 	} else if p.Email == nil {
 		fields["phone"] = ReasonPhoneRequired
 	}
+	gender, birthDate := s.personalFields(in.Gender, in.BirthDate, fields)
 	if len(fields) > 0 {
 		return model.Principal{}, &InputError{Fields: fields}
 	}
 
-	user, err := s.Users.UpdateProfile(ctx, scope.Tenant.ID, p.UserID, name, phone)
+	user, err := s.Users.UpdateProfile(ctx, scope.Tenant.ID, p.UserID, name, phone, gender, birthDate)
 	switch {
 	case errors.Is(err, repository.ErrDuplicatePhone):
 		return model.Principal{}, ErrPhoneTaken

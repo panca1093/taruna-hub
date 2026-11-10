@@ -32,7 +32,7 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-const userColumns = `id, tenant_id, name, email, phone, password_hash, role, balance::text, created_at, is_active, email_verified_at, avatar_key`
+const userColumns = `id, tenant_id, name, email, phone, password_hash, role, balance::text, created_at, is_active, email_verified_at, avatar_key, gender, birth_date`
 
 func (r *UserRepository) FindByID(ctx context.Context, tenantID, id uuid.UUID) (model.User, error) {
 	if tenantID == uuid.Nil {
@@ -94,15 +94,15 @@ func (r *UserRepository) ReplacePasswordTx(ctx context.Context, tx pgx.Tx, tenan
 	return tag.RowsAffected() > 0, nil
 }
 
-// UpdateProfile rewrites the two fields a person owns; a nil phone clears it. The unique index decides a
+// UpdateProfile rewrites the fields a person owns; a nil phone, gender or birth date clears it. The unique index decides a
 // phone another account holds, and the email-or-phone check is the caller's to avoid.
-func (r *UserRepository) UpdateProfile(ctx context.Context, tenantID, id uuid.UUID, name string, phone *string) (model.User, error) {
+func (r *UserRepository) UpdateProfile(ctx context.Context, tenantID, id uuid.UUID, name string, phone, gender *string, birthDate *time.Time) (model.User, error) {
 	if tenantID == uuid.Nil {
 		return model.User{}, ErrScopeRequired
 	}
 	row := r.db.QueryRow(ctx,
-		`UPDATE users SET name = $3, phone = $4 WHERE tenant_id = $1 AND id = $2 RETURNING `+userColumns,
-		tenantID, id, name, phone)
+		`UPDATE users SET name = $3, phone = $4, gender = $5, birth_date = $6 WHERE tenant_id = $1 AND id = $2 RETURNING `+userColumns,
+		tenantID, id, name, phone, gender, birthDate)
 	return scanUser(row)
 }
 
@@ -182,9 +182,9 @@ type rowQuerier interface {
 
 func insertUser(ctx context.Context, q rowQuerier, u model.User) (model.User, error) {
 	row := q.QueryRow(ctx,
-		`INSERT INTO users (tenant_id, name, email, phone, password_hash, role, email_verified_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING `+userColumns,
-		u.TenantID, u.Name, u.Email, u.Phone, u.PasswordHash, u.Role, u.EmailVerifiedAt)
+		`INSERT INTO users (tenant_id, name, email, phone, password_hash, role, email_verified_at, gender, birth_date)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING `+userColumns,
+		u.TenantID, u.Name, u.Email, u.Phone, u.PasswordHash, u.Role, u.EmailVerifiedAt, u.Gender, u.BirthDate)
 	return scanUser(row)
 }
 
@@ -195,7 +195,7 @@ type scannable interface {
 func scanUser(row scannable) (model.User, error) {
 	var u model.User
 	err := row.Scan(&u.ID, &u.TenantID, &u.Name, &u.Email, &u.Phone, &u.PasswordHash, &u.Role, &u.Balance, &u.CreatedAt, &u.IsActive,
-		&u.EmailVerifiedAt, &u.AvatarKey)
+		&u.EmailVerifiedAt, &u.AvatarKey, &u.Gender, &u.BirthDate)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.User{}, ErrNotFound
 	}

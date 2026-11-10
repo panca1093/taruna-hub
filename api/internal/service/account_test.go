@@ -161,7 +161,7 @@ func (h *accountHarness) notificationCount(recipient string) int {
 
 func (h *accountHarness) register(scope HostScope, email, phone string) Tokens {
 	h.t.Helper()
-	tokens, err := h.account.Register(context.Background(), scope, RegisterInput{
+	tokens, err := h.account.Register(context.Background(), scope, RegisterInput{Gender: model.GenderMale, BirthDate: "2008-04-17",
 		Name: "Budi Santoso", Email: email, Phone: phone, Password: authPassword,
 	})
 	if err != nil {
@@ -203,7 +203,7 @@ func TestRegisterCreatesAStudentWhoCanLogInBeforeVerifying(t *testing.T) {
 	phone := uniqueLocalPhone()
 	canonicalPhone := "+62" + phone[1:]
 
-	tokens, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{
+	tokens, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{Gender: model.GenderMale, BirthDate: "2008-04-17",
 		Name: "  Budi Santoso ", Email: "  " + strings.ToUpper(email), Phone: phone[:4] + "-" + phone[4:], Password: authPassword,
 	})
 	if err != nil {
@@ -313,9 +313,9 @@ func TestRegisterRefusesTakenIdentifiersAndBadInput(t *testing.T) {
 		in   RegisterInput
 		want error
 	}{
-		{"email in another case", RegisterInput{Name: "X", Email: strings.ToUpper(*existing.Email), Password: authPassword}, ErrEmailTaken},
-		{"an unverified account's email", RegisterInput{Name: "X", Email: unverifiedEmail, Password: "other-password"}, ErrEmailTaken},
-		{"phone in another form", RegisterInput{Name: "X", Email: uniqueEmail("fresh"), Phone: "62" + phone[1:], Password: authPassword}, ErrPhoneTaken},
+		{"email in another case", RegisterInput{Gender: model.GenderMale, BirthDate: "2008-04-17", Name: "X", Email: strings.ToUpper(*existing.Email), Password: authPassword}, ErrEmailTaken},
+		{"an unverified account's email", RegisterInput{Gender: model.GenderMale, BirthDate: "2008-04-17", Name: "X", Email: unverifiedEmail, Password: "other-password"}, ErrEmailTaken},
+		{"phone in another form", RegisterInput{Gender: model.GenderMale, BirthDate: "2008-04-17", Name: "X", Email: uniqueEmail("fresh"), Phone: "62" + phone[1:], Password: authPassword}, ErrPhoneTaken},
 	}
 	for _, tc := range cases {
 		if _, err := h.account.Register(ctx, h.scope(tenant), tc.in); !errors.Is(err, tc.want) {
@@ -325,18 +325,19 @@ func TestRegisterRefusesTakenIdentifiersAndBadInput(t *testing.T) {
 	// The squatter's signup did not change who owns the unverified account's password.
 	h.login(h.scope(tenant), unverifiedEmail, authPassword)
 
-	_, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{Name: " ", Email: "not-an-email", Phone: "12", Password: "short"})
+	_, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{Name: " ", Email: "not-an-email", Phone: "12", Password: "short", Gender: "other", BirthDate: "17-04-2008"})
 	var input *InputError
 	if !errors.As(err, &input) {
 		t.Fatalf("bad input: err = %v, want an InputError", err)
 	}
-	want := map[string]string{"name": ReasonInvalid, "email": ReasonInvalid, "phone": ReasonInvalid, "password": ReasonPassword}
+	want := map[string]string{"name": ReasonInvalid, "email": ReasonInvalid, "phone": ReasonInvalid, "password": ReasonPassword,
+		"gender": ReasonInvalid, "birth_date": ReasonInvalid}
 	for field, reason := range want {
 		if input.Fields[field] != reason {
 			t.Errorf("field %s = %q, want %q", field, input.Fields[field], reason)
 		}
 	}
-	if _, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{
+	if _, err := h.account.Register(ctx, h.scope(tenant), RegisterInput{Gender: model.GenderMale, BirthDate: "2008-04-17",
 		Name: "X", Email: uniqueEmail("long"), Password: strings.Repeat("a", maxPasswordBytes+1),
 	}); !errors.As(err, &input) {
 		t.Errorf("a 73-byte password: err = %v, want an InputError", err)
@@ -354,7 +355,7 @@ func TestConcurrentRegisterCreatesOneAccount(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := h.account.Register(context.Background(), h.scope(tenant), RegisterInput{Name: "R", Email: email, Password: authPassword})
+			_, err := h.account.Register(context.Background(), h.scope(tenant), RegisterInput{Gender: model.GenderMale, BirthDate: "2008-04-17", Name: "R", Email: email, Password: authPassword})
 			switch {
 			case err == nil:
 				wins.Add(1)
@@ -842,14 +843,14 @@ func TestUpdateProfileTrimsNormalizesAndClearsPhone(t *testing.T) {
 	p := h.principal(scope, tokens)
 
 	for _, name := range []string{"", "   ", strings.Repeat("a", maxNameRunes+1)} {
-		_, err := h.account.UpdateProfile(ctx, scope, p, name, "")
+		_, err := h.account.UpdateProfile(ctx, scope, p, ProfileInput{Name: name, Phone: ""})
 		wantInputReason(t, fmt.Sprintf("name %q", name), err, "name", ReasonInvalid)
 	}
-	_, err := h.account.UpdateProfile(ctx, scope, p, "Budi", "12")
+	_, err := h.account.UpdateProfile(ctx, scope, p, ProfileInput{Name: "Budi", Phone: "12"})
 	wantInputReason(t, "bad phone", err, "phone", ReasonInvalid)
 
 	phone := uniqueLocalPhone()
-	got, err := h.account.UpdateProfile(ctx, scope, p, "  Budi Baru ", phone[:4]+"-"+phone[4:])
+	got, err := h.account.UpdateProfile(ctx, scope, p, ProfileInput{Name: "  Budi Baru ", Phone: phone[:4] + "-" + phone[4:]})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -860,9 +861,27 @@ func TestUpdateProfileTrimsNormalizesAndClearsPhone(t *testing.T) {
 		t.Errorf("live principal name = %q, want the new name", live.Name)
 	}
 
-	cleared, err := h.account.UpdateProfile(ctx, scope, p, "Budi Baru", "  ")
-	if err != nil || cleared.Phone != nil {
-		t.Errorf("clearing the phone of an account with an email: phone = %v, err = %v; want nil, nil", cleared.Phone, err)
+	cleared, err := h.account.UpdateProfile(ctx, scope, p, ProfileInput{Name: "Budi Baru", Phone: "  "})
+	if err != nil || cleared.Phone != nil || cleared.Gender != nil || cleared.BirthDate != nil {
+		t.Errorf("clearing the optional fields: got %+v, err = %v; want phone, gender and birth date nil", cleared, err)
+	}
+
+	tomorrow := time.Now().AddDate(0, 0, 1).Format(time.DateOnly)
+	for _, bad := range []ProfileInput{{Name: "Budi", Gender: "other"}, {Name: "Budi", BirthDate: "2008-13-01"}, {Name: "Budi", BirthDate: tomorrow}, {Name: "Budi", BirthDate: "1899-12-31"}} {
+		field := "gender"
+		if bad.BirthDate != "" {
+			field = "birth_date"
+		}
+		_, err := h.account.UpdateProfile(ctx, scope, p, bad)
+		wantInputReason(t, fmt.Sprintf("%+v", bad), err, field, ReasonInvalid)
+	}
+	personal, err := h.account.UpdateProfile(ctx, scope, p, ProfileInput{Name: "Budi Baru", Gender: model.GenderFemale, BirthDate: "2009-02-28"})
+	if err != nil || personal.Gender == nil || *personal.Gender != model.GenderFemale ||
+		personal.BirthDate == nil || personal.BirthDate.Format(time.DateOnly) != "2009-02-28" {
+		t.Fatalf("personal fields = %+v, err = %v; want female born 2009-02-28", personal, err)
+	}
+	if want := model.DefaultAvatarKey(p.UserID, personal.Gender, personal.BirthDate, time.Now()); personal.Avatar != want {
+		t.Errorf("avatar without a pick = %q, want the automatic %q", personal.Avatar, want)
 	}
 }
 
@@ -882,7 +901,7 @@ func TestUpdateProfileCannotClearTheOnlyIdentifier(t *testing.T) {
 	h.mu.Unlock()
 	p := h.principal(scope, h.login(scope, phone, authPassword))
 
-	_, err = h.account.UpdateProfile(context.Background(), scope, p, "Phone Only", "")
+	_, err = h.account.UpdateProfile(context.Background(), scope, p, ProfileInput{Name: "Phone Only", Phone: ""})
 	wantInputReason(t, "clearing the only identifier", err, "phone", ReasonPhoneRequired)
 }
 
@@ -894,15 +913,15 @@ func TestUpdateProfilePhoneIsUniquePerTenant(t *testing.T) {
 	h.register(h.scope(tenant), uniqueEmail("holder"), phone)
 	mine := h.principal(h.scope(tenant), h.register(h.scope(tenant), uniqueEmail("mine"), ""))
 
-	if _, err := h.account.UpdateProfile(ctx, h.scope(tenant), mine, "Budi", phone); !errors.Is(err, ErrPhoneTaken) {
+	if _, err := h.account.UpdateProfile(ctx, h.scope(tenant), mine, ProfileInput{Name: "Budi", Phone: phone}); !errors.Is(err, ErrPhoneTaken) {
 		t.Errorf("a phone another account holds: err = %v, want ErrPhoneTaken", err)
 	}
 	owner := h.principal(h.scope(tenant), h.login(h.scope(tenant), "+62"+phone[1:], authPassword))
-	if _, err := h.account.UpdateProfile(ctx, h.scope(tenant), owner, "Budi Lagi", phone); err != nil {
+	if _, err := h.account.UpdateProfile(ctx, h.scope(tenant), owner, ProfileInput{Name: "Budi Lagi", Phone: phone}); err != nil {
 		t.Errorf("saving the phone the account already holds: err = %v, want nil", err)
 	}
 	foreign := h.principal(h.scope(other), h.register(h.scope(other), uniqueEmail("foreign"), ""))
-	if _, err := h.account.UpdateProfile(ctx, h.scope(other), foreign, "Budi", phone); err != nil {
+	if _, err := h.account.UpdateProfile(ctx, h.scope(other), foreign, ProfileInput{Name: "Budi", Phone: phone}); err != nil {
 		t.Errorf("the same phone in another tenant: err = %v, want nil", err)
 	}
 }

@@ -437,8 +437,17 @@ func principalFor(u model.User, sessionID uuid.UUID) model.Principal {
 		Role:      u.Role,
 		// The flag is read from the live row on every request, so the web app sees a verification at once.
 		EmailVerified: u.EmailVerifiedAt != nil,
-		AvatarKey:     u.AvatarKey,
+		Avatar:        avatarOf(u),
+		Gender:        u.Gender,
+		BirthDate:     u.BirthDate,
 	}
+}
+
+func avatarOf(u model.User) string {
+	if u.AvatarKey != nil {
+		return *u.AvatarKey
+	}
+	return model.DefaultAvatarKey(u.ID, u.Gender, u.BirthDate, time.Now())
 }
 
 // scopeTenant is the scope as the nullable tenant the database uses; null-tenant (platform) rows never match it.

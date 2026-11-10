@@ -7,12 +7,15 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
 // Identity comes only from the principal, so neither body names a user.
 type updateProfileRequest struct {
-	Name  string `json:"name"`
-	Phone string `json:"phone"`
+	Name      string `json:"name"`
+	Phone     string `json:"phone"`
+	Gender    string `json:"gender"`
+	BirthDate string `json:"birth_date"`
 }
 
 type setAvatarRequest struct {
@@ -33,7 +36,7 @@ func (h *Handler) Me(c echo.Context) error {
 	return c.JSON(http.StatusOK, newUserResponse(principal))
 }
 
-// UpdateMe changes the caller's own name and phone and answers with the user as /me would.
+// UpdateMe changes the caller's own profile fields and answers with the user as /me would.
 func (h *Handler) UpdateMe(c echo.Context) error {
 	scope, ok := hostScope(c)
 	principal, signedIn := PrincipalFrom(c)
@@ -44,7 +47,9 @@ func (h *Handler) UpdateMe(c echo.Context) error {
 	if err := bindStrict(c, &req); err != nil {
 		return err
 	}
-	updated, err := h.account.UpdateProfile(c.Request().Context(), scope, principal, req.Name, req.Phone)
+	updated, err := h.account.UpdateProfile(c.Request().Context(), scope, principal, service.ProfileInput{
+		Name: req.Name, Phone: req.Phone, Gender: req.Gender, BirthDate: req.BirthDate,
+	})
 	if err != nil {
 		return accountError(c, err)
 	}
