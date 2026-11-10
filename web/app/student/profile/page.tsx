@@ -6,7 +6,7 @@ import { User as UserIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { CardKicker, Panel } from "@/components/page-blocks";
 import { AvatarSection, Feedback, PasswordPanel, failure, idle, type Outcome } from "@/components/profile-sections";
-import { TextInput } from "@/components/ui/form";
+import { SelectInput, TextInput } from "@/components/ui/form";
 import { api } from "@/lib/api/client";
 import { useSession, useUser } from "@/lib/session-context";
 import { useStudentProfileT } from "@/lib/i18n/dict/student-profile";
@@ -17,6 +17,8 @@ export default function StudentProfilePage() {
   const t = useStudentProfileT();
   const [name, setName] = useState(user.name);
   const [phone, setPhone] = useState(user.phone ?? "");
+  const [gender, setGender] = useState<string | null>(user.gender);
+  const [birthDate, setBirthDate] = useState(user.birthDate ?? "");
   const [profile, setProfile] = useState<Outcome>(idle);
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -25,9 +27,11 @@ export default function StudentProfilePage() {
     setProfile(idle);
     setSavingProfile(true);
     try {
-      const updated = await api.updateProfile({ name, phone });
+      const updated = await api.updateProfile({ name, phone, gender: gender ?? "", birth_date: birthDate });
       setName(updated.name);
       setPhone(updated.phone ?? "");
+      setGender(updated.gender);
+      setBirthDate(updated.birth_date ?? "");
       setProfile({ ...idle, saved: true });
       await reloadUser().catch(() => {});
     } catch (err) {
@@ -67,6 +71,22 @@ export default function StudentProfilePage() {
                 error={profile.fields.phone}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+              />
+              <SelectInput
+                label={t.gender}
+                description={t.personalHint}
+                error={profile.fields.gender}
+                options={[{ id: "male", label: t.genderMale }, { id: "female", label: t.genderFemale }]}
+                selectedKey={gender}
+                onSelectionChange={setGender}
+              />
+              <TextInput
+                label={t.birthDate}
+                type="date"
+                max={new Date().toLocaleDateString("en-CA")}
+                error={profile.fields.birth_date}
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
               />
             </div>
             <div className="flex flex-col gap-1.5">

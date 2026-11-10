@@ -85,22 +85,29 @@ message that would arrive dead is expired instead of sent.
 
 | Route | Answer |
 |---|---|
-| `PATCH /me` | `200` and the updated user; body `{name, phone}`; students only, staff get `403` |
+| `PATCH /me` | `200` and the updated user; body `{name, phone, gender, birth_date}`; students only, staff get `403` |
 | `PUT /me/avatar` | `200` and the updated user; body `{avatar}`: `a01`…`a35` or `null`; every role |
 | `POST /me/password` | `204`; body `{current_password, new_password}` |
 
 `PATCH /me` is student-only (`RequireRole(student)`): an admin or operator gets `403` and their row
 is untouched, since the owner decision of 2026-10-31 covers students. `POST /me/password` takes any
 authenticated principal. Neither names a user: the account is always the caller's, and unknown body
-fields are refused with `422 fields.body`. A student changes only the name and the phone; the email
-is read-only and changes stay with an admin.
+fields are refused with `422 fields.body`. A student changes the name, the phone, the gender and the birth date; an empty optional field
+clears it. The email is read-only and changes stay with an admin.
 
 `PUT /me/avatar` is open to every role, staff included: it stores only the picture (`users.avatar_key`,
 migration 26), so the 2026-10-31 rule about staff profile fields does not apply (owner decision 2026-11-10).
 The thirty-five keys are validated in the service (`model.ValidAvatarKey`) and by a column check; the images
-live in the web app (`web/public/avatars/`), named by the same `a01`…`a35`. `null` clears the pick
-and the web app shows a neutral person placeholder. The pick is published on `User.avatar` (login,
-`/me`). Staff lists do not carry other users' picks yet, so a list shows the neutral placeholder.
+live in the web app (`web/public/avatars/`), named by the same `a01`…`a35`. `null` clears the pick.
+
+**Automatic avatar (owner decision 2026-11-10).** `User.avatar` (login, `/me`) is never null. Without a pick
+the service answers `model.DefaultAvatarKey`: the thirty-five avatars are split into four groups (male or
+female, under 25 or not), the user's `gender` and `birth_date` (migration 27) narrow the groups, and the
+user id picks within what is left, so a user keeps the same face while their gender and age group stay the same, and nothing is stored. With both
+fields empty (staff, and students from before sign-up asked) the id picks among all thirty-five. Sign-up
+requires both fields; `gender` is `male` or `female`, `birth_date` is `YYYY-MM-DD`, not in the future and
+not before 1900. The grouping was sorted by eye from a low-resolution sheet and is not yet confirmed by the
+owner. Staff lists do not carry other users' avatars yet, so a list shows the neutral placeholder.
 
 `name` is trimmed and 1 to 100 characters. `phone` is optional and goes through the same
 `NormalizePhone` as register. Uniqueness is left to the `(tenant, phone)` unique index, so saving the
@@ -158,7 +165,7 @@ local auto-logout timer and no role switcher; the role is whatever the server sa
 |---|---|
 | `/login`, `/portal` | `POST /auth/login`, then `/student` or `/admin` by the role the server returns; staff enter the portal directly |
 | `/login/staff` | Redirects to `/portal` for existing bookmarks |
-| `/register` | `POST /auth/register` (name, email, optional phone, password), then `/verify-email`; server field errors show under the field |
+| `/register` | `POST /auth/register` (name, email, optional phone, gender, birth date, password), then `/verify-email`; the password is typed twice and a mismatch is caught in the form before any request; server field errors show under the field |
 | `/verify-email` | Authenticated account code entry and resend through the existing API; success/skip returns students to `/student` and staff to `/admin` |
 | `/forgot-password` | `POST /auth/password/forgot`; always the same confirmation |
 | `/reset-password#token=…` | reads the token from the fragment, `POST /auth/password/reset`, then asks the user to log in |

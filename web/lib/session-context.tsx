@@ -2,15 +2,18 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { ApiError, api, onSessionLost, type ApiUser, type TokenResponse } from "./api/client";
+import { ApiError, api, onSessionLost, type ApiUser, type RegisterBody, type TokenResponse } from "./api/client";
 import type { Role } from "./types";
 
 export interface SessionUser {
   id: string;
   name: string;
-  avatar: string | null;
+  avatar: string;
+  avatarPicked: boolean;
   email: string | null;
   phone: string | null;
+  gender: ApiUser["gender"];
+  birthDate: string | null;
   /** Null for a role this app has no screens for (platform_admin). */
   role: Role | null;
   emailVerified: boolean;
@@ -24,7 +27,7 @@ interface SessionContextValue {
   user: SessionUser | null;
   role: Role | null;
   login: (identifier: string, password: string) => Promise<SessionUser>;
-  register: (body: { name: string; email: string; phone?: string; password: string }) => Promise<SessionUser>;
+  register: (body: RegisterBody) => Promise<SessionUser>;
   logout: () => Promise<void>;
   retry: () => void;
   reloadUser: () => Promise<void>;
@@ -43,8 +46,11 @@ function toUser(u: ApiUser): SessionUser {
     id: u.id,
     name: u.name,
     avatar: u.avatar,
+    avatarPicked: u.avatar_picked,
     email: u.email,
     phone: u.phone,
+    gender: u.gender,
+    birthDate: u.birth_date,
     role: appRoles.includes(u.role) ? (u.role as Role) : null,
     emailVerified: u.email_verified,
   };

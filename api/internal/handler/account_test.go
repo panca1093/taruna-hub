@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -100,7 +101,7 @@ func TestSignUpOverHTTP(t *testing.T) {
 	e := f.echo(t)
 	host := f.host(f.active[0].Slug)
 	email := "signup-" + uuid.NewString()[:8] + "@example.com"
-	signup := map[string]string{"name": "Budi", "email": strings.ToUpper(email), "phone": "0812-" + strconv.Itoa(10000000+int(uuid.New().ID()%89999999)), "password": authTestPassword}
+	signup := map[string]string{"name": "Budi", "email": strings.ToUpper(email), "phone": "0812-" + strconv.Itoa(10000000+int(uuid.New().ID()%89999999)), "password": authTestPassword, "gender": "female", "birth_date": "2008-04-17"}
 
 	rec := postJSON(e, host, "/api/v1/auth/register", signup, nil)
 	if rec.Code != http.StatusCreated {
@@ -125,6 +126,12 @@ func TestSignUpOverHTTP(t *testing.T) {
 		t.Errorf("me before verifying: status = %d body = %s, want 200 and email_verified false", me.Code, me.Body.String())
 	}
 
+	for _, want := range []string{`"gender":"female"`, `"birth_date":"2008-04-17"`, `"avatar_picked":false`} {
+		if !strings.Contains(me.Body.String(), want) {
+			t.Errorf("me after sign-up = %s, want %s", me.Body.String(), want)
+		}
+	}
+
 	wrong := "000000"
 	if code == wrong {
 		wrong = "000001"
@@ -146,12 +153,12 @@ func TestSignUpOverHTTP(t *testing.T) {
 
 	wantError(t, "email taken", postJSON(e, host, "/api/v1/auth/register", signup, nil), http.StatusConflict, httpx.CodeConflict, "email")
 	wantError(t, "missing fields", postJSON(e, host, "/api/v1/auth/register", map[string]string{"phone": "0812"}, nil),
-		http.StatusUnprocessableEntity, httpx.CodeValidation, "name", "email", "password")
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "name", "email", "password", "gender", "birth_date")
 	wantError(t, "bad formats", postJSON(e, host, "/api/v1/auth/register",
-		map[string]string{"name": "X", "email": "nope", "phone": "12", "password": "short"}, nil),
-		http.StatusUnprocessableEntity, httpx.CodeValidation, "email", "phone", "password")
+		map[string]string{"name": "X", "email": "nope", "phone": "12", "password": "short", "gender": "x", "birth_date": "17/04/2008"}, nil),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "email", "phone", "password", "gender", "birth_date")
 	wantError(t, "unknown field", postJSON(e, host, "/api/v1/auth/register",
-		map[string]string{"name": "X", "email": email, "password": authTestPassword, "role": "admin"}, nil),
+		map[string]string{"name": "X", "email": email, "password": authTestPassword, "gender": "male", "birth_date": "2008-04-17", "role": "admin"}, nil),
 		http.StatusUnprocessableEntity, httpx.CodeValidation, "body")
 
 	if strings.Contains(f.logs.String(), code) {
@@ -419,16 +426,21 @@ func TestSetAvatarOverHTTP(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusOK {
 			t.Fatalf("%s set: status = %d body = %s err = %v, want 200", role, rec.Code, rec.Body.String(), err)
 		}
-		if got.ID != user.ID || got.Avatar == nil || *got.Avatar != "a35" {
+		if got.ID != user.ID || got.Avatar != "a35" {
 			t.Errorf("%s updated user = %+v, want the caller with avatar a35", role, got)
 		}
-		if me := getWithToken(e, host, "/api/v1/me", token); !strings.Contains(me.Body.String(), `"avatar":"a35"`) {
-			t.Errorf("%s me after the pick = %s, want avatar a35", role, me.Body.String())
+		if me := getWithToken(e, host, "/api/v1/me", token); !strings.Contains(me.Body.String(), `"avatar":"a35"`) || !strings.Contains(me.Body.String(), `"avatar_picked":true`) {
+			t.Errorf("%s me after the pick = %s, want avatar a35 and avatar_picked true", role, me.Body.String())
 		}
 
 		rec = sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": nil}, bearer)
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"avatar":null`) {
-			t.Errorf("%s clear: status = %d body = %s, want 200 with a null avatar", role, rec.Code, rec.Body.String())
+		automatic := model.DefaultAvatarKey(user.ID, nil, nil, time.Now())
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"avatar":"`+automatic+`"`) || !strings.Contains(rec.Body.String(), `"avatar_picked":false`) {
+			t.Errorf("%s clear: status = %d body = %s, want 200 with the automatic avatar %s", role, rec.Code, rec.Body.String(), automatic)
+		}
+		var stored *string
+		if err := f.pool.QueryRow(context.Background(), `SELECT avatar_key FROM users WHERE id = $1`, user.ID).Scan(&stored); err != nil || stored != nil {
+			t.Errorf("%s stored pick after clearing = %v, %v; want null", role, stored, err)
 		}
 	}
 

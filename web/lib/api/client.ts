@@ -114,7 +114,7 @@ export interface ElementUpload {
 }
 type GraceBody = components["schemas"]["GraceRequest"];
 type LoginBody = components["schemas"]["LoginRequest"];
-type RegisterBody = components["schemas"]["RegisterRequest"];
+export type RegisterBody = components["schemas"]["RegisterRequest"];
 type UpdateProfileBody = components["schemas"]["UpdateProfileRequest"];
 type ChangePasswordBody = components["schemas"]["ChangePasswordRequest"];
 type CreateProgramBody = components["schemas"]["CreateProgramRequest"];

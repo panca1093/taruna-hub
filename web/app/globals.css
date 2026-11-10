@@ -671,7 +671,7 @@ body {
 .auth-subtitle { margin-top: 12px; margin-bottom: 32px; color: var(--muted); font-size: var(--text-small); line-height: 1.7; }
 .auth-fields { display: flex; flex-direction: column; gap: 22px; }
 .auth-fields input { min-height: 44px; border-radius: var(--radius-control); }
-.auth-fields input:not([aria-invalid="true"]):not(:focus) { border-color: color-mix(in oklab, var(--muted) 75%, var(--surface)); }
+.auth-fields input:not([aria-invalid="true"]):not(:focus), .auth-fields .select:not([data-invalid]) .select__trigger:not(:focus-visible) { border-color: color-mix(in oklab, var(--muted) 75%, var(--surface)); }
 .auth-fields label { font-size: var(--text-caption); }
 .auth-forgot { position: absolute; right: 0; top: 0; z-index: 1; color: var(--accent); font-size: 12px; }
 .auth-forgot:hover { text-decoration: underline; }

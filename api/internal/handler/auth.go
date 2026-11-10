@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -98,12 +99,16 @@ type loginRequest struct {
 
 // userResponse publishes only what a session needs; balance and the ledger stay out of this slice.
 type userResponse struct {
-	ID     uuid.UUID  `json:"id"`
-	Name   string     `json:"name"`
-	Avatar *string    `json:"avatar"`
-	Email  *string    `json:"email"`
-	Phone  *string    `json:"phone"`
-	Role   model.Role `json:"role"`
+	ID           uuid.UUID  `json:"id"`
+	Name         string     `json:"name"`
+	Avatar       string     `json:"avatar"`
+	AvatarPicked bool       `json:"avatar_picked"`
+	Email        *string    `json:"email"`
+	Phone        *string    `json:"phone"`
+	Role         model.Role `json:"role"`
+	Gender       *string    `json:"gender"`
+	// BirthDate is YYYY-MM-DD.
+	BirthDate *string `json:"birth_date"`
 	// EmailVerified drives the web app's "verify your email" alert; it never blocks anything.
 	EmailVerified bool `json:"email_verified"`
 }
@@ -210,9 +215,14 @@ func bindStrict(c echo.Context, dst any) error {
 }
 
 func newUserResponse(p model.Principal) userResponse {
+	var birthDate *string
+	if p.BirthDate != nil {
+		formatted := p.BirthDate.Format(time.DateOnly)
+		birthDate = &formatted
+	}
 	return userResponse{
-		ID: p.UserID, Name: p.Name, Avatar: p.AvatarKey, Email: p.Email, Phone: p.Phone, Role: p.Role,
-		EmailVerified: p.EmailVerified,
+		ID: p.UserID, Name: p.Name, Avatar: p.Avatar, AvatarPicked: p.AvatarPicked, Email: p.Email, Phone: p.Phone, Role: p.Role,
+		EmailVerified: p.EmailVerified, Gender: p.Gender, BirthDate: birthDate,
 	}
 }
 

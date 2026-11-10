@@ -31,10 +31,12 @@ const (
 )
 
 type registerRequest struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Phone     string `json:"phone"`
+	Password  string `json:"password"`
+	Gender    string `json:"gender"`
+	BirthDate string `json:"birth_date"`
 }
 
 type emailRequest struct {
@@ -60,11 +62,14 @@ func (h *Handler) SignUp(c echo.Context) error {
 	if err := bindStrict(c, &req); err != nil {
 		return err
 	}
-	if err := requireFields(map[string]string{"name": req.Name, "email": req.Email, "password": req.Password}); err != nil {
+	if err := requireFields(map[string]string{
+		"name": req.Name, "email": req.Email, "password": req.Password, "gender": req.Gender, "birth_date": req.BirthDate,
+	}); err != nil {
 		return err
 	}
 	tokens, err := h.account.Register(c.Request().Context(), scope, service.RegisterInput{
 		Name: req.Name, Email: req.Email, Phone: req.Phone, Password: req.Password,
+		Gender: req.Gender, BirthDate: req.BirthDate,
 	})
 	if err != nil {
 		return accountError(c, err)

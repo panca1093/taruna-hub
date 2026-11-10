@@ -5331,12 +5331,16 @@ components:
     RegisterRequest:
       type: object
       additionalProperties: false
-      required: [name, email, password]
+      required: [name, email, password, gender, birth_date]
       properties:
         name:
           type: string
           maxLength: 100
           example: Budi Santoso
+        gender:
+          $ref: "#/components/schemas/Gender"
+        birth_date:
+          $ref: "#/components/schemas/BirthDate"
         email:
           type: string
           description: Required (D01). Stored trimmed and lowercased.
@@ -5397,12 +5401,30 @@ components:
           type: string
           description: Optional. Same forms as on register, stored as E.164. Empty clears it.
           example: 0812-3456-7890
+        gender:
+          type: string
+          description: Optional. `male` or `female`. Omitted keeps the stored value; empty clears it.
+          example: male
+        birth_date:
+          type: string
+          description: Optional. `YYYY-MM-DD`, not in the future. Omitted keeps the stored value; empty clears it.
+          example: "2008-04-17"
+
+    Gender:
+      type: string
+      enum: [male, female]
+
+    BirthDate:
+      type: string
+      format: date
+      description: "`YYYY-MM-DD`, not in the future."
+      example: "2008-04-17"
 
     AvatarKey:
       type: string
       nullable: true
       pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
-      description: A built-in avatar, `a01` to `a35`; `null` when the user has not picked one.
+      description: A built-in avatar, `a01` to `a35`; `null` in a request goes back to the automatic one.
       example: a03
 
     SetAvatarRequest:
@@ -5430,7 +5452,7 @@ components:
     User:
       type: object
       additionalProperties: false
-      required: [id, name, avatar, email, phone, role, email_verified]
+      required: [id, name, avatar, avatar_picked, email, phone, role, email_verified, gender, birth_date]
       properties:
         id:
           type: string
@@ -5438,7 +5460,26 @@ components:
         name:
           type: string
         avatar:
-          $ref: "#/components/schemas/AvatarKey"
+          type: string
+          pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+          description: |
+            The avatar to show, never null: the user's pick, or an automatic one. The automatic one is
+            narrowed by gender and by age (under 25 or not) when known, and is stable while the user's gender and
+            age group stay the same.
+          example: a03
+        avatar_picked:
+          type: boolean
+          description: True when the user chose the avatar; false when it is the automatic one.
+        gender:
+          type: string
+          nullable: true
+          enum: [male, female, null]
+          description: Null on staff and on accounts made before sign-up asked for it.
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+          description: Null on staff and on accounts made before sign-up asked for it.
         email:
           type: string
           nullable: true

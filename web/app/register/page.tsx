@@ -7,13 +7,14 @@ import { Button, Spinner, toast } from "@heroui/react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { AuthLayout } from "@/components/auth-layout";
 import { PasswordInput } from "@/components/password-input";
-import { TextInput } from "@/components/ui/form";
+import { SelectInput, TextInput } from "@/components/ui/form";
 import { safeReturnPath, withReturn } from "@/lib/return-intent";
 import { useSession } from "@/lib/session-context";
-import { ApiError, errorText } from "@/lib/api/client";
+import { ApiError, errorText, type RegisterBody } from "@/lib/api/client";
 import { useAuthT } from "@/lib/i18n/dict/auth";
 
-const registerFields = ["name", "email", "phone", "password"];
+const registerFields = ["name", "email", "phone", "password", "gender", "birth_date"];
+const today = () => new Date().toLocaleDateString("en-CA");
 
 function RegisterForm() {
   const router = useRouter();
@@ -24,21 +25,29 @@ function RegisterForm() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [gender, setGender] = useState<RegisterBody["gender"] | null>(null);
+  const [birthDate, setBirthDate] = useState("");
   const [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
   const edit = (key: string, set: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
     set(e.target.value);
-    setFields((f) => ({ ...f, [key]: "" }));
+    setFields((f) => ({ ...f, [key]: "", confirm: "" }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (!gender) return;
+    if (password !== confirm) {
+      setFields({ confirm: t.passwordMismatch });
+      return;
+    }
     setFields({});
     setPending(true);
     try {
-      await register({ name, email, phone: phone.trim() || undefined, password });
+      await register({ name, email, phone: phone.trim() || undefined, password, gender, birth_date: birthDate });
       toast.success(t.toastAccountCreatedTitle, { description: t.toastAccountCreatedDescription });
       router.push(withReturn("/verify-email", next));
     } catch (err) {
@@ -60,10 +69,25 @@ function RegisterForm() {
         <TextInput label={t.fullNameLabel} name="name" autoComplete="name" placeholder={t.fullNamePlaceholder} required error={fields.name} value={name} onChange={edit("name", setName)} />
         <TextInput label={t.emailLabel} name="email" autoComplete="email" type="email" placeholder={t.emailPlaceholder} required error={fields.email} value={email} onChange={edit("email", setEmail)} />
         <TextInput label={t.phoneLabel} name="phone" autoComplete="tel" type="tel" placeholder={t.phonePlaceholder} error={fields.phone} value={phone} onChange={edit("phone", setPhone)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SelectInput
+            label={t.genderLabel}
+            required
+            error={fields.gender}
+            options={[{ id: "male", label: t.genderMale }, { id: "female", label: t.genderFemale }]}
+            selectedKey={gender}
+            onSelectionChange={(key) => {
+              setGender(key as RegisterBody["gender"] | null);
+              setFields((f) => ({ ...f, gender: "" }));
+            }}
+          />
+          <TextInput label={t.birthDateLabel} name="birth_date" autoComplete="bday" type="date" max={today()} required error={fields.birth_date} value={birthDate} onChange={edit("birth_date", setBirthDate)} />
+        </div>
         <div>
           <PasswordInput label={t.passwordLabel} name="password" autoComplete="new-password" minLength={8} placeholder={t.registerPasswordPlaceholder} required error={fields.password} value={password} onChange={edit("password", setPassword)} aria-describedby="password-hint" />
           <p id="password-hint" className="auth-hint">{t.passwordHint}</p>
         </div>
+        <PasswordInput label={t.confirmPasswordLabel} name="confirm-password" autoComplete="new-password" placeholder={t.registerPasswordPlaceholder} required error={fields.confirm} value={confirm} onChange={edit("confirm", setConfirm)} />
         {error && <p role="alert" className="auth-error">{error}</p>}
         <Button type="submit" variant="primary" fullWidth className="auth-submit" isDisabled={pending}>
           {pending && <Spinner size="sm" />}{pending ? t.creatingAccount : t.submitRegister}{!pending && <ArrowRight className="size-4" />}

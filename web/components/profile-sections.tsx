@@ -82,7 +82,7 @@ export function AvatarSection() {
           aria-expanded={open}
           aria-controls={open ? chooserId : undefined}
           onPress={() => {
-            setPicked(user.avatar);
+            setPicked(user.avatarPicked ? user.avatar : null);
             setOutcome(idle);
             setOpen((current) => !current);
           }}

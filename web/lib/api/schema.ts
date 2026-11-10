@@ -7187,6 +7187,8 @@ export interface components {
         RegisterRequest: {
             /** @example Budi Santoso */
             name: string;
+            gender: components["schemas"]["Gender"];
+            birth_date: components["schemas"]["BirthDate"];
             /**
              * @description Required (D01). Stored trimmed and lowercased.
              * @example budi@example.com
@@ -7228,9 +7230,27 @@ export interface components {
              * @example 0812-3456-7890
              */
             phone?: string;
+            /**
+             * @description Optional. `male` or `female`. Omitted keeps the stored value; empty clears it.
+             * @example male
+             */
+            gender?: string;
+            /**
+             * @description Optional. `YYYY-MM-DD`, not in the future. Omitted keeps the stored value; empty clears it.
+             * @example 2008-04-17
+             */
+            birth_date?: string;
         };
+        /** @enum {string} */
+        Gender: "male" | "female";
         /**
-         * @description A built-in avatar, `a01` to `a35`; `null` when the user has not picked one.
+         * Format: date
+         * @description `YYYY-MM-DD`, not in the future.
+         * @example 2008-04-17
+         */
+        BirthDate: string;
+        /**
+         * @description A built-in avatar, `a01` to `a35`; `null` in a request goes back to the automatic one.
          * @example a03
          */
         AvatarKey: string | null;
@@ -7250,7 +7270,25 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
-            avatar: components["schemas"]["AvatarKey"];
+            /**
+             * @description The avatar to show, never null: the user's pick, or an automatic one. The automatic one is
+             *     narrowed by gender and by age (under 25 or not) when known, and is stable while the user's gender and
+             *     age group stay the same.
+             * @example a03
+             */
+            avatar: string;
+            /** @description True when the user chose the avatar; false when it is the automatic one. */
+            avatar_picked: boolean;
+            /**
+             * @description Null on staff and on accounts made before sign-up asked for it.
+             * @enum {string|null}
+             */
+            gender: "male" | "female" | null;
+            /**
+             * Format: date
+             * @description Null on staff and on accounts made before sign-up asked for it.
+             */
+            birth_date: string | null;
             /** @description Null when the account was created with a phone number only. */
             email: string | null;
             /** @description Null when the account was created with an email only. */
