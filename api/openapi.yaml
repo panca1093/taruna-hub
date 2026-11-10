@@ -5403,11 +5403,11 @@ components:
           example: 0812-3456-7890
         gender:
           type: string
-          description: Optional. `male` or `female`; empty clears it.
+          description: Optional. `male` or `female`. Omitted keeps the stored value; empty clears it.
           example: male
         birth_date:
           type: string
-          description: Optional. `YYYY-MM-DD`, not in the future; empty clears it.
+          description: Optional. `YYYY-MM-DD`, not in the future. Omitted keeps the stored value; empty clears it.
           example: "2008-04-17"
 
     Gender:
@@ -5452,7 +5452,7 @@ components:
     User:
       type: object
       additionalProperties: false
-      required: [id, name, avatar, email, phone, role, email_verified, gender, birth_date]
+      required: [id, name, avatar, avatar_picked, email, phone, role, email_verified, gender, birth_date]
       properties:
         id:
           type: string
@@ -5464,8 +5464,12 @@ components:
           pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
           description: |
             The avatar to show, never null: the user's pick, or an automatic one. The automatic one is
-            narrowed by gender and by age (under 25 or not) when known, and is stable per user.
+            narrowed by gender and by age (under 25 or not) when known, and is stable while the user's gender and
+            age group stay the same.
           example: a03
+        avatar_picked:
+          type: boolean
+          description: True when the user chose the avatar; false when it is the automatic one.
         gender:
           type: string
           nullable: true

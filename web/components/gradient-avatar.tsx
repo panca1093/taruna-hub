@@ -18,7 +18,7 @@ const placeholderTints = [
 
 const hashOf = (name: string) => [...name].reduce((sum, char) => sum + char.charCodeAt(0), 0);
 
-/** The built-in avatar a user picked. Without a pick it is a person glyph on a name-picked tint, never a face the user did not choose. */
+/** The built-in avatar to show; a missing avatar (rows of other users) shows a person glyph on a name-picked tint. */
 export function GradientAvatar({
   user,
   size = "md",

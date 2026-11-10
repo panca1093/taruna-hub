@@ -103,7 +103,7 @@ live in the web app (`web/public/avatars/`), named by the same `a01`…`a35`. `n
 **Automatic avatar (owner decision 2026-11-10).** `User.avatar` (login, `/me`) is never null. Without a pick
 the service answers `model.DefaultAvatarKey`: the thirty-five avatars are split into four groups (male or
 female, under 25 or not), the user's `gender` and `birth_date` (migration 27) narrow the groups, and the
-user id picks within what is left, so one user always gets the same face and nothing is stored. With both
+user id picks within what is left, so a user keeps the same face while their gender and age group stay the same, and nothing is stored. With both
 fields empty (staff, and students from before sign-up asked) the id picks among all thirty-five. Sign-up
 requires both fields; `gender` is `male` or `female`, `birth_date` is `YYYY-MM-DD`, not in the future and
 not before 1900. The grouping was sorted by eye from a low-resolution sheet and is not yet confirmed by the
@@ -165,7 +165,7 @@ local auto-logout timer and no role switcher; the role is whatever the server sa
 |---|---|
 | `/login`, `/portal` | `POST /auth/login`, then `/student` or `/admin` by the role the server returns; staff enter the portal directly |
 | `/login/staff` | Redirects to `/portal` for existing bookmarks |
-| `/register` | `POST /auth/register` (name, email, optional phone, gender, birth date, password), then `/verify-email`; server field errors show under the field |
+| `/register` | `POST /auth/register` (name, email, optional phone, gender, birth date, password), then `/verify-email`; the password is typed twice and a mismatch is caught in the form before any request; server field errors show under the field |
 | `/verify-email` | Authenticated account code entry and resend through the existing API; success/skip returns students to `/student` and staff to `/admin` |
 | `/forgot-password` | `POST /auth/password/forgot`; always the same confirmation |
 | `/reset-password#token=…` | reads the token from the fragment, `POST /auth/password/reset`, then asks the user to log in |

@@ -32,9 +32,10 @@ type Principal struct {
 	// EmailVerified is a flag for the web app to surface; D01 never lets it block a login.
 	EmailVerified bool
 	// Avatar is what to show: the pick, or the automatic one when there is none.
-	Avatar    string
-	Gender    *string
-	BirthDate *time.Time
+	Avatar       string
+	AvatarPicked bool
+	Gender       *string
+	BirthDate    *time.Time
 }
 
 // EmailCode is the outstanding verification code of one account; it never leaves the service.

@@ -12,10 +12,10 @@ import (
 
 // Identity comes only from the principal, so neither body names a user.
 type updateProfileRequest struct {
-	Name      string `json:"name"`
-	Phone     string `json:"phone"`
-	Gender    string `json:"gender"`
-	BirthDate string `json:"birth_date"`
+	Name      string  `json:"name"`
+	Phone     string  `json:"phone"`
+	Gender    *string `json:"gender"`
+	BirthDate *string `json:"birth_date"`
 }
 
 type setAvatarRequest struct {

@@ -438,6 +438,7 @@ func principalFor(u model.User, sessionID uuid.UUID) model.Principal {
 		// The flag is read from the live row on every request, so the web app sees a verification at once.
 		EmailVerified: u.EmailVerifiedAt != nil,
 		Avatar:        avatarOf(u),
+		AvatarPicked:  u.AvatarKey != nil,
 		Gender:        u.Gender,
 		BirthDate:     u.BirthDate,
 	}

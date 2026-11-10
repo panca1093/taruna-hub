@@ -218,6 +218,11 @@ func TestRegisterCreatesAStudentWhoCanLogInBeforeVerifying(t *testing.T) {
 		t.Errorf("principal tenant = %v, refresh = %q; want %s and a session", p.TenantID, tokens.RefreshToken, tenant.ID)
 	}
 
+	if live := h.principal(h.scope(tenant), tokens); live.Gender == nil || *live.Gender != model.GenderMale ||
+		live.BirthDate == nil || live.BirthDate.Format(time.DateOnly) != "2008-04-17" {
+		t.Errorf("stored gender and birth date = %v, %v; want male born 2008-04-17", live.Gender, live.BirthDate)
+	}
+
 	// Unverified is not locked out: every spelling of the identifiers logs in.
 	for _, identifier := range []string{canonicalPhone, phone, "62" + phone[1:], strings.ToUpper(email)} {
 		got, err := h.auth.Login(ctx, h.scope(tenant), identifier, authPassword)
@@ -862,20 +867,25 @@ func TestUpdateProfileTrimsNormalizesAndClearsPhone(t *testing.T) {
 	}
 
 	cleared, err := h.account.UpdateProfile(ctx, scope, p, ProfileInput{Name: "Budi Baru", Phone: "  "})
-	if err != nil || cleared.Phone != nil || cleared.Gender != nil || cleared.BirthDate != nil {
-		t.Errorf("clearing the optional fields: got %+v, err = %v; want phone, gender and birth date nil", cleared, err)
+	if err != nil || cleared.Phone != nil || cleared.Gender == nil || cleared.BirthDate == nil {
+		t.Errorf("omitting gender and birth date: got %+v, err = %v; want the phone cleared and both kept", cleared, err)
+	}
+	empty := ""
+	cleared, err = h.account.UpdateProfile(ctx, scope, p, ProfileInput{Name: "Budi Baru", Gender: &empty, BirthDate: &empty})
+	if err != nil || cleared.Gender != nil || cleared.BirthDate != nil {
+		t.Errorf("clearing with empty strings: got %+v, err = %v; want gender and birth date nil", cleared, err)
 	}
 
 	tomorrow := time.Now().AddDate(0, 0, 1).Format(time.DateOnly)
-	for _, bad := range []ProfileInput{{Name: "Budi", Gender: "other"}, {Name: "Budi", BirthDate: "2008-13-01"}, {Name: "Budi", BirthDate: tomorrow}, {Name: "Budi", BirthDate: "1899-12-31"}} {
+	for _, bad := range []ProfileInput{{Name: "Budi", Gender: ptr("other")}, {Name: "Budi", BirthDate: ptr("2008-13-01")}, {Name: "Budi", BirthDate: &tomorrow}, {Name: "Budi", BirthDate: ptr("1899-12-31")}} {
 		field := "gender"
-		if bad.BirthDate != "" {
+		if bad.BirthDate != nil {
 			field = "birth_date"
 		}
 		_, err := h.account.UpdateProfile(ctx, scope, p, bad)
 		wantInputReason(t, fmt.Sprintf("%+v", bad), err, field, ReasonInvalid)
 	}
-	personal, err := h.account.UpdateProfile(ctx, scope, p, ProfileInput{Name: "Budi Baru", Gender: model.GenderFemale, BirthDate: "2009-02-28"})
+	personal, err := h.account.UpdateProfile(ctx, scope, p, ProfileInput{Name: "Budi Baru", Gender: ptr(model.GenderFemale), BirthDate: ptr("2009-02-28")})
 	if err != nil || personal.Gender == nil || *personal.Gender != model.GenderFemale ||
 		personal.BirthDate == nil || personal.BirthDate.Format(time.DateOnly) != "2009-02-28" {
 		t.Fatalf("personal fields = %+v, err = %v; want female born 2009-02-28", personal, err)

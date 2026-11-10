@@ -126,6 +126,12 @@ func TestSignUpOverHTTP(t *testing.T) {
 		t.Errorf("me before verifying: status = %d body = %s, want 200 and email_verified false", me.Code, me.Body.String())
 	}
 
+	for _, want := range []string{`"gender":"female"`, `"birth_date":"2008-04-17"`, `"avatar_picked":false`} {
+		if !strings.Contains(me.Body.String(), want) {
+			t.Errorf("me after sign-up = %s, want %s", me.Body.String(), want)
+		}
+	}
+
 	wrong := "000000"
 	if code == wrong {
 		wrong = "000001"
@@ -423,13 +429,13 @@ func TestSetAvatarOverHTTP(t *testing.T) {
 		if got.ID != user.ID || got.Avatar != "a35" {
 			t.Errorf("%s updated user = %+v, want the caller with avatar a35", role, got)
 		}
-		if me := getWithToken(e, host, "/api/v1/me", token); !strings.Contains(me.Body.String(), `"avatar":"a35"`) {
-			t.Errorf("%s me after the pick = %s, want avatar a35", role, me.Body.String())
+		if me := getWithToken(e, host, "/api/v1/me", token); !strings.Contains(me.Body.String(), `"avatar":"a35"`) || !strings.Contains(me.Body.String(), `"avatar_picked":true`) {
+			t.Errorf("%s me after the pick = %s, want avatar a35 and avatar_picked true", role, me.Body.String())
 		}
 
 		rec = sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": nil}, bearer)
 		automatic := model.DefaultAvatarKey(user.ID, nil, nil, time.Now())
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"avatar":"`+automatic+`"`) {
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"avatar":"`+automatic+`"`) || !strings.Contains(rec.Body.String(), `"avatar_picked":false`) {
 			t.Errorf("%s clear: status = %d body = %s, want 200 with the automatic avatar %s", role, rec.Code, rec.Body.String(), automatic)
 		}
 		var stored *string

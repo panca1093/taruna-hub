@@ -25,6 +25,7 @@ function RegisterForm() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [gender, setGender] = useState<RegisterBody["gender"] | null>(null);
   const [birthDate, setBirthDate] = useState("");
   const [error, setError] = useState("");
@@ -39,6 +40,10 @@ function RegisterForm() {
     e.preventDefault();
     setError("");
     if (!gender) return;
+    if (password !== confirm) {
+      setFields({ confirm: t.passwordMismatch });
+      return;
+    }
     setFields({});
     setPending(true);
     try {
@@ -82,6 +87,7 @@ function RegisterForm() {
           <PasswordInput label={t.passwordLabel} name="password" autoComplete="new-password" minLength={8} placeholder={t.registerPasswordPlaceholder} required error={fields.password} value={password} onChange={edit("password", setPassword)} aria-describedby="password-hint" />
           <p id="password-hint" className="auth-hint">{t.passwordHint}</p>
         </div>
+        <PasswordInput label={t.confirmPasswordLabel} name="confirm-password" autoComplete="new-password" placeholder={t.registerPasswordPlaceholder} required error={fields.confirm} value={confirm} onChange={edit("confirm", setConfirm)} />
         {error && <p role="alert" className="auth-error">{error}</p>}
         <Button type="submit" variant="primary" fullWidth className="auth-submit" isDisabled={pending}>
           {pending && <Spinner size="sm" />}{pending ? t.creatingAccount : t.submitRegister}{!pending && <ArrowRight className="size-4" />}

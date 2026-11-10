@@ -142,8 +142,8 @@ type RegisterInput struct {
 type ProfileInput struct {
 	Name      string
 	Phone     string
-	Gender    string
-	BirthDate string
+	Gender    *string
+	BirthDate *string
 }
 
 // personalFields reads gender and birth date; empty leaves each nil, and anything unreadable lands in fields.
@@ -159,7 +159,7 @@ func (s *AccountService) personalFields(rawGender, rawBirthDate string, fields m
 	var birthDate *time.Time
 	if raw := strings.TrimSpace(rawBirthDate); raw != "" {
 		d, err := time.Parse(time.DateOnly, raw)
-		if err != nil || d.After(s.now()) || d.Year() < 1900 {
+		if err != nil || raw > s.now().In(wib).Format(time.DateOnly) || d.Year() < 1900 {
 			fields["birth_date"] = ReasonInvalid
 		} else {
 			birthDate = &d
@@ -275,7 +275,23 @@ func (s *AccountService) UpdateProfile(ctx context.Context, scope HostScope, p m
 	} else if p.Email == nil {
 		fields["phone"] = ReasonPhoneRequired
 	}
-	gender, birthDate := s.personalFields(in.Gender, in.BirthDate, fields)
+	gender, birthDate := p.Gender, p.BirthDate
+	if in.Gender != nil || in.BirthDate != nil {
+		rawGender, rawBirthDate := "", ""
+		if in.Gender != nil {
+			rawGender = *in.Gender
+		}
+		if in.BirthDate != nil {
+			rawBirthDate = *in.BirthDate
+		}
+		g, b := s.personalFields(rawGender, rawBirthDate, fields)
+		if in.Gender != nil {
+			gender = g
+		}
+		if in.BirthDate != nil {
+			birthDate = b
+		}
+	}
 	if len(fields) > 0 {
 		return model.Principal{}, &InputError{Fields: fields}
 	}

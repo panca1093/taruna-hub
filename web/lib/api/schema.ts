@@ -7231,12 +7231,12 @@ export interface components {
              */
             phone?: string;
             /**
-             * @description Optional. `male` or `female`; empty clears it.
+             * @description Optional. `male` or `female`. Omitted keeps the stored value; empty clears it.
              * @example male
              */
             gender?: string;
             /**
-             * @description Optional. `YYYY-MM-DD`, not in the future; empty clears it.
+             * @description Optional. `YYYY-MM-DD`, not in the future. Omitted keeps the stored value; empty clears it.
              * @example 2008-04-17
              */
             birth_date?: string;
@@ -7272,10 +7272,13 @@ export interface components {
             name: string;
             /**
              * @description The avatar to show, never null: the user's pick, or an automatic one. The automatic one is
-             *     narrowed by gender and by age (under 25 or not) when known, and is stable per user.
+             *     narrowed by gender and by age (under 25 or not) when known, and is stable while the user's gender and
+             *     age group stay the same.
              * @example a03
              */
             avatar: string;
+            /** @description True when the user chose the avatar; false when it is the automatic one. */
+            avatar_picked: boolean;
             /**
              * @description Null on staff and on accounts made before sign-up asked for it.
              * @enum {string|null}

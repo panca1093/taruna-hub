@@ -9,6 +9,7 @@ export interface SessionUser {
   id: string;
   name: string;
   avatar: string;
+  avatarPicked: boolean;
   email: string | null;
   phone: string | null;
   gender: ApiUser["gender"];
@@ -45,6 +46,7 @@ function toUser(u: ApiUser): SessionUser {
     id: u.id,
     name: u.name,
     avatar: u.avatar,
+    avatarPicked: u.avatar_picked,
     email: u.email,
     phone: u.phone,
     gender: u.gender,

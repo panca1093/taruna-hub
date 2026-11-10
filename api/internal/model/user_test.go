@@ -69,4 +69,11 @@ func TestAgeAt(t *testing.T) {
 			t.Errorf("age on 2026-11-%02d = %d, want %d", day, got, want)
 		}
 	}
+	leap := time.Date(2004, 2, 29, 0, 0, 0, 0, time.UTC)
+	if got := AgeAt(leap, time.Date(2026, 2, 28, 0, 0, 0, 0, time.UTC)); got != 21 {
+		t.Errorf("29 Feb birth on 28 Feb 2026 = %d, want 21", got)
+	}
+	if got := AgeAt(leap, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)); got != 22 {
+		t.Errorf("29 Feb birth on 1 Mar 2026 = %d, want 22", got)
+	}
 }
