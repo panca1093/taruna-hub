@@ -407,6 +407,10 @@ func TestSetAvatarOverHTTP(t *testing.T) {
 			wantError(t, string(role)+" "+bad, sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": bad}, bearer),
 				http.StatusUnprocessableEntity, httpx.CodeValidation, "avatar")
 		}
+		wantError(t, string(role)+" avatar missing", sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{}, bearer),
+			http.StatusUnprocessableEntity, httpx.CodeValidation, "avatar")
+		wantError(t, string(role)+" avatar not a string", sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": 5}, bearer),
+			http.StatusUnprocessableEntity, httpx.CodeValidation, "avatar")
 		wantError(t, string(role)+" id in the body", sendJSON(e, http.MethodPut, host, "/api/v1/me/avatar", map[string]any{"avatar": "a03", "id": victim.ID}, bearer),
 			http.StatusUnprocessableEntity, httpx.CodeValidation, "body")
 

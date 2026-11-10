@@ -29,7 +29,7 @@ const focusRing = "outline-none focus-visible:ring-2 focus-visible:ring-sidebar-
 /** stacked = icon over label (student rail, 88px); row = icon beside label (expanded); icon = icon only (admin collapsed). */
 type NavLayout = "stacked" | "row" | "icon";
 
-function NavLink({ item, active, layout, showBar = true, barInset, onNavigate, className }: { item: NavItem; active: boolean; layout: NavLayout; showBar?: boolean; barInset?: string; onNavigate?: () => void; className?: string }) {
+function NavLink({ item, active, layout, compact = false, showBar = true, barInset, onNavigate, className }: { item: NavItem; active: boolean; layout: NavLayout; compact?: boolean; showBar?: boolean; barInset?: string; onNavigate?: () => void; className?: string }) {
   const navT = useNavT();
   const label = navT[item.href] ?? item.label;
   return (
@@ -43,7 +43,7 @@ function NavLink({ item, active, layout, showBar = true, barInset, onNavigate, c
         "relative flex items-center transition-colors",
         focusRing,
         layout === "stacked" && "min-h-18 flex-col justify-center gap-2 rounded-tile text-nano",
-        layout === "row" && "min-h-12.5 gap-3.5 rounded-tile px-4 text-small",
+        layout === "row" && cn("min-h-12.5 gap-3.5 rounded-tile px-4", compact ? "text-caption" : "text-small"),
         layout === "icon" && "min-h-12 justify-center rounded-tile",
         active ? "bg-rail-active text-sidebar-foreground" : "text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-foreground",
         className,
@@ -66,7 +66,7 @@ function ChildLink({ item, active, last, onNavigate }: { item: NavItem; active: 
         "after:absolute after:left-0 after:top-1/2 after:w-3 after:border-t after:border-dashed after:border-sidebar-muted/60",
       )}
     >
-      <NavLink item={item} active={active} layout="row" showBar={false} onNavigate={onNavigate} className="min-h-10 gap-3 rounded-control px-3 py-1.5 text-caption font-normal" />
+      <NavLink item={item} active={active} layout="row" compact showBar={false} onNavigate={onNavigate} className="min-h-10 gap-3 rounded-control px-3 py-1.5 font-normal" />
     </li>
   );
 }
@@ -437,7 +437,9 @@ function AccountMenu() {
           { id: "/student/wallet", label: shellT.walletTransactions, hint: shellT.walletHint, icon: Wallet },
           { id: "/student/orders", label: shellT.orders, hint: shellT.ordersHint, icon: Receipt },
         ]
-      : [{ id: "/admin/profile", label: shellT.profile, hint: shellT.profileHint, icon: User }];
+      : role === "operator" || role === "admin"
+        ? [{ id: "/admin/profile", label: shellT.profile, hint: shellT.profileHint, icon: User }]
+        : [];
 
   return (
     <Dropdown>

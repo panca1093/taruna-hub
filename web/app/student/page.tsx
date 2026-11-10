@@ -78,7 +78,7 @@ export default function StudentDashboardPage() {
     <AppShell
       title={t.greeting(user.name.split(" ")[0])}
       description={t.subtitle}
-      leading={<GradientAvatar user={{ name: user.name }} size="lg" className="hidden sm:flex" />}
+      leading={<GradientAvatar user={{ name: user.name, avatar: user.avatar }} size="lg" className="hidden sm:flex" />}
       actions={<LinkButton href="/catalog" variant="outline" className="min-h-10">{t.viewCatalog}<Icon icon={ArrowRight} size="xs" /></LinkButton>}
     >
       <div className="space-y-6">
@@ -134,7 +134,7 @@ export default function StudentDashboardPage() {
                       <li key={enrollment.id}><Link href={`/student/tryout/${enrollment.tryout_id}`} className={rowClass}><span className={`${tileClass} ${programTintClass(enrollment.program_code)}`}><Icon icon={BookOpen} size="md" /></span><div className="min-w-0 flex-1"><p className="break-words text-small font-medium">{enrollment.tryout_title}</p><p className="mt-1 text-label text-muted">{t.accessUntil(formatDate(enrollment.active_until))}</p></div><ProgramBadge code={enrollment.program_code} /><Icon icon={ArrowRight} size="sm" className="text-muted" /></Link></li>
                     ))}
                     {data.kecermatan.slice(0, Math.max(1, 4 - Math.min(3, data.enrollments.length))).map((test) => (
-                      <li key={test.test_id}><Link href={`/student/kecermatan/${test.test_id}`} className={rowClass}><span className={`${tileClass} text-white`} style={{ background: `linear-gradient(135deg, ${test.cover_from}, ${test.cover_to})` }}><Icon icon={Sparkles} size="md" /></span><div className="min-w-0 flex-1"><p className="break-words text-small font-medium">{test.title}</p><p className="mt-1 text-label text-muted">{t.attemptsAvailable(test.attempts_remaining)}</p></div><ProgramBadge code={test.program_code} /><Icon icon={ArrowRight} size="sm" className="text-muted" /></Link></li>
+                      <li key={test.test_id}><Link href={`/student/kecermatan/${test.test_id}`} className={rowClass}><span className={tileClass} style={{ background: `linear-gradient(135deg, ${test.cover_from}, ${test.cover_to})` }}><span className="grid size-7 place-items-center rounded-full bg-surface text-accent"><Icon icon={Sparkles} size="sm" /></span></span><div className="min-w-0 flex-1"><p className="break-words text-small font-medium">{test.title}</p><p className="mt-1 text-label text-muted">{t.attemptsAvailable(test.attempts_remaining)}</p></div><ProgramBadge code={test.program_code} /><Icon icon={ArrowRight} size="sm" className="text-muted" /></Link></li>
                     ))}
                   </ul>
                 )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@heroui/react";
 import { CheckCircle2, KeyRound } from "lucide-react";
 import { AvatarPicker } from "@/components/avatar-picker";
@@ -51,6 +51,8 @@ export function AvatarSection() {
   const [picked, setPicked] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome>(idle);
   const [saving, setSaving] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const chooserId = useId();
 
   const save = async () => {
     if (!picked) return;
@@ -60,6 +62,7 @@ export function AvatarSection() {
       await api.setAvatar(picked);
       await reloadUser().catch(() => {});
       setOpen(false);
+      triggerRef.current?.focus();
       setOutcome({ ...idle, saved: true });
     } catch (err) {
       setOutcome(failure(err, t.networkError));
@@ -74,9 +77,10 @@ export function AvatarSection() {
         <GradientAvatar user={user} size="xl" />
         <p className="min-w-0 flex-1 basis-40 font-display text-heading-sm">{user.name}</p>
         <Button
+          ref={triggerRef}
           variant="outline"
           aria-expanded={open}
-          aria-controls="avatar-chooser"
+          aria-controls={open ? chooserId : undefined}
           onPress={() => {
             setPicked(user.avatar);
             setOutcome(idle);
@@ -87,14 +91,20 @@ export function AvatarSection() {
         </Button>
       </div>
       {open && (
-        <div id="avatar-chooser" className="mt-5 flex flex-col gap-4 border-t border-border pt-5">
+        <div id={chooserId} className="mt-5 flex flex-col gap-4 border-t border-border pt-5">
           <p className="text-caption text-muted">{t.avatarHint}</p>
           <AvatarPicker value={picked} onChange={setPicked} groupLabel={t.avatarGroup} optionLabel={t.avatarOption} />
           <div className="flex flex-wrap gap-2.5">
             <Button variant="primary" isDisabled={!picked || saving} onPress={save}>
               {saving ? t.saving : t.saveAvatar}
             </Button>
-            <Button variant="ghost" onPress={() => setOpen(false)}>
+            <Button
+              variant="ghost"
+              onPress={() => {
+                setOpen(false);
+                triggerRef.current?.focus();
+              }}
+            >
               {t.cancel}
             </Button>
           </div>
@@ -117,6 +127,13 @@ export function PasswordPanel() {
   const [next, setNext] = useState("");
   const [outcome, setOutcome] = useState<Outcome>(idle);
   const [saving, setSaving] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+
+  useEffect(() => {
+    if (wasOpen.current && !open) triggerRef.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
 
   const close = (result: Outcome) => {
     setOpen(false);
@@ -156,6 +173,7 @@ export function PasswordPanel() {
             )}
           </div>
           <Button
+            ref={triggerRef}
             variant="outline"
             onPress={() => {
               setOutcome(idle);

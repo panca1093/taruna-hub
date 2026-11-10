@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -15,7 +16,7 @@ type updateProfileRequest struct {
 }
 
 type setAvatarRequest struct {
-	Avatar *string `json:"avatar"`
+	Avatar json.RawMessage `json:"avatar"`
 }
 
 type changePasswordRequest struct {
@@ -60,7 +61,18 @@ func (h *Handler) SetAvatar(c echo.Context) error {
 	if err := bindStrict(c, &req); err != nil {
 		return err
 	}
-	updated, err := h.account.SetAvatar(c.Request().Context(), principal, req.Avatar)
+	if len(req.Avatar) == 0 {
+		return httpx.Validation(incomplete, map[string]string{"avatar": required})
+	}
+	var avatar *string
+	if string(req.Avatar) != "null" {
+		var key string
+		if err := json.Unmarshal(req.Avatar, &key); err != nil {
+			return httpx.Validation(incomplete, map[string]string{"avatar": invalidFormat})
+		}
+		avatar = &key
+	}
+	updated, err := h.account.SetAvatar(c.Request().Context(), principal, avatar)
 	if err != nil {
 		return accountError(c, err)
 	}

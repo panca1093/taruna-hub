@@ -715,8 +715,8 @@ export interface paths {
         /**
          * Choose the signed-in user's avatar
          * @description Every role, including staff: unlike `PATCH /me` this changes nothing but the picture. `avatar` is one of
-         *     the thirty-five built-in keys `a01` to `a35`, or `null` to go back to the avatar the web app picks from the
-         *     name. Any other value is `422` with `fields.avatar`. The caller is the principal, so no id travels in the
+         *     the thirty-five built-in keys `a01` to `a35`, or `null` to clear the pick, after which the web app shows a
+         *     neutral placeholder. Any other value is `422` with `fields.avatar`. The caller is the principal, so no id travels in the
          *     path or body.
          */
         put: {
@@ -742,7 +742,6 @@ export interface paths {
                     };
                 };
                 401: components["responses"]["Unauthorized"];
-                404: components["responses"]["NotFound"];
                 422: components["responses"]["ValidationFailed"];
             };
         };
