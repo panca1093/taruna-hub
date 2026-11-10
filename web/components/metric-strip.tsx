@@ -2,6 +2,14 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Icon } from "./icon";
 
+const toneClass = {
+  neutral: "bg-background text-rose",
+  blue: "bg-viz-blue-soft text-viz-blue",
+  green: "bg-viz-green-soft text-viz-green",
+  amber: "bg-viz-amber-soft text-viz-amber",
+  rose: "bg-accent-soft text-accent",
+} as const;
+
 /** One number with caption (prototype .metric). Use inside MetricStrip or alone. */
 export function Metric({
   value,
@@ -9,6 +17,7 @@ export function Metric({
   icon,
   note,
   size = "md",
+  tone = "neutral",
   className,
 }: {
   value: string;
@@ -16,14 +25,15 @@ export function Metric({
   icon?: LucideIcon;
   note?: string;
   size?: "md" | "lg" | "xl";
+  tone?: keyof typeof toneClass;
   className?: string;
 }) {
   const valueClass = size === "xl" ? "text-metric-xl" : size === "lg" ? "text-metric-lg" : "text-metric";
   return (
     <div className={cn("flex min-w-0 items-center gap-4 px-3 sm:px-6", className)}>
       {icon && (
-        <span className="hidden size-9.5 shrink-0 place-items-center rounded-control bg-background text-rose sm:grid">
-          <Icon icon={icon} size="sm" />
+        <span className={cn("hidden size-11 shrink-0 place-items-center rounded-control sm:grid", toneClass[tone])}>
+          <Icon icon={icon} size="md" />
         </span>
       )}
       <div className="min-w-0">

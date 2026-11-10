@@ -90,15 +90,15 @@
   --text-brand--line-height: 1;
   --text-brand--letter-spacing: -3px;
   --text-brand--font-weight: 650;
-  --text-small: 0.8125rem;
+  --text-small: 0.9375rem;
   --text-small--line-height: 1.5;
-  --text-caption: 0.75rem;
+  --text-caption: 0.875rem;
   --text-caption--line-height: 1.5;
-  --text-label: 0.6875rem;
+  --text-label: 0.8125rem;
   --text-label--line-height: 1.5;
-  --text-micro: 0.625rem;
+  --text-micro: 0.75rem;
   --text-micro--line-height: 1.5;
-  --text-nano: 0.5625rem;
+  --text-nano: 0.6875rem;
   --text-nano--line-height: 1.5;
 
   /* Public marketing type (prototype landing.css): Geist display, 550, -0.04em */

@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button, Skeleton } from "@heroui/react";
-import { ArrowRight, Award, BookOpen, Clock, CloudOff, PackageOpen, Sparkles, Trophy, TrendingUp, BarChart3 } from "lucide-react";
+import { ArrowRight, Award, BookOpen, Clock, CloudOff, PackageOpen, Sparkles, Trophy, TrendingUp, BarChart3, type LucideIcon } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
 import { Metric, MetricStrip } from "@/components/metric-strip";
 import { CardKicker, Panel, SectionHeader } from "@/components/page-blocks";
 import { LinkButton } from "@/components/ui/link-button";
-import { ProgramBadge } from "@/components/status-badge";
+import { ProgramBadge, programTintClass } from "@/components/status-badge";
 import { api, errorText, type AttemptSummary, type Enrollment, type KecermatanStudentTest } from "@/lib/api/client";
 import { useUser } from "@/lib/session-context";
 import { useLocale } from "@/lib/i18n/locale-context";
@@ -23,6 +24,16 @@ type DashboardData = {
   attempts: AttemptSummary[];
   kecermatan: KecermatanStudentTest[];
 };
+
+function HeroArt({ icon }: { icon: LucideIcon }) {
+  return (
+    <span aria-hidden className="pointer-events-none absolute -top-10 -right-10 -z-10 grid size-40 place-items-center rounded-full bg-surface/35 md:size-52">
+      <span className="grid size-26 place-items-center rounded-full bg-surface/45 text-accent/55 md:size-34">
+        <Icon icon={icon} size="hero" />
+      </span>
+    </span>
+  );
+}
 
 export default function StudentDashboardPage() {
   const user = useUser();
@@ -67,6 +78,7 @@ export default function StudentDashboardPage() {
     <AppShell
       title={t.greeting(user.name.split(" ")[0])}
       description={t.subtitle}
+      leading={<GradientAvatar user={{ name: user.name }} size="lg" className="hidden sm:flex" />}
       actions={<LinkButton href="/catalog" variant="outline" className="min-h-10">{t.viewCatalog}<Icon icon={ArrowRight} size="xs" /></LinkButton>}
     >
       <div className="space-y-6">
@@ -82,7 +94,8 @@ export default function StudentDashboardPage() {
         ) : (
           <>
             <div className="grid gap-5 md:grid-cols-2">
-              <Panel tone="peach" radius="hero" as="section" padding="lg" className="flex min-h-66 flex-col">
+              <Panel tone="peach" radius="hero" as="section" padding="lg" className="relative isolate flex min-h-66 flex-col overflow-hidden">
+                <HeroArt icon={BookOpen} />
                 <CardKicker icon={BookOpen} className="mb-7">{t.tryoutKicker}</CardKicker>
                 <h2 className="mb-2.5 max-w-md font-display text-hero-lg">{featuredTryout ? featuredTryout.tryout_title : t.tryoutPromoTitle}</h2>
                 <p className="max-w-md text-small text-foreground/80">{featuredTryout ? t.tryoutOwnedDescription : t.tryoutPromoDescription}</p>
@@ -91,7 +104,8 @@ export default function StudentDashboardPage() {
                   <LinkButton href={featuredTryout ? `/student/tryout/${featuredTryout.tryout_id}` : "/catalog"} variant="primary" className="min-h-10">{featuredTryout ? t.openTryout : t.viewCatalog}<Icon icon={ArrowRight} size="xs" /></LinkButton>
                 </div>
               </Panel>
-              <Panel tone="soft" radius="hero" as="section" padding="lg" className="flex min-h-66 flex-col">
+              <Panel tone="soft" radius="hero" as="section" padding="lg" className="relative isolate flex min-h-66 flex-col overflow-hidden">
+                <HeroArt icon={Sparkles} />
                 <CardKicker icon={Sparkles} className="mb-7">{t.kecermatanKicker}</CardKicker>
                 <h2 className="mb-2.5 max-w-md font-display text-hero-lg">{featuredTest ? featuredTest.title : t.kecermatanPromoTitle}</h2>
                 <p className="max-w-md text-small text-foreground/80">{t.kecermatanPromoDescription}</p>
@@ -105,10 +119,10 @@ export default function StudentDashboardPage() {
             </div>
 
             <MetricStrip>
-              <Metric icon={BookOpen} value={String(data.summary.owned_tryouts)} label={t.ownedTryouts} />
-              <Metric icon={Sparkles} value={String(quota)} label={t.attemptsQuota} />
-              <Metric icon={Trophy} value={String(data.summary.completed_tryouts)} label={t.completedTryouts} />
-              <Metric icon={TrendingUp} value={data.summary.average_score === null ? "—" : formatScore(data.summary.average_score)} label={t.averageScore} />
+              <Metric tone="blue" icon={BookOpen} value={String(data.summary.owned_tryouts)} label={t.ownedTryouts} />
+              <Metric tone="rose" icon={Sparkles} value={String(quota)} label={t.attemptsQuota} />
+              <Metric tone="green" icon={Trophy} value={String(data.summary.completed_tryouts)} label={t.completedTryouts} />
+              <Metric tone="amber" icon={TrendingUp} value={data.summary.average_score === null ? "—" : formatScore(data.summary.average_score)} label={t.averageScore} />
             </MetricStrip>
 
             <div className="grid gap-7 lg:grid-cols-hero-pair lg:gap-9">
@@ -117,10 +131,10 @@ export default function StudentDashboardPage() {
                 {!hasContent ? <EmptyState icon={PackageOpen} title={t.emptyTitle} description={t.emptyTryoutsDescription} action={<LinkButton href="/catalog" variant="ghost" size="sm">{t.viewCatalog}</LinkButton>} /> : (
                   <ul className="grid gap-2.5">
                     {data.enrollments.slice(0, 3).map((enrollment) => (
-                      <li key={enrollment.id}><Link href={`/student/tryout/${enrollment.tryout_id}`} className={rowClass}><span className={`${tileClass} bg-peach text-accent`}><Icon icon={BookOpen} size="md" /></span><div className="min-w-0 flex-1"><p className="break-words text-caption font-medium">{enrollment.tryout_title}</p><p className="mt-1 text-label text-muted">{t.accessUntil(formatDate(enrollment.active_until))}</p></div><Icon icon={ArrowRight} size="sm" className="text-muted" /></Link></li>
+                      <li key={enrollment.id}><Link href={`/student/tryout/${enrollment.tryout_id}`} className={rowClass}><span className={`${tileClass} ${programTintClass(enrollment.program_code)}`}><Icon icon={BookOpen} size="md" /></span><div className="min-w-0 flex-1"><p className="break-words text-small font-medium">{enrollment.tryout_title}</p><p className="mt-1 text-label text-muted">{t.accessUntil(formatDate(enrollment.active_until))}</p></div><ProgramBadge code={enrollment.program_code} /><Icon icon={ArrowRight} size="sm" className="text-muted" /></Link></li>
                     ))}
                     {data.kecermatan.slice(0, Math.max(1, 4 - Math.min(3, data.enrollments.length))).map((test) => (
-                      <li key={test.test_id}><Link href={`/student/kecermatan/${test.test_id}`} className={rowClass}><span className={`${tileClass} bg-success-soft text-success-soft-foreground`}><Icon icon={Sparkles} size="md" /></span><div className="min-w-0 flex-1"><p className="break-words text-caption font-medium">{test.title}</p><p className="mt-1 text-label text-muted">{t.attemptsAvailable(test.attempts_remaining)}</p></div><Icon icon={ArrowRight} size="sm" className="text-muted" /></Link></li>
+                      <li key={test.test_id}><Link href={`/student/kecermatan/${test.test_id}`} className={rowClass}><span className={`${tileClass} text-white`} style={{ background: `linear-gradient(135deg, ${test.cover_from}, ${test.cover_to})` }}><Icon icon={Sparkles} size="md" /></span><div className="min-w-0 flex-1"><p className="break-words text-small font-medium">{test.title}</p><p className="mt-1 text-label text-muted">{t.attemptsAvailable(test.attempts_remaining)}</p></div><ProgramBadge code={test.program_code} /><Icon icon={ArrowRight} size="sm" className="text-muted" /></Link></li>
                     ))}
                   </ul>
                 )}
@@ -131,7 +145,7 @@ export default function StudentDashboardPage() {
                   <ul>
                     {recent.map((attempt) => {
                       const enrollment = enrollmentByTryout.get(attempt.tryout_id);
-                      return <li key={attempt.session_id}><Link href={`/student/tryout/${attempt.tryout_id}/result?attempt=${attempt.session_id}`} className="flex items-center gap-3 border-b border-border py-4 transition-colors hover:text-accent"><span className="min-w-12 font-display text-heading tabular-nums">{formatScore(attempt.score!)}</span><div className="min-w-0 flex-1">{enrollment && <ProgramBadge code={enrollment.program_code} />}<p className="mt-1 break-words text-label font-medium">{enrollment?.tryout_title ?? t.genericTryout}</p><p className="mt-1 text-micro text-muted">{t.attempt(attempt.attempt_number)}{attempt.completed_at && <> · {formatDate(attempt.completed_at)}</>}</p></div><Icon icon={ArrowRight} size="xs" className="text-muted" /></Link></li>;
+                      return <li key={attempt.session_id}><Link href={`/student/tryout/${attempt.tryout_id}/result?attempt=${attempt.session_id}`} className="flex items-center gap-3 border-b border-border py-4 transition-colors hover:text-accent"><span className={`grid size-14 shrink-0 place-items-center rounded-full font-display text-small tabular-nums ${programTintClass(enrollment?.program_code)}`}><span className="text-foreground">{formatScore(attempt.score!)}</span></span><div className="min-w-0 flex-1">{enrollment && <ProgramBadge code={enrollment.program_code} />}<p className="mt-1 break-words text-small font-medium">{enrollment?.tryout_title ?? t.genericTryout}</p><p className="mt-1 text-micro text-muted">{t.attempt(attempt.attempt_number)}{attempt.completed_at && <> · {formatDate(attempt.completed_at)}</>}</p></div><Icon icon={ArrowRight} size="xs" className="text-muted" /></Link></li>;
                     })}
                   </ul>
                 )}

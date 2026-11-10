@@ -39,10 +39,12 @@ export function PageHeading({
   description,
   breadcrumb,
   actions,
+  leading,
   size = "display",
   className,
 }: {
   title: string;
+  leading?: React.ReactNode;
   description?: string;
   breadcrumb?: Crumb[];
   actions?: React.ReactNode;
@@ -54,9 +56,12 @@ export function PageHeading({
     <div className={cn("mb-7", className)}>
       {breadcrumb && breadcrumb.length > 0 && <Breadcrumb items={breadcrumb} />}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
-        <div className="min-w-0">
-          <h1 className={cn("font-display text-balance", size === "display" ? "text-display-sm md:text-display" : "text-display-sm")}>{title}</h1>
-          {description && <p className="mt-2 max-w-prose text-small text-muted">{description}</p>}
+        <div className="flex min-w-0 items-center gap-4">
+          {leading}
+          <div className="min-w-0">
+            <h1 className={cn("font-display text-balance", size === "display" ? "text-display-sm md:text-display" : "text-display-sm")}>{title}</h1>
+            {description && <p className="mt-2 max-w-prose text-small text-muted">{description}</p>}
+          </div>
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2.5">{actions}</div>}
       </div>

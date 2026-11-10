@@ -72,7 +72,7 @@ Each numeric triplet is wrapped in `oklch(...)` in CSS. Success, warning and dan
 | `ring-start`, `ring-end` | Same values as `accent`, `accent-2` (plum to rose) | Gradient identity |
 | `backdrop` | Light `oklch(0.2 0.02 335 / 45%)`; dark `oklch(0 0 0 / 65%)` | Modal / drawer dimming |
 | `bg-gradient-ring`, `text-gradient` | `linear-gradient(135deg, var(--ring-start), var(--ring-end))` | Supporting brand emphasis |
-| `viz-blue`, `viz-green`, `viz-amber` and their `-soft` pairs | Brighter data colours outside the rose palette, light and dark values in `globals.css` | Progress chart line/fill and metric tiles on the kecermatan result only. The strong colour is for marks and icons, never small text (below 4.5:1); text on a `-soft` tile uses `foreground` or `foreground/80` |
+| `viz-blue`, `viz-green`, `viz-amber` and their `-soft` pairs | Brighter data colours outside the rose palette, light and dark values in `globals.css` | Progress chart line/fill, metric tiles, tinted icon tiles and avatar discs (see §7.4c0). The strong colour is for marks and icons, never small text (below 4.5:1); text on a `-soft` tile uses `foreground` or `foreground/80` |
 | `bg-grid` | 1px `border` lines every 32px | Landing background |
 | Text selection | Accent at 30% mixed with transparent | Selected text |
 
@@ -140,10 +140,10 @@ Defined in `globals.css` (`@theme static`). Use these utilities; never `text-[13
 | `text-metric-xl` / `-lg` / `text-metric` | 42px / 35px / 21px | Wallet amount, chart summary, metric strip |
 | `text-score` | 70px, -3px | Result score |
 | `text-brand` | 34px, -3px, 650 | The rail "T." mark |
-| `text-small` | 13px | Descriptions, row text |
-| `text-caption` | 12px | Buttons, table cells, form labels, menu rows |
-| `text-label` | 11px | Breadcrumb, kicker, table header, chips |
-| `text-micro` / `text-nano` | 10px / 9px | Hints, tags, rail labels |
+| `text-small` | 15px | Descriptions, row text and row titles |
+| `text-caption` | 14px | Buttons, table cells, form labels, menu rows |
+| `text-label` | 13px | Breadcrumb, kicker, table header, chips |
+| `text-micro` / `text-nano` | 12px / 11px | Hints, tags, rail labels |
 
 Base rules (workspace only): `body` 14px / 1.5; `h1` = display, `h2` = heading, `h3` = title, all Geist 550. A `text-*` or `font-*` utility on the element overrides them.
 
@@ -230,7 +230,7 @@ Reuse [AppShell](../web/components/app-shell.tsx) for authenticated operational 
 | Rail brand | "T." mark (`text-brand`, dot in `sidebar-accent`) at the top, linking to the role home; expanded adds "Taruna Eduka" and a tagline |
 | Rail bottom | Theme control (moon/sun icon, label when expanded); student expanded also shows the "Selangkah lebih siap." note |
 | Collapsed sidebar (staff) | Ringkasan plus one module icon button per multi-item group (operations `MonitorDot`, content `Layers`, finance `Wallet`, system `SlidersHorizontal`; the icon never repeats a child icon), with one hairline between Ringkasan and the modules. The button takes `bg-rail-active` and the accent bar when the route is inside its group. Hover (150ms in, 200ms out) or click/Enter/Space opens a fixed flyout to the right of the rail (`rounded-menu bg-sidebar shadow-menu`) with the group name and its child links on the dashed tree; click (also on a hover-opened flyout) pins it and moves focus to the first link; hover is ignored on other groups while one is pinned, clicking another switches. Esc closes it from anywhere (focus returns to the button only if it was inside), as do outside click, navigation, window resize and any scroll; the panel is clamped inside the viewport. Button has `aria-expanded`, `aria-controls` and the group name as its label (a disclosure, not a menu: no `aria-haspopup`). |
-| Nav item (student) | Collapsed: icon over a `text-nano` label, `min-h-18` (72px), `rounded-tile`. Expanded: row, 50px high, 13px label |
+| Nav item (student) | Collapsed: icon over a `text-nano` label, `min-h-18` (72px), `rounded-tile`. Expanded: row, 50px high, 15px label (admin child rows 14px) |
 | Nav item (staff) | Row, 48px; group children use 40px rows under the dashed tree |
 | Student navigation | Exactly three items: Dashboard `/student`, Tryout `/student/tryouts` (also active on `/student/tryout/*` and `/student/kecermatan/*`), Katalog `/catalog`, as a flat list with no group header or tree connector |
 | Student mobile | No drawer. A floating bottom bar (`sidebar` surface, `rounded-hero`, 70px, 16px side inset) shows the same three destinations; main gets 112px bottom padding below `lg` |
@@ -380,7 +380,7 @@ Zero renders as an empty bar; small positive values keep a 4% minimum so they st
 
 Use the existing Taruna Eduka image assets through [Logo](../web/components/logo.tsx): full logo at 36px height; collapsed icon at 32px. Preserve aspect ratio and use legible assets for each surface. The current full logo is visually subdued on the dark sidebar; review a suitable dark-surface asset before release.
 
-[GradientAvatar](../web/components/gradient-avatar.tsx) uses initials over a user-color gradient: 28px small, 36px medium, 48px large. Avatar and product-cover colors are decorative identity, not permission or status indicators.
+[GradientAvatar](../web/components/gradient-avatar.tsx) draws an illustrated figure (head, hair, shoulders) on a tinted disc instead of initials: 34px small, 38px medium, 48px large. Accounts carry no photo, so the disc tint (`peach`, `viz-blue-soft`, `viz-green-soft`, `viz-amber-soft`, `accent-soft`) and one of three hair shapes are picked from the name; the name is the image label. It is used everywhere a person appears: top bar, account menu, profile, staff tables, the student greeting. Avatar and product-cover colors are decorative identity, not permission or status indicators.
 
 ### 6.10 Shared visual helpers (visual parity pass)
 
@@ -482,6 +482,15 @@ Import `AppShell` / `StatCard` from `@/components/...` and `Card` from `@heroui/
 | Public / auth | Landing, login, register, checkout | Public navigation or focused form layout; reuse tokens and controls while preserving their different task |
 
 Use the richer landing visual treatment only where discovery/marketing is the goal. Detailed timing, ranking, payment, and entitlement rules remain product requirements.
+
+### 7.4c0 Client readability and colour pass (2026-11-10)
+
+Client feedback was that text was too small on every page and that pages lacked imagery and colour. Two rules follow from it:
+
+- **Type.** The five small steps were raised by 2px in `globals.css` (`text-small` 15, `text-caption` 14, `text-label` 13, `text-micro` 12, `text-nano` 11). Do not go below `text-micro` for anything a user must read; `text-nano` is for the collapsed rail label only. Titles of list rows use `text-small`.
+- **Colour.** A neutral icon tile may take a data tint when it helps tell items apart: `Metric` has a `tone` (`blue`, `green`, `amber`, `rose`), programme rows and score discs reuse the programme chip colours through `programTintClass` (still defined only in `status-badge.tsx`), kecermatan rows show the test's cover gradient, and people are shown with `GradientAvatar`. Tints are decorative identity, never status: a score disc is tinted by programme, not by how good the score is.
+
+Dashboards: the student greeting carries the user's avatar (`AppShell` `leading`), the two hero cards have a decorative disc with the card's icon in the top-right corner behind the text, and metric icons are tinted. The admin KPI icons are tinted, queue rows show the student's avatar with a "Pesanan" (warning) or "Top-up" (success) chip, and shortcut tiles use `viz-amber-soft` and `viz-blue-soft`.
 
 ### 7.4a Approved account entry and student overview
 
