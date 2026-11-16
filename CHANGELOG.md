@@ -2,6 +2,12 @@
 
 Notable changes to the Taruna Eduka tryout platform, newest first. Each version is a git tag; pushing a `v*` tag builds the deploy images.
 
+## Unreleased
+
+### Changed
+
+- **Kecermatan scoring v2.** New student attempts are scored with the client's revised formula (kecepatan, ketahanan and ketelitian weighted 30/30/40). Version 1 is kept and can still be applied by recomputing stored results. Existing results keep their version until recomputed.
+
 ## v0.1.3 — 2026-11-10
 
 Run migrations `000026_user_avatar` and `000027_user_gender_birth_date` when deploying.
