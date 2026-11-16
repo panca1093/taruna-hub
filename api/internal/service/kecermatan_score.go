@@ -6,10 +6,10 @@ import (
 	"math"
 )
 
-// KecermatanScoringVersion is the formula new attempts are scored with. Version 1 is the provisional baseline
-// the owner approved on 2026-10-28; the client will revise it (PRD section 10, question 1, D03), and a revised
-// formula becomes version 2 while version 1 stays readable, so stored results can be recomputed from raw counts.
-const KecermatanScoringVersion = 1
+// KecermatanScoringVersion is the formula new attempts are scored with. Version 2 is the client's revised formula;
+// version 1, the baseline the owner approved on 2026-10-28, stays readable so stored results can be recomputed
+// from raw counts.
+const KecermatanScoringVersion = 2
 
 var ErrKecermatanScoringVersion = errors.New("unknown kecermatan scoring version")
 
