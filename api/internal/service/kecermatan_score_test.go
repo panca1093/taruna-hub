@@ -146,9 +146,81 @@ func TestScoreKecermatanRejects(t *testing.T) {
 	if _, err := ScoreKecermatan(99, uniformKolom(10, KecermatanKolomCount{1, 1, 1})); !errors.Is(err, ErrKecermatanScoringVersion) {
 		t.Errorf("unknown version err = %v, want ErrKecermatanScoringVersion", err)
 	}
-	for _, n := range []int{0, 1, 9} {
-		if _, err := ScoreKecermatan(1, uniformKolom(n, KecermatanKolomCount{1, 1, 1})); err == nil {
-			t.Errorf("%d kolom accepted, want an error for an odd or empty set", n)
+	for _, v := range []int{1, 2} {
+		for _, n := range []int{0, 1, 9} {
+			if _, err := ScoreKecermatan(v, uniformKolom(n, KecermatanKolomCount{1, 1, 1})); err == nil {
+				t.Errorf("version %d: %d kolom accepted, want an error for an odd or empty set", v, n)
+			}
+		}
+	}
+}
+
+func goldenV2Kolom() []KecermatanKolomCount {
+	rows := [][3]int{{25, 8, 17}, {28, 10, 12}, {24, 6, 20}, {30, 10, 10}, {29, 9, 12}, {26, 11, 13}, {20, 13, 17}, {25, 8, 17}, {30, 5, 15}, {32, 8, 10}}
+	out := make([]KecermatanKolomCount, len(rows))
+	for i, r := range rows {
+		out[i] = KecermatanKolomCount{r[0], r[1], r[2]}
+	}
+	return out
+}
+
+func near(got, want, tol float64) bool { return math.Abs(got-want) <= tol }
+
+func TestScoreKecermatanVersion2Golden(t *testing.T) {
+	got, err := ScoreKecermatan(2, goldenV2Kolom())
+	if err != nil {
+		t.Fatalf("ScoreKecermatan: %v", err)
+	}
+	if got.Version != 2 || got.Kecepatan != 78.82 || got.Ketahanan != 72.58 || got.Ketelitian != 61.03 || got.NilaiAkhir != 69.83 {
+		t.Errorf("got %+v, want version 2 and 78.82/72.58/61.03/69.83", got)
+	}
+	a, sd, b := kecermatanV2Stability(goldenV2Kolom())
+	if !near(a, 71.04, 0.01) || !near(sd, 3.40, 0.01) || !near(b, 74.90, 0.01) {
+		t.Errorf("A/SD/B = %v/%v/%v, want 71.04/3.40/74.90", a, sd, b)
+	}
+}
+
+func TestScoreKecermatanVersion2KecepatanBranches(t *testing.T) {
+	// 2 kolom of 50 soal; the first kolom is filled first, so dikerjakan d is also p.
+	for _, c := range []struct {
+		dikerjakan int
+		want       float64
+	}{{100, 80}, {74, 80}, {52, 70}, {30, 60}, {20, 40}} {
+		first := min(c.dikerjakan, 50)
+		kolom := []KecermatanKolomCount{{first, 0, 50 - first}, {c.dikerjakan - first, 0, 50 - (c.dikerjakan - first)}}
+		got, err := ScoreKecermatan(2, kolom)
+		if err != nil {
+			t.Fatalf("ScoreKecermatan: %v", err)
+		}
+		if got.Kecepatan != c.want {
+			t.Errorf("dikerjakan %d: kecepatan = %v, want %v", c.dikerjakan, got.Kecepatan, c.want)
+		}
+	}
+}
+
+func TestScoreKecermatanVersion2NothingAnswered(t *testing.T) {
+	got, err := ScoreKecermatan(2, uniformKolom(2, KecermatanKolomCount{0, 0, 50}))
+	if err != nil {
+		t.Fatalf("ScoreKecermatan: %v", err)
+	}
+	if got.Kecepatan != 0 || got.Ketelitian != 0 || got.Ketahanan != 75.2 || got.NilaiAkhir != 22.56 {
+		t.Errorf("got %+v, want 0 / 75.2 / 0 and final 22.56", got)
+	}
+}
+
+// Only Ketahanan can leave 0-100 under v2: Kecepatan is at most 80 and Ketelitian at most 81.
+func TestScoreKecermatanVersion2KetahananClamp(t *testing.T) {
+	upper, _ := ScoreKecermatan(2, []KecermatanKolomCount{{0, 40, 0}, {40, 0, 0}})
+	if upper.Ketahanan != 100 || !near(upper.KetahananRaw, 113.6, 1e-9) {
+		t.Errorf("upper: ketahanan %v raw %v, want 100 and 113.6", upper.Ketahanan, upper.KetahananRaw)
+	}
+	lower, _ := ScoreKecermatan(2, []KecermatanKolomCount{{100, 0, 0}, {0, 0, 100}})
+	if lower.Ketahanan != 0 || !near(lower.KetahananRaw, -63.23, 0.01) {
+		t.Errorf("lower: ketahanan %v raw %v, want 0 and about -63.23", lower.Ketahanan, lower.KetahananRaw)
+	}
+	for _, s := range []KecermatanScores{upper, lower} {
+		if !near(s.KecepatanRaw, s.Kecepatan, 0.005) || !near(s.KetelitianRaw, s.Ketelitian, 0.005) {
+			t.Errorf("kecepatan/ketelitian raw differ from plain values: %+v", s)
 		}
 	}
 }
