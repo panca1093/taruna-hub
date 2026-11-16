@@ -744,7 +744,7 @@ func TestKecermatanRecomputeRewritesOnlyScores(t *testing.T) {
 		after.Result.BenarTotal != before.Result.BenarTotal || after.Result.KosongTotal != before.Result.KosongTotal {
 		t.Errorf("after recompute %+v, want %+v", after.Result, before.Result)
 	}
-	if _, err := h.rt.RecomputeScores(ctx, tenant.ID, 2); !errors.Is(err, ErrKecermatanScoringVersion) {
+	if _, err := h.rt.RecomputeScores(ctx, tenant.ID, 3); !errors.Is(err, ErrKecermatanScoringVersion) {
 		t.Errorf("recompute to an unknown version: err = %v, want ErrKecermatanScoringVersion", err)
 	}
 }
