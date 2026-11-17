@@ -73,7 +73,7 @@ const numberFields = {
   itemLength: { min: 1, max: 5, path: "item_length" },
   optionsPerSoal: { min: 3, max: 8, path: "options_per_soal" },
   soalPerKolom: { min: 50, max: 100, path: "soal_per_kolom" },
-  kolomCount: { min: 10, max: 50, path: "kolom_count" },
+  kolomCount: { min: 2, max: 50, path: "kolom_count" },
   kolomDurationMinutes: { min: 1, max: 60, path: "kolom_duration_seconds" },
 } as const;
 type NumberKey = keyof typeof numberFields;
@@ -408,7 +408,7 @@ export function KecermatanBuilder({ testId }: { testId?: string }) {
             <TextInput label={t.itemLengthLabel} min={1} max={5} {...numberField("itemLength")} />
             <TextInput label={t.optionsPerSoalLabel} min={3} max={8} {...numberField("optionsPerSoal")} />
             <TextInput label={t.soalPerKolomLabel} min={50} max={100} {...numberField("soalPerKolom")} />
-            <TextInput label={t.kolomCountLabel} min={10} max={50} step={2} {...numberField("kolomCount")} />
+            <TextInput label={t.kolomCountLabel} min={2} max={50} step={2} {...numberField("kolomCount")} />
             <TextInput label={t.kolomDurationLabel} min={1} max={60} {...numberField("kolomDurationMinutes")} />
           </div>
           <p className={cn("text-caption", pool < need || formErrors.pool ? "text-danger" : "text-muted")}>

@@ -49,7 +49,7 @@ const (
 const (
 	maxKecermatanTitleLen = 200
 	maxKecermatanDesc     = 2000
-	minKolomCount         = 10
+	minKolomCount         = 2
 	maxKolomCount         = 50
 	minSoalPerKolom       = 50
 	maxSoalPerKolom       = 100

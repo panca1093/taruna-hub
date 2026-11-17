@@ -78,6 +78,7 @@ from the environment so it stays out of shell history:
 go run ./cmd/bootstrap tenant -slug taruna -name "Taruna Eduka"
 BOOTSTRAP_PASSWORD=... go run ./cmd/bootstrap admin -tenant taruna -name "Siti" -email siti@example.com
 BOOTSTRAP_PASSWORD=... go run ./cmd/bootstrap admin -platform -name "Root" -email root@example.com
+go run ./cmd/bootstrap rescore-kecermatan -tenant taruna   # rewrite stored kecermatan scores with the current version
 ```
 
 ## Configuration

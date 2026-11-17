@@ -154,7 +154,7 @@ export default function KecermatanOverviewPage({ params }: { params: Promise<{ i
                     </span>
                   </Link>
                 ))}
-                <p className="mt-3 text-micro text-muted">{t.historyProvisional}</p>
+                <p className="mt-3 text-micro text-muted">{t.historyComposite}</p>
               </div>
             )}
           </Panel>

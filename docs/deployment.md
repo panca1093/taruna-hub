@@ -117,6 +117,15 @@ dc run --rm api bootstrap tenant -slug taruna -name "Taruna Eduka"
 dc run --rm -e BOOTSTRAP_PASSWORD='…' api bootstrap admin -tenant taruna -name "…" -email "…"
 ```
 
+### After a kecermatan scoring version change
+
+When a release changes the default kecermatan scoring version (the changelog says so), rewrite the stored results once
+after the migration. It reads only the stored per-kolom counts and can be run again safely:
+
+```bash
+dc run --rm api bootstrap rescore-kecermatan -tenant taruna
+```
+
 ## 4. Backups
 
 Create an R2 bucket `taruna-backup` and an R2 API token with Object Read & Write on it only, then fill the

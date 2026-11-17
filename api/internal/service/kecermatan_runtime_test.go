@@ -376,13 +376,13 @@ func TestKecermatanCompletionConsumesOnceAndScores(t *testing.T) {
 	if done.Phase != KecPhaseCompleted || done.Result == nil {
 		t.Fatalf("phase = %s result = %v, want completed with a result", done.Phase, done.Result)
 	}
-	want, err := ScoreKecermatan(1, append(
+	want, err := ScoreKecermatan(KecermatanScoringVersion, append(
 		uniformKolom(5, KecermatanKolomCount{30, 10, 10}), uniformKolom(5, KecermatanKolomCount{20, 10, 20})...))
 	if err != nil {
 		t.Fatalf("score: %v", err)
 	}
 	r := done.Result
-	if r.BenarTotal != 250 || r.SalahTotal != 100 || r.KosongTotal != 150 || r.ScoringVersion != KecermatanScoringVersion ||
+	if r.BenarTotal != 250 || r.SalahTotal != 100 || r.KosongTotal != 150 || r.ScoringVersion != 2 || KecermatanScoringVersion != 2 ||
 		r.NilaiAkhir != want.NilaiAkhir || r.Kecepatan != want.Kecepatan || r.Ketahanan != want.Ketahanan || r.Ketelitian != want.Ketelitian {
 		t.Errorf("result = %+v, want 250/100/150 and the scores of %+v", r, want)
 	}
@@ -726,25 +726,67 @@ func TestKecermatanRecomputeRewritesOnlyScores(t *testing.T) {
 	view, _ := h.start(t, tenant, p, test)
 	h.answer(t, tenant, p, view.Session, 1, 1, 20, true)
 	h.clock.Advance(time.Duration(kecKolomCount) * kecSlot * time.Second)
-	before, err := h.rt.Result(ctx, h.scope(tenant), p, view.Session.ID)
-	if err != nil {
+	if _, err := h.rt.Result(ctx, h.scope(tenant), p, view.Session.ID); err != nil {
 		t.Fatalf("result: %v", err)
 	}
+	kolomBefore, err := h.rt.repo.Kolom(ctx, h.pool, tenant.ID, view.Session.ID)
+	if err != nil {
+		t.Fatalf("kolom: %v", err)
+	}
+	counts := countsOf(kolomBefore)
 
-	// Damage the stored composite on purpose: the recompute must restore it from the raw counts.
-	if _, err := h.pool.Exec(ctx, `UPDATE kecermatan_results SET nilai_akhir = 1, kecepatan = 1 WHERE session_id = $1`, view.Session.ID); err != nil {
-		t.Fatalf("tamper: %v", err)
+	for _, version := range []int{1, 2} {
+		// Damage the stored composite on purpose: the recompute must restore it from the raw counts.
+		if _, err := h.pool.Exec(ctx, `UPDATE kecermatan_results SET nilai_akhir = 1, kecepatan = 1 WHERE session_id = $1`, view.Session.ID); err != nil {
+			t.Fatalf("tamper: %v", err)
+		}
+		n, err := h.rt.RecomputeScores(ctx, tenant.ID, version)
+		if err != nil || n < 1 {
+			t.Fatalf("recompute v%d = %d, %v, want at least the one result", version, n, err)
+		}
+		want, _ := ScoreKecermatan(version, counts)
+		after, _ := h.rt.Result(ctx, h.scope(tenant), p, view.Session.ID)
+		if r := after.Result; r.ScoringVersion != version || r.NilaiAkhir != want.NilaiAkhir || r.Kecepatan != want.Kecepatan ||
+			r.Ketahanan != want.Ketahanan || r.Ketelitian != want.Ketelitian {
+			t.Errorf("recompute v%d: result %+v, want scores %+v", version, r, want)
+		}
+		kolomAfter, _ := h.rt.repo.Kolom(ctx, h.pool, tenant.ID, view.Session.ID)
+		if !reflect.DeepEqual(countsOf(kolomAfter), counts) {
+			t.Errorf("recompute v%d changed the per-kolom counts", version)
+		}
 	}
-	n, err := h.rt.RecomputeScores(ctx, tenant.ID, 1)
-	if err != nil || n < 1 {
-		t.Fatalf("recompute = %d, %v, want at least the one result", n, err)
-	}
-	after, _ := h.rt.Result(ctx, h.scope(tenant), p, view.Session.ID)
-	if after.Result.NilaiAkhir != before.Result.NilaiAkhir || after.Result.Kecepatan != before.Result.Kecepatan ||
-		after.Result.BenarTotal != before.Result.BenarTotal || after.Result.KosongTotal != before.Result.KosongTotal {
-		t.Errorf("after recompute %+v, want %+v", after.Result, before.Result)
-	}
-	if _, err := h.rt.RecomputeScores(ctx, tenant.ID, 2); !errors.Is(err, ErrKecermatanScoringVersion) {
+	stored, _ := h.rt.Result(ctx, h.scope(tenant), p, view.Session.ID)
+	if _, err := h.rt.RecomputeScores(ctx, tenant.ID, 3); !errors.Is(err, ErrKecermatanScoringVersion) {
 		t.Errorf("recompute to an unknown version: err = %v, want ErrKecermatanScoringVersion", err)
+	}
+	if again, _ := h.rt.Result(ctx, h.scope(tenant), p, view.Session.ID); again.Result != stored.Result {
+		t.Errorf("rejected recompute wrote: %+v, want %+v", again.Result, stored.Result)
+	}
+}
+
+func TestKecermatanTwoKolomAttemptCompletesAndScores(t *testing.T) {
+	h := newKecHarness(t)
+	tenant := h.t.q.a
+	ctx := context.Background()
+	test, err := h.kec.Create(ctx, h.scope(tenant), h.staff(tenant, model.RoleAdmin), KecermatanInput{
+		ProgramID: h.t.q.program(tenant).ID, Title: "Kecermatan " + uuid.NewString()[:8], ItemType: model.KecChar,
+		ItemLength: 2, OptionsPerSoal: 5, SoalPerKolom: kecSoalCount, KolomCount: 2,
+		KolomDurationSeconds: kecKolomSeconds, CoverFrom: "#f59e0b", CoverTo: "#ef4444",
+	})
+	if err != nil {
+		t.Fatalf("create a 2-kolom test: %v", err)
+	}
+	_, p := h.holder(t, tenant, test, 1)
+	view, _ := h.start(t, tenant, p, test)
+	h.answer(t, tenant, p, view.Session, 1, 1, 20, true)
+	h.clock.Advance(2 * kecSlot * time.Second)
+
+	done := h.session(t, tenant, p, view.Session.ID)
+	if done.Phase != KecPhaseCompleted || done.Result == nil {
+		t.Fatalf("phase = %s result = %v, want completed with a result", done.Phase, done.Result)
+	}
+	want, _ := ScoreKecermatan(KecermatanScoringVersion, []KecermatanKolomCount{{20, 0, kecSoalCount - 20}, {0, 0, kecSoalCount}})
+	if r := done.Result; r.BenarTotal != 20 || r.KosongTotal != 2*kecSoalCount-20 || r.NilaiAkhir != want.NilaiAkhir || r.Ketahanan != want.Ketahanan {
+		t.Errorf("result = %+v, want 20 benar over 2 kolom and the scores of %+v", r, want)
 	}
 }

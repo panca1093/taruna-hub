@@ -6117,7 +6117,7 @@ export interface paths {
          * @description Saves the frozen generation configuration (FR-ADM-KEC-01/06/07/10/13/23). Everything is validated on
          *     save and a failing save stores nothing, so a stored test is always playable:
          *
-         *     - `kolom_count` is even, 10 to 50; `soal_per_kolom` 50 to 100 (D09); `item_length` 1 to 5;
+         *     - `kolom_count` is even, 2 to 50; `soal_per_kolom` 50 to 100 (D09); `item_length` 1 to 5;
          *       `options_per_soal` 3 to 8; `kolom_duration_seconds` 1 to 3600.
          *     - Sources by `item_type`: `char` and `number` are built in and take no `package_ids`; `symbol`, `emoji`
          *       and `image` take exactly one package of the same type; `shape` takes none (all seven built-in
@@ -6672,8 +6672,9 @@ export interface paths {
         /**
          * The result of a completed attempt
          * @description Student only, owner only. Per-kolom and total benar/salah/kosong are authoritative and immutable. The four
-         *     composite scores are provisional (D03, client confirmation pending) and carry the `scoring_version` they
-         *     were computed under, so a revised formula can recompute them from the counts. An attempt in progress is
+         *     composite scores carry the `scoring_version` they were computed under. Version 2, the client's revised
+         *     formula, is the default for new attempts and version 1 is retained, so either can recompute the scores from
+         *     the counts. An attempt in progress is
          *     `409` `kecermatan_result_not_ready`.
          */
         get: {
@@ -9092,12 +9093,12 @@ export interface components {
             started_at: string;
             /** Format: date-time */
             completed_at: string | null;
-            /** @description Provisional composite (D03); `null` until completed. */
+            /** @description Composite score under the result's `scoring_version`; `null` until completed. */
             nilai_akhir: number | null;
         };
         /**
          * @description Averages over the most recent completed attempts, at most five, each rounded to two decimals. They are
-         *     built on the provisional composite scores (D03).
+         *     built on the composite scores, each computed under its own `scoring_version`.
          */
         KecermatanProgress: {
             attempts_counted: number;
@@ -9152,7 +9153,7 @@ export interface components {
             soal: components["schemas"]["KecermatanSoal"][];
             answers: components["schemas"]["KecermatanStoredAnswer"][];
         };
-        /** @description Provisional composite scores (D03), each clamped to 0-100 with two decimals. */
+        /** @description Composite scores, each clamped to 0-100 with two decimals. */
         KecermatanScores: {
             kecepatan: number;
             ketahanan: number;

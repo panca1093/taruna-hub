@@ -27,7 +27,7 @@ const (
 	kecItemLength   = "Panjang item 1–5."
 	kecOptionsRule  = "Jumlah opsi per soal 3–8."
 	kecSoalRule     = "Soal per kolom 50–100."
-	kecKolomRange   = "Jumlah kolom 10–50."
+	kecKolomRange   = "Jumlah kolom 2–50."
 	kecKolomOdd     = "Jumlah kolom harus genap."
 	kecDurationRule = "Durasi kolom 1–3600 detik."
 	kecCoverRule    = "Warna sampul harus berformat #rrggbb."

@@ -193,7 +193,7 @@ func TestKecermatanTableRefusesWhatTheServiceShouldNeverSend(t *testing.T) {
 	f := newKecermatanFixture(t)
 	for name, mutate := range map[string]func(*model.KecermatanTest){
 		"odd kolom":     func(k *model.KecermatanTest) { k.KolomCount = 11 },
-		"9 kolom":       func(k *model.KecermatanTest) { k.KolomCount = 8 },
+		"0 kolom":       func(k *model.KecermatanTest) { k.KolomCount = 0 },
 		"49 soal":       func(k *model.KecermatanTest) { k.SoalPerKolom = 49 },
 		"length 6":      func(k *model.KecermatanTest) { k.ItemLength = 6 },
 		"zero duration": func(k *model.KecermatanTest) { k.KolomDurationSeconds = 0 },

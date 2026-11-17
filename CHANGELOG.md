@@ -2,6 +2,15 @@
 
 Notable changes to the Taruna Eduka tryout platform, newest first. Each version is a git tag; pushing a `v*` tag builds the deploy images.
 
+## Unreleased
+
+Run migration `000028_kecermatan_kolom_from_two` when deploying, then `bootstrap rescore-kecermatan -tenant <slug>` once so stored kecermatan results move to scoring version 2.
+
+### Changed
+
+- **Kecermatan tests from 2 kolom.** A test may have any even number of kolom from 2 to 50; the minimum was 10.
+- **Kecermatan scoring v2.** New student attempts are scored with the client's revised formula (kecepatan, ketahanan and ketelitian weighted 30/30/40). Version 1 is kept. Existing results keep version 1 until `bootstrap rescore-kecermatan` rewrites them from their stored counts.
+
 ## v0.1.3 — 2026-11-10
 
 Run migrations `000026_user_avatar` and `000027_user_gender_birth_date` when deploying.

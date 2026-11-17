@@ -278,8 +278,8 @@ func TestKecermatanRuntimeFlowNeverLeaksKeysDuringAnAttempt(t *testing.T) {
 	}
 	wantCode(t, f.call(http.MethodPut, answerPath, map[string]any{"answer": "A"}, f.tokenA), http.StatusConflict, "kecermatan_session_completed")
 	result := decodeInto[kecResultResponse](t, f.call(http.MethodGet, kecSessionPath(sid, "/result"), nil, f.tokenA))
-	if result.ScoringVersion != 1 || result.BenarTotal+result.SalahTotal+result.KosongTotal != 500 || len(result.Kolom) != 10 || result.AttemptNumber != 1 {
-		t.Errorf("result = %+v, want version 1 counting 500 soal over 10 kolom", result)
+	if result.ScoringVersion != 2 || result.BenarTotal+result.SalahTotal+result.KosongTotal != 500 || len(result.Kolom) != 10 || result.AttemptNumber != 1 {
+		t.Errorf("result = %+v, want version 2 counting 500 soal over 10 kolom", result)
 	}
 	review := f.call(http.MethodGet, kecSessionPath(sid, "/review"), nil, f.tokenA)
 	if review.Code != http.StatusOK || !strings.Contains(review.Body.String(), `"missing"`) {
