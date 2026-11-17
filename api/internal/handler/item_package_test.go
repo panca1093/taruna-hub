@@ -20,6 +20,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
 type packageFixture struct {
@@ -436,8 +437,8 @@ func TestEmojiIsCatalogOnlyAndShapesAreBuiltIn(t *testing.T) {
 
 	catalog := sendTryoutJSON(f.e, http.MethodGet, f.hostA, "/api/v1/item-packages/catalog", nil, f.tokenAdminA)
 	var body itemCatalogResponse
-	if err := json.Unmarshal(catalog.Body.Bytes(), &body); err != nil || len(body.Emoji) == 0 || len(body.Shapes) != 7 || len(body.SymbolPalette) == 0 {
-		t.Fatalf("catalog = %s (%v), want emoji, 7 shapes and a palette", catalog.Body.String(), err)
+	if err := json.Unmarshal(catalog.Body.Bytes(), &body); err != nil || len(body.Emoji) == 0 || len(body.Shapes) != len(service.ShapeCatalog()) || len(body.SymbolPalette) == 0 {
+		t.Fatalf("catalog = %s (%v), want emoji, the full shape catalog and a palette", catalog.Body.String(), err)
 	}
 	if !strings.Contains(body.EmojiAttribution, "Twemoji") || !strings.Contains(body.EmojiAttribution, "CC-BY 4.0") {
 		t.Errorf("attribution = %q, want the Twemoji CC-BY 4.0 credit", body.EmojiAttribution)
