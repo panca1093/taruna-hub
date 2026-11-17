@@ -1,9 +1,11 @@
 // Command bootstrap provisions the first tenant and admin accounts. It is the only way to
 // create them: there is deliberately no HTTP endpoint, so there is no public path to admin.
+// It also carries the one-off operator job that rescores stored kecermatan results.
 //
 //	bootstrap tenant -slug taruna -name "Taruna Eduka"
 //	BOOTSTRAP_PASSWORD=... bootstrap admin -tenant taruna -name "Siti" -email siti@example.com
 //	BOOTSTRAP_PASSWORD=... bootstrap admin -platform -name "Root" -email root@example.com
+//	bootstrap rescore-kecermatan -tenant taruna
 package main
 
 import (
@@ -30,7 +32,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: bootstrap tenant|admin [flags]")
+		return errors.New("usage: bootstrap tenant|admin|rescore-kecermatan [flags]")
 	}
 
 	cfg, err := config.Load()
@@ -89,6 +91,25 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Printf("%s %s created (%s)\n", created.Role, *email, created.ID)
+		return nil
+
+	case "rescore-kecermatan":
+		fs := flag.NewFlagSet("rescore-kecermatan", flag.ContinueOnError)
+		slug := fs.String("tenant", "", "tenant slug")
+		version := fs.Int("version", service.KecermatanScoringVersion, "scoring version to rewrite every stored result with")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		t, err := tenants.BySlug(ctx, *slug)
+		if err != nil {
+			return err
+		}
+		runtime := service.NewKecermatanRuntimeService(pool, repository.NewKecermatanRuntimeRepository(pool), nil, nil)
+		n, err := runtime.RecomputeScores(ctx, t.ID, *version)
+		if err != nil {
+			return fmt.Errorf("after %d results: %w", n, err)
+		}
+		fmt.Printf("%d kecermatan results of %s rescored with version %d\n", n, t.Slug, *version)
 		return nil
 
 	default:

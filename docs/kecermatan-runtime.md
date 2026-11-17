@@ -121,7 +121,9 @@ numbers. At N=10 Ketahanan equals the client's "last 5 vs first 5". The unclampe
 
 `KecermatanRuntimeService.RecomputeScores(ctx, tenantID, version)` accepts version 1 or 2 (anything else fails with
 the unknown-scoring-version error before any write) and rewrites only the composites and the version of every result
-of the tenant from the stored counts. One call uses one version; it cannot mix them. It has no HTTP or CLI trigger yet.
+of the tenant from the stored counts. One call uses one version; it cannot mix them. An operator runs it with
+`bootstrap rescore-kecermatan -tenant <slug>` (`-version` defaults to the current one); there is no HTTP trigger. Run
+it once after deploying a new default version, so the history and the progress averages do not mix versions.
 
 ## Results and history
 
