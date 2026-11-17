@@ -15,7 +15,7 @@ ARCHITECTURE lists a unified `tests` model; as with P08's `tryouts`, a standalon
 
 ## Rules
 
-Checked on save, and a failing save stores nothing: `kolom_count` even 10-50, `soal_per_kolom` 50-100 (D09),
+Checked on save, and a failing save stores nothing: `kolom_count` even 2-50, `soal_per_kolom` 50-100 (D09),
 `item_length` 1-5, `options_per_soal` 3-8, `kolom_duration_seconds` 1-3600 (the upper bounds for options and
 duration are choices made here, not in the PRD), `#rrggbb` covers. The same limits are CHECK constraints.
 

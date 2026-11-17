@@ -92,8 +92,8 @@ summed over kolom for the totals.
     Ketelitian = (1 - Salah / dikerjakan) * 81
     Nilai Akhir = 0.30 Kecepatan + 0.30 Ketahanan + 0.40 Ketelitian
 
-**Assumption:** the client document gives no branch for p < 30; it is read as `2 * p`, which meets the middle branch
-at 60 when p = 30. A zero denominator (all soal = 0 or dikerjakan = 0) makes Kecepatan or Ketelitian 0. Each component
+The client document writes the lowest branch as `2 × nilai mentah × 100` for a nilai mentah of 30% or less, with nilai
+mentah as a fraction; on p that is `2 * p`, and it meets the middle branch at 60 when p = 30. A zero denominator (all soal = 0 or dikerjakan = 0) makes Kecepatan or Ketelitian 0. Each component
 is clamped to 0-100 and rounded to two decimals (half away from zero), the same helpers as v1; Nilai Akhir weights the
 clamped, rounded components and is rounded again. The unclamped values are stored in `*_raw`. The intermediates p, A,
 SD and B are not rounded. Only Ketahanan can leave 0-100 (Kecepatan is at most 80, Ketelitian at most 81).
@@ -101,6 +101,11 @@ SD and B are not rounded. Only Ketahanan can leave 0-100 (Kecepatan is at most 8
 An attempt with nothing answered follows the formulas with no special case: Kecepatan 0, Ketelitian 0, A 72, SD 0,
 B 80, Ketahanan 75.2 and Nilai Akhir 22.56. Whether A or B can leave a sensible range (B negative, A very large) is
 not reviewed here and is out of scope for this change.
+
+Ketahanan is unstable on short tests, with no special case: at N = 2 it compares one kolom with one kolom and the SD
+is taken over two values, so one kolom's difference moves the score a lot. The constants are also in raw soal counts,
+so the same relative performance scores a different Ketahanan above 50 soal per kolom. Both are open client questions
+(PRD §10 question 1).
 
 ### Version 1 (kept)
 

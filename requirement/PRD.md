@@ -267,7 +267,7 @@ Format latihan psikotes baru, dijual dan dikerjakan terpisah dari tryout (produk
 - **FR-KEC-06:** Tidak ada fullscreen enforcement, violation log, atau ranking/leaderboard untuk format ini (berbeda dari tryout)
 
 **Pengulangan kolom (paruh kedua = ulangan paruh pertama):**
-- **FR-KEC-15:** `kolom_count` **wajib genap** dan minimal 10. Nilai ganjil ditolak saat pembuatan tes (lihat FR-ADM-KEC-06)
+- **FR-KEC-15:** `kolom_count` **wajib genap**, minimal 2 dan maksimal 50 (2, 4, 6, dst.). Nilai ganjil ditolak saat pembuatan tes (lihat FR-ADM-KEC-06)
 - **FR-KEC-16:** Kolom ke-*k* diulang **persis** di kolom ke-*(k + N/2)* — set item referensi, seluruh urutan soal, subset yang ditampilkan, dan item yang dihilangkan semuanya identik. Contoh untuk N=4: kolom 1 = kolom 3, kolom 2 = kolom 4
 - **FR-KEC-17:** Konsekuensi generasi: sistem hanya membangkitkan konten untuk N/2 kolom pertama per attempt, lalu memutarnya kembali untuk paruh kedua. Jawaban siswa tetap dicatat terpisah per kolom (kolom 1 dan kolom 3 punya baris jawaban masing-masing)
 - **FR-KEC-18:** Siswa **tidak diberi tahu** bahwa paruh kedua adalah pengulangan — tidak ada label, penanda, atau pesan apa pun di UI pengerjaan
@@ -295,7 +295,7 @@ Format latihan psikotes baru, dijual dan dikerjakan terpisah dari tryout (produk
 **Batasan konfigurasi:**
 - **FR-ADM-KEC-06:** Validasi saat simpan tes kecermatan:
   - `soal_per_kolom` — minimum **50**, nilai default terisi **50**
-  - `kolom_count` — wajib **genap**, minimum **10** (lihat FR-KEC-15)
+  - `kolom_count` — wajib **genap**, minimum **2** (lihat FR-KEC-15)
   - `item_length` — 1 sampai **5** karakter/elemen; nilai di luar rentang ditolak
 - **FR-ADM-KEC-07:** Tipe item referensi yang didukung: `char` (A–Z) dan `number` (0–9) — keduanya bawaan sistem, tidak memerlukan paket item; `symbol` dan `image` — elemen berasal dari paket item yang diisi admin; `emoji` — admin memilih subset dari katalog emoji bawaan sistem, bukan input bebas (FR-ADM-KEC-24); `shape` (bangun datar — kotak, segitiga, persegi panjang, lingkaran, jajar genjang, trapesium, belah ketupat) — 7 bentuk bawaan sistem, admin dapat memilih subsetnya lewat paket `shape` (opsional); dan `mix`, yaitu campuran dari beberapa tipe di atas (lihat FR-ADM-KEC-23)
 - **FR-ADM-KEC-08:** Untuk tipe `image`, elemen item berasal dari satu **image package** yang dikelola di halaman Paket Item (FR-ADM-KEC-15..22). Batas ukuran mengikuti §6.3 (maks 5MB per gambar); gambar ditampilkan pada ukuran seragam saat pengerjaan
@@ -575,6 +575,7 @@ Seluruh fitur pada dokumen ini adalah scope MVP.
    Catatan: "total soal dikerjakan" = Benar + Salah (tidak termasuk Kosong). Sumber `−0,05` pada Kecepatan dan Ketahanan belum dijelaskan klien — kemungkinan faktor koreksi/penalti, perlu dikonfirmasi. Formula ini dipakai sebagai baseline implementasi tapi tetap ditandai provisional sampai klien mengonfirmasi secara eksplisit bahwa ini formula final.
 
    **Tambahan (2026-07-27) — definisi "5 kolom pertama/terakhir" bentrok dengan aturan pengulangan kolom.** Setelah FR-KEC-15/16 (kolom genap, kolom *k* diulang di kolom *k + N/2*), "5 kolom terakhir vs 5 kolom pertama" hanya berimpit dengan "paruh kedua vs paruh pertama" tepat saat N=10. Untuk N=12, misalnya, 5 kolom terakhir adalah kolom 8–12 yang merupakan ulangan kolom 2–6 — dibandingkan terhadap kolom 1–5, jadi bukan materi yang sama. Dua opsi: (a) kunci `kolom_count = 10` saja, atau (b) generalkan formula menjadi rata-rata Benar paruh kedua ÷ rata-rata Benar paruh pertama. Opsi (b) yang direkomendasikan karena mempertahankan maksud aslinya untuk semua N. Perlu konfirmasi klien.
+   **Tambahan (2026-11-17) — formula revisi klien dan tes pendek.** Klien mengirim dokumen revisi penilaian (November 2026) yang diimplementasikan sebagai `scoring_version` 2 dan dipakai untuk attempt baru, dengan bobot Nilai Akhir Kecepatan 30%, Ketahanan 30%, Ketelitian 40% (menggantikan bobot pada FR-KEC-14); rumus lengkap ada di `docs/kecermatan-runtime.md`. Dokumen itu hanya memuat satu contoh 10 kolom × 50 soal. Sejak `kolom_count` boleh mulai dari 2 (FR-KEC-15), yang masih perlu konfirmasi klien: (a) pada tes pendek skor Ketahanan sangat fluktuatif — dengan 2 kolom ia membandingkan satu kolom dengan satu kolom dan simpangan baku dihitung dari dua nilai saja; (b) konstanta 1,6 dan 1,5 memakai jumlah soal mentah, sehingga tes dengan lebih dari 50 soal per kolom memberi Ketahanan berbeda untuk performa relatif yang sama; (c) attempt sempurna bernilai 78,96 dan attempt kosong 22,56.
 
 2. **RAB dan timeline perlu di-repricing setelah PRD v1.3.** RAB v1.3 (Rp57jt, ±5 minggu) dan target go-live 3 Agustus 2026 disusun berdasarkan PRD v1.2 — sebelum multi-tenant, top-up mandiri, download soal PDF, dan perluasan kecermatan masuk scope. Angka lama tidak boleh dikutip untuk scope ini. Perlu keputusan klien: naikkan anggaran/mundurkan timeline, atau turunkan sebagian scope kembali ke Fase 2.
 

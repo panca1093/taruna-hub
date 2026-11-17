@@ -24,7 +24,6 @@ func TestKecermatanScalarsTable(t *testing.T) {
 	}{
 		{"odd kolom", func(i *KecermatanInput) { i.KolomCount = 11 }, "kolom_count", ReasonKecKolomOdd},
 		{"odd kolom above the minimum", func(i *KecermatanInput) { i.KolomCount = 13 }, "kolom_count", ReasonKecKolomOdd},
-		{"8 kolom", func(i *KecermatanInput) { i.KolomCount = 8 }, "kolom_count", ReasonKecKolomRange},
 		{"0 kolom", func(i *KecermatanInput) { i.KolomCount = 0 }, "kolom_count", ReasonKecKolomRange},
 		{"52 kolom", func(i *KecermatanInput) { i.KolomCount = 52 }, "kolom_count", ReasonKecKolomRange},
 		{"49 soal", func(i *KecermatanInput) { i.SoalPerKolom = 49 }, "soal_per_kolom", ReasonKecSoal},
@@ -71,11 +70,12 @@ func TestKecermatanScalarsTable(t *testing.T) {
 		mutate func(*KecermatanInput)
 	}{
 		{"the smallest legal test", func(i *KecermatanInput) {
-			i.ItemLength, i.OptionsPerSoal, i.SoalPerKolom, i.KolomCount, i.KolomDurationSeconds = 1, 3, 50, 10, 1
+			i.ItemLength, i.OptionsPerSoal, i.SoalPerKolom, i.KolomCount, i.KolomDurationSeconds = 1, 3, 50, 2, 1
 		}},
 		{"the largest legal test (D09)", func(i *KecermatanInput) {
 			i.ItemLength, i.OptionsPerSoal, i.SoalPerKolom, i.KolomCount, i.KolomDurationSeconds = 5, 8, 100, 50, 3600
 		}},
+		{"an even kolom count below 10", func(i *KecermatanInput) { i.KolomCount = 6 }},
 		{"a mix of built-ins only", func(i *KecermatanInput) { i.ItemType, i.BuiltinSources = model.KecMix, []string{"char", "shape"} }},
 		{"a shape test with no package", func(i *KecermatanInput) { i.ItemType = model.KecShape }},
 	}

@@ -142,7 +142,7 @@ func scoreV2(kolom []KecermatanKolomCount) KecermatanScores {
 		case p >= kecV2KecepatanFloor:
 			raw.KecepatanRaw = kecV2KecepatanMid + (p-kecV2KecepatanFloor)*kecV2KecepatanMidSpan/kecV2KecepatanSpan
 		default:
-			// Assumption (work order): the client's p < 30 branch reads as 2*p, which meets the middle branch at 60.
+			// The client writes this branch as 2 x mentah x 100 with mentah as a fraction, which is 2*p.
 			raw.KecepatanRaw = kecV2KecepatanLowFactor * p
 		}
 	}

@@ -36,7 +36,7 @@ const id = {
   historyTitle: "Riwayat Attempt",
   attemptLabel: (n: number) => `Attempt ${n}`,
   nilaiAkhir: "Nilai Akhir",
-  historyProvisional: "Nilai akhir adalah komposit kecepatan, ketahanan, dan ketelitian.",
+  historyComposite: "Nilai akhir adalah komposit kecepatan, ketahanan, dan ketelitian.",
   noHistoryInfo: "Belum ada attempt yang selesai. Hasil dan pembahasan tiap attempt akan tampil di sini.",
 };
 
@@ -74,7 +74,7 @@ const en: typeof id = {
   historyTitle: "Attempt History",
   attemptLabel: (n: number) => `Attempt ${n}`,
   nilaiAkhir: "Final Score",
-  historyProvisional: "The final score is a composite of speed, endurance, and accuracy.",
+  historyComposite: "The final score is a composite of speed, endurance, and accuracy.",
   noHistoryInfo: "No attempt has finished yet. Each attempt's result and review will show up here.",
 };
 

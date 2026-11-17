@@ -161,7 +161,7 @@ func TestKecermatanRejectsInvalidDefinitions(t *testing.T) {
 		field  string
 	}{
 		{"odd kolom", func(b map[string]any) { b["kolom_count"] = 11 }, "kolom_count"},
-		{"fewer than 10 kolom", func(b map[string]any) { b["kolom_count"] = 8 }, "kolom_count"},
+		{"fewer than 2 kolom", func(b map[string]any) { b["kolom_count"] = 0 }, "kolom_count"},
 		{"more than 50 kolom", func(b map[string]any) { b["kolom_count"] = 52 }, "kolom_count"},
 		{"fewer than 50 soal", func(b map[string]any) { b["soal_per_kolom"] = 49 }, "soal_per_kolom"},
 		{"more than 100 soal", func(b map[string]any) { b["soal_per_kolom"] = 101 }, "soal_per_kolom"},

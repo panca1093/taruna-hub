@@ -4,8 +4,11 @@ Notable changes to the Taruna Eduka tryout platform, newest first. Each version 
 
 ## Unreleased
 
+Run migration `000028_kecermatan_kolom_from_two` when deploying.
+
 ### Changed
 
+- **Kecermatan tests from 2 kolom.** A test may have any even number of kolom from 2 to 50; the minimum was 10.
 - **Kecermatan scoring v2.** New student attempts are scored with the client's revised formula (kecepatan, ketahanan and ketelitian weighted 30/30/40). Version 1 is kept and can still be applied by recomputing stored results. Existing results keep their version until recomputed.
 
 ## v0.1.3 — 2026-11-10

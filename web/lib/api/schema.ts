@@ -6117,7 +6117,7 @@ export interface paths {
          * @description Saves the frozen generation configuration (FR-ADM-KEC-01/06/07/10/13/23). Everything is validated on
          *     save and a failing save stores nothing, so a stored test is always playable:
          *
-         *     - `kolom_count` is even, 10 to 50; `soal_per_kolom` 50 to 100 (D09); `item_length` 1 to 5;
+         *     - `kolom_count` is even, 2 to 50; `soal_per_kolom` 50 to 100 (D09); `item_length` 1 to 5;
          *       `options_per_soal` 3 to 8; `kolom_duration_seconds` 1 to 3600.
          *     - Sources by `item_type`: `char` and `number` are built in and take no `package_ids`; `symbol`, `emoji`
          *       and `image` take exactly one package of the same type; `shape` takes none (all seven built-in

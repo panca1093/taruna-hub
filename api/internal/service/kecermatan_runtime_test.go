@@ -763,3 +763,30 @@ func TestKecermatanRecomputeRewritesOnlyScores(t *testing.T) {
 		t.Errorf("rejected recompute wrote: %+v, want %+v", again.Result, stored.Result)
 	}
 }
+
+func TestKecermatanTwoKolomAttemptCompletesAndScores(t *testing.T) {
+	h := newKecHarness(t)
+	tenant := h.t.q.a
+	ctx := context.Background()
+	test, err := h.kec.Create(ctx, h.scope(tenant), h.staff(tenant, model.RoleAdmin), KecermatanInput{
+		ProgramID: h.t.q.program(tenant).ID, Title: "Kecermatan " + uuid.NewString()[:8], ItemType: model.KecChar,
+		ItemLength: 2, OptionsPerSoal: 5, SoalPerKolom: kecSoalCount, KolomCount: 2,
+		KolomDurationSeconds: kecKolomSeconds, CoverFrom: "#f59e0b", CoverTo: "#ef4444",
+	})
+	if err != nil {
+		t.Fatalf("create a 2-kolom test: %v", err)
+	}
+	_, p := h.holder(t, tenant, test, 1)
+	view, _ := h.start(t, tenant, p, test)
+	h.answer(t, tenant, p, view.Session, 1, 1, 20, true)
+	h.clock.Advance(2 * kecSlot * time.Second)
+
+	done := h.session(t, tenant, p, view.Session.ID)
+	if done.Phase != KecPhaseCompleted || done.Result == nil {
+		t.Fatalf("phase = %s result = %v, want completed with a result", done.Phase, done.Result)
+	}
+	want, _ := ScoreKecermatan(KecermatanScoringVersion, []KecermatanKolomCount{{20, 0, kecSoalCount - 20}, {0, 0, kecSoalCount}})
+	if r := done.Result; r.BenarTotal != 20 || r.KosongTotal != 2*kecSoalCount-20 || r.NilaiAkhir != want.NilaiAkhir || r.Ketahanan != want.Ketahanan {
+		t.Errorf("result = %+v, want 20 benar over 2 kolom and the scores of %+v", r, want)
+	}
+}
