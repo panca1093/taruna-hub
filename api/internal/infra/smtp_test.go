@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"net"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/config"
@@ -204,6 +206,15 @@ func TestSMTPSenderClassifiesReplies(t *testing.T) {
 // PlainAuth's reply-less refusal to send a password must be permanent, not retried for hours.
 func TestSMTPCleartextAuthRefusalIsPermanent(t *testing.T) {
 	// 127.0.0.2 is loopback but not one of the names PlainAuth trusts, so the refusal is real.
+	probe, perr := net.Listen("tcp", "127.0.0.2:0")
+	if errors.Is(perr, syscall.EADDRNOTAVAIL) {
+		t.Skip("127.0.0.2 is not bindable on this host; on macOS run: sudo ifconfig lo0 alias 127.0.0.2")
+	}
+	if perr != nil {
+		t.Fatalf("probe listen on 127.0.0.2: %v", perr)
+	}
+	probe.Close()
+
 	s := newFakeSMTPOn(t, "127.0.0.2:0")
 	s.authEnabled = true
 	host, port := s.hostPort(t)
