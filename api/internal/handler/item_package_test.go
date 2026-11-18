@@ -468,7 +468,13 @@ func TestEmojiIsCatalogOnlyAndShapesAreBuiltIn(t *testing.T) {
 	}
 
 	shapes := f.create(t, f.hostA, f.tokenAdminA, "shape", "Bangun")
-	rec := elementsCall(t, f.e, f.hostA, f.tokenAdminA, commitPath(shapes.ID), map[string][]string{"ids": {"lingkaran", "kotak", "bintang"}})
+	const unknownShape = "bentuk_tidak_dikenal"
+	for _, s := range service.ShapeCatalog() {
+		if s.ID == unknownShape {
+			t.Fatalf("shape %q is now in the catalog; pick another id that is not a real shape", unknownShape)
+		}
+	}
+	rec := elementsCall(t, f.e, f.hostA, f.tokenAdminA, commitPath(shapes.ID), map[string][]string{"ids": {"lingkaran", "kotak", unknownShape}})
 	if c := decodeCommit(t, rec); c.Added != 2 || c.Rejected != 1 {
 		t.Errorf("shape commit = %+v, want 2 added and the unknown shape rejected", c)
 	}
