@@ -2,14 +2,16 @@
 
 Notable changes to the Taruna Eduka tryout platform, newest first. Each version is a git tag; pushing a `v*` tag builds the deploy images.
 
-## Unreleased
-
-Run migration `000028_kecermatan_kolom_from_two` when deploying, then `bootstrap rescore-kecermatan -tenant <slug>` once so stored kecermatan results move to scoring version 2.
+## v0.1.4 — 2026-11-18
 
 ### Changed
 
-- **Kecermatan tests from 2 kolom.** A test may have any even number of kolom from 2 to 50; the minimum was 10.
-- **Kecermatan scoring v2.** New student attempts are scored with the client's revised formula (kecepatan, ketahanan and ketelitian weighted 30/30/40). Version 1 is kept. Existing results keep version 1 until `bootstrap rescore-kecermatan` rewrites them from their stored counts.
+- **New kecermatan scores.** Students see kecepatan, ketahanan, ketelitian and the final score calculated with Taruna Eduka's revised formula. Ketelitian now counts most towards the final score (40%), with kecepatan and ketahanan at 30% each.
+- **Scores no longer reach 100.** A student who answers every soal correctly at a steady pace gets a final score of about 79, so expect lower numbers than before for the same performance.
+- **Past results are updated too.** The score history and the progress chart show every earlier attempt with the new formula, so old and new attempts can be compared.
+- **Shorter kecermatan tests.** Admins can create a test with as few as 2 kolom, in even numbers (2, 4, 6, up to 50). The minimum used to be 10.
+
+> **Deploy note:** run migration `000028_kecermatan_kolom_from_two` when deploying, then `bootstrap rescore-kecermatan -tenant <slug>` once so stored kecermatan results move to scoring version 2.
 
 ## v0.1.3 — 2026-11-10
 
