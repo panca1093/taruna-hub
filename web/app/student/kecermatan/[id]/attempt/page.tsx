@@ -144,12 +144,12 @@ function KolomScreen({
           </div>
         )}
 
-        <div className="mx-auto w-full max-w-200">
+        <div className="@container mx-auto w-full max-w-200" style={{ "--item-cols": labels.length } as React.CSSProperties}>
           <div role="group" aria-label={t.referenceLabel(kolom.number)} className="grid gap-1 sm:gap-3" style={columns(labels.length, units)}>
             {kolom.reference.map((item) => (
               <figure key={item.label} className="flex min-w-0 flex-col">
                 <figcaption className="font-mono text-base font-extrabold text-foreground sm:text-2xl">{item.label}</figcaption>
-                <div className="@container mt-1.5 flex flex-1 items-center justify-center rounded-tile border border-border bg-surface px-0 py-3 text-center sm:px-2">
+                <div className="mt-1.5 flex flex-1 items-center justify-center rounded-tile border border-border bg-surface px-0 py-3 text-center sm:px-2">
                   <KecermatanItem elements={item.elements} fit className="item-fit font-extrabold" elementClassName="item-fit-el" />
                 </div>
               </figure>
@@ -161,8 +161,8 @@ function KolomScreen({
               <h1 className="mt-7 font-sans text-xl font-semibold tracking-normal text-foreground sm:text-2xl">{t.soalPrompt}</h1>
               <div className="mt-5 grid gap-1 sm:gap-3" style={columns(soal.shown.length, units)}>
                 {soal.shown.map((label) => (
-                  <div key={label} className="@container flex min-w-0 items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-0 py-5 sm:px-2 sm:py-5.5">
-                    <KecermatanItem elements={labelOf(label)?.elements ?? []} fit className="item-fit item-fit-shown font-extrabold" elementClassName="item-fit-el" />
+                  <div key={label} className="flex min-w-0 items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-0 py-3 sm:px-2">
+                    <KecermatanItem elements={labelOf(label)?.elements ?? []} fit className="item-fit font-extrabold" elementClassName="item-fit-el" />
                   </div>
                 ))}
               </div>

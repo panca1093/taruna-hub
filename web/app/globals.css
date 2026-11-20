@@ -712,14 +712,25 @@ body {
 
 /* Kecermatan attempt items: one font-size for every item of a kolom, so size never hints at the answer.
    --item-units is the widest reference item in em (mono char 0.6, symbol 1.25 for fallback fonts, emoji/shape/image 1,
-   0.25 gaps, 0.3 slack), set on the row by the page. Elements are sized in em so text and elements scale together. */
+   0.25 gaps, 0.3 slack), set on the row by the page. Elements are sized in em so text and elements scale together.
+   The size comes from a reference card's content width (rows' container / --item-cols), so the soal row matches it
+   with fewer, wider cards. --fit-gap and --fit-pad mirror the rows' gap and the cards' padding + border. */
 .item-fit {
   --fit-min: 0.375rem;
   --fit-max: 2.5rem;
-  font-size: clamp(var(--fit-min), calc(98cqi / var(--item-units)), var(--fit-max));
+  --fit-trim: 0px;
+  --fit-gap: 0.25rem;
+  --fit-pad: 2px;
+  --fit-card: calc((100cqi - (var(--item-cols) - 1) * var(--fit-gap)) / var(--item-cols) - var(--fit-pad));
+  font-size: clamp(var(--fit-min), calc(0.98 * var(--fit-card) / var(--item-units) - var(--fit-trim)), var(--fit-max));
 }
-.item-fit-shown {
-  --fit-max: 3rem;
+@media (min-width: 40rem) {
+  .item-fit {
+    --fit-max: 2.375rem;
+    --fit-trim: 2px;
+    --fit-gap: 0.75rem;
+    --fit-pad: calc(1rem + 2px);
+  }
 }
 .item-fit-mixed {
   gap: 0.25em;
