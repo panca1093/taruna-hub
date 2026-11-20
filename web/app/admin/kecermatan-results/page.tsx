@@ -38,7 +38,7 @@ function downloadCsv(rows: KecermatanStaffStudentRow[], t: ReturnType<typeof use
     ]
       .map((v) => {
         const text = String(v);
-        return `"${(/^[=+\-@]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
+        return `"${(/^[=+\-@\t\r]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
       })
       .join(","),
   );
@@ -68,13 +68,8 @@ export default function KecermatanResultsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const filterKey = `${testFilter}|${programFilter}|${search}|${reloadKey}`;
-  const filterKeyRef = useRef(filterKey);
+  const generationRef = useRef(0);
   const loadingMoreRef = useRef(false);
-
-  useEffect(() => {
-    filterKeyRef.current = filterKey;
-  }, [filterKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +106,7 @@ export default function KecermatanResultsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    generationRef.current += 1;
     api.kecermatanResults
       .list({
         test_id: testFilter === "all" ? undefined : testFilter,
@@ -120,6 +116,8 @@ export default function KecermatanResultsPage() {
       })
       .then((page) => {
         if (cancelled) return;
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
         setRows(page.results);
         setTotal(page.total);
       })
@@ -133,23 +131,25 @@ export default function KecermatanResultsPage() {
 
   const loadMore = async () => {
     if (loadingMoreRef.current) return;
-    const requestKey = filterKey;
+    const generation = generationRef.current;
     loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const page = await api.kecermatanResults.list({ ...filters, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
-      if (filterKeyRef.current !== requestKey) return;
+      if (generationRef.current !== generation) return;
       setRows((prev) => {
         const seen = new Set((prev ?? []).map(rowKey));
         return [...(prev ?? []), ...page.results.filter((row) => !seen.has(rowKey(row)))];
       });
       setTotal(page.total);
     } catch (err) {
-      if (filterKeyRef.current !== requestKey) return;
+      if (generationRef.current !== generation) return;
       toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
     } finally {
-      loadingMoreRef.current = false;
-      setLoadingMore(false);
+      if (generationRef.current === generation) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
     }
   };
 

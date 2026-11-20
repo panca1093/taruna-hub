@@ -1,7 +1,8 @@
 # Tryout PDF (P20)
 
-An Admin or Operator downloads a tryout as a printable PDF: questions only, no keys, no explanations. Student and
-kecermatan PDFs do not exist (D11). Built on the shared export jobs in [exports.md](exports.md).
+An Admin or Operator downloads a tryout as a printable PDF: questions only, no keys, no explanations. Server-side student and
+kecermatan PDF exports do not exist (D11); a student's kecermatan result PDF is captured in the browser from the admin
+detail page and needs no export job. Built on the shared export jobs in [exports.md](exports.md).
 
 ## Flow
 
