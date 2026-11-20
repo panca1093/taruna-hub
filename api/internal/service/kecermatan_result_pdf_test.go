@@ -57,7 +57,7 @@ func TestBuildKecermatanResultPDFFilesSectionsAndEscaping(t *testing.T) {
 		"Nilai per percobaan", "<svg", "Percobaan", "Tanggal", "Nilai akhir", "Masuk nilai gabungan",
 		"Percobaan 6", "Percobaan 1", "<th>Kolom</th>", "<th class=\"n\">Benar</th>", "<th class=\"n\">Salah</th>", "<th class=\"n\">Kosong</th>",
 		`<tr class="sum"><td>Total</td><td class="n">50</td><td class="n">15</td><td class="n">35</td><td class="n">100</td></tr>`,
-		"9 November 2026",
+		"9 November 2026", "window.__mathDone=true",
 	} {
 		if !strings.Contains(index, want) {
 			t.Errorf("index.html lacks %q", want)
@@ -69,7 +69,10 @@ func TestBuildKecermatanResultPDFFilesSectionsAndEscaping(t *testing.T) {
 	if strings.Index(index, "Percobaan 6") > strings.Index(index, "Percobaan 1</h2>") {
 		t.Error("per-attempt sections must follow the newest-first order")
 	}
-	for _, raw := range []string{"<script", "<b>Cermat", "Bimbel <Taruna>"} {
+	if strings.Count(index, "<script") != 1 || strings.Contains(footer, "<script") {
+		t.Error("the only script allowed is the fixed ready flag; a student-controlled <script> reached the document")
+	}
+	for _, raw := range []string{"<b>Cermat", "Bimbel <Taruna>"} {
 		if strings.Contains(index, raw) || strings.Contains(footer, raw) {
 			t.Errorf("unescaped %q reached the document", raw)
 		}

@@ -157,7 +157,7 @@ func BuildKecermatanResultPDFFiles(r KecermatanPDFReport, printedAt time.Time) (
 		fmt.Fprintf(&b, `<tr class="sum"><td>Total</td><td class="n">%d</td><td class="n">%d</td><td class="n">%d</td><td class="n">%d</td></tr></tbody></table></section>`,
 			benar, salah, kosong, benar+salah+kosong)
 	}
-	b.WriteString(`</body></html>`)
+	b.WriteString(`<script>window.__mathDone=true;</script></body></html>`)
 	if b.Len() > pdfMaxHTMLBytes {
 		return nil, &ExportError{Code: exportCodePDFTooLarge, Err: fmt.Errorf("document is %d bytes, over the %d limit", b.Len(), pdfMaxHTMLBytes)}
 	}
