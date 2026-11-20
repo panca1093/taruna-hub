@@ -33,6 +33,7 @@ func registerExportRenderers(svc *service.ExportService, deps exportDeps) {
 			deps.logger.Error("tryout pdf renderer disabled", slog.String("error", err.Error()))
 		} else {
 			svc.Register(model.ExportTryoutPDF, service.NewTryoutPDFRenderer(repository.NewTryoutRepository(deps.pool), conv))
+			svc.Register(model.ExportKecermatanResultPDF, service.NewKecermatanResultPDFRenderer(deps.pool, repository.NewKecermatanRuntimeRepository(deps.pool), conv))
 		}
 	}
 }
