@@ -428,10 +428,14 @@ func TestKecermatanCompletionConsumesOnceAndScores(t *testing.T) {
 			t.Fatalf("staff results (%s) = %d of %d, err %v, want the one attempt", name, len(rows), total, err)
 		}
 		row := rows[0]
-		if row.RemainingAttempts != 2 || row.BenarTotal != 250 || row.SalahTotal != 100 || row.KosongTotal != 150 ||
-			row.NilaiAkhir != want.NilaiAkhir || row.Kecepatan != want.Kecepatan || row.CompletedAt.IsZero() || row.StudentName == "" {
-			t.Errorf("staff row (%s) = %+v, want counts, composites, final score, date and 2 attempts left", name, row)
+		if row.RemainingAttempts != 2 || row.AttemptsCompleted != 1 || row.StudentName == "" || row.LastCompletedAt.IsZero() ||
+			row.Progress == nil || row.Progress.NilaiGabungan != want.NilaiAkhir || row.Progress.Kecepatan != want.Kecepatan {
+			t.Errorf("staff row (%s) = %+v, want one attempt, the student's progress, date and 2 attempts left", name, row)
 		}
+	}
+	attempt, err := h.rt.StaffResult(ctx, h.scope(tenant), admin, sess.ID)
+	if err != nil || attempt.Result.BenarTotal != 250 || attempt.Result.SalahTotal != 100 || attempt.Result.KosongTotal != 150 {
+		t.Errorf("staff attempt = %+v err %v, want the counts 250/100/150", attempt.Result, err)
 	}
 	other := uuid.New()
 	if rows, total, err := h.rt.StaffResults(ctx, h.scope(tenant), admin, KecResultFilter{ProgramID: &other}); err != nil || total != 0 || len(rows) != 0 {

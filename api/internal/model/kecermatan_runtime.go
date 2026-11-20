@@ -115,6 +115,25 @@ type KecStudentTest struct {
 	InProgress           bool
 }
 
+// KecStudentRow is one student on one test with at least one completed attempt. The avatar inputs travel with it
+// so the service resolves the avatar exactly like User.avatar.
+type KecStudentRow struct {
+	StudentID         uuid.UUID
+	StudentName       string
+	AvatarKey         *string
+	Gender            *string
+	BirthDate         *time.Time
+	TestID            uuid.UUID
+	TestTitle         string
+	ProgramID         uuid.UUID
+	ProgramCode       string
+	ProgramName       string
+	AttemptsCompleted int
+	LastCompletedAt   time.Time
+	// RemainingAttempts is the student's unused credits on the test now.
+	RemainingAttempts int
+}
+
 // KecResultRow is a result with the names staff filter by.
 type KecResultRow struct {
 	KecResult

@@ -230,9 +230,41 @@ type kecStaffResultResponse struct {
 	RemainingAttempts int `json:"remaining_attempts"`
 }
 
-type kecStaffResultsResponse struct {
-	Results []kecStaffResultResponse `json:"results"`
-	Total   int                      `json:"total"`
+type kecStaffStudentRowResponse struct {
+	StudentID         uuid.UUID           `json:"student_id"`
+	StudentName       string              `json:"student_name"`
+	StudentAvatar     string              `json:"student_avatar"`
+	TestID            uuid.UUID           `json:"test_id"`
+	TestTitle         string              `json:"test_title"`
+	ProgramID         uuid.UUID           `json:"program_id"`
+	ProgramCode       string              `json:"program_code"`
+	AttemptsCompleted int                 `json:"attempts_completed"`
+	Progress          kecProgressResponse `json:"progress"`
+	LastCompletedAt   time.Time           `json:"last_completed_at"`
+	RemainingAttempts int                 `json:"remaining_attempts"`
+}
+
+type kecStaffStudentsResponse struct {
+	Results []kecStaffStudentRowResponse `json:"results"`
+	Total   int                          `json:"total"`
+}
+
+type kecStaffStudentDetailResponse struct {
+	Student struct {
+		ID     uuid.UUID `json:"id"`
+		Name   string    `json:"name"`
+		Avatar string    `json:"avatar"`
+	} `json:"student"`
+	Test struct {
+		ID          uuid.UUID `json:"id"`
+		Title       string    `json:"title"`
+		ProgramID   uuid.UUID `json:"program_id"`
+		ProgramCode string    `json:"program_code"`
+		ProgramName string    `json:"program_name"`
+	} `json:"test"`
+	RemainingAttempts int                  `json:"remaining_attempts"`
+	Progress          kecProgressResponse  `json:"progress"`
+	Attempts          []kecAttemptResponse `json:"attempts"`
 }
 
 type kecStaffResultDetailResponse struct {
@@ -270,22 +302,16 @@ func (h *Handler) MyKecermatanTest(c echo.Context) error {
 		return kecRuntimeError(err)
 	}
 	body := kecOverviewResponse{Test: kecStudentTestOf(view.Test), ProductID: view.ProductID,
-		Attempts: make([]kecAttemptResponse, 0, len(view.Attempts))}
+		Attempts: []kecAttemptResponse{}}
 	if view.Current != nil {
 		current := kecSessionOf(*view.Current)
 		body.Current = &current
 	}
 	if p := view.Progress; p != nil {
-		body.Progress = &kecProgressResponse{AttemptsCounted: p.AttemptsCounted, NilaiGabungan: p.NilaiGabungan,
-			NilaiGabunganPrevious: p.NilaiGabunganPrevious, Kecepatan: p.Kecepatan, Ketahanan: p.Ketahanan,
-			Ketelitian: p.Ketelitian}
+		progress := kecProgressOf(*p)
+		body.Progress = &progress
 	}
-	for _, a := range view.Attempts {
-		body.Attempts = append(body.Attempts, kecAttemptResponse{
-			SessionID: a.SessionID, AttemptNumber: a.AttemptNumber, Status: a.Status, StartedAt: a.StartedAt,
-			CompletedAt: a.CompletedAt, NilaiAkhir: a.NilaiAkhir,
-		})
-	}
+	body.Attempts = kecAttemptsOf(view.Attempts)
 	return c.JSON(http.StatusOK, body)
 }
 
@@ -433,7 +459,7 @@ func (h *Handler) StaffKecermatanResults(c echo.Context) error {
 	if !ok {
 		return httpx.Unauthorized(sessionInvalid)
 	}
-	filter := service.KecResultFilter{}
+	filter := service.KecResultFilter{Search: c.QueryParam("q")}
 	fields := map[string]string{}
 	for name, target := range map[string]**uuid.UUID{"test_id": &filter.TestID, "program_id": &filter.ProgramID} {
 		raw := c.QueryParam(name)
@@ -466,11 +492,86 @@ func (h *Handler) StaffKecermatanResults(c echo.Context) error {
 	if err != nil {
 		return kecRuntimeError(err)
 	}
-	body := kecStaffResultsResponse{Results: make([]kecStaffResultResponse, 0, len(rows)), Total: total}
+	body := kecStaffStudentsResponse{Results: make([]kecStaffStudentRowResponse, 0, len(rows)), Total: total}
 	for _, row := range rows {
-		body.Results = append(body.Results, kecStaffResultOf(row))
+		body.Results = append(body.Results, kecStaffStudentRowResponse{
+			StudentID: row.StudentID, StudentName: row.StudentName, StudentAvatar: row.Avatar, TestID: row.TestID,
+			TestTitle: row.TestTitle, ProgramID: row.ProgramID, ProgramCode: row.ProgramCode,
+			AttemptsCompleted: row.AttemptsCompleted, Progress: kecProgressOf(*row.Progress),
+			LastCompletedAt: row.LastCompletedAt, RemainingAttempts: row.RemainingAttempts,
+		})
 	}
 	return c.JSON(http.StatusOK, body)
+}
+
+func (h *Handler) StaffKecermatanStudentResults(c echo.Context) error {
+	scope, principal, ok := runtimeCaller(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	studentID, testID, err := kecStudentTestIDs(c)
+	if err != nil {
+		return err
+	}
+	view, err := h.kecRuntime.StaffStudentResults(c.Request().Context(), scope, principal, studentID, testID)
+	if err != nil {
+		return kecRuntimeError(err)
+	}
+	var body kecStaffStudentDetailResponse
+	body.Student.ID, body.Student.Name, body.Student.Avatar = view.StudentID, view.StudentName, view.Avatar
+	body.Test.ID, body.Test.Title, body.Test.ProgramID = view.TestID, view.TestTitle, view.ProgramID
+	body.Test.ProgramCode, body.Test.ProgramName = view.ProgramCode, view.ProgramName
+	body.RemainingAttempts = view.RemainingAttempts
+	body.Progress = kecProgressOf(*view.Progress)
+	body.Attempts = kecAttemptsOf(view.Attempts)
+	return c.JSON(http.StatusOK, body)
+}
+
+// RequestKecermatanResultPDF is the PDF create endpoint of one student's results on one test.
+func (h *Handler) RequestKecermatanResultPDF(c echo.Context) error {
+	if !h.pdfConfigured {
+		return httpx.New(http.StatusServiceUnavailable, CodePDFUnavailable, pdfUnavailable)
+	}
+	scope, principal, ok := runtimeCaller(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	studentID, testID, err := kecStudentTestIDs(c)
+	if err != nil {
+		return err
+	}
+	params, err := h.kecRuntime.PreparePDF(c.Request().Context(), scope, principal, studentID, testID)
+	if err != nil {
+		return kecRuntimeError(err)
+	}
+	return h.acceptExport(c, model.ExportKecermatanResultPDF, params)
+}
+
+func kecStudentTestIDs(c echo.Context) (studentID, testID uuid.UUID, err error) {
+	if studentID, err = runtimeID(c, "student_id"); err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	if testID, err = runtimeID(c, "test_id"); err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	return studentID, testID, nil
+}
+
+func kecProgressOf(p service.KecProgress) kecProgressResponse {
+	return kecProgressResponse{AttemptsCounted: p.AttemptsCounted, NilaiGabungan: p.NilaiGabungan,
+		NilaiGabunganPrevious: p.NilaiGabunganPrevious, Kecepatan: p.Kecepatan, Ketahanan: p.Ketahanan,
+		Ketelitian: p.Ketelitian}
+}
+
+func kecAttemptsOf(attempts []model.KecAttempt) []kecAttemptResponse {
+	out := make([]kecAttemptResponse, 0, len(attempts))
+	for _, a := range attempts {
+		out = append(out, kecAttemptResponse{
+			SessionID: a.SessionID, AttemptNumber: a.AttemptNumber, Status: a.Status, StartedAt: a.StartedAt,
+			CompletedAt: a.CompletedAt, NilaiAkhir: a.NilaiAkhir,
+		})
+	}
+	return out
 }
 
 func (h *Handler) StaffKecermatanResult(c echo.Context) error {
