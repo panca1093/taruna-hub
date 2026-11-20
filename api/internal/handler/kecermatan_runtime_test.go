@@ -320,44 +320,21 @@ func TestKecermatanRuntimeFlowNeverLeaksKeysDuringAnAttempt(t *testing.T) {
 		studentDetail.Attempts[0].SessionID != sid || studentDetail.Progress.AttemptsCounted != 1 || studentDetail.Test.ProgramName == "" {
 		t.Errorf("student detail = %+v, want the student, the test and the one completed attempt", studentDetail)
 	}
-	exportPath := studentPath + "/pdf-exports"
 	for name, c := range map[string]struct {
 		method, path, token string
 		want                int
 	}{
 		"student lists":           {http.MethodGet, "/api/v1/admin/kecermatan-results", f.tokenA, http.StatusForbidden},
 		"student reads detail":    {http.MethodGet, studentPath, f.tokenA, http.StatusForbidden},
-		"student exports":         {http.MethodPost, exportPath, f.tokenA, http.StatusForbidden},
 		"anonymous detail":        {http.MethodGet, studentPath, "", http.StatusUnauthorized},
 		"another tenant detail":   {http.MethodGet, studentPath, f.tokenAdmB, http.StatusUnauthorized},
-		"another tenant export":   {http.MethodPost, exportPath, f.tokenAdmB, http.StatusUnauthorized},
 		"unknown student":         {http.MethodGet, "/api/v1/admin/kecermatan-results/students/" + uuid.NewString() + "/tests/" + f.test.ID.String(), f.tokenAdminA, http.StatusNotFound},
 		"malformed test":          {http.MethodGet, "/api/v1/admin/kecermatan-results/students/" + f.studentA.ID.String() + "/tests/nope", f.tokenAdminA, http.StatusNotFound},
-		"unknown student export":  {http.MethodPost, "/api/v1/admin/kecermatan-results/students/" + uuid.NewString() + "/tests/" + f.test.ID.String() + "/pdf-exports", f.tokenAdminA, http.StatusNotFound},
 		"second student, no work": {http.MethodGet, "/api/v1/admin/kecermatan-results/students/" + f.secondStudent.ID.String() + "/tests/" + f.test.ID.String(), f.tokenAdminA, http.StatusNotFound},
 	} {
 		if rec := f.call(c.method, c.path, nil, c.token); rec.Code != c.want {
 			t.Errorf("%s: status = %d %s, want %d", name, rec.Code, rec.Body.String(), c.want)
 		}
-	}
-	for _, token := range []string{f.tokenAdminA, f.tokenOperatorA} {
-		rec := f.call(http.MethodPost, exportPath, nil, token)
-		var body exportResponse
-		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusAccepted {
-			t.Fatalf("export = %d %s, want 202", rec.Code, rec.Body.String())
-		}
-		var params service.KecermatanResultPDFParams
-		if err := json.Unmarshal(body.Params, &params); err != nil || body.Kind != model.ExportKecermatanResultPDF || body.Status != model.ExportQueued ||
-			params.StudentID != f.studentA.ID || params.TestID != f.test.ID {
-			t.Errorf("export = %+v params %+v, want a queued kecermatan_result_pdf for the pair", body, params)
-		}
-	}
-	if rec := sendTryoutJSON(f.noPDF, http.MethodPost, f.hostA, exportPath, nil, f.tokenAdminA); rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), `"pdf_unavailable"`) {
-		t.Errorf("export without a converter = %d %s, want 503 pdf_unavailable", rec.Code, rec.Body.String())
-	}
-	var queued int
-	if err := f.pool.QueryRow(context.Background(), `SELECT count(*) FROM exports WHERE tenant_id = $1 AND kind = $2`, f.tenantA.ID, model.ExportKecermatanResultPDF).Scan(&queued); err != nil || queued != 2 {
-		t.Errorf("%d exports queued (%v), want exactly the two accepted requests", queued, err)
 	}
 	detail := decodeInto[kecStaffResultDetailResponse](t, f.call(http.MethodGet, "/api/v1/admin/kecermatan-results/"+sid.String(), nil, f.tokenAdminA))
 	if len(detail.Kolom) != 10 || detail.BenarTotal != result.BenarTotal {

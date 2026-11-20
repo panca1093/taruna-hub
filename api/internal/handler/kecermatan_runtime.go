@@ -527,26 +527,6 @@ func (h *Handler) StaffKecermatanStudentResults(c echo.Context) error {
 	return c.JSON(http.StatusOK, body)
 }
 
-// RequestKecermatanResultPDF is the PDF create endpoint of one student's results on one test.
-func (h *Handler) RequestKecermatanResultPDF(c echo.Context) error {
-	if !h.pdfConfigured {
-		return httpx.New(http.StatusServiceUnavailable, CodePDFUnavailable, pdfUnavailable)
-	}
-	scope, principal, ok := runtimeCaller(c)
-	if !ok {
-		return httpx.Unauthorized(sessionInvalid)
-	}
-	studentID, testID, err := kecStudentTestIDs(c)
-	if err != nil {
-		return err
-	}
-	params, err := h.kecRuntime.PreparePDF(c.Request().Context(), scope, principal, studentID, testID)
-	if err != nil {
-		return kecRuntimeError(err)
-	}
-	return h.acceptExport(c, model.ExportKecermatanResultPDF, params)
-}
-
 func kecStudentTestIDs(c echo.Context) (studentID, testID uuid.UUID, err error) {
 	if studentID, err = runtimeID(c, "student_id"); err != nil {
 		return uuid.Nil, uuid.Nil, err

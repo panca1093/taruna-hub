@@ -8,10 +8,9 @@ import (
 )
 
 const (
-	ExportTryoutPDF           = "tryout_pdf"
-	ExportTryoutResultsCSV    = "tryout_results_csv"
-	ExportTryoutResultsXLSX   = "tryout_results_xlsx"
-	ExportKecermatanResultPDF = "kecermatan_result_pdf"
+	ExportTryoutPDF         = "tryout_pdf"
+	ExportTryoutResultsCSV  = "tryout_results_csv"
+	ExportTryoutResultsXLSX = "tryout_results_xlsx"
 )
 
 const (

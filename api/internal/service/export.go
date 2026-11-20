@@ -50,10 +50,9 @@ const (
 )
 
 var knownExportKinds = map[string]bool{
-	model.ExportTryoutPDF:           true,
-	model.ExportTryoutResultsCSV:    true,
-	model.ExportTryoutResultsXLSX:   true,
-	model.ExportKecermatanResultPDF: true,
+	model.ExportTryoutPDF:         true,
+	model.ExportTryoutResultsCSV:  true,
+	model.ExportTryoutResultsXLSX: true,
 }
 
 type ExportArtifact struct {

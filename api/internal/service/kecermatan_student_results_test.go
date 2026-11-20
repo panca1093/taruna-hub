@@ -256,10 +256,6 @@ func TestKecermatanStaffStudentResultsDetail(t *testing.T) {
 			_, err := h.rt.StaffStudentResults(ctx, h.scope(tenant), admin, uuid.New(), test.ID)
 			return err
 		},
-		"pdf for another tenant": func() error {
-			_, err := h.rt.PreparePDF(ctx, h.scope(other), adminB, user.ID, test.ID)
-			return err
-		},
 	} {
 		if err := call(); !errors.Is(err, ErrKecSessionNotFound) {
 			t.Errorf("%s: err = %v, want not found", name, err)
@@ -277,8 +273,5 @@ func TestKecermatanStaffStudentResultsDetail(t *testing.T) {
 	}
 	if _, err := h.rt.StaffStudentResults(ctx, h.scope(tenant), p, user.ID, test.ID); !errors.Is(err, ErrRuntimeForbidden) {
 		t.Errorf("student reads the detail: err = %v, want forbidden", err)
-	}
-	if _, err := h.rt.PreparePDF(ctx, h.scope(tenant), p, user.ID, test.ID); !errors.Is(err, ErrRuntimeForbidden) {
-		t.Errorf("student prepares the pdf: err = %v, want forbidden", err)
 	}
 }

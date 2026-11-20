@@ -137,7 +137,7 @@ export function KecermatanResultView({
   initialOpenId?: string | null;
 }) {
   const t = useKecermatanResultT();
-  const [openId, setOpenId] = useState<string | null>(initialOpenId ?? attempts[0]?.session_id ?? null);
+  const [openId, setOpenId] = useState<string | null>(initialOpenId !== undefined ? initialOpenId : (attempts[0]?.session_id ?? null));
 
   const counted = attempts.slice(0, progress.attempts_counted);
   const countedIds = new Set(counted.map((attempt) => attempt.session_id));

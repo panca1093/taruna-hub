@@ -1,18 +1,18 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { Button, toast } from "@heroui/react";
 import { BarChart3, CloudOff, Download } from "lucide-react";
-import { ExportStatus } from "@/components/admin/export-status";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
 import { KecermatanResultView } from "@/components/kecermatan-result-view";
+import { PageHeading } from "@/components/page-heading";
 import { LinkButton } from "@/components/ui/link-button";
-import { ApiError, api, errorText, type KecermatanStaffStudentDetail } from "@/lib/api/client";
+import { ApiError, api, type KecermatanStaffStudentDetail } from "@/lib/api/client";
+import { savePageAsPdf } from "@/lib/capture-pdf";
 import { useKecermatanResultsT } from "@/lib/i18n/dict/results";
-import { useTryoutPdfT } from "@/lib/i18n/dict/tryout-pdf";
 
 type LoadState = "loading" | "ready" | "failed" | "notFound";
 
@@ -21,12 +21,11 @@ const loadAttempt = (sessionId: string) => api.kecermatanResults.get(sessionId);
 export default function KecermatanStudentResultPage({ params }: { params: Promise<{ testId: string; studentId: string }> }) {
   const { testId, studentId } = use(params);
   const t = useKecermatanResultsT();
-  const pdfT = useTryoutPdfT();
   const [detail, setDetail] = useState<KecermatanStaffStudentDetail | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [reloadKey, setReloadKey] = useState(0);
-  const [pdfRequesting, setPdfRequesting] = useState(false);
-  const [pdfRefresh, setPdfRefresh] = useState(0);
+  const [pdfWorking, setPdfWorking] = useState(false);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,16 +45,17 @@ export default function KecermatanStudentResultPage({ params }: { params: Promis
     };
   }, [studentId, testId, reloadKey]);
 
-  const requestPdf = async () => {
-    setPdfRequesting(true);
+  const downloadPdf = async () => {
+    if (!captureRef.current || !detail) return;
+    setPdfWorking(true);
     try {
-      await api.kecermatanResults.requestPdf(studentId, testId);
-      setPdfRefresh((n) => n + 1);
-      toast.success(pdfT.toastQueued, { description: pdfT.toastQueuedDescription });
-    } catch (err) {
-      toast.danger(pdfT.toastFailed, { description: errorText(err, pdfT.failedFallback) });
+      const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const background = getComputedStyle(document.body).backgroundColor;
+      await savePageAsPdf(captureRef.current, `kecermatan-${slug(detail.student.name)}-${slug(detail.test.title)}.pdf`, background);
+    } catch {
+      toast.danger(t.pdfFailed);
     } finally {
-      setPdfRequesting(false);
+      setPdfWorking(false);
     }
   };
 
@@ -119,14 +119,24 @@ export default function KecermatanStudentResultPage({ params }: { params: Promis
       leading={<GradientAvatar user={student} size="lg" />}
       breadcrumb={[listCrumb, { label: student.name }]}
       actions={
-        <Button variant="secondary" size="sm" isDisabled={pdfRequesting} onPress={() => void requestPdf()}>
-          <Icon icon={Download} size="xs" /> {pdfRequesting ? pdfT.requesting : pdfT.request}
+        <Button variant="secondary" size="sm" isDisabled={pdfWorking} onPress={() => void downloadPdf()}>
+          <Icon icon={Download} size="xs" /> {pdfWorking ? t.pdfPreparing : t.pdfDownload}
         </Button>
       }
     >
       <div className="space-y-6">
-        <ExportStatus kind="kecermatan_result_pdf" refreshKey={pdfRefresh} />
         <KecermatanResultView progress={progress} attempts={attempts} loadAttempt={loadAttempt} />
+      </div>
+      <div aria-hidden inert className="fixed top-0 -left-300 w-275">
+        <div ref={captureRef} className="space-y-6 bg-background p-8">
+          <PageHeading
+            title={student.name}
+            description={`${test.title} · ${t.detailDescription(test.program_code, detail.remaining_attempts)}`}
+            leading={<GradientAvatar user={student} size="lg" />}
+            size="compact"
+          />
+          <KecermatanResultView progress={progress} attempts={attempts} loadAttempt={loadAttempt} initialOpenId={null} />
+        </div>
       </div>
     </AppShell>
   );

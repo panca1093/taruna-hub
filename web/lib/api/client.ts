@@ -757,9 +757,6 @@ export const api = {
     /** One attempt with its per-kolom counts. */
     get: (id: string) =>
       authed<KecermatanStaffResultDetail>(`/api/v1/admin/kecermatan-results/${id}` as keyof paths),
-    /** 202 with the queued export; 503 `pdf_unavailable` when no converter is configured. */
-    requestPdf: (studentId: string, testId: string) =>
-      mutate<Export>("POST", `${kecermatanStudentPath(studentId, testId)}/pdf-exports` as keyof paths),
   },
 
   /** Marketing content: `published` is public, the rest is the Admin workbench (draft, save, publish, history). */

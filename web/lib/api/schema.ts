@@ -6920,67 +6920,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/kecermatan-results/students/{student_id}/tests/{test_id}/pdf-exports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request the PDF report of one student's results on one test
-         * @description Admin and Operator only; a Student answers `403`. Answers `202` with the `Export` to poll through
-         *     `GET /api/v1/exports/{id}` and download through `POST /api/v1/exports/{id}/download-link`. The report holds
-         *     what the detail endpoint shows: student and test, the combined score and averages, the score per attempt
-         *     and the per-kolom counts of each completed attempt. It never carries the generated columns or answers. Its
-         *     `params` are `{student_id, test_id}`; the report describes the completed attempts at render time. A student
-         *     or test that is not the tenant's, or a student with no completed attempt, is `404`. Failure codes are
-         *     `student_result_not_found`, `pdf_too_large`, `renderer_unavailable` and `render_failed`. `503` with code
-         *     `pdf_unavailable` means no PDF converter is configured on this deployment, and no job is queued.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    student_id: string;
-                    test_id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The queued export */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Export"];
-                    };
-                };
-                401: components["responses"]["Unauthorized"];
-                403: components["responses"]["Forbidden"];
-                404: components["responses"]["NotFound"];
-                /** @description No PDF converter is configured (`pdf_unavailable`) or the export service is unavailable. */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/website": {
         parameters: {
             query?: never;
@@ -8242,7 +8181,7 @@ export interface components {
             program_id?: string;
         };
         /** @enum {string} */
-        ExportKind: "tryout_pdf" | "tryout_results_csv" | "tryout_results_xlsx" | "kecermatan_result_pdf";
+        ExportKind: "tryout_pdf" | "tryout_results_csv" | "tryout_results_xlsx";
         /**
          * @description A durable artifact request. `queued` and `running` are in progress, `ready` has a file, `failed` ends with an
          *     `error_code`. The storage key is never exposed.

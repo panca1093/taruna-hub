@@ -5129,54 +5129,6 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/admin/kecermatan-results/students/{student_id}/tests/{test_id}/pdf-exports:
-    post:
-      tags: [kecermatan-runtime, exports]
-      summary: Request the PDF report of one student's results on one test
-      description: |
-        Admin and Operator only; a Student answers `403`. Answers `202` with the `Export` to poll through
-        `GET /api/v1/exports/{id}` and download through `POST /api/v1/exports/{id}/download-link`. The report holds
-        what the detail endpoint shows: student and test, the combined score and averages, the score per attempt
-        and the per-kolom counts of each completed attempt. It never carries the generated columns or answers. Its
-        `params` are `{student_id, test_id}`; the report describes the completed attempts at render time. A student
-        or test that is not the tenant's, or a student with no completed attempt, is `404`. Failure codes are
-        `student_result_not_found`, `pdf_too_large`, `renderer_unavailable` and `render_failed`. `503` with code
-        `pdf_unavailable` means no PDF converter is configured on this deployment, and no job is queued.
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: student_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: test_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "202":
-          description: The queued export
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Export"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          description: No PDF converter is configured (`pdf_unavailable`) or the export service is unavailable.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-
   /api/v1/website:
     get:
       tags: [website]
@@ -7128,7 +7080,7 @@ components:
 
     ExportKind:
       type: string
-      enum: [tryout_pdf, tryout_results_csv, tryout_results_xlsx, kecermatan_result_pdf]
+      enum: [tryout_pdf, tryout_results_csv, tryout_results_xlsx]
 
     Export:
       type: object
