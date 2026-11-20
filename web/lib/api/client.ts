@@ -92,7 +92,8 @@ export type KecermatanStudentTestList = components["schemas"]["KecermatanStudent
 export type KecermatanOverview = components["schemas"]["KecermatanOverview"];
 export type KecermatanAttempt = components["schemas"]["KecermatanAttempt"];
 export type KecermatanSession = components["schemas"]["KecermatanSession"];
-export type KecermatanKolom = components["schemas"]["KecermatanKolom"];
+export type KecermatanProgress = components["schemas"]["KecermatanProgress"];
+export type KecermatanKolom =components["schemas"]["KecermatanKolom"];
 export type KecermatanReference = components["schemas"]["KecermatanReference"];
 export type KecermatanRuntimeElement = components["schemas"]["KecermatanRuntimeElement"];
 export type KecermatanResult = components["schemas"]["KecermatanResult"];
@@ -100,6 +101,9 @@ export type KecermatanAnswerAck = components["schemas"]["KecermatanAnswerAck"];
 export type KecermatanStaffResult = components["schemas"]["KecermatanStaffResult"];
 export type KecermatanStaffResultList = components["schemas"]["KecermatanStaffResultList"];
 export type KecermatanStaffResultDetail = components["schemas"]["KecermatanStaffResultDetail"];
+export type KecermatanStaffStudentRow = components["schemas"]["KecermatanStaffStudentRow"];
+export type KecermatanStaffStudentList = components["schemas"]["KecermatanStaffStudentList"];
+export type KecermatanStaffStudentDetail = components["schemas"]["KecermatanStaffStudentDetail"];
 type KecermatanTestBody = components["schemas"]["KecermatanTestRequest"];
 type UpdateKecermatanTestBody = components["schemas"]["UpdateKecermatanTestRequest"];
 type KecermatanPreviewBody = components["schemas"]["KecermatanPreviewRequest"];
@@ -341,6 +345,8 @@ function uploadElements<T>(path: keyof paths, input: ElementUpload): Promise<T> 
 }
 
 const kecermatanPath = (id: string) => `/api/v1/kecermatan-tests/${id}` as keyof paths;
+const kecermatanStudentPath = (studentId: string, testId: string) =>
+  `/api/v1/admin/kecermatan-results/students/${studentId}/tests/${testId}` as keyof paths;
 const itemPackagePath = (id: string) => `/api/v1/item-packages/${id}` as keyof paths;
 
 /** Multipart upload of one image with its purpose, the way POST /api/v1/assets reads it. */
@@ -742,12 +748,18 @@ export const api = {
       ),
   },
 
-  /** Completed kecermatan attempts of the tenant. */
+  /** Completed kecermatan attempts of the tenant: one row per student and test, with the attempts behind `student`. */
   kecermatanResults: {
-    list: (filters: { test_id?: string; program_id?: string; limit?: number; offset?: number } = {}) =>
-      authed<KecermatanStaffResultList>(`/api/v1/admin/kecermatan-results${queryOf(filters)}` as keyof paths),
+    list: (filters: { test_id?: string; program_id?: string; q?: string; limit?: number; offset?: number } = {}) =>
+      authed<KecermatanStaffStudentList>(`/api/v1/admin/kecermatan-results${queryOf(filters)}` as keyof paths),
+    student: (studentId: string, testId: string) =>
+      authed<KecermatanStaffStudentDetail>(kecermatanStudentPath(studentId, testId)),
+    /** One attempt with its per-kolom counts. */
     get: (id: string) =>
       authed<KecermatanStaffResultDetail>(`/api/v1/admin/kecermatan-results/${id}` as keyof paths),
+    /** 202 with the queued export; 503 `pdf_unavailable` when no converter is configured. */
+    requestPdf: (studentId: string, testId: string) =>
+      mutate<Export>("POST", `${kecermatanStudentPath(studentId, testId)}/pdf-exports` as keyof paths),
   },
 
   /** Marketing content: `published` is public, the rest is the Admin workbench (draft, save, publish, history). */
