@@ -128,7 +128,7 @@ export default function KecermatanStudentResultPage({ params }: { params: Promis
         <KecermatanResultView progress={progress} attempts={attempts} loadAttempt={loadAttempt} />
       </div>
       <div aria-hidden inert data-theme="light" className="fixed top-0 -left-300 w-275">
-        <div ref={captureRef} className="space-y-6 bg-background p-8">
+        <div ref={captureRef} className="space-y-6 bg-background p-8 text-foreground">
           <PageHeading
             title={student.name}
             description={`${test.title} · ${t.detailDescription(test.program_code, detail.remaining_attempts)}`}
