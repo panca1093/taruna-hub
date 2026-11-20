@@ -9447,18 +9447,6 @@ components:
           type: integer
           description: The student's unused credits on this test now, not at completion time.
 
-    KecermatanStaffResultList:
-      type: object
-      additionalProperties: false
-      required: [results, total]
-      properties:
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/KecermatanStaffResult"
-        total:
-          type: integer
-
     KecermatanStaffResultDetail:
       allOf:
         - $ref: "#/components/schemas/KecermatanStaffResult"

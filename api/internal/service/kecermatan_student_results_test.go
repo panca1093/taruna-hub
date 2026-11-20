@@ -197,6 +197,9 @@ func TestKecermatanStaffResultsAvatarIsResolvedLikeMe(t *testing.T) {
 	h.finish(t, tenant, autoP, test, 5)
 
 	rows, _ := h.staffRows(t, tenant, KecResultFilter{})
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want the two students", len(rows))
+	}
 	want := map[uuid.UUID]string{picked.ID: "a07", auto.ID: model.DefaultAvatarKey(auto.ID, &female, &young, time.Now())}
 	for _, r := range rows {
 		if r.Avatar != want[r.StudentID] || !avatarKeyPattern.MatchString(r.Avatar) {

@@ -104,7 +104,7 @@ function ResultContent({ testId }: { testId: string }) {
       }
     >
       <div className="space-y-6">
-        <KecermatanResultView progress={progress} attempts={completed} loadAttempt={loadAttempt} initialOpenId={initialOpenId} />
+        <KecermatanResultView key={initialOpenId} progress={progress} attempts={completed} loadAttempt={loadAttempt} initialOpenId={initialOpenId} />
 
         <NoteBox>{t.quotaLeft(test.attempts_remaining)}</NoteBox>
 

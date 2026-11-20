@@ -42,11 +42,14 @@ export async function savePageAsPdf(node: HTMLElement, fileName: string, backgro
   const pixelRatio = 2;
   const dataUrl = await toJpeg(node, { quality: 0.95, pixelRatio, backgroundColor: background, cacheBust: true });
   const jpeg = new Uint8Array(await (await fetch(dataUrl)).arrayBuffer());
-  const blob = singleImagePdf(jpeg, Math.round(node.offsetWidth * pixelRatio), Math.round(node.offsetHeight * pixelRatio));
+  const bitmap = await createImageBitmap(new Blob([jpeg as BlobPart], { type: "image/jpeg" }));
+  const { width, height } = bitmap;
+  bitmap.close();
+  const blob = singleImagePdf(jpeg, width, height);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

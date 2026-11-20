@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, toast } from "@heroui/react";
 import { BarChart3, CloudOff, Download } from "lucide-react";
@@ -36,7 +36,10 @@ function downloadCsv(rows: KecermatanStaffStudentRow[], t: ReturnType<typeof use
       r.remaining_attempts,
       r.last_completed_at,
     ]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+      .map((v) => {
+        const text = String(v);
+        return `"${(/^[=+\-@]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
+      })
       .join(","),
   );
   const csv = [t.csvHeaders.join(","), ...lines].join("\n");
@@ -65,6 +68,13 @@ export default function KecermatanResultsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const filterKey = `${testFilter}|${programFilter}|${search}|${reloadKey}`;
+  const filterKeyRef = useRef(filterKey);
+  const loadingMoreRef = useRef(false);
+
+  useEffect(() => {
+    filterKeyRef.current = filterKey;
+  }, [filterKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,17 +132,23 @@ export default function KecermatanResultsPage() {
   }, [testFilter, programFilter, search, reloadKey]);
 
   const loadMore = async () => {
+    if (loadingMoreRef.current) return;
+    const requestKey = filterKey;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const page = await api.kecermatanResults.list({ ...filters, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      if (filterKeyRef.current !== requestKey) return;
       setRows((prev) => {
         const seen = new Set((prev ?? []).map(rowKey));
         return [...(prev ?? []), ...page.results.filter((row) => !seen.has(rowKey(row)))];
       });
       setTotal(page.total);
     } catch (err) {
+      if (filterKeyRef.current !== requestKey) return;
       toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
   };
@@ -218,6 +234,7 @@ export default function KecermatanResultsPage() {
             label={t.fieldSearch}
             placeholder={t.searchPlaceholder}
             type="search"
+            maxLength={100}
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
           />

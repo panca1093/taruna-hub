@@ -9331,10 +9331,6 @@ export interface components {
             /** @description The student's unused credits on this test now, not at completion time. */
             remaining_attempts: number;
         };
-        KecermatanStaffResultList: {
-            results: components["schemas"]["KecermatanStaffResult"][];
-            total: number;
-        };
         KecermatanStaffResultDetail: components["schemas"]["KecermatanStaffResult"] & {
             kolom: components["schemas"]["KecermatanKolomResult"][];
         };

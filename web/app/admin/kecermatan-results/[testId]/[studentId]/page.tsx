@@ -50,7 +50,7 @@ export default function KecermatanStudentResultPage({ params }: { params: Promis
     setPdfWorking(true);
     try {
       const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      const background = getComputedStyle(document.body).backgroundColor;
+      const background = getComputedStyle(captureRef.current).backgroundColor;
       await savePageAsPdf(captureRef.current, `kecermatan-${slug(detail.student.name)}-${slug(detail.test.title)}.pdf`, background);
     } catch {
       toast.danger(t.pdfFailed);
@@ -127,7 +127,7 @@ export default function KecermatanStudentResultPage({ params }: { params: Promis
       <div className="space-y-6">
         <KecermatanResultView progress={progress} attempts={attempts} loadAttempt={loadAttempt} />
       </div>
-      <div aria-hidden inert className="fixed top-0 -left-300 w-275">
+      <div aria-hidden inert data-theme="light" className="fixed top-0 -left-300 w-275">
         <div ref={captureRef} className="space-y-6 bg-background p-8">
           <PageHeading
             title={student.name}

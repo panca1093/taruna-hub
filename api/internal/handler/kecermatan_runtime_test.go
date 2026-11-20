@@ -30,7 +30,6 @@ func (linkStore) PresignGet(_ context.Context, key string, _ time.Duration) (str
 type kecHTTPFixture struct {
 	walletHTTPFixture
 	e     http.Handler
-	noPDF http.Handler
 	clock *runtimeClock
 	test  model.KecermatanTest
 }
@@ -67,33 +66,19 @@ func newKecHTTPFixture(t *testing.T) kecHTTPFixture {
 	account := newAccountService(t, f.tenantFixture, auth)
 	assets := newAssetService(f.tenantFixture, linkStore{}, time.Minute)
 	runtime := newRuntimeService(f.tenantFixture)
-	notes, err := service.NewNotificationService(repository.NewNotificationRepository(f.pool), noJobs{}, nil, handlerSealKey, f.logger)
-	if err != nil {
-		t.Fatalf("notification service: %v", err)
-	}
-	exports := service.NewExportService(f.pool, repository.NewExportRepository(f.pool), exportStubStore{}, exportStubJobs{}, notes, f.logger)
-	t.Cleanup(func() {
-		if _, err := f.pool.Exec(context.Background(), `DELETE FROM exports WHERE tenant_id = ANY($1)`,
-			[]uuid.UUID{f.tenantA.ID, f.tenantB.ID}); err != nil {
-			t.Errorf("cleanup exports: %v", err)
-		}
+	f.e = f.deployments(func(slug string) *echo.Echo {
+		e := echo.New()
+		e.HideBanner = true
+		e.HTTPErrorHandler = httpx.ErrorHandler(logger)
+		e.Use(httpx.RequestID())
+		e.Use(httpx.Recover(logger))
+		New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture),
+			newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets,
+			newOrderService(f.tenantFixture, assets), runtime, newResultService(f.tenantFixture, runtime), newMonitoringService(f.tenantFixture, runtime),
+			newItemPackageService(f.tenantFixture, assets), tests, AuthOptions{AllowedOrigin: httpx.OriginPolicy(devOrigins, true)}).
+			WithKecermatanRuntime(rt).Register(e, ResolveHostScope(f.tenants, slug))
+		return e
 	})
-	build := func(pdf bool) http.Handler {
-		return f.deployments(func(slug string) *echo.Echo {
-			e := echo.New()
-			e.HideBanner = true
-			e.HTTPErrorHandler = httpx.ErrorHandler(logger)
-			e.Use(httpx.RequestID())
-			e.Use(httpx.Recover(logger))
-			New(logger, NewHealthHandler(f.pool), auth, account, newCurriculumService(f.tenantFixture), newQuestionService(f.tenantFixture),
-				newTryoutService(f.tenantFixture), newProductService(f.tenantFixture), newWalletService(f.tenantFixture), assets,
-				newOrderService(f.tenantFixture, assets), runtime, newResultService(f.tenantFixture, runtime), newMonitoringService(f.tenantFixture, runtime),
-				newItemPackageService(f.tenantFixture, assets), tests, AuthOptions{AllowedOrigin: httpx.OriginPolicy(devOrigins, true)}).
-				WithKecermatanRuntime(rt).WithExports(exports).WithPDF(pdf).Register(e, ResolveHostScope(f.tenants, slug))
-			return e
-		})
-	}
-	f.e, f.noPDF = build(true), build(false)
 
 	program := questionCurriculum(t, f.e, f.hostA, f.tokenAdminA)
 	id := f.tenantA.ID
@@ -335,6 +320,10 @@ func TestKecermatanRuntimeFlowNeverLeaksKeysDuringAnAttempt(t *testing.T) {
 		if rec := f.call(c.method, c.path, nil, c.token); rec.Code != c.want {
 			t.Errorf("%s: status = %d %s, want %d", name, rec.Code, rec.Body.String(), c.want)
 		}
+	}
+	longQ := f.call(http.MethodGet, "/api/v1/admin/kecermatan-results?q="+strings.Repeat("x", 101), nil, f.tokenAdminA)
+	if longQ.Code != http.StatusUnprocessableEntity || errorBody(t, longQ).Fields["q"] == "" {
+		t.Errorf("101-character q = %d %s, want 422 with a q field error", longQ.Code, longQ.Body.String())
 	}
 	detail := decodeInto[kecStaffResultDetailResponse](t, f.call(http.MethodGet, "/api/v1/admin/kecermatan-results/"+sid.String(), nil, f.tokenAdminA))
 	if len(detail.Kolom) != 10 || detail.BenarTotal != result.BenarTotal {

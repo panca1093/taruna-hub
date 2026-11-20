@@ -533,22 +533,6 @@ func (r *KecermatanRuntimeRepository) CompletedAttempts(ctx context.Context, q d
 	return out, rows.Err()
 }
 
-// TenantName is the label the PDF footer carries.
-func (r *KecermatanRuntimeRepository) TenantName(ctx context.Context, tenantID uuid.UUID) (string, error) {
-	if tenantID == uuid.Nil {
-		return "", ErrScopeRequired
-	}
-	var name string
-	err := r.db.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenantID).Scan(&name)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	if err != nil {
-		return "", fmt.Errorf("read tenant name: %w", err)
-	}
-	return name, nil
-}
-
 // Attempts is a student's history on one test, newest first.
 func (r *KecermatanRuntimeRepository) Attempts(ctx context.Context, q dbtx, tenantID, userID, testID uuid.UUID) ([]model.KecAttempt, error) {
 	rows, err := q.Query(ctx, `
