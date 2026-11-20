@@ -66,7 +66,7 @@ function AttemptRecap({ sessionId }: { sessionId: string }) {
   const cell = "border-b border-border px-2.5 py-3";
 
   return (
-    <div className="grid items-start gap-7 pb-6 lg:grid-cols-detail">
+    <div className="grid items-start gap-7 pb-6 lg:grid-cols-2">
       <p className="flex flex-wrap gap-x-6 gap-y-1 text-small text-muted tabular-nums lg:col-span-2">
         {scores.map((score) => (
           <span key={score.label}>
