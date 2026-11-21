@@ -59,8 +59,9 @@ interface PageLayout {
 /**
  * Flows measured block heights into pages. A `keep` block stays on the page of the block after it; a group whose
  * keep blocks plus the block after them exceed a page goes on its own page with that last block scaled to fit.
+ * A block flagged in `breakBefore` always starts a new page.
  */
-export function paginate(heights: number[], keep: boolean[], bodyH: number): PageLayout[] {
+export function paginate(heights: number[], keep: boolean[], bodyH: number, breakBefore: boolean[] = []): PageLayout[] {
   const pages: PageLayout[] = [];
   let current: PageLayout["blocks"] = [];
   let used = 0;
@@ -81,8 +82,9 @@ export function paginate(heights: number[], keep: boolean[], bodyH: number): Pag
   };
   let i = 0;
   while (i < heights.length) {
+    if (breakBefore[i]) flush();
     let end = i;
-    while (keep[end] && end + 1 < heights.length) end++;
+    while (keep[end] && end + 1 < heights.length && !breakBefore[end + 1]) end++;
     const lead = heights.slice(i, end).reduce((sum, h) => sum + h, 0);
     const total = lead + heights[end];
     if (total <= bodyH) {
@@ -167,6 +169,10 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
     return out;
   }, [title, subtests]);
   const keep = useMemo(() => blocks.map((block) => block.kind !== "question"), [blocks]);
+  const breakBefore = useMemo(() => {
+    const first = blocks.findIndex((block) => block.kind === "subtest");
+    return blocks.map((block, i) => block.kind === "subtest" && i !== first);
+  }, [blocks]);
 
   const measureRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -188,12 +194,12 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
       await inlineImages(container, imageFailedRef.current, assetBytes);
       if (cancelled) return;
       const heights = Array.from(container.querySelectorAll<HTMLElement>("[data-block]")).map((el) => el.getBoundingClientRect().height);
-      setPages(paginate(heights, keep, BODY_H));
+      setPages(paginate(heights, keep, BODY_H, breakBefore));
     })();
     return () => {
       cancelled = true;
     };
-  }, [keep]);
+  }, [keep, breakBefore]);
 
   useEffect(() => {
     const root = rootRef.current;

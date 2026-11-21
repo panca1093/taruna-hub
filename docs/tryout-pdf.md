@@ -46,6 +46,8 @@ margins and footer. Rules, in the order the code applies them:
 5. An empty subtest's heading joins the following heading's group, so it travels with the next question.
 6. Trailing keep blocks with no question after them (a last empty subtest) have nothing to stay with and are placed
    where they fall.
+7. Every subtest after the first starts on a new page (owner decision 2026-11-21); the first subtest stays under the
+   title on page 1. An empty subtest's heading therefore sits alone on its own page, which overrides rule 5 for it.
 
 Checked by reading the code against these cases: empty subtest (rule 5, one group), heading plus oversize question
 (rule 4, no orphan heading), title plus heading plus oversize first question (rule 4), exact-fit page (rule 3),
