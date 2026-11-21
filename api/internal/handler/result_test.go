@@ -97,11 +97,19 @@ func TestResultEndpointsRoles(t *testing.T) {
 			t.Errorf("results%s: status = %d, want 422", query, rec.Code)
 		}
 	}
-	byProgram := decodeInto[staffResultStudentListResponse](t, f.call(http.MethodGet, "/api/v1/admin/results?program_id="+f.tryout.ProgramID.String(), nil, f.tokenAdminA))
+	programRec := f.call(http.MethodGet, "/api/v1/admin/results?program_id="+f.tryout.ProgramID.String(), nil, f.tokenAdminA)
+	if programRec.Code != http.StatusOK {
+		t.Fatalf("results by program: status = %d body = %s", programRec.Code, programRec.Body.String())
+	}
+	byProgram := decodeInto[staffResultStudentListResponse](t, programRec)
 	if byProgram.Total != 1 || len(byProgram.Results) != 1 || byProgram.Results[0].StudentID != f.studentA.ID {
 		t.Errorf("results by program = %+v, want the one completed student", byProgram)
 	}
-	otherProgram := decodeInto[staffResultStudentListResponse](t, f.call(http.MethodGet, "/api/v1/admin/results?program_id="+uuid.NewString(), nil, f.tokenAdminA))
+	otherRec := f.call(http.MethodGet, "/api/v1/admin/results?program_id="+uuid.NewString(), nil, f.tokenAdminA)
+	if otherRec.Code != http.StatusOK {
+		t.Fatalf("results of another program: status = %d body = %s", otherRec.Code, otherRec.Body.String())
+	}
+	otherProgram := decodeInto[staffResultStudentListResponse](t, otherRec)
 	if otherProgram.Total != 0 || len(otherProgram.Results) != 0 {
 		t.Errorf("results of another program = %+v, want none", otherProgram)
 	}
