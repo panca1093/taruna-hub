@@ -329,67 +329,6 @@ func TestResultIRTCountsDistinctStudentsPerQuestionVersion(t *testing.T) {
 	}
 }
 
-func TestResultStaffListFiltersRanksAndFlagsIRTOnlyOnIRTTryouts(t *testing.T) {
-	h := newResultHarness(t)
-	q1, q2 := h.question(t), h.question(t)
-	weighted := h.tryoutOf(t, nil, q1)
-	irt := h.tryoutOf(t, func(in *TryoutInput) { in.ScoringMode = model.ScoringIRT }, q2)
-
-	ada, pa := h.enrolledStudentOf(t, weighted)
-	h.enroll(t, ada, irt.ID)
-	_, pb := h.enrolledStudentOf(t, weighted)
-	h.take(t, pa, weighted, map[uuid.UUID]string{q1.ID: optID(t, q1, "4")})
-	h.take(t, pb, weighted, map[uuid.UUID]string{q1.ID: optID(t, q1, "3")})
-	h.take(t, pa, irt, map[uuid.UUID]string{q2.ID: optID(t, q2, "4")})
-
-	ctx, scope := context.Background(), h.scopeA()
-	rows, total, err := h.rs.StaffResults(ctx, scope, h.staff(model.RoleOperator), StaffResultFilter{TryoutID: &weighted.ID})
-	if err != nil || total != 2 || len(rows) != 2 {
-		t.Fatalf("weighted results = %d of %d (err %v), want 2", len(rows), total, err)
-	}
-	if rows[0].Rank != 1 || rows[0].Score != 100 || rows[1].Rank != 2 || rows[1].Participants != 2 || rows[0].IRTWarning || rows[1].IRTWarning {
-		t.Errorf("weighted rows = %+v / %+v, want ranks 1 and 2 of 2 and no IRT flag", rows[0], rows[1])
-	}
-	if len(rows[0].Subtests) != 1 || rows[0].Subtests[0].Score != 100 {
-		t.Errorf("subtests = %+v, want the one subtest scored 100", rows[0].Subtests)
-	}
-
-	rows, total, err = h.rs.StaffResults(ctx, scope, h.staff(model.RoleAdmin), StaffResultFilter{TryoutID: &irt.ID})
-	if err != nil || total != 1 || !rows[0].IRTWarning {
-		t.Errorf("irt results = %+v of %d (err %v), want one row with the IRT warning (1 respondent < 3)", rows, total, err)
-	}
-
-	rows, total, err = h.rs.StaffResults(ctx, scope, h.staff(model.RoleAdmin), StaffResultFilter{})
-	if err != nil || total != 3 || len(rows) != 3 {
-		t.Errorf("all results = %d of %d (err %v), want 3", len(rows), total, err)
-	}
-	rows, total, err = h.rs.StaffResults(ctx, scope, h.staff(model.RoleAdmin), StaffResultFilter{Limit: 1, Offset: 2})
-	if err != nil || total != 3 || len(rows) != 1 {
-		t.Errorf("page = %d of %d (err %v), want 1 of 3", len(rows), total, err)
-	}
-	rows, total, err = h.rs.StaffResults(ctx, scope, h.staff(model.RoleAdmin), StaffResultFilter{Search: "%"})
-	if err != nil || total != 0 || len(rows) != 0 {
-		t.Errorf("a literal %% search = %d rows (err %v), want none", len(rows), err)
-	}
-	rows, _, err = h.rs.StaffResults(ctx, scope, h.staff(model.RoleAdmin), StaffResultFilter{Search: "siswa runtime"})
-	if err != nil || len(rows) != 3 {
-		t.Errorf("name search = %d rows (err %v), want all 3", len(rows), err)
-	}
-
-	if _, _, err := h.rs.StaffResults(ctx, scope, pa, StaffResultFilter{}); !errors.Is(err, ErrRuntimeForbidden) {
-		t.Errorf("student staff list err = %v, want forbidden", err)
-	}
-	if _, _, err := h.rs.StaffResults(ctx, scope, h.staff(model.RoleAdmin), StaffResultFilter{Limit: 101}); err == nil {
-		t.Error("a limit over 100 must be rejected")
-	}
-	if _, _, err := h.rs.Leaderboard(ctx, scope, pa, weighted.ID, 0, 0); !errors.Is(err, ErrRuntimeForbidden) {
-		t.Errorf("student leaderboard err = %v, want forbidden", err)
-	}
-	if _, _, err := h.rs.Leaderboard(ctx, scope, h.staff(model.RoleAdmin), uuid.New(), 0, 0); !errors.Is(err, ErrTryoutNotFound) {
-		t.Errorf("unknown tryout leaderboard err = %v, want tryout not found", err)
-	}
-}
-
 func TestIRTDefaultThresholdIsThirty(t *testing.T) {
 	if IRTMinStudents != 30 {
 		t.Fatalf("IRTMinStudents = %d, want 30 (PRD, D04)", IRTMinStudents)

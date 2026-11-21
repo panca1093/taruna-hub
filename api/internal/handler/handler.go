@@ -212,6 +212,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/admin/tryout-sessions/:id/extensions", h.ExtendSession, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.PUT("/tryouts/:id/grace", h.SetTryoutGrace, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.GET("/admin/results", h.StaffResults, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
+	v1.GET("/admin/results/students/:student_id/tryouts/:tryout_id", h.StaffStudentResults, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.POST("/results/exports", h.RequestResultExport, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/tryouts/:id/leaderboard", h.TryoutLeaderboard, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/settings", h.Settings, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
