@@ -2,6 +2,35 @@
 
 Notable changes to the Taruna Eduka tryout platform, newest first. Each version is a git tag; pushing a `v*` tag builds the deploy images.
 
+## v0.1.5 — 2026-11-21
+
+### Added
+
+- **New question editor.** Admins write a question the way it will look: text, formulas, tables, pictures and solid shapes appear in place while typing, with no codes to remember. One toolbar works for the question, every answer option and the explanation.
+- **Formulas, tables, pictures and solid shapes in questions.** A formula is built with quick buttons (fraction, power, root and more) and shown before it is inserted. A table is picked by size and filled in directly. A picture is uploaded from the computer (PNG, JPG or WebP, up to 5 MB). Seven solids are ready to insert: kubus, balok, tabung, kerucut, bola, limas and prisma, each with an optional caption.
+- **Answer options can hold the same content** as the question, so an option can be a formula, a table or a picture.
+- **Question preview.** A "Pratinjau" button shows the question exactly as a student will see it before it is saved.
+- **Results per student.** Tryout and kecermatan results list one row per student and test, can be searched by student name, and open a detail page for each student.
+- **Result PDF for one student.** The detail page downloads that student's result as a PDF that looks like the page.
+- **Result PDF for several students.** On the results pages admins tick up to 30 students and download one PDF with one student per page.
+
+### Changed
+
+- **Add and edit question form.** Writing is on the left (question, answer options, explanation) and the classification and answer settings are on the right.
+- **Existing questions keep their content.** Text, formulas and lists written before this version show as before and open in the new editor.
+- **Tryout PDF downloads straight away.** "Unduh PDF" in the tryout builder saves the file directly, with a progress count, instead of waiting for an export and an email. Pages are white, every subtest after the first starts on a new page, and there is more room between a subtest's heading and its first question.
+- **Students see pictures, tables and solid shapes** in the exam, and the tryout PDF prints them too.
+- **Picked avatars show everywhere for staff.** The students, users and monitoring pages, the leaderboard and the admin dashboard show the avatar a student chose.
+- **Kecermatan cards are the same size.** The cards of a soal are as wide and tall as the reference cards above them, with the same symbol size.
+- The question list shows formulas typeset instead of as code.
+
+### Removed
+
+- **Results export to CSV and XLSX** and the "Ekspor terbaru" list. Results are downloaded as PDFs only.
+- The "Ekspor CSV" button on the kecermatan results page.
+
+> **Deploy note:** run migrations `000029_drop_tryout_pdf_export`, `000030_question_rich_docs` and `000031_drop_exports`. The API converts existing questions once at its first start. The Gotenberg container and `GOTENBERG_URL` are no longer used and can be removed. Export files made before this version stay in storage. Text in the PDFs is an image and cannot be selected.
+
 ## v0.1.4 — 2026-11-18
 
 ### Changed
