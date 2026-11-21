@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
-	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
 )
 
 func (h resultHarness) named(t *testing.T, tr model.Tryout, name string) (model.User, model.Principal) {
@@ -126,25 +125,6 @@ func TestStaffResultsGroupPerStudentAndTryoutWithTheLeaderboardRank(t *testing.T
 		if r.IRTWarning {
 			t.Errorf("%s: a weighted tryout must not carry an IRT warning", r.StudentName)
 		}
-	}
-}
-
-func TestStaffResultsExportStaysPerAttempt(t *testing.T) {
-	h := newResultHarness(t)
-	q := h.question(t)
-	tr := h.tryoutOf(t, nil, q)
-	_, p := h.named(t, tr, "Dua Kali")
-	h.take(t, p, tr, map[uuid.UUID]string{q.ID: optID(t, q, "3")})
-	h.clock.Advance(time.Minute)
-	h.take(t, p, tr, map[uuid.UUID]string{q.ID: optID(t, q, "4")})
-
-	if rows, total := h.staffRows(t, StaffResultFilter{}); len(rows) != 1 || total != 1 {
-		t.Errorf("list = %d of %d, want one student row", len(rows), total)
-	}
-	exported, err := h.results.ExportRows(context.Background(), h.pool, h.tenant().ID,
-		repository.ExportFilter{TryoutID: &tr.ID, CutOff: h.clock.Now().Add(time.Hour), Limit: 100})
-	if err != nil || len(exported) != 2 {
-		t.Errorf("export rows = %d (err %v), want one per attempt (2)", len(exported), err)
 	}
 }
 

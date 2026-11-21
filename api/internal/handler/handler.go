@@ -39,7 +39,6 @@ type Handler struct {
 	topups        *service.TopupService
 	payments      *service.PaymentService
 	website       *service.WebsiteService
-	exports       *service.ExportService
 	userAdmin     *service.UserAdminService
 	reports       *service.ReportService
 	secureCookies bool
@@ -212,7 +211,6 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.PUT("/tryouts/:id/grace", h.SetTryoutGrace, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.GET("/admin/results", h.StaffResults, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/results/students/:student_id/tryouts/:tryout_id", h.StaffStudentResults, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
-	v1.POST("/results/exports", h.RequestResultExport, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/tryouts/:id/leaderboard", h.TryoutLeaderboard, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin, model.RoleOperator))
 	v1.GET("/admin/settings", h.Settings, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
 	v1.PUT("/admin/settings", h.UpdateSettings, httpx.NoStore(), Authenticate(h.auth), RequireRole(model.RoleAdmin))
@@ -258,11 +256,6 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.POST("/assets", h.UploadAsset, httpx.NoStore(), Authenticate(h.auth))
 	v1.GET("/assets/:id/url", h.AssetURL, httpx.NoStore(), Authenticate(h.auth))
 	v1.GET("/assets/:id/content", h.AssetContent, httpx.NoStore(), Authenticate(h.auth))
-
-	// Exports are staff work (D02: role-only); the create endpoints live with each kind's slice.
-	v1.GET("/exports", h.ListExports, httpx.NoStore(), Authenticate(h.auth), staff)
-	v1.GET("/exports/:id", h.GetExport, httpx.NoStore(), Authenticate(h.auth), staff)
-	v1.POST("/exports/:id/download-link", h.ExportDownloadLink, httpx.NoStore(), Authenticate(h.auth), staff)
 
 	h.registerStudentOps(v1)
 }

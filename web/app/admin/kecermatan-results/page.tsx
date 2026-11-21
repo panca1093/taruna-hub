@@ -5,15 +5,18 @@ import { useRouter } from "next/navigation";
 import { Button, toast } from "@heroui/react";
 import { BarChart3, CloudOff, Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { useBulkSheetPdf } from "@/components/capture-stage";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
+import { KecermatanResultCaptureSheet } from "@/components/kecermatan-result-capture-sheet";
 import { SelectInput, TextInput } from "@/components/ui/form";
 import { api, errorText, type KecermatanStaffStudentRow, type KecermatanTestSummary, type Program } from "@/lib/api/client";
 import { useKecermatanResultsT } from "@/lib/i18n/dict/results";
 
 const PAGE_SIZE = 100;
+const MAX_SELECTED = 30;
 const SEARCH_DEBOUNCE_MS = 300;
 
 const formatDateTime = (iso: string) =>
@@ -21,42 +24,13 @@ const formatDateTime = (iso: string) =>
     new Date(iso),
   );
 
-// Exports the rows on screen only; the bulk CSV/XLSX export is P21.
-function downloadCsv(rows: KecermatanStaffStudentRow[], t: ReturnType<typeof useKecermatanResultsT>) {
-  const lines = rows.map((r) =>
-    [
-      r.student_name,
-      r.test_title,
-      r.program_code,
-      r.attempts_completed,
-      r.progress.nilai_gabungan,
-      r.progress.kecepatan,
-      r.progress.ketahanan,
-      r.progress.ketelitian,
-      r.remaining_attempts,
-      r.last_completed_at,
-    ]
-      .map((v) => {
-        const text = String(v);
-        return `"${(/^[=+\-@\t\r]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
-      })
-      .join(","),
-  );
-  const csv = [t.csvHeaders.join(","), ...lines].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "hasil-kecermatan.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 const rowKey = (r: KecermatanStaffStudentRow) => `${r.student_id}:${r.test_id}`;
 
 export default function KecermatanResultsPage() {
   const t = useKecermatanResultsT();
   const router = useRouter();
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const bulk = useBulkSheetPdf();
   const [tests, setTests] = useState<KecermatanTestSummary[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [testFilter, setTestFilter] = useState("all");
@@ -92,6 +66,7 @@ export default function KecermatanResultsPage() {
       const next = searchInput.trim();
       if (next === search) return;
       setRows(null);
+      setSelected(new Set());
       setLoadFailed(false);
       setSearch(next);
     }, SEARCH_DEBOUNCE_MS);
@@ -153,6 +128,19 @@ export default function KecermatanResultsPage() {
     }
   };
 
+  const working = bulk.status === "working";
+
+  const downloadPdf = async () => {
+    const chosen = (rows ?? []).filter((r) => selected.has(rowKey(r)));
+    if (chosen.length === 0) return;
+    const saved = await bulk.run(
+      chosen,
+      async (row) => <KecermatanResultCaptureSheet detail={await api.kecermatanResults.student(row.student_id, row.test_id)} />,
+      `hasil-kecermatan-${chosen.length}-siswa-${new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Jakarta" })}.pdf`,
+    );
+    if (saved) toast.success(t.bulkDone(chosen.length));
+  };
+
   const testOptions = [{ id: "all", label: t.allTests }, ...tests.map((test) => ({ id: test.id, label: test.title }))];
   const programOptions = [{ id: "all", label: t.allPrograms }, ...programs.map((p) => ({ id: p.id, label: p.name }))];
 
@@ -202,11 +190,28 @@ export default function KecermatanResultsPage() {
     <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
   ) : (
     <>
+      {bulk.status === "error" && (
+        <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-tile border border-danger bg-danger-soft px-4 py-3 text-caption text-danger">
+          <span>
+            <strong className="font-medium">{t.bulkFailedTitle}.</strong> {t.bulkFailed(bulk.done, bulk.total)}
+          </span>
+          <Button variant="secondary" size="sm" onPress={() => void downloadPdf()}>
+            {t.bulkRetry}
+          </Button>
+        </div>
+      )}
+      {selected.size >= MAX_SELECTED && <p className="mb-3 text-label text-muted">{t.bulkCap(MAX_SELECTED)}</p>}
       <DataTable
         columns={columns}
         rows={rows}
         rowKey={rowKey}
         onRowClick={(row) => router.push(`/admin/kecermatan-results/${row.test_id}/${row.student_id}`)}
+        selectedKeys={selected}
+        onSelectionChange={setSelected}
+        maxSelected={MAX_SELECTED}
+        isSelectionDisabled={working}
+        selectAllLabel={t.selectAll}
+        selectRowLabel={(r) => t.selectRow(r.student_name)}
       />
       {rows.length < total && (
         <div className="mt-4 flex justify-center">
@@ -223,8 +228,8 @@ export default function KecermatanResultsPage() {
       title={t.pageTitle}
       description={t.resultCount(total)}
       actions={
-        <Button variant="secondary" size="sm" onPress={() => rows && downloadCsv(rows, t)} isDisabled={!rows || rows.length === 0}>
-          <Icon icon={Download} size="xs" /> {t.exportCsv}
+        <Button variant="primary" size="sm" isDisabled={selected.size === 0 || working} onPress={() => void downloadPdf()}>
+          <Icon icon={Download} size="xs" /> {working ? t.bulkProgress(bulk.page, bulk.total) : t.bulkPdf(selected.size)}
         </Button>
       }
     >
@@ -246,6 +251,7 @@ export default function KecermatanResultsPage() {
             selectedKey={testFilter}
             onSelectionChange={(k) => {
               setRows(null);
+              setSelected(new Set());
               setLoadFailed(false);
               setTestFilter(k ?? "all");
             }}
@@ -258,6 +264,7 @@ export default function KecermatanResultsPage() {
             selectedKey={programFilter}
             onSelectionChange={(k) => {
               setRows(null);
+              setSelected(new Set());
               setLoadFailed(false);
               setProgramFilter(k ?? "all");
             }}
@@ -266,6 +273,7 @@ export default function KecermatanResultsPage() {
       </div>
 
       {body}
+      {bulk.stage}
     </AppShell>
   );
 }

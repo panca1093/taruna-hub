@@ -48,8 +48,8 @@ function imagePdf(pages: PdfPage[]): Blob {
   return new Blob(parts as BlobPart[], { type: "application/pdf" });
 }
 
-async function captureJpeg(node: HTMLElement, background: string, options: { cacheBust: boolean; fontEmbedCSS?: string }) {
-  const dataUrl = await toJpeg(node, { quality: 0.95, pixelRatio: 2, backgroundColor: background, ...options });
+async function captureJpeg(node: HTMLElement, background: string, fontEmbedCSS: string) {
+  const dataUrl = await toJpeg(node, { quality: 0.95, pixelRatio: 2, backgroundColor: background, cacheBust: false, fontEmbedCSS });
   const jpeg = new Uint8Array(await (await fetch(dataUrl)).arrayBuffer());
   const bitmap = await createImageBitmap(new Blob([jpeg as BlobPart], { type: "image/jpeg" }));
   const { width, height } = bitmap;
@@ -66,31 +66,61 @@ function download(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** "a4" gives every page the fixed A4 portrait size; "content" keeps the A4 width and lets each page's height follow its element. */
+export type PdfPageSize = "a4" | "content";
+
+const pageSizeOf = (shot: { imgW: number; imgH: number }, size: PdfPageSize) =>
+  size === "a4"
+    ? { pageW: A4_WIDTH_PT, pageH: A4_HEIGHT_PT }
+    : { pageW: A4_WIDTH_PT, pageH: Math.round(A4_WIDTH_PT * (shot.imgH / shot.imgW) * 100) / 100 };
+
+export type CapturedPage = PdfPage;
+
+/** CSS of the web fonts used under `node`, computed once and passed to every `capturePage` of a run. */
+export async function fontEmbedCSSOf(node: HTMLElement) {
+  await document.fonts.ready;
+  return getFontEmbedCSS(node);
+}
+
+/** Captures one element as a page that stays in memory until `savePdf` writes the file. */
+export async function capturePage(node: HTMLElement, background: string, size: PdfPageSize, fontEmbedCSS: string): Promise<CapturedPage> {
+  const shot = await captureJpeg(node, background, fontEmbedCSS);
+  return { ...shot, ...pageSizeOf(shot, size) };
+}
+
+export function savePdf(pages: CapturedPage[], fileName: string) {
+  download(imagePdf(pages), fileName);
+}
+
 /** Renders the node to one PDF page exactly as it looks and saves it; `background` fills what the node leaves transparent. */
 export async function savePageAsPdf(node: HTMLElement, fileName: string, background: string) {
-  const shot = await captureJpeg(node, background, { cacheBust: true });
-  const pageW = A4_WIDTH_PT;
-  const pageH = Math.round(pageW * (shot.imgH / shot.imgW) * 100) / 100;
-  download(imagePdf([{ ...shot, pageW, pageH }]), fileName);
+  await inlineImages(node);
+  savePdf([await capturePage(node, background, "content", await fontEmbedCSSOf(node))], fileName);
 }
 
 /**
- * Captures each element as one A4 portrait page of a single PDF, one after the other so only one bitmap is decoded at
- * a time (the JPEG bytes of every page are kept until the file is written). `onProgress` gets the 1-based page about
- * to be captured and the total; an aborted `signal` stops before the next page and before the download.
+ * Captures each element as one page of a single PDF, one after the other so only one bitmap is decoded at
+ * a time (the JPEG bytes of every page are kept until the file is written). Pages are A4 portrait.
+ * `onProgress` gets the 1-based page about to be captured and the total; an aborted `signal` stops before the next
+ * page and before the download.
  */
-export async function savePagesAsPdf(pages: HTMLElement[], fileName: string, background: string, onProgress?: (page: number, total: number) => void, signal?: AbortSignal) {
-  await document.fonts.ready;
+export async function savePagesAsPdf(
+  pages: HTMLElement[],
+  fileName: string,
+  background: string,
+  onProgress?: (page: number, total: number) => void,
+  signal?: AbortSignal,
+) {
   // Fonts are collected from the pages' shared parent: page 1 alone may not use the math faces later pages need.
-  const fontEmbedCSS = pages.length > 0 ? await getFontEmbedCSS(pages[0].parentElement ?? pages[0]) : "";
-  const shots: PdfPage[] = [];
+  const fontEmbedCSS = pages.length > 0 ? await fontEmbedCSSOf(pages[0].parentElement ?? pages[0]) : "";
+  const shots: CapturedPage[] = [];
   for (const [i, node] of pages.entries()) {
     signal?.throwIfAborted();
     onProgress?.(i + 1, pages.length);
-    shots.push({ ...(await captureJpeg(node, background, { cacheBust: false, fontEmbedCSS })), pageW: A4_WIDTH_PT, pageH: A4_HEIGHT_PT });
+    shots.push(await capturePage(node, background, "a4", fontEmbedCSS));
   }
   signal?.throwIfAborted();
-  download(imagePdf(shots), fileName);
+  savePdf(shots, fileName);
 }
 
 function readAsDataUrl(blob: Blob) {

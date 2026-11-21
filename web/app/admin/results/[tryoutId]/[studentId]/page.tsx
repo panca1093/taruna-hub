@@ -5,13 +5,14 @@ import { useSearchParams } from "next/navigation";
 import { Button, toast } from "@heroui/react";
 import { AlertTriangle, BarChart3, CloudOff, Download, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { CaptureStage } from "@/components/capture-stage";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
 import { Panel } from "@/components/page-blocks";
-import { PageHeading } from "@/components/page-heading";
 import { StatusChip } from "@/components/status-badge";
 import { TryoutResultView } from "@/components/tryout-result-view";
+import { TryoutResultCaptureSheet, viewOf } from "@/components/tryout-result-capture-sheet";
 import { LinkButton } from "@/components/ui/link-button";
 import { ApiError, api, type StaffResultAttempt, type StaffResultStudentDetail, type ViolationTimeline } from "@/lib/api/client";
 import { savePageAsPdf } from "@/lib/capture-pdf";
@@ -87,14 +88,6 @@ function StaffAttemptSection({ attempt }: { attempt: StaffResultAttempt }) {
     </Panel>
   );
 }
-
-const viewOf = (detail: StaffResultStudentDetail, attempt: StaffResultAttempt) => ({
-  score: attempt.score,
-  subtests: attempt.subtests,
-  ranking: detail.ranking,
-  attempts: detail.attempts,
-  currentSessionId: attempt.session_id,
-});
 
 function TryoutStudentResultContent({ params }: { params: Promise<{ tryoutId: string; studentId: string }> }) {
   const { tryoutId, studentId } = use(params);
@@ -210,12 +203,9 @@ function TryoutStudentResultContent({ params }: { params: Promise<{ tryoutId: st
         <TryoutResultView {...viewOf(detail, selected)} attemptHref={(id) => `/admin/results/${tryoutId}/${studentId}?attempt=${id}`} />
         <StaffAttemptSection key={selected.session_id} attempt={selected} />
       </div>
-      <div aria-hidden inert data-theme="light" style={{ colorScheme: "light" }} className="fixed top-0 -left-300 w-275">
-        <div ref={captureRef} className="space-y-6 bg-background p-8 text-foreground">
-          <PageHeading title={student.name} description={description} leading={<GradientAvatar user={student} size="lg" />} size="compact" />
-          <TryoutResultView {...viewOf(detail, selected)} />
-        </div>
-      </div>
+      <CaptureStage>
+        <TryoutResultCaptureSheet ref={captureRef} detail={detail} attempt={selected} />
+      </CaptureStage>
     </AppShell>
   );
 }

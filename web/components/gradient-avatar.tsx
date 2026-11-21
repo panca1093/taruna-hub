@@ -24,18 +24,20 @@ export function GradientAvatar({
   size = "md",
   label,
   className,
+  eager,
 }: {
   user: { name: string; avatar?: string | null };
   size?: keyof typeof sizeMap;
   label?: string;
   className?: string;
+  eager?: boolean;
 }) {
   const picked = user.avatar && AVATAR_KEYS.includes(user.avatar) ? user.avatar : null;
   return (
     <Avatar className={cn("overflow-hidden rounded-full", sizeMap[size], className)}>
       {picked ? (
         <Avatar.Fallback className="size-full">
-          <Image src={`/avatars/${picked}.webp`} alt={label ?? user.name} width={192} height={192} unoptimized className="size-full object-cover" />
+          <Image src={`/avatars/${picked}.webp`} alt={label ?? user.name} width={192} height={192} unoptimized loading={eager ? "eager" : undefined} className="size-full object-cover" />
         </Avatar.Fallback>
       ) : (
         <Avatar.Fallback className={cn("grid size-full place-items-center", placeholderTints[hashOf(user.name) % placeholderTints.length])}>
