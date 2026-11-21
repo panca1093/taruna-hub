@@ -5338,13 +5338,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Completed attempts of the tenant with each student's current rank
-         * @description Admin and Operator (D02: a role guard). Best current rank first, then newest, at most 100 per page.
-         *     `tryout_id` narrows to one tryout. `q` is a case-insensitive substring of the student's name; `%` and `_`
-         *     are literal. `rank` and `participant_count` are the student's current standing on that tryout (the same for
-         *     every attempt of that student). `irt_warning` is true only for an IRT-mode attempt that holds a question
-         *     version answered (non-blank, in a completed session) by fewer than 30 distinct students; retakes count
-         *     once and a new question version starts at 0.
+         * Tryout results of the tenant, one row per student and tryout
+         * @description Admin and Operator (D02: a role guard). A student who attempted a tryout more than once is one row; the
+         *     attempts are the detail behind it (`GET /api/v1/admin/results/students/{student_id}/tryouts/{tryout_id}`).
+         *     Only students with at least one completed attempt appear. Best current rank first, then most recently
+         *     active (`last_completed_at`), then by name, at most 100 per page. `tryout_id` narrows to one tryout. `q` is a
+         *     case-insensitive substring of the student's name; `%` and `_` are literal. `rank` and `participant_count`
+         *     are the student's current standing on that tryout and `average_score` is what ranks them. `irt_warning` is
+         *     true when any completed attempt of the student is an IRT-mode attempt that holds a question version answered
+         *     (non-blank, in a completed session) by fewer than 30 distinct students; retakes count once and a new
+         *     question version starts at 0. The CSV and XLSX exports stay one row per attempt.
          */
         get: {
             parameters: {
@@ -5363,18 +5366,67 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description One page of results */
+                /** @description One page of student rows */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["StaffResultList"];
+                        "application/json": components["schemas"]["StaffResultStudentList"];
                     };
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
                 422: components["responses"]["ValidationFailed"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/results/students/{student_id}/tryouts/{tryout_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One student's standing and completed attempts on one tryout
+         * @description Admin and Operator (D02: a role guard). What the student sees on their own result page, per attempt: the
+         *     score, the subtest breakdown, plus the student's current `ranking` on the tryout, and the staff-only
+         *     `irt_warning` of each attempt. Attempts are completed ones, newest first. A student or tryout that is not
+         *     the tenant's, or a student with no completed attempt on the tryout, is `404`. Violations of one attempt come
+         *     from `GET /api/v1/admin/tryout-sessions/{id}/violations`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    student_id: string;
+                    tryout_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The student's results on the tryout */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StaffResultStudentDetail"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
             };
         };
         put?: never;
@@ -8700,34 +8752,71 @@ export interface components {
             total: number;
             violations: components["schemas"]["Violation"][];
         };
-        StaffResult: {
+        /** @description One student on one tryout; the attempts are behind `GET /api/v1/admin/results/students/{student_id}/tryouts/{tryout_id}`. */
+        StaffResultStudentRow: {
             /** Format: uuid */
-            session_id: string;
+            student_id: string;
+            student_name: string;
+            /**
+             * @description The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+             * @example a03
+             */
+            student_avatar: string;
             /** Format: uuid */
             tryout_id: string;
             tryout_title: string;
             program_code: string;
             /** @enum {string} */
             scoring_mode: "weighted" | "irt";
-            /** Format: uuid */
-            user_id: string;
-            student_name: string;
-            attempt_number: number;
-            /** @description This attempt's score out of 100. */
-            score: number;
+            attempts_completed: number;
             /** @description The student's average over completed attempts of this tryout, which ranks them. */
             average_score: number;
+            /** @description The score of the most recently completed attempt, out of 100. */
+            latest_score: number;
             /** @description The student's current rank, not a rank frozen at completion. */
             rank: number;
             participant_count: number;
             irt_warning: boolean;
             /** Format: date-time */
+            last_completed_at: string;
+        };
+        StaffResultStudentList: {
+            results: components["schemas"]["StaffResultStudentRow"][];
+            /** @description Student rows matching the filters, not attempts. */
+            total: number;
+        };
+        StaffResultAttempt: {
+            /** Format: uuid */
+            session_id: string;
+            attempt_number: number;
+            /** @description This attempt's score out of 100. */
+            score: number;
+            /** Format: date-time */
             completed_at: string;
+            irt_warning: boolean;
             subtests: components["schemas"]["StaffResultSubtest"][];
         };
-        StaffResultList: {
-            results: components["schemas"]["StaffResult"][];
-            total: number;
+        StaffResultStudentDetail: {
+            student: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                avatar: string;
+            };
+            tryout: {
+                /** Format: uuid */
+                id: string;
+                title: string;
+                /** Format: uuid */
+                program_id: string;
+                program_code: string;
+                program_name: string;
+                /** @enum {string} */
+                scoring_mode: "weighted" | "irt";
+            };
+            ranking: components["schemas"]["TryoutRanking"];
+            /** @description Completed attempts, newest first. */
+            attempts: components["schemas"]["StaffResultAttempt"][];
         };
         TryoutSession: {
             /** Format: uuid */
