@@ -402,12 +402,12 @@ func TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree(t *testing.T) {
 	secrets := []string{explanationMarker, "77.25"}
 	keyed := func(content string, weighted bool, optionIDs [3]string, labels ...string) questionResponse {
 		body := pgQuestionBody(program)
-		body["content"] = content
-		body["explanation"] = explanationMarker
+		body["content"] = d(content)
+		body["explanation"] = d(explanationMarker)
 		body["option_weighted"] = weighted
 		options := make([]any, 0, len(labels))
 		for i, label := range labels {
-			option := map[string]any{"id": optionIDs[i], "label": label}
+			option := map[string]any{"id": optionIDs[i], "label": d(label)}
 			if weighted {
 				points := 1.0
 				if i == 1 {
@@ -458,7 +458,7 @@ func TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree(t *testing.T) {
 	}
 
 	edit := updateBodyOf(zulu)
-	edit["content"] = "Soal Zulu SUDAH-DIUBAH"
+	edit["content"] = d("Soal Zulu SUDAH-DIUBAH")
 	if rec := sendQuestionJSON(e, http.MethodPut, hostA, "/api/v1/questions/"+zulu.ID.String(), edit, admin); rec.Code != http.StatusOK {
 		t.Fatalf("edit question: status = %d body = %s", rec.Code, rec.Body.String())
 	}
@@ -483,12 +483,13 @@ func TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree(t *testing.T) {
 		labels := func(q printQuestionResponse) []string {
 			out := []string{}
 			for _, option := range q.Options {
-				out = append(out, option.Label)
+				out = append(out, model.DocText(option.Label))
 			}
 			return out
 		}
-		if first.Questions[0].Content != "Soal Zulu pertama" || first.Questions[1].Content != "Soal Alfa kedua" || second.Questions[0].Content != "Soal Mike ketiga" {
-			t.Errorf("%s stems = %q, %q, %q, want stored order with the frozen (pre-edit) stem", name, first.Questions[0].Content, first.Questions[1].Content, second.Questions[0].Content)
+		stems := []string{model.DocText(first.Questions[0].Content), model.DocText(first.Questions[1].Content), model.DocText(second.Questions[0].Content)}
+		if stems[0] != "Soal Zulu pertama" || stems[1] != "Soal Alfa kedua" || stems[2] != "Soal Mike ketiga" {
+			t.Errorf("%s stems = %q, want stored order with the frozen (pre-edit) stem", name, stems)
 		}
 		if got := strings.Join(labels(first.Questions[0]), ","); got != "Zeta,Alfa,Mu" {
 			t.Errorf("%s options = %s, want stored order Zeta,Alfa,Mu", name, got)

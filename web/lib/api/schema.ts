@@ -1083,7 +1083,7 @@ export interface paths {
                     subject_id?: string;
                     type?: "pg" | "pg_multi" | "isian" | "benar_salah";
                     difficulty?: "easy" | "medium" | "hard";
-                    /** @description Case-insensitive substring of the content; `%` and `_` are literal. */
+                    /** @description Case-insensitive substring of the question text (the plain-text projection of the content, so text inside tables, lists and math is searched); `%` and `_` are literal. */
                     q?: string;
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
@@ -1131,8 +1131,16 @@ export interface paths {
          *     `isian` takes no options and 1–10 accepted answers. `benar_salah` has the server's fixed
          *     `benar`/`salah` options and exactly one of them as the answer.
          *
-         *     Content is stored verbatim as text: markdown and LaTeX render in the client, no HTML is
-         *     interpreted, and a `data:` or `javascript:` image URL answers `422` because images are deferred.
+         *     `content`, `explanation` and every option `label` are `RichDoc` documents (Tiptap/ProseMirror
+         *     JSON), validated and normalised by the server; no HTML is ever interpreted. A document that is
+         *     not a document, has a node, mark or attribute outside the allow-list, nests wrongly or exceeds
+         *     the limits answers `422` with the offending field (`content`, `explanation`, `options[i].label`)
+         *     in `fields`. `content` needs at least one visible element (text, math, a shape or an image) and
+         *     at most 20000 characters of text; an option label needs the same with at most 2000; the
+         *     explanation may be the empty document. Images are attached by `attrs.asset_id` of a `staged` or
+         *     `final` `question_image` asset of this tenant: saving finalizes it in the same transaction, and an
+         *     unknown asset, another tenant's or one of another purpose answers `422` on the field holding it.
+         *     `data:` and `javascript:` URLs are refused everywhere.
          */
         post: {
             parameters: {
@@ -1391,7 +1399,11 @@ export interface paths {
          *     The file is untrusted: at most 5 MB and 500 data rows, the type is proved from the content
          *     (a ZIP header plus `xl/workbook.xml` or `word/document.xml` for XLSX/DOCX, valid BOM-less
          *     UTF-8 without NUL bytes for CSV), and decompression is bounded. Cell text is used verbatim,
-         *     so a formula such as `=1+1` is stored as the literal text it is.
+         *     so a formula such as `=1+1` is stored as the literal text it is. The template stays text: on
+         *     commit the server converts each `content`, `explanation` and option cell to a `RichDoc`
+         *     (`$...$` becomes math, `**bold**`, `*italic*`, `- ` and `1. ` list lines and `![alt](http...)`
+         *     image lines are recognised) and applies the same validation as the create endpoint. A `data:` or
+         *     `javascript:` image line in a cell is refused. The preview `content` stays the plain cell text.
          */
         post: {
             parameters: {
@@ -4287,9 +4299,10 @@ export interface paths {
         /**
          * A short-lived download link
          * @description Authorizes on every call: the asset must be in the caller's tenant, and the caller must be the
-         *     uploader or an Admin or Operator. A `staged` asset is downloadable only by its uploader, and a
-         *     student cannot yet read a staff-uploaded `question_image`: that path arrives with the slice that
-         *     serves questions to students (P16). The
+         *     uploader or an Admin or Operator. A `staged` asset is downloadable only by its uploader. A Student
+         *     may also read a `final` `question_image` of the tenant, which is how question images render in
+         *     the exam and the review; a `final` `item_image` is readable by a Student only as the Kecermatan
+         *     attempt allows. The
          *     link is a presigned GET valid for 60 seconds — whoever holds it can read the object until
          *     then, so ask again instead of keeping it. The response is `Cache-Control: private, no-store`.
          *     An id of another tenant, an unknown id and an asset the caller may not read all answer the
@@ -7499,6 +7512,14 @@ export interface components {
          *     limas, prisma; optional `attrs.caption`) and `image` (`attrs.asset_id` of a `question_image`
          *     asset; optional `attrs.alt`). Inline: `text` (marks `bold`, `italic`, `underline`),
          *     `hardBreak` and `math` (`attrs.latex`).
+         *
+         *     Nesting: a `paragraph` holds inline nodes; lists hold `listItem` of paragraphs and nested lists
+         *     (`orderedList` may carry `attrs.start`); a table has 1 to 30 rows of 1 to 12 cells whose
+         *     `attrs.colspan` and `attrs.rowspan` are 1 to 12 and which hold paragraphs, lists, shapes and
+         *     images, never another table. `math.attrs.latex` is 1 to 2000 characters. `image` carries exactly
+         *     one of `attrs.asset_id` or, for legacy content only, an `http(s)` `attrs.src`. A document has at
+         *     most 2000 nodes, depth 12 and 100 KB once normalised. Violations answer `422` on the field that
+         *     holds the document.
          */
         RichDoc: {
             /** @enum {string} */

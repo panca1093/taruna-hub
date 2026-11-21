@@ -261,7 +261,7 @@ func TestRuntimeEndpointsFlowOwnershipAndSecrecy(t *testing.T) {
 	}
 	right := ""
 	for _, o := range f.q1.Options {
-		if o.Label == "4" {
+		if model.DocText(o.Label) == "4" {
 			right = o.ID
 		}
 	}

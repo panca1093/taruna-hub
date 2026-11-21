@@ -53,11 +53,30 @@ always the server's `benar`/`salah`, and sending different ones answers `422`.
 
 ## Rules, and where they live
 
-`content` is trimmed to 1–20000 characters and `explanation` to at most 20000; both are stored
-verbatim as text, because markdown and LaTeX render in the browser and no HTML is ever interpreted.
-A markdown image whose URL starts with `data:` or `javascript:` is refused ("Gambar belum didukung"):
-uploads and assets are deferred (P06), so the editor hides the image button instead of offering
-something the server cannot store.
+`content`, `explanation` and every option `label` are rich documents (`RichDoc`: Tiptap/ProseMirror JSON,
+see `api/internal/model/richdoc.go`), never HTML. `internal/service/richdoc.go` checks them against an
+allow-list (paragraph, lists, table, `shape`, `image`; inline text with bold/italic/underline, `hardBreak`,
+`math`), drops every attribute it does not know, and stores the normalised document. Limits: 2000 nodes,
+depth 12, 100 KB; a table is at most 30 x 12 cells. `content` needs a visible element and at most 20000
+characters of text, an option label the same with 2000, the explanation may be the empty document
+`{"type":"doc","content":[]}`. A bad document answers `422` on its field with one of `doc_invalid`,
+`doc_node`, `doc_mark`, `doc_attr`, `doc_too_large` or `doc_asset`.
+
+Storage: `question_versions.content_doc` and `explanation_doc` (jsonb) and a `doc` key on every `options`
+element hold the documents; the text columns `content`, `explanation` and the option `label` stay as the
+plain-text projection (`model.DocText`), which is what the `q` search matches, so text inside a table cell is
+found. A row with no documents is read as `model.DocFromLegacyText(text)`, so reads never depend on the
+backfill. At API startup `QuestionService.BackfillDocs` converts every legacy version (advisory lock, batches
+of 500, idempotent) and leaves the text columns untouched; it rewrites immutable version rows on purpose
+because the rendered content does not change. "Nothing changed, no new version" compares normalised documents.
+
+Images: an `image` node names a `question_image` asset by `attrs.asset_id`. In the same transaction as the
+version insert, every asset id of the content, explanation and options must be an asset of this tenant with
+that purpose, and is finalized (`AssetService.FinalizePurposeTx`); a staff member other than the uploader may
+save a question whose image is already final. An unknown, foreign-tenant or wrong-purpose id is `doc_asset` on
+the field that holds it, never a `500`. `attrs.src` (an `http(s)` URL) is accepted only so legacy content
+round-trips. A student may read a `final` `question_image` link (`GET /assets/{id}/url`); staged ones stay
+with the uploader and staff.
 
 `pg` takes 2–8 options with unique labels; normally exactly one correct id, and with `option_weighted`
 none at all — every option is valid and may carry 0–100 points with at most 2 decimals. An option
@@ -111,15 +130,18 @@ carry `xl/workbook.xml` or `word/document.xml`; `.csv` must be UTF-8 without NUL
 decompression is bounded by a 50 MB unzip and 20 MB worksheet budget in excelize, and the DOCX reader
 takes only `word/document.xml` through a 20 MB `LimitedReader` with `encoding/xml`, which never
 resolves external entities. A formula stays text: `=1+1` is stored as `=1+1` and never calculated, and
-a formula cell's own text wins over its cached result. Content is stored verbatim, so HTML is data and
-`data:`/`javascript:` image URLs are still refused by the shared rule.
+a formula cell's own text wins over its cached result. The template keeps its text columns: on preview and
+commit each `content`, `explanation` and option cell goes through `DocFromLegacyText` (`$...$` math,
+`**bold**`, `*italic*`, `- `/`1. ` lists, `![alt](http...)` image lines) and then the same validation as the
+create endpoint, so HTML is data. A `data:`/`javascript:` image line in a cell is refused (`question_image`
+reason), and the preview `content` stays the plain cell text.
 
 The two upload routes carry no rate limit: the only throttle in the codebase is the auth service's
 Redis counter inside login/forgot/resend, not a reusable middleware, and no import budget is defined.
 
 ## Not in this slice
 
-Master content and copy-to-own (FR-TEN-09..13), images, and any per-question or per-difficulty weight
+Master content and copy-to-own (FR-TEN-09..13), and any per-question or per-difficulty weight
 (D04 is still open; weights are tenant-level and belong to P08/P16). There is no capability matrix
 either (D02): the guard is by role, and both Admin and Operator write tenant
 content — Operator is content, per `decisions.md`. The page therefore lost its "Bobot" column and the

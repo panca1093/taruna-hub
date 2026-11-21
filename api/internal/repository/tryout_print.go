@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -33,8 +32,8 @@ func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UU
 	}
 
 	rows, err := tx.Query(ctx, `
-		SELECT s.id, s.name, s.duration_seconds, v.type, v.content,
-		       COALESCE((SELECT jsonb_agg(o.obj ->> 'label' ORDER BY o.ord)
+		SELECT s.id, s.name, s.duration_seconds, v.type, v.content, v.content_doc,
+		       COALESCE((SELECT jsonb_agg(jsonb_build_object('label', o.obj ->> 'label', 'doc', o.obj -> 'doc') ORDER BY o.ord)
 		                   FROM jsonb_array_elements(v.options) WITH ORDINALITY AS o(obj, ord)), '[]'::jsonb)
 		  FROM tryout_subtests s
 		  LEFT JOIN tryout_questions tq ON tq.subtest_id = s.id AND tq.tenant_id = s.tenant_id
@@ -51,8 +50,8 @@ func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UU
 		var name string
 		var duration int
 		var kind, content *string
-		var rawOptions []byte
-		if err := rows.Scan(&subtestID, &name, &duration, &kind, &content, &rawOptions); err != nil {
+		var rawOptions, contentDoc []byte
+		if err := rows.Scan(&subtestID, &name, &duration, &kind, &content, &contentDoc, &rawOptions); err != nil {
 			return model.PrintTryout{}, fmt.Errorf("scan print question: %w", err)
 		}
 		at, seen := index[subtestID]
@@ -64,11 +63,19 @@ func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UU
 		if content == nil || kind == nil {
 			continue
 		}
-		var labels []string
-		if err := json.Unmarshal(rawOptions, &labels); err != nil {
+		options, err := decodeOptions(rawOptions)
+		if err != nil {
 			return model.PrintTryout{}, fmt.Errorf("decode print options: %w", err)
 		}
-		out.Subtests[at].Questions = append(out.Subtests[at].Questions, model.PrintQuestion{Type: *kind, Content: *content, Options: labels})
+		doc, err := model.DocFromColumn(contentDoc, *content)
+		if err != nil {
+			return model.PrintTryout{}, fmt.Errorf("decode print content: %w", err)
+		}
+		labels := make([]model.RichDoc, 0, len(options))
+		for _, option := range options {
+			labels = append(labels, option.Doc)
+		}
+		out.Subtests[at].Questions = append(out.Subtests[at].Questions, model.PrintQuestion{Type: *kind, Content: doc, Options: labels})
 	}
 	if err := rows.Err(); err != nil {
 		return model.PrintTryout{}, fmt.Errorf("read print questions: %w", err)

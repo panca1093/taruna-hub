@@ -26,7 +26,7 @@ type Assignment struct {
 	Number     int64
 	Type       string
 	Difficulty string
-	Content    string
+	Content    RichDoc
 	Position   int
 }
 

@@ -26,7 +26,7 @@ func newCurriculumService(f tenantFixture) *service.CurriculumService {
 }
 
 func newQuestionService(f tenantFixture) *service.QuestionService {
-	return service.NewQuestionService(f.pool, repository.NewQuestionRepository(f.pool))
+	return service.NewQuestionService(f.pool, repository.NewQuestionRepository(f.pool), newAssetService(f, nil, time.Minute))
 }
 
 func newTryoutService(f tenantFixture) *service.TryoutService {

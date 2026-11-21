@@ -32,7 +32,7 @@ func newQuestionHarness(t *testing.T) questionHarness {
 	users := repository.NewUserRepository(pool)
 
 	h := questionHarness{
-		svc:    NewQuestionService(pool, repository.NewQuestionRepository(pool)),
+		svc:    NewQuestionService(pool, repository.NewQuestionRepository(pool), NewAssetService(pool, repository.NewAssetRepository(pool), nil, 0)),
 		pool:   pool,
 		a:      a,
 		b:      b,
@@ -105,9 +105,9 @@ func (h questionHarness) create(t *testing.T, tenant model.Tenant, input Questio
 func (h questionHarness) pgInput(tenant model.Tenant) QuestionInput {
 	return QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionPG, Content: "Hasil dari 2 + 2 adalah ...", Difficulty: model.DifficultyEasy,
-		Explanation: "2 + 2 = 4.",
-		Options:     []QuestionOptionInput{{ID: "a", Label: "3"}, {ID: "b", Label: "4"}},
+		Type: model.QuestionPG, Content: d("Hasil dari 2 + 2 adalah ..."), Difficulty: model.DifficultyEasy,
+		Explanation: d("2 + 2 = 4."),
+		Options:     []QuestionOptionInput{{ID: "a", Label: d("3")}, {ID: "b", Label: d("4")}},
 		Correct:     []string{"b"},
 	}
 }
@@ -146,7 +146,7 @@ func TestQuestionValidation(t *testing.T) {
 	options := func(labels ...string) []QuestionOptionInput {
 		out := make([]QuestionOptionInput, 0, len(labels))
 		for _, label := range labels {
-			out = append(out, QuestionOptionInput{Label: label})
+			out = append(out, QuestionOptionInput{Label: d(label)})
 		}
 		return out
 	}
@@ -159,21 +159,21 @@ func TestQuestionValidation(t *testing.T) {
 	}{
 		{"unknown type", func() QuestionInput { in := base; in.Type = "essay"; return in }, "type"},
 		{"unknown difficulty", func() QuestionInput { in := base; in.Difficulty = "extreme"; return in }, "difficulty"},
-		{"empty content", func() QuestionInput { in := base; in.Content = "   "; return in }, "content"},
-		{"content too long", func() QuestionInput { in := base; in.Content = strings.Repeat("a", maxContentLen+1); return in }, "content"},
+		{"empty content", func() QuestionInput { in := base; in.Content = d("   "); return in }, "content"},
+		{"content too long", func() QuestionInput { in := base; in.Content = d(strings.Repeat("a", maxContentLen+1)); return in }, "content"},
 		{"data image", func() QuestionInput {
 			in := base
-			in.Content = "Lihat gambar ![x](data:image/png;base64,AAAA)"
+			in.Content = imageDoc(map[string]any{"src": "data:image/png;base64,AAAA"})
 			return in
 		}, "content"},
 		{"javascript image", func() QuestionInput {
 			in := base
-			in.Content = "Lihat ![x](JaVaScRiPt:alert(1))"
+			in.Content = imageDoc(map[string]any{"src": "JaVaScRiPt:alert(1)"})
 			return in
 		}, "content"},
 		{"explanation too long", func() QuestionInput {
 			in := base
-			in.Explanation = strings.Repeat("e", maxExplanationLen+1)
+			in.Explanation = d(strings.Repeat("e", maxExplanationLen+1))
 			return in
 		}, "explanation"},
 		{"missing program", func() QuestionInput { in := base; in.ProgramID = uuid.Nil; return in }, "program_id"},
@@ -203,17 +203,17 @@ func TestQuestionValidation(t *testing.T) {
 		}, "options"},
 		{"pg empty label", func() QuestionInput {
 			in := base
-			in.Options = []QuestionOptionInput{{ID: "a", Label: "3"}, {ID: "b", Label: "  "}}
+			in.Options = []QuestionOptionInput{{ID: "a", Label: d("3")}, {ID: "b", Label: d("  ")}}
 			return in
 		}, "options[1].label"},
 		{"pg label too long", func() QuestionInput {
 			in := base
-			in.Options = []QuestionOptionInput{{ID: "a", Label: "3"}, {ID: "b", Label: strings.Repeat("b", maxOptionLabelLen+1)}}
+			in.Options = []QuestionOptionInput{{ID: "a", Label: d("3")}, {ID: "b", Label: d(strings.Repeat("b", maxOptionLabelLen+1))}}
 			return in
 		}, "options[1].label"},
 		{"pg duplicate labels", func() QuestionInput {
 			in := base
-			in.Options = []QuestionOptionInput{{ID: "a", Label: "Empat"}, {ID: "b", Label: " empat "}}
+			in.Options = []QuestionOptionInput{{ID: "a", Label: d("Empat")}, {ID: "b", Label: d(" empat ")}}
 			return in
 		}, "options[1].label"},
 		{"pg no correct answer", func() QuestionInput { in := base; in.Correct = nil; return in }, "correct"},
@@ -361,14 +361,14 @@ func TestQuestionValidation(t *testing.T) {
 	if len(pg.Options) != 2 || pg.Correct[0] != pg.Options[1].ID {
 		t.Errorf("pg = options %+v correct %v, want the placeholders replaced by ids", pg.Options, pg.Correct)
 	}
-	if pg.Content != base.Content || pg.Explanation != base.Explanation {
-		t.Errorf("pg content = %q explanation = %q, want the trimmed text as sent", pg.Content, pg.Explanation)
+	if !sameDoc(pg.Content, base.Content) || !sameDoc(pg.Explanation, base.Explanation) {
+		t.Errorf("pg content = %v explanation = %v, want the document as sent", pg.Content, pg.Explanation)
 	}
 
 	multi := h.create(t, tenant, QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionPGMulti, Content: "Manakah bilangan genap?", Difficulty: model.DifficultyMedium,
-		Options: []QuestionOptionInput{{ID: "a", Label: "2"}, {ID: "b", Label: "3"}, {ID: "c", Label: "4"}},
+		Type: model.QuestionPGMulti, Content: d("Manakah bilangan genap?"), Difficulty: model.DifficultyMedium,
+		Options: []QuestionOptionInput{{ID: "a", Label: d("2")}, {ID: "b", Label: d("3")}, {ID: "c", Label: d("4")}},
 		Correct: []string{"a", "c"},
 	})
 	if len(multi.Correct) != 2 || !strings.Contains(strings.Join(optionIDs(multi), ","), multi.Correct[0]) {
@@ -377,7 +377,7 @@ func TestQuestionValidation(t *testing.T) {
 
 	isian := h.create(t, tenant, QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionIsian, Content: "Hasil dari 3 + 4 adalah ...", Difficulty: model.DifficultyEasy,
+		Type: model.QuestionIsian, Content: d("Hasil dari 3 + 4 adalah ..."), Difficulty: model.DifficultyEasy,
 		Correct: []string{" 7 ", "tujuh"}, CaseSensitive: true,
 	})
 	if len(isian.Options) != 0 || len(isian.Correct) != 2 || isian.Correct[0] != "7" {
@@ -386,7 +386,7 @@ func TestQuestionValidation(t *testing.T) {
 
 	trueFalse := h.create(t, tenant, QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionTrueFalse, Content: "Bumi itu bulat.", Difficulty: model.DifficultyEasy,
+		Type: model.QuestionTrueFalse, Content: d("Bumi itu bulat."), Difficulty: model.DifficultyEasy,
 		Correct: []string{"benar"},
 	})
 	if ids := optionIDs(trueFalse); len(ids) != 2 || ids[0] != "benar" || ids[1] != "salah" {
@@ -396,9 +396,9 @@ func TestQuestionValidation(t *testing.T) {
 	// An option without points stays absent so scoring (P16) can default it to 1.
 	weighted := h.create(t, tenant, QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionPG, Content: "Sikap paling tepat adalah ...", Difficulty: model.DifficultyEasy,
+		Type: model.QuestionPG, Content: d("Sikap paling tepat adalah ..."), Difficulty: model.DifficultyEasy,
 		OptionWeighted: true, Options: []QuestionOptionInput{
-			{Label: "Membiarkan"}, {Label: "Melapor", Points: points(4)},
+			{Label: d("Membiarkan")}, {Label: d("Melapor"), Points: points(4)},
 		},
 	})
 	if weighted.Options[0].Points != nil || weighted.Options[1].Points == nil || *weighted.Options[1].Points != 4 {
@@ -408,7 +408,7 @@ func TestQuestionValidation(t *testing.T) {
 	// An isian answer that differs only in case is legal once the question is case-sensitive.
 	if _, err := h.svc.Create(context.Background(), h.scope(tenant), h.principal(tenant, model.RoleAdmin), QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionIsian, Content: "Tulis nama ibukota Jawa Barat.", Difficulty: model.DifficultyEasy,
+		Type: model.QuestionIsian, Content: d("Tulis nama ibukota Jawa Barat."), Difficulty: model.DifficultyEasy,
 		Correct: []string{"Bandung", "bandung"}, CaseSensitive: true,
 	}); err != nil {
 		t.Errorf("case-sensitive isian with answers differing only in case: %v", err)
@@ -421,8 +421,8 @@ func TestOptionIdsAreStableAcrossVersions(t *testing.T) {
 	tenant := h.a
 	created := h.create(t, tenant, QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionPG, Content: "Pilih yang benar.", Difficulty: model.DifficultyEasy,
-		Options: []QuestionOptionInput{{ID: "a", Label: "Salah"}, {ID: "b", Label: "Benar"}},
+		Type: model.QuestionPG, Content: d("Pilih yang benar."), Difficulty: model.DifficultyEasy,
+		Options: []QuestionOptionInput{{ID: "a", Label: d("Salah")}, {ID: "b", Label: d("Benar")}},
 		Correct: []string{"b"},
 	})
 
@@ -434,10 +434,10 @@ func TestOptionIdsAreStableAcrossVersions(t *testing.T) {
 	// A save that keeps both ids and adds one new option: the kept ids survive, the new one gets one.
 	update := QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionPG, Content: "Pilih yang benar.", Difficulty: model.DifficultyEasy,
+		Type: model.QuestionPG, Content: d("Pilih yang benar."), Difficulty: model.DifficultyEasy,
 		BaseVersion: created.Version,
 		Options: []QuestionOptionInput{
-			{ID: first[0], Label: "Salah"}, {ID: first[1], Label: "Benar"}, {Label: "Mungkin"},
+			{ID: first[0], Label: d("Salah")}, {ID: first[1], Label: d("Benar")}, {Label: d("Mungkin")},
 		},
 		Correct: []string{first[1]},
 	}
@@ -460,10 +460,10 @@ func TestOptionIdsAreStableAcrossVersions(t *testing.T) {
 	other := h.createPG(t, tenant)
 	foreign := QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionPG, Content: "Pilih yang benar.", Difficulty: model.DifficultyEasy,
+		Type: model.QuestionPG, Content: d("Pilih yang benar."), Difficulty: model.DifficultyEasy,
 		BaseVersion: updated.Version,
 		Options: []QuestionOptionInput{
-			{ID: optionIDs(other)[0], Label: "Salah"}, {ID: first[1], Label: "Benar"},
+			{ID: optionIDs(other)[0], Label: d("Salah")}, {ID: first[1], Label: d("Benar")},
 		},
 		Correct: []string{first[1]},
 	}
@@ -476,7 +476,7 @@ func TestOptionIdsAreStableAcrossVersions(t *testing.T) {
 	// benar_salah keeps the fixed ids across versions too.
 	trueFalse := h.create(t, tenant, QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionTrueFalse, Content: "Air mendidih pada 100 derajat.", Difficulty: model.DifficultyEasy,
+		Type: model.QuestionTrueFalse, Content: d("Air mendidih pada 100 derajat."), Difficulty: model.DifficultyEasy,
 		Correct: []string{"benar"},
 	})
 	reopened, err := h.svc.Get(ctx, h.scope(tenant), h.principal(tenant, model.RoleOperator), trueFalse.ID)
@@ -485,7 +485,7 @@ func TestOptionIdsAreStableAcrossVersions(t *testing.T) {
 	}
 	changed, err := h.update(t, tenant, reopened.ID, QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionTrueFalse, Content: "Air mendidih pada 90 derajat.", Difficulty: model.DifficultyEasy,
+		Type: model.QuestionTrueFalse, Content: d("Air mendidih pada 90 derajat."), Difficulty: model.DifficultyEasy,
 		BaseVersion: reopened.Version, Correct: []string{"salah"},
 	})
 	if err != nil {
@@ -507,8 +507,8 @@ func TestUpdateCreatesNewVersionOnlyWhenChanged(t *testing.T) {
 		Type: model.QuestionPG, Content: created.Content, Difficulty: created.Difficulty,
 		Explanation: created.Explanation, BaseVersion: created.Version,
 		Options: []QuestionOptionInput{
-			{ID: created.Options[0].ID, Label: created.Options[0].Label},
-			{ID: created.Options[1].ID, Label: created.Options[1].Label},
+			{ID: created.Options[0].ID, Label: created.Options[0].Doc},
+			{ID: created.Options[1].ID, Label: created.Options[1].Doc},
 		},
 		Correct: []string{created.Options[1].ID},
 	}
@@ -524,7 +524,7 @@ func TestUpdateCreatesNewVersionOnlyWhenChanged(t *testing.T) {
 	}
 
 	changed := unchanged
-	changed.Content = "Hasil dari 4 + 4 adalah ..."
+	changed.Content = d("Hasil dari 4 + 4 adalah ...")
 	changed.BaseVersion = same.Version
 	next, err := h.update(t, tenant, created.ID, changed)
 	if err != nil {
@@ -546,8 +546,8 @@ func TestUpdateCreatesNewVersionOnlyWhenChanged(t *testing.T) {
 		`SELECT content FROM question_versions WHERE id = $1`, created.VersionID).Scan(&oldContent); err != nil {
 		t.Fatalf("read the first version: %v", err)
 	}
-	if oldContent != created.Content {
-		t.Errorf("first version content = %q, want the original %q", oldContent, created.Content)
+	if want := model.DocText(created.Content); oldContent != want {
+		t.Errorf("first version content = %q, want the original %q", oldContent, want)
 	}
 }
 
@@ -558,10 +558,10 @@ func TestStaleBaseVersionConflicts(t *testing.T) {
 
 	change := QuestionInput{
 		ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-		Type: model.QuestionPG, Content: "Isi baru.", Difficulty: model.DifficultyEasy,
+		Type: model.QuestionPG, Content: d("Isi baru."), Difficulty: model.DifficultyEasy,
 		BaseVersion: created.Version,
 		Options: []QuestionOptionInput{
-			{ID: created.Options[0].ID, Label: "3"}, {ID: created.Options[1].ID, Label: "4"},
+			{ID: created.Options[0].ID, Label: d("3")}, {ID: created.Options[1].ID, Label: d("4")},
 		},
 		Correct: []string{created.Options[1].ID},
 	}
@@ -574,7 +574,7 @@ func TestStaleBaseVersionConflicts(t *testing.T) {
 	}
 
 	stale := change
-	stale.Content = "Isi lain."
+	stale.Content = d("Isi lain.")
 	stale.BaseVersion = created.Version
 	if _, err := h.update(t, tenant, created.ID, stale); !errors.Is(err, ErrQuestionStale) {
 		t.Fatalf("stale update: err = %v, want ErrQuestionStale", err)
@@ -584,8 +584,8 @@ func TestStaleBaseVersionConflicts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if current.Version != 2 || current.Content != "Isi baru." {
-		t.Errorf("current = version %d %q, want the first update's version 2", current.Version, current.Content)
+	if current.Version != 2 || model.DocText(current.Content) != "Isi baru." {
+		t.Errorf("current = version %d %q, want the first update's version 2", current.Version, model.DocText(current.Content))
 	}
 	if rows := versionCount(t, h, created.ID); rows != 2 {
 		t.Errorf("version rows = %d after the rejected update, want 2", rows)
@@ -614,10 +614,10 @@ func TestConcurrentUpdatesExactlyOneWinsPerBaseVersion(t *testing.T) {
 			defer wg.Done()
 			in := QuestionInput{
 				ProgramID: h.program(tenant).ID, SubjectID: h.subject(tenant).ID,
-				Type: model.QuestionPG, Content: fmt.Sprintf("Versi dari penulis %d", i),
+				Type: model.QuestionPG, Content: d(fmt.Sprintf("Versi dari penulis %d", i)),
 				Difficulty: model.DifficultyEasy, BaseVersion: created.Version,
 				Options: []QuestionOptionInput{
-					{ID: created.Options[0].ID, Label: "3"}, {ID: created.Options[1].ID, Label: "4"},
+					{ID: created.Options[0].ID, Label: d("3")}, {ID: created.Options[1].ID, Label: d("4")},
 				},
 				Correct: []string{created.Options[1].ID},
 			}
@@ -669,12 +669,12 @@ func TestQuestionFilters(t *testing.T) {
 		}
 		in := QuestionInput{
 			ProgramID: tree.Program.ID, SubjectID: subjectID, Type: kind,
-			Content: content, Difficulty: difficulty,
+			Content: d(content), Difficulty: difficulty,
 		}
 		if kind == model.QuestionIsian {
 			in.Correct = []string{"jawaban"}
 		} else {
-			in.Options = []QuestionOptionInput{{ID: "a", Label: "Satu"}, {ID: "b", Label: "Dua"}}
+			in.Options = []QuestionOptionInput{{ID: "a", Label: d("Satu")}, {ID: "b", Label: d("Dua")}}
 			in.Correct = []string{"a"}
 		}
 		return h.create(t, tenant, in)

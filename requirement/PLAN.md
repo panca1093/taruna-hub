@@ -279,7 +279,7 @@ For every slice, use this verification loop:
 
 ### P07 — Question bank and imports
 
-**Status:** P07a and P07b done — four question types with immutable versions, filters, the bank page and the confirmed XLSX/CSV/DOCX import; D08 is confirmed (preview, confirmed accepted set, one atomic commit), and master content, copy, images and per-question weights are deferred · **Size:** L · **Depends:** P05, P06
+**Status:** P07a and P07b done — four question types with immutable versions, filters, the bank page and the confirmed XLSX/CSV/DOCX import; D08 is confirmed (preview, confirmed accepted set, one atomic commit). Rich documents (Tiptap JSON with tables, lists, shapes, math and `question_image` images) are done on the API with a startup backfill of existing questions; the editor/student/PDF rendering demo is pending. Master content, copy and per-question weights are deferred · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff create four question types or import real documents and maintain tenant/master content safely.
 
@@ -297,7 +297,7 @@ For every slice, use this verification loop:
       Immutable versions are done and tested (P08 assigns frozen versions); the master/copy half is deferred.
 - [x] Upload malformed and valid rows, see real errors, confirm exact accepted set per D08; retry creates no duplicates.
 - [ ] LaTeX/images preview correctly; filters/IDs work; HTML and spreadsheet-formula input is handled safely.
-      Filters, IDs, stored-verbatim HTML and formula neutralising are tested; images are deferred.
+      API side proven by tests: documents validated and normalised, images finalized with the version, students read final question images, search over the text projection, import converted to documents, legacy rows backfilled. The browser demo of LaTeX/images in the editor, exam, review and PDF is pending (main session).
 
 **Decision / verification gate:** D08 resolved 2026-10-28 (confirmed accepted set, atomic commit); D04 resolved. No hardcoded import preview counts as done.
 

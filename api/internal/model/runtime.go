@@ -96,7 +96,7 @@ type AttemptQuestion struct {
 	VersionID      uuid.UUID
 	Type           string
 	Difficulty     string
-	Content        string
+	Content        RichDoc
 	OptionWeighted bool
 	CaseSensitive  bool
 	Options        []QuestionOption

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -66,6 +67,14 @@ func run() error {
 		return err
 	}
 
+	// Immutable version rows are rewritten here on purpose: only the document columns are added, so what every
+	// student and review screen renders is unchanged.
+	converted, err := service.NewQuestionService(pool, repository.NewQuestionRepository(pool), nil).BackfillDocs(ctx)
+	if err != nil {
+		return fmt.Errorf("backfill question documents: %w", err)
+	}
+	logger.Info("question documents backfilled", slog.Int("converted", converted))
+
 	e := newEcho(cfg, logger, pool, rdb, notifications, store)
 
 	go func() {
@@ -103,11 +112,11 @@ func newEcho(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool, rdb *re
 		Logger:        logger,
 	})
 	curriculum := service.NewCurriculumService(pool, repository.NewCurriculumRepository(pool))
-	questions := service.NewQuestionService(pool, repository.NewQuestionRepository(pool))
 	tryouts := service.NewTryoutService(pool, repository.NewTryoutRepository(pool))
 	products := service.NewProductService(pool, repository.NewProductRepository(pool))
 	wallets := service.NewWalletService(pool, repository.NewWalletRepository(pool))
 	assets := service.NewAssetService(pool, repository.NewAssetRepository(pool), store, assetURLTTL)
+	questions := service.NewQuestionService(pool, repository.NewQuestionRepository(pool), assets)
 	orders := service.NewOrderService(pool, repository.NewOrderRepository(pool), repository.NewProductRepository(pool), wallets, assets, notifications,
 		service.BankAccount{Bank: cfg.Bank.Name, Number: cfg.Bank.AccountNumber, Holder: cfg.Bank.AccountHolder})
 	topups := service.NewTopupService(pool, repository.NewTopupRepository(pool), wallets, assets, notifications)

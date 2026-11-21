@@ -132,8 +132,8 @@ type studentTryoutResponse struct {
 }
 
 type runtimeOptionResponse struct {
-	ID    string `json:"id"`
-	Label string `json:"label"`
+	ID    string        `json:"id"`
+	Label model.RichDoc `json:"label"`
 }
 
 // runtimeQuestionResponse is the student's question: no key, no option points, no explanation, no version ids.
@@ -141,7 +141,7 @@ type runtimeQuestionResponse struct {
 	ID       uuid.UUID               `json:"id"`
 	Position int                     `json:"position"`
 	Type     string                  `json:"type"`
-	Content  string                  `json:"content"`
+	Content  model.RichDoc           `json:"content"`
 	Options  []runtimeOptionResponse `json:"options"`
 	Answer   []string                `json:"answer"`
 	Revision int                     `json:"revision"`
@@ -297,7 +297,7 @@ func (h *Handler) TryoutSessionSubtest(c echo.Context) error {
 			Options: make([]runtimeOptionResponse, 0, len(q.Options)), Answer: []string{},
 		}
 		for _, o := range q.Options {
-			item.Options = append(item.Options, runtimeOptionResponse{ID: o.ID, Label: o.Label})
+			item.Options = append(item.Options, runtimeOptionResponse{ID: o.ID, Label: o.Doc})
 		}
 		if saved, ok := view.Answers[q.QuestionID]; ok {
 			item.Answer, item.Revision, item.Seq = saved.Answer, saved.Revision, saved.Seq

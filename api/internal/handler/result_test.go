@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
 // completeAttempt answers the first question right and runs both subtests to completion over HTTP.
@@ -16,7 +18,7 @@ func (f runtimeHTTPFixture) completeAttempt(t *testing.T, token string) uuid.UUI
 	session := f.startSession(t, token)
 	right := ""
 	for _, o := range f.q1.Options {
-		if o.Label == "4" {
+		if model.DocText(o.Label) == "4" {
 			right = o.ID
 		}
 	}
@@ -114,7 +116,7 @@ func TestResultRawResponsesHideTheKeyUntilRelease(t *testing.T) {
 	}
 	right := ""
 	for _, o := range f.q1.Options {
-		if o.Label == "4" {
+		if model.DocText(o.Label) == "4" {
 			right = o.ID
 		}
 	}
@@ -156,7 +158,7 @@ func TestResultRawResponsesHideTheKeyUntilRelease(t *testing.T) {
 		t.Fatalf("review after release: status = %d body = %s", released.Code, released.Body.String())
 	}
 	q := body.Subtests[0].Questions[0]
-	if q.Explanation != "2 + 2 = 4." || len(q.Correct) != 1 || !q.IsCorrect || len(q.Answer) != 1 {
+	if model.DocText(q.Explanation) != "2 + 2 = 4." || len(q.Correct) != 1 || !q.IsCorrect || len(q.Answer) != 1 {
 		t.Errorf("released question = %+v, want the explanation, the key and the right answer", q)
 	}
 	if got := decodeInto[resultDetailResponse](t, f.call(http.MethodGet, sessionPath(sid, "/result"), nil, f.tokenA)); !got.ExplanationsReleased {

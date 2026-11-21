@@ -63,9 +63,10 @@ unknown purpose is `422` on `purpose`. With `S3_ENDPOINT` unset every route answ
 A foreign tenant's id, an unknown id, a malformed id and an asset the caller may not touch all answer
 the **same `404`**, never `403` (the convention from the wallet), so ids cannot be probed. A staged
 asset is readable only by its uploader — an admin cannot download it until it is final.
-A student therefore reads only their own uploads; `DownloadURL` allows only the uploader or staff, so
-a student cannot yet read a final `question_image`. That access is deferred to the slice that serves
-questions to students (P16).
+A student therefore reads only their own uploads; `DownloadURL` allows the uploader or staff, and a student
+may also read a `final` `question_image` of their tenant (question images render in the exam and review,
+like the `item_image` rule). A staged one stays with the uploader and staff. Question saves finalize the
+images their documents name through `FinalizePurposeTx`, which refuses another purpose or tenant as not found.
 
 Authorization runs on every `url` call, but a link already issued works for anyone who holds it until it
 expires; that is why the TTL is 60 seconds and the response is never cached.

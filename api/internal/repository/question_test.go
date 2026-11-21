@@ -70,9 +70,9 @@ func newQuestionFixture(t *testing.T) questionFixture {
 
 		question: model.Question{
 			ProgramID: madeOther.Program.ID, SubjectID: madeOther.Subjects[0].Subject.ID,
-			Type: model.QuestionPG, Content: "Berapa 2 + 2?", Difficulty: model.DifficultyEasy,
-			Explanation: "Empat.", Options: []model.QuestionOption{
-				{ID: "a", Label: "3"}, {ID: "b", Label: "4"},
+			Type: model.QuestionPG, Content: d("Berapa 2 + 2?"), Difficulty: model.DifficultyEasy,
+			Explanation: d("Empat."), Options: []model.QuestionOption{
+				{ID: "a", Label: "3", Doc: d("3")}, {ID: "b", Label: "4", Doc: d("4")},
 			},
 			Correct: []string{"b"},
 		},
@@ -88,12 +88,15 @@ func (f questionFixture) create(t *testing.T, tenantID, authorID uuid.UUID, q mo
 	return out
 }
 
+// d is the document a plain string stands for in fixtures.
+func d(text string) model.RichDoc { return model.DocFromLegacyText(text) }
+
 func samplePG(programID, subjectID uuid.UUID) model.Question {
 	return model.Question{
 		ProgramID: programID, SubjectID: subjectID,
-		Type: model.QuestionPG, Content: "Hasil dari 2 + 2 adalah ...", Difficulty: model.DifficultyEasy,
-		Explanation: "2 + 2 = 4.",
-		Options:     []model.QuestionOption{{ID: "a", Label: "3"}, {ID: "b", Label: "4"}},
+		Type: model.QuestionPG, Content: d("Hasil dari 2 + 2 adalah ..."), Difficulty: model.DifficultyEasy,
+		Explanation: d("2 + 2 = 4."),
+		Options:     []model.QuestionOption{{ID: "a", Label: "3", Doc: d("3")}, {ID: "b", Label: "4", Doc: d("4")}},
 		Correct:     []string{"b"},
 	}
 }
@@ -204,7 +207,7 @@ func TestQuestionVersionsAreImmutable(t *testing.T) {
 	}
 
 	changed := samplePG(f.program.ID, f.subject.ID)
-	changed.Content = "Hasil dari 3 + 3 adalah ..."
+	changed.Content = d("Hasil dari 3 + 3 adalah ...")
 	changed.Correct = []string{"a"}
 	for _, version := range []int{2, 3} {
 		err := inCurriculumTx(t, f.repo.db, func(tx pgx.Tx) error {
@@ -229,8 +232,8 @@ func TestQuestionVersionsAreImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find: %v", err)
 	}
-	if current.Version != 3 || current.Content != changed.Content {
-		t.Errorf("current = version %d %q, want version 3 with the last content", current.Version, current.Content)
+	if current.Version != 3 || model.DocText(current.Content) != model.DocText(changed.Content) {
+		t.Errorf("current = version %d %q, want version 3 with the last content", current.Version, model.DocText(current.Content))
 	}
 	if current.Number != created.Number {
 		t.Errorf("number = %d, want the unchanged %d", current.Number, created.Number)

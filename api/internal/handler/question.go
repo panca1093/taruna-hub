@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -19,15 +21,21 @@ const (
 	questionConflict   = "Soal sudah diubah orang lain, muat ulang."
 	questionReferenced = "Soal masih dipakai konten lain."
 	questionTypeRule   = "Tipe soal tidak dikenal."
-	questionContentEll = "Konten 1–20000 karakter."
+	questionContentEll = "Konten wajib diisi, maksimal 20000 karakter."
 	questionImageRule  = "Gambar belum didukung."
 	questionExplRule   = "Pembahasan maksimal 20000 karakter."
+	docInvalidRule     = "Isi soal bukan dokumen yang valid."
+	docNodeRule        = "Dokumen memuat elemen yang tidak didukung atau salah tempat."
+	docMarkRule        = "Dokumen memuat format teks yang tidak didukung."
+	docAttrRule        = "Dokumen memuat atribut yang tidak valid."
+	docTooLargeRule    = "Dokumen terlalu besar atau terlalu dalam."
+	docAssetRule       = "Gambar tidak ditemukan atau bukan gambar soal."
 	questionDiffRule   = "Kesulitan harus mudah, sedang, atau sulit."
 	questionProgram    = "Program tidak ditemukan."
 	questionSubject    = "Mata pelajaran tidak ada di program itu."
 	questionChapter    = "Bab materi tidak ada di mata pelajaran itu."
 	questionOptions    = "Jumlah opsi 2–8."
-	questionLabel      = "Label opsi 1–500 karakter."
+	questionLabel      = "Label opsi wajib diisi, maksimal 2000 karakter."
 	questionLabelDup   = "Label opsi tidak boleh sama (tanpa membedakan huruf besar-kecil)."
 	questionOptionOwn  = "Opsi ini bukan milik soal tersebut."
 	questionPoints     = "Poin 0–100 dengan paling banyak 2 desimal."
@@ -39,9 +47,9 @@ const (
 )
 
 type questionOptionResponse struct {
-	ID     string   `json:"id"`
-	Label  string   `json:"label"`
-	Points *float64 `json:"points,omitempty"`
+	ID     string        `json:"id"`
+	Label  model.RichDoc `json:"label"`
+	Points *float64      `json:"points,omitempty"`
 }
 
 type questionResponse struct {
@@ -53,9 +61,9 @@ type questionResponse struct {
 	SubjectID      uuid.UUID                `json:"subject_id"`
 	ChapterID      *uuid.UUID               `json:"chapter_id"`
 	Type           string                   `json:"type"`
-	Content        string                   `json:"content"`
+	Content        model.RichDoc            `json:"content"`
 	Difficulty     string                   `json:"difficulty"`
-	Explanation    string                   `json:"explanation"`
+	Explanation    model.RichDoc            `json:"explanation"`
 	OptionWeighted bool                     `json:"option_weighted"`
 	CaseSensitive  bool                     `json:"case_sensitive"`
 	Options        []questionOptionResponse `json:"options"`
@@ -70,9 +78,9 @@ type questionsResponse struct {
 }
 
 type questionOptionRequest struct {
-	ID     string   `json:"id"`
-	Label  string   `json:"label"`
-	Points *float64 `json:"points"`
+	ID     string          `json:"id"`
+	Label  json.RawMessage `json:"label"`
+	Points *float64        `json:"points"`
 }
 
 type createQuestionRequest struct {
@@ -80,9 +88,9 @@ type createQuestionRequest struct {
 	SubjectID      string                  `json:"subject_id"`
 	ChapterID      *string                 `json:"chapter_id"`
 	Type           string                  `json:"type"`
-	Content        string                  `json:"content"`
+	Content        json.RawMessage         `json:"content"`
 	Difficulty     string                  `json:"difficulty"`
-	Explanation    string                  `json:"explanation"`
+	Explanation    json.RawMessage         `json:"explanation"`
 	OptionWeighted bool                    `json:"option_weighted"`
 	CaseSensitive  bool                    `json:"case_sensitive"`
 	Options        []questionOptionRequest `json:"options"`
@@ -237,9 +245,11 @@ func questionFilterOf(c echo.Context) (service.QuestionFilter, error) {
 func questionInputOf(req createQuestionRequest) (service.QuestionInput, error) {
 	fields := map[string]string{}
 	input := service.QuestionInput{
-		Type: req.Type, Content: req.Content, Difficulty: req.Difficulty, Explanation: req.Explanation,
+		Type: req.Type, Difficulty: req.Difficulty,
 		OptionWeighted: req.OptionWeighted, CaseSensitive: req.CaseSensitive, Correct: req.Correct,
 	}
+	input.Content = docOf(req.Content, "content", fields)
+	input.Explanation = docOf(req.Explanation, "explanation", fields)
 	if req.ProgramID != "" {
 		id, err := uuid.Parse(req.ProgramID)
 		if err != nil {
@@ -264,15 +274,29 @@ func questionInputOf(req createQuestionRequest) (service.QuestionInput, error) {
 			input.ChapterID = &id
 		}
 	}
-	for _, option := range req.Options {
+	for i, option := range req.Options {
 		input.Options = append(input.Options, service.QuestionOptionInput{
-			ID: option.ID, Label: option.Label, Points: option.Points,
+			ID: option.ID, Label: docOf(option.Label, fmt.Sprintf("options[%d].label", i), fields), Points: option.Points,
 		})
 	}
 	if len(fields) > 0 {
 		return service.QuestionInput{}, httpx.Validation(incomplete, fields)
 	}
 	return input, nil
+}
+
+// docOf reads one document field; an absent or null one is the empty document, anything that is not a document
+// names its field.
+func docOf(raw json.RawMessage, path string, fields map[string]string) model.RichDoc {
+	if len(raw) == 0 || string(raw) == "null" {
+		return model.EmptyDoc()
+	}
+	var doc model.RichDoc
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		fields[path] = docInvalidRule
+		return model.EmptyDoc()
+	}
+	return doc
 }
 
 func questionResponseOf(question model.Question) questionResponse {
@@ -290,7 +314,7 @@ func questionResponseOf(question model.Question) questionResponse {
 		out.Correct = []string{}
 	}
 	for _, option := range question.Options {
-		out.Options = append(out.Options, questionOptionResponse{ID: option.ID, Label: option.Label, Points: option.Points})
+		out.Options = append(out.Options, questionOptionResponse{ID: option.ID, Label: option.Doc, Points: option.Points})
 	}
 	return out
 }
@@ -327,6 +351,18 @@ func questionReason(reason string) string {
 		return questionImageRule
 	case service.ReasonQuestionExpl:
 		return questionExplRule
+	case service.ReasonDocInvalid:
+		return docInvalidRule
+	case service.ReasonDocNode:
+		return docNodeRule
+	case service.ReasonDocMark:
+		return docMarkRule
+	case service.ReasonDocAttr:
+		return docAttrRule
+	case service.ReasonDocTooLarge:
+		return docTooLargeRule
+	case service.ReasonDocAsset:
+		return docAssetRule
 	case service.ReasonDifficulty:
 		return questionDiffRule
 	case service.ReasonProgramID:

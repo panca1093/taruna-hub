@@ -16,6 +16,6 @@ type PrintSubtest struct {
 
 type PrintQuestion struct {
 	Type    string
-	Content string
-	Options []string
+	Content RichDoc
+	Options []RichDoc
 }

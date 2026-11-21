@@ -37,10 +37,10 @@ func NewQuestionRepository(db *pgxpool.Pool) *QuestionRepository {
 const (
 	questionColumns = `q.id, q.seq, q.tenant_id, q.current_version, q.created_at, q.updated_at,
 	v.id, v.program_id, v.subject_id, v.chapter_id, v.type, v.content, v.difficulty, v.explanation,
-	v.option_weighted, v.case_sensitive, v.options, v.correct, v.created_by`
+	v.option_weighted, v.case_sensitive, v.options, v.correct, v.created_by, v.content_doc, v.explanation_doc`
 	questionHeadColumns    = `id, seq, tenant_id, current_version, created_at, updated_at`
 	questionVersionColumns = `id, program_id, subject_id, chapter_id, type, content, difficulty, explanation,
-	option_weighted, case_sensitive, options, correct, created_by`
+	option_weighted, case_sensitive, options, correct, created_by, content_doc, explanation_doc`
 )
 
 // The tenant pair keeps a version of another tenant from ever joining.
@@ -123,20 +123,31 @@ func (r *QuestionRepository) Create(ctx context.Context, tenantID, createdBy uui
 	}
 	var out model.Question
 	err := r.inTx(ctx, func(tx pgx.Tx) error {
-		var id uuid.UUID
-		if err := tx.QueryRow(ctx,
-			`INSERT INTO questions (tenant_id, current_version, created_by) VALUES ($1, 1, $2) RETURNING id`,
-			tenantID, createdBy).Scan(&id); err != nil {
-			return mapQuestionError("create question", err)
-		}
-		if err := insertQuestionVersion(ctx, tx, tenantID, id, 1, createdBy, q); err != nil {
+		id, err := r.CreateTx(ctx, tx, tenantID, createdBy, q)
+		if err != nil {
 			return err
 		}
-		var err error
 		out, err = r.find(ctx, tx, tenantID, id, false)
 		return err
 	})
 	return out, err
+}
+
+// CreateTx inserts the question head and its first version in the caller's transaction.
+func (r *QuestionRepository) CreateTx(ctx context.Context, tx pgx.Tx, tenantID, createdBy uuid.UUID, q model.Question) (uuid.UUID, error) {
+	if tenantID == uuid.Nil {
+		return uuid.Nil, ErrScopeRequired
+	}
+	var id uuid.UUID
+	if err := tx.QueryRow(ctx,
+		`INSERT INTO questions (tenant_id, current_version, created_by) VALUES ($1, 1, $2) RETURNING id`,
+		tenantID, createdBy).Scan(&id); err != nil {
+		return uuid.Nil, mapQuestionError("create question", err)
+	}
+	if err := insertQuestionVersion(ctx, tx, tenantID, id, 1, createdBy, q); err != nil {
+		return uuid.Nil, err
+	}
+	return id, nil
 }
 
 // InsertVersionTx appends one immutable version; the previous rows are never touched.
@@ -297,13 +308,14 @@ func (r *QuestionRepository) find(ctx context.Context, q queryer, tenantID, id u
 	}
 
 	var chapter *uuid.UUID
-	var options, correct []byte
+	var options, correct, contentDoc, explanationDoc []byte
+	var content, explanation string
 	err = q.QueryRow(ctx,
 		`SELECT `+questionVersionColumns+` FROM question_versions
 		  WHERE tenant_id = $1 AND question_id = $2 AND version = $3`,
 		tenantID, out.ID, out.Version).Scan(&out.VersionID, &out.ProgramID, &out.SubjectID, &chapter,
-		&out.Type, &out.Content, &out.Difficulty, &out.Explanation, &out.OptionWeighted,
-		&out.CaseSensitive, &options, &correct, &out.CreatedBy)
+		&out.Type, &content, &out.Difficulty, &explanation, &out.OptionWeighted,
+		&out.CaseSensitive, &options, &correct, &out.CreatedBy, &contentDoc, &explanationDoc)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Question{}, ErrNotFound
 	}
@@ -311,14 +323,19 @@ func (r *QuestionRepository) find(ctx context.Context, q queryer, tenantID, id u
 		return model.Question{}, fmt.Errorf("read question version: %w", err)
 	}
 	out.ChapterID = chapter
-	if err := decodeQuestionJSON(&out, options, correct); err != nil {
+	if err := decodeQuestionJSON(&out, options, correct, content, explanation, contentDoc, explanationDoc); err != nil {
 		return model.Question{}, err
 	}
 	return out, nil
 }
 
 func insertQuestionVersion(ctx context.Context, tx pgx.Tx, tenantID, questionID uuid.UUID, version int, createdBy uuid.UUID, q model.Question) error {
-	options, err := json.Marshal(q.Options)
+	stored := make([]model.QuestionOption, len(q.Options))
+	copy(stored, q.Options)
+	for i := range stored {
+		stored[i].Label = model.DocText(stored[i].Doc)
+	}
+	options, err := json.Marshal(stored)
 	if err != nil {
 		return fmt.Errorf("encode options: %w", err)
 	}
@@ -326,12 +343,22 @@ func insertQuestionVersion(ctx context.Context, tx pgx.Tx, tenantID, questionID 
 	if err != nil {
 		return fmt.Errorf("encode correct: %w", err)
 	}
+	contentDoc, err := json.Marshal(q.Content)
+	if err != nil {
+		return fmt.Errorf("encode content: %w", err)
+	}
+	explanationDoc, err := json.Marshal(q.Explanation)
+	if err != nil {
+		return fmt.Errorf("encode explanation: %w", err)
+	}
 	_, err = tx.Exec(ctx,
 		`INSERT INTO question_versions (question_id, tenant_id, version, program_id, subject_id, chapter_id,
-		        type, content, difficulty, explanation, option_weighted, case_sensitive, options, correct, created_by)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-		questionID, tenantID, version, q.ProgramID, q.SubjectID, q.ChapterID, q.Type, q.Content,
-		q.Difficulty, q.Explanation, q.OptionWeighted, q.CaseSensitive, options, correct, createdBy)
+		        type, content, difficulty, explanation, option_weighted, case_sensitive, options, correct, created_by,
+		        content_doc, explanation_doc)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		questionID, tenantID, version, q.ProgramID, q.SubjectID, q.ChapterID, q.Type, model.DocText(q.Content),
+		q.Difficulty, model.DocText(q.Explanation), q.OptionWeighted, q.CaseSensitive, options, correct, createdBy,
+		contentDoc, explanationDoc)
 	if err != nil {
 		return mapQuestionError("create question version", err)
 	}
@@ -341,34 +368,142 @@ func insertQuestionVersion(ctx context.Context, tx pgx.Tx, tenantID, questionID 
 func scanQuestion(row pgx.Row) (model.Question, error) {
 	var out model.Question
 	var chapter *uuid.UUID
-	var options, correct []byte
+	var options, correct, contentDoc, explanationDoc []byte
+	var content, explanation string
 	err := row.Scan(&out.ID, &out.Number, &out.TenantID, &out.Version, &out.CreatedAt, &out.UpdatedAt,
-		&out.VersionID, &out.ProgramID, &out.SubjectID, &chapter, &out.Type, &out.Content, &out.Difficulty,
-		&out.Explanation, &out.OptionWeighted, &out.CaseSensitive, &options, &correct, &out.CreatedBy)
+		&out.VersionID, &out.ProgramID, &out.SubjectID, &chapter, &out.Type, &content, &out.Difficulty,
+		&explanation, &out.OptionWeighted, &out.CaseSensitive, &options, &correct, &out.CreatedBy,
+		&contentDoc, &explanationDoc)
 	if err != nil {
 		return model.Question{}, fmt.Errorf("scan question: %w", err)
 	}
 	out.ChapterID = chapter
-	if err := decodeQuestionJSON(&out, options, correct); err != nil {
+	if err := decodeQuestionJSON(&out, options, correct, content, explanation, contentDoc, explanationDoc); err != nil {
 		return model.Question{}, err
 	}
 	return out, nil
 }
 
-func decodeQuestionJSON(q *model.Question, options, correct []byte) error {
-	if err := json.Unmarshal(options, &q.Options); err != nil {
-		return fmt.Errorf("decode options: %w", err)
+func decodeQuestionJSON(q *model.Question, options, correct []byte, content, explanation string, contentDoc, explanationDoc []byte) error {
+	var err error
+	if q.Options, err = decodeOptions(options); err != nil {
+		return err
 	}
 	if err := json.Unmarshal(correct, &q.Correct); err != nil {
 		return fmt.Errorf("decode correct: %w", err)
 	}
-	if q.Options == nil {
-		q.Options = []model.QuestionOption{}
-	}
 	if q.Correct == nil {
 		q.Correct = []string{}
 	}
+	if q.Content, err = model.DocFromColumn(contentDoc, content); err != nil {
+		return fmt.Errorf("decode content: %w", err)
+	}
+	if q.Explanation, err = model.DocFromColumn(explanationDoc, explanation); err != nil {
+		return fmt.Errorf("decode explanation: %w", err)
+	}
 	return nil
+}
+
+// decodeOptions reads a stored options array; an option written before documents existed gets its doc from its label.
+func decodeOptions(raw []byte) ([]model.QuestionOption, error) {
+	var options []model.QuestionOption
+	if err := json.Unmarshal(raw, &options); err != nil {
+		return nil, fmt.Errorf("decode options: %w", err)
+	}
+	if options == nil {
+		return []model.QuestionOption{}, nil
+	}
+	return model.OptionsWithDocs(options), nil
+}
+
+// backfillLockKey is the advisory lock that keeps two API instances from converting the same rows.
+const backfillLockKey = 7_001_030
+
+// BackfillDocs converts every question version stored without documents, batch rows at a time, and returns how
+// many it converted. The text columns and option labels are left exactly as they were: only the documents are added.
+func (r *QuestionRepository) BackfillDocs(ctx context.Context, batch int) (int, error) {
+	conn, err := r.db.Acquire(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("acquire backfill connection: %w", err)
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, backfillLockKey); err != nil {
+		return 0, fmt.Errorf("take backfill lock: %w", err)
+	}
+	defer func() { _, _ = conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock($1)`, backfillLockKey) }()
+
+	total := 0
+	for {
+		n, err := r.backfillBatch(ctx, conn, batch)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		if n < batch {
+			return total, nil
+		}
+	}
+}
+
+func (r *QuestionRepository) backfillBatch(ctx context.Context, conn *pgxpool.Conn, batch int) (int, error) {
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin backfill: %w", err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+
+	rows, err := tx.Query(ctx,
+		`SELECT id, content, explanation, options FROM question_versions
+		  WHERE content_doc IS NULL ORDER BY id LIMIT $1 FOR UPDATE`, batch)
+	if err != nil {
+		return 0, fmt.Errorf("read legacy versions: %w", err)
+	}
+	type legacy struct {
+		id                   uuid.UUID
+		content, explanation string
+		options              []byte
+	}
+	var found []legacy
+	for rows.Next() {
+		var l legacy
+		if err := rows.Scan(&l.id, &l.content, &l.explanation, &l.options); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan legacy version: %w", err)
+		}
+		found = append(found, l)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("read legacy versions: %w", err)
+	}
+
+	for _, l := range found {
+		options, err := decodeOptions(l.options)
+		if err != nil {
+			return 0, fmt.Errorf("backfill version %s: %w", l.id, err)
+		}
+		optionsJSON, err := json.Marshal(options)
+		if err != nil {
+			return 0, fmt.Errorf("encode options of %s: %w", l.id, err)
+		}
+		contentDoc, err := json.Marshal(model.DocFromLegacyText(l.content))
+		if err != nil {
+			return 0, fmt.Errorf("encode content of %s: %w", l.id, err)
+		}
+		explanationDoc, err := json.Marshal(model.DocFromLegacyText(l.explanation))
+		if err != nil {
+			return 0, fmt.Errorf("encode explanation of %s: %w", l.id, err)
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE question_versions SET content_doc = $2, explanation_doc = $3, options = $4 WHERE id = $1`,
+			l.id, contentDoc, explanationDoc, optionsJSON); err != nil {
+			return 0, fmt.Errorf("backfill version %s: %w", l.id, err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit backfill: %w", err)
+	}
+	return len(found), nil
 }
 
 // likePattern escapes the wildcards so `%` and `_` only ever match themselves.

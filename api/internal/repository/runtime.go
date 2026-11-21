@@ -355,7 +355,7 @@ func (r *RuntimeRepository) Parts(ctx context.Context, q dbtx, tenantID, session
 const questionSelect = `
 		SELECT sq.session_id, sq.subtest_id, sq.position, sq.question_id, sq.question_version_id,
 		       v.type, v.difficulty, v.content, v.option_weighted, v.case_sensitive, v.options, v.correct,
-		       sq.option_order
+		       sq.option_order, v.content_doc
 		  FROM tryout_session_questions sq
 		  JOIN question_versions v ON v.id = sq.question_version_id AND v.tenant_id = sq.tenant_id
 		  JOIN tryout_session_parts p ON p.session_id = sq.session_id AND p.subtest_id = sq.subtest_id
@@ -366,16 +366,20 @@ func scanQuestions(rows pgx.Rows) ([]model.AttemptQuestion, error) {
 	out := []model.AttemptQuestion{}
 	for rows.Next() {
 		var aq model.AttemptQuestion
-		var options, correct, order []byte
+		var options, correct, order, contentDoc []byte
+		var content string
 		if err := rows.Scan(&aq.SessionID, &aq.SubtestID, &aq.Position, &aq.QuestionID, &aq.VersionID,
-			&aq.Type, &aq.Difficulty, &aq.Content, &aq.OptionWeighted, &aq.CaseSensitive, &options, &correct,
-			&order); err != nil {
+			&aq.Type, &aq.Difficulty, &content, &aq.OptionWeighted, &aq.CaseSensitive, &options, &correct,
+			&order, &contentDoc); err != nil {
 			return nil, fmt.Errorf("scan session question: %w", err)
 		}
-		var stored []model.QuestionOption
 		var ids []string
-		if err := json.Unmarshal(options, &stored); err != nil {
+		stored, err := decodeOptions(options)
+		if err != nil {
 			return nil, fmt.Errorf("decode session options: %w", err)
+		}
+		if aq.Content, err = model.DocFromColumn(contentDoc, content); err != nil {
+			return nil, fmt.Errorf("decode session content: %w", err)
 		}
 		if err := json.Unmarshal(correct, &aq.Correct); err != nil {
 			return nil, fmt.Errorf("decode session correct: %w", err)

@@ -144,6 +144,23 @@ func (s *AssetService) FinalizeTx(ctx context.Context, tx pgx.Tx, scope HostScop
 	return asset, nil
 }
 
+// FinalizePurposeTx is FinalizeTx for a consumer that accepts one purpose only; any other asset, and any asset of
+// another tenant, is ErrAssetNotFound so the caller cannot tell them apart.
+func (s *AssetService) FinalizePurposeTx(ctx context.Context, tx pgx.Tx, scope HostScope, principal model.Principal, id uuid.UUID, purpose string) (model.Asset, error) {
+	tenantID, err := walletTenant(scope, principal)
+	if err != nil {
+		return model.Asset{}, err
+	}
+	asset, err := s.repo.Find(ctx, tx, tenantID, id)
+	if err != nil {
+		return model.Asset{}, assetRepoError(err)
+	}
+	if asset.Purpose != purpose {
+		return model.Asset{}, ErrAssetNotFound
+	}
+	return s.FinalizeTx(ctx, tx, scope, principal, id)
+}
+
 // DownloadURL re-authorizes on every call; a staged asset is the uploader's alone.
 func (s *AssetService) DownloadURL(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) (AssetLink, error) {
 	if s.store == nil {
@@ -159,9 +176,14 @@ func (s *AssetService) DownloadURL(ctx context.Context, scope HostScope, princip
 	}
 	if !isUploader(asset, principal) && !(asset.Status == model.AssetFinal && isStaff(principal.Role)) {
 		visible := false
-		if asset.Status == model.AssetFinal && asset.Purpose == model.PurposeItemImage && principal.Role == model.RoleStudent {
-			if visible, err = s.repo.KecermatanItemVisible(ctx, s.db, tenantID, principal.UserID, id); err != nil {
-				return AssetLink{}, assetRepoError(err)
+		if asset.Status == model.AssetFinal && principal.Role == model.RoleStudent {
+			switch asset.Purpose {
+			case model.PurposeQuestionImage:
+				visible = true
+			case model.PurposeItemImage:
+				if visible, err = s.repo.KecermatanItemVisible(ctx, s.db, tenantID, principal.UserID, id); err != nil {
+					return AssetLink{}, assetRepoError(err)
+				}
 			}
 		}
 		if !visible {
