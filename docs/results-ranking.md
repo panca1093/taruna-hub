@@ -33,7 +33,8 @@ on `GET /admin/results` and its student detail only; weighted scoring is untouch
 ## Staff
 
 `GET /admin/results` (Admin, Operator) lists one row per student and tryout with attempt count, average, latest score,
-the student's current rank and `irt_warning`, filterable by tryout, program and student name, paginated like orders.
+the student's current rank and `irt_warning`, filterable by tryout, program and student name, paginated like orders. Order: most recent activity first; with a
+`tryout_id` filter, rank first (ranks of different tryouts are not comparable).
 `GET /admin/results/students/{student_id}/tryouts/{tryout_id}` gives that student's ranking and completed attempts
 with their subtests. The leaderboard endpoint is staff-only too.
 

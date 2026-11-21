@@ -3976,8 +3976,9 @@ paths:
       description: |
         Admin and Operator (D02: a role guard). A student who attempted a tryout more than once is one row; the
         attempts are the detail behind it (`GET /api/v1/admin/results/students/{student_id}/tryouts/{tryout_id}`).
-        Only students with at least one completed attempt appear. Best current rank first, then most recently
-        active (`last_completed_at`), then by name, at most 100 per page. `tryout_id` narrows to one tryout. `q` is a
+        Only students with at least one completed attempt appear. Most recently active first
+        (`last_completed_at`), then by name; with `tryout_id` the best current rank comes first instead, because ranks of
+        different tryouts are not comparable. At most 100 per page. `tryout_id` narrows to one tryout. `q` is a
         case-insensitive substring of the student's name; `%` and `_` are literal. `rank` and `participant_count`
         are the student's current standing on that tryout and `average_score` is what ranks them. `irt_warning` is
         true when any completed attempt of the student is an IRT-mode attempt that holds a question version answered

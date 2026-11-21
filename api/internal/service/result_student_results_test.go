@@ -343,7 +343,7 @@ func TestStaffStudentResultsDetail(t *testing.T) {
 			return err
 		},
 	} {
-		if err := call(); !errors.Is(err, ErrTryoutNotFound) {
+		if err := call(); !errors.Is(err, ErrStudentResultNotFound) {
 			t.Errorf("%s: err = %v, want not found", name, err)
 		}
 	}
@@ -358,5 +358,80 @@ func TestStaffStudentResultsDetail(t *testing.T) {
 	}
 	if _, err := h.rs.StaffStudentResults(ctx, h.scopeA(), p, user.ID, tr.ID); !errors.Is(err, ErrRuntimeForbidden) {
 		t.Errorf("student reads the detail: err = %v, want forbidden", err)
+	}
+}
+
+func TestStaffResultsOrderByActivityUnlessATryoutIsSelected(t *testing.T) {
+	h := newResultHarness(t)
+	q1, q2 := h.question(t), h.question(t)
+	old, recent := h.tryoutOf(t, nil, q1), h.tryoutOf(t, nil, q2)
+	right1, wrong1 := map[uuid.UUID]string{q1.ID: optID(t, q1, "4")}, map[uuid.UUID]string{q1.ID: optID(t, q1, "3")}
+	right2, wrong2 := map[uuid.UUID]string{q2.ID: optID(t, q2, "4")}, map[uuid.UUID]string{q2.ID: optID(t, q2, "3")}
+
+	_, adaP := h.named(t, old, "Ada")
+	_, budiP := h.named(t, old, "Budi")
+	_, ciciP := h.named(t, recent, "Cici")
+	_, dodiP := h.named(t, recent, "Dodi")
+	h.take(t, adaP, old, right1)
+	h.clock.Advance(time.Minute)
+	h.take(t, budiP, old, wrong1)
+	h.clock.Advance(time.Minute)
+	h.take(t, ciciP, recent, right2)
+	h.clock.Advance(time.Minute)
+	h.take(t, dodiP, recent, wrong2)
+
+	names := func(f StaffResultFilter) string {
+		rows, _ := h.staffRows(t, f)
+		got := make([]string, len(rows))
+		for i, r := range rows {
+			got[i] = r.StudentName
+		}
+		return strings.Join(got, ",")
+	}
+	if got := names(StaffResultFilter{}); got != "Dodi,Cici,Budi,Ada" {
+		t.Errorf("unfiltered order = %s, want most recent activity first (the new tryout's rank 2 before the old tryout's rank 1)", got)
+	}
+	if got := names(StaffResultFilter{TryoutID: &old.ID}); got != "Ada,Budi" {
+		t.Errorf("old tryout order = %s, want rank first", got)
+	}
+	if got := names(StaffResultFilter{TryoutID: &recent.ID}); got != "Cici,Dodi" {
+		t.Errorf("recent tryout order = %s, want rank first although Dodi was active last", got)
+	}
+}
+
+func TestStaffResultsMixedScoringModesFlagIRTOnlyOnIRTRows(t *testing.T) {
+	h := newResultHarness(t)
+	q1, q2 := h.question(t), h.question(t)
+	weighted := h.tryoutOf(t, nil, q1)
+	irt := h.tryoutOf(t, func(in *TryoutInput) { in.ScoringMode = model.ScoringIRT }, q2)
+
+	ada, adaP := h.named(t, weighted, "Ada")
+	h.enroll(t, ada, irt.ID)
+	budi, budiP := h.named(t, weighted, "Budi")
+	h.take(t, adaP, weighted, map[uuid.UUID]string{q1.ID: optID(t, q1, "4")})
+	h.take(t, budiP, weighted, map[uuid.UUID]string{q1.ID: optID(t, q1, "3")})
+	h.take(t, adaP, irt, map[uuid.UUID]string{q2.ID: optID(t, q2, "4")})
+
+	rows, total := h.staffRows(t, StaffResultFilter{})
+	if total != 3 || len(rows) != 3 {
+		t.Fatalf("rows = %d of %d, want 3", len(rows), total)
+	}
+	w, i, b := rowOf(t, rows, ada.ID, weighted.ID), rowOf(t, rows, ada.ID, irt.ID), rowOf(t, rows, budi.ID, weighted.ID)
+	if w.IRTWarning || b.IRTWarning || !i.IRTWarning {
+		t.Errorf("warnings weighted=%v budi=%v irt=%v, want only the IRT row warned (1 respondent < 3)", w.IRTWarning, b.IRTWarning, i.IRTWarning)
+	}
+	if w.Rank != 1 || w.Participants != 2 || w.Average != 100 || b.Rank != 2 || b.Participants != 2 {
+		t.Errorf("weighted rows = %+v / %+v, want ranks 1 and 2 of 2", w, b)
+	}
+
+	ctx, admin := context.Background(), h.staff(model.RoleAdmin)
+	if _, _, err := h.rs.Leaderboard(ctx, h.scopeA(), adaP, weighted.ID, 0, 0); !errors.Is(err, ErrRuntimeForbidden) {
+		t.Errorf("student leaderboard err = %v, want forbidden", err)
+	}
+	if _, _, err := h.rs.Leaderboard(ctx, h.scopeA(), admin, uuid.New(), 0, 0); !errors.Is(err, ErrTryoutNotFound) {
+		t.Errorf("unknown tryout leaderboard err = %v, want tryout not found", err)
+	}
+	if standings, total, err := h.rs.Leaderboard(ctx, h.scopeA(), admin, weighted.ID, 0, 0); err != nil || total != 2 || len(standings) != 2 {
+		t.Errorf("leaderboard = %d of %d (err %v), want 2", len(standings), total, err)
 	}
 }

@@ -455,6 +455,8 @@ func runtimeError(err error) error {
 		return httpx.NotFound(tenantNotFound)
 	case errors.Is(err, service.ErrTryoutNotFound):
 		return httpx.NotFound(tryoutNotFound)
+	case errors.Is(err, service.ErrStudentResultNotFound):
+		return httpx.NotFound(studentResultNotFound)
 	case errors.Is(err, service.ErrSessionNotFound):
 		return httpx.NotFound(sessionNotFound)
 	case errors.Is(err, service.ErrRuntimeForbidden):
