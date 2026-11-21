@@ -304,7 +304,7 @@ func (s *ResultService) StaffStudentResults(ctx context.Context, scope HostScope
 		return StaffStudentDetail{}, runtimeError(err)
 	}
 	if len(rows) == 0 {
-		return StaffStudentDetail{}, ErrTryoutNotFound
+		return StaffStudentDetail{}, ErrStudentResultNotFound
 	}
 	row := rows[0]
 	pair := repository.StudentTryout{StudentID: studentID, TryoutID: tryoutID}

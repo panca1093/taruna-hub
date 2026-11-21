@@ -186,8 +186,9 @@ type StaffResultFilter struct {
 	Offset    int
 }
 
-// StaffStudentResults lists one row per student and tryout with at least one completed attempt, best current rank
-// first, then most recently active. Rank and average come from the same averageSQL as the leaderboard.
+// StaffStudentResults lists one row per student and tryout with at least one completed attempt. With a tryout filter
+// the best current rank comes first; without one ranks of different tryouts are not comparable, so the most recently
+// active comes first. Rank and average come from the same averageSQL as the leaderboard.
 func (r *ResultRepository) StaffStudentResults(ctx context.Context, q dbtx, tenantID uuid.UUID, f StaffResultFilter) ([]model.StaffStudentResult, int, error) {
 	if tenantID == uuid.Nil {
 		return nil, 0, ErrScopeRequired
@@ -217,7 +218,7 @@ func (r *ResultRepository) StaffStudentResults(ctx context.Context, q dbtx, tena
 	rows, err := q.Query(ctx, cte+`
 		SELECT g.user_id, u.name, u.avatar_key, u.gender, u.birth_date, g.tryout_id, t.title, t.program_id, p.code, p.name,
 		       t.scoring_mode, g.attempts, st.result_count, st.average::float8, g.latest::float8, st.rnk, st.participants, g.last_at`+from+`
-		 ORDER BY st.rnk, g.last_at DESC, u.name, g.user_id, g.tryout_id
+		 ORDER BY CASE WHEN $2::uuid IS NULL THEN 0 ELSE st.rnk END, g.last_at DESC, u.name, g.user_id, g.tryout_id
 		 LIMIT $6 OFFSET $7`, tenantID, f.TryoutID, search, f.ProgramID, f.StudentID, f.Limit, f.Offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list staff student results: %w", err)

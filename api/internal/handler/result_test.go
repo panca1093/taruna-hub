@@ -237,8 +237,11 @@ func TestStaffStudentResultsOverHTTP(t *testing.T) {
 		"malformed student":   {"/api/v1/admin/results/students/nope/tryouts/" + f.tryout.ID.String(), f.tokenAdminA, http.StatusNotFound},
 		"malformed tryout":    {"/api/v1/admin/results/students/" + f.studentA.ID.String() + "/tryouts/nope", f.tokenAdminA, http.StatusNotFound},
 	} {
-		if rec := f.call(http.MethodGet, c.path, nil, c.token); rec.Code != c.want {
+		rec := f.call(http.MethodGet, c.path, nil, c.token)
+		if rec.Code != c.want {
 			t.Errorf("%s: status = %d %s, want %d", name, rec.Code, rec.Body.String(), c.want)
+		} else if c.want == http.StatusNotFound && errorBody(t, rec).Message != studentResultNotFound {
+			t.Errorf("%s: message = %q, want %q", name, errorBody(t, rec).Message, studentResultNotFound)
 		}
 	}
 

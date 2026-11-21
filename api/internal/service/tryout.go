@@ -17,11 +17,12 @@ import (
 )
 
 var (
-	ErrTryoutNotFound   = errors.New("tryout not found")
-	ErrTryoutStale      = errors.New("tryout changed by someone else")
-	ErrTryoutLocked     = errors.New("tryout already attempted")
-	ErrTryoutReferenced = errors.New("tryout still referenced")
-	ErrTryoutForbidden  = errors.New("tryout change needs an admin")
+	ErrTryoutNotFound        = errors.New("tryout not found")
+	ErrStudentResultNotFound = errors.New("student result not found")
+	ErrTryoutStale           = errors.New("tryout changed by someone else")
+	ErrTryoutLocked          = errors.New("tryout already attempted")
+	ErrTryoutReferenced      = errors.New("tryout still referenced")
+	ErrTryoutForbidden       = errors.New("tryout change needs an admin")
 )
 
 // Tryout field reasons; the transport turns each into the copy the builder shows.

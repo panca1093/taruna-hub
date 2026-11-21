@@ -277,11 +277,11 @@ func (h *Handler) StaffStudentResults(c echo.Context) error {
 	}
 	studentID, err := uuid.Parse(c.Param("student_id"))
 	if err != nil {
-		return httpx.NotFound(tryoutNotFound)
+		return httpx.NotFound(studentResultNotFound)
 	}
 	tryoutID, err := uuid.Parse(c.Param("tryout_id"))
 	if err != nil {
-		return httpx.NotFound(tryoutNotFound)
+		return httpx.NotFound(studentResultNotFound)
 	}
 	detail, err := h.results.StaffStudentResults(c.Request().Context(), scope, principal, studentID, tryoutID)
 	if err != nil {
