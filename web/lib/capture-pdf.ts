@@ -102,19 +102,22 @@ function readAsDataUrl(blob: Blob) {
   });
 }
 
+const IMAGE_TIMEOUT_MS = 10_000;
+
 async function loadedOk(img: HTMLImageElement) {
   if (!img.complete) {
     await new Promise<void>((resolve) => {
       img.addEventListener("load", () => resolve(), { once: true });
       img.addEventListener("error", () => resolve(), { once: true });
+      setTimeout(resolve, IMAGE_TIMEOUT_MS);
     });
   }
-  return img.naturalWidth > 0;
+  return img.complete && img.naturalWidth > 0;
 }
 
 /**
  * Makes every image under `root` self-contained before a capture: loaded images become `data:` URLs, and one that
- * fails to load or fetch is replaced by a bordered box with its alt text (or `fallback`), so it never prints as a gap.
+ * fails to load or fetch within ten seconds is hidden behind a bordered box with its alt text (or `fallback`), so it never prints as a gap.
  */
 export async function inlineImages(root: HTMLElement, fallback = "") {
   await Promise.all(
@@ -123,7 +126,7 @@ export async function inlineImages(root: HTMLElement, fallback = "") {
         if (!(await loadedOk(img))) throw new Error("image failed to load");
         const src = img.currentSrc || img.src;
         if (src.startsWith("data:")) return;
-        const response = await fetch(src);
+        const response = await fetch(src, { signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS) });
         if (!response.ok) throw new Error(`image fetch ${response.status}`);
         img.removeAttribute("srcset");
         img.src = await readAsDataUrl(await response.blob());
@@ -132,7 +135,9 @@ export async function inlineImages(root: HTMLElement, fallback = "") {
         const box = document.createElement("span");
         box.className = "inline-block rounded-lg border border-border px-2 py-1 text-caption text-muted";
         box.textContent = img.alt || fallback;
-        img.replaceWith(box);
+        // The image stays in the tree, hidden, because React still owns that node.
+        img.hidden = true;
+        img.after(box);
       }
     }),
   );

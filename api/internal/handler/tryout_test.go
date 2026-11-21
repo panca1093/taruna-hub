@@ -416,7 +416,6 @@ func TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree(t *testing.T) {
 				option["points"] = points
 			}
 			options = append(options, option)
-			secrets = append(secrets, optionIDs[i])
 		}
 		body["options"] = options
 		body["correct"] = []string{optionIDs[0]}
@@ -429,6 +428,12 @@ func TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree(t *testing.T) {
 		}
 		q := decodeQuestion(t, rec)
 		secrets = append(secrets, q.ID.String(), q.VersionID.String())
+		for _, option := range q.Options {
+			secrets = append(secrets, option.ID)
+		}
+		if len(q.Options) != len(labels) {
+			t.Fatalf("created question has %d options, want %d", len(q.Options), len(labels))
+		}
 		return q
 	}
 	zulu := keyed("Soal Zulu pertama", false, [3]string{"kunci-rahasia-31", "opsi-rahasia-32", "opsi-rahasia-33"}, "Zeta", "Alfa", "Mu")

@@ -162,8 +162,10 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
   const rootRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<PageLayout[] | null>(null);
   const onLaidOutRef = useRef(onLaidOut);
+  const imageFailedRef = useRef(labels.imageFailed);
   useLayoutEffect(() => {
     onLaidOutRef.current = onLaidOut;
+    imageFailedRef.current = labels.imageFailed;
   });
 
   useEffect(() => {
@@ -172,7 +174,7 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
       await document.fonts.ready;
       const container = measureRef.current;
       if (!container) return;
-      await inlineImages(container, labels.imageFailed);
+      await inlineImages(container, imageFailedRef.current);
       if (cancelled) return;
       const heights = Array.from(container.querySelectorAll<HTMLElement>("[data-block]")).map((el) => el.getBoundingClientRect().height);
       setPages(paginate(heights, keep, BODY_H));
@@ -180,19 +182,19 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
     return () => {
       cancelled = true;
     };
-  }, [keep, labels.imageFailed]);
+  }, [keep]);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!pages || !root) return;
     let cancelled = false;
-    void inlineImages(root, labels.imageFailed).then(() => {
+    void inlineImages(root, imageFailedRef.current).then(() => {
       if (!cancelled) onLaidOutRef.current(Array.from(root.querySelectorAll<HTMLElement>("[data-print-page]")));
     });
     return () => {
       cancelled = true;
     };
-  }, [pages, labels.imageFailed]);
+  }, [pages]);
 
   return (
     <div ref={rootRef} aria-hidden inert data-theme="light" style={{ colorScheme: "light" }} className="fixed top-0 -left-300 text-foreground">
