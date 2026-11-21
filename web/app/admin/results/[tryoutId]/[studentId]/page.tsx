@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { Suspense, use, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button, toast } from "@heroui/react";
 import { AlertTriangle, BarChart3, CloudOff, Download, TriangleAlert } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -95,13 +96,13 @@ const viewOf = (detail: StaffResultStudentDetail, attempt: StaffResultAttempt) =
   currentSessionId: attempt.session_id,
 });
 
-export default function TryoutStudentResultPage({ params }: { params: Promise<{ tryoutId: string; studentId: string }> }) {
+function TryoutStudentResultContent({ params }: { params: Promise<{ tryoutId: string; studentId: string }> }) {
   const { tryoutId, studentId } = use(params);
   const t = useResultsT();
+  const attemptParam = useSearchParams().get("attempt");
   const [detail, setDetail] = useState<StaffResultStudentDetail | null>(null);
   const [state, setState] = useState<LoadState>("loading");
   const [reloadKey, setReloadKey] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pdfWorking, setPdfWorking] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
 
@@ -112,7 +113,6 @@ export default function TryoutStudentResultPage({ params }: { params: Promise<{ 
       .then((data) => {
         if (cancelled) return;
         setDetail(data);
-        setSelectedId(null);
         setState("ready");
       })
       .catch((err: unknown) => {
@@ -130,7 +130,7 @@ export default function TryoutStudentResultPage({ params }: { params: Promise<{ 
     try {
       const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       const background = getComputedStyle(captureRef.current).backgroundColor;
-      await savePageAsPdf(captureRef.current, `tryout-${slug(detail.student.name)}-${slug(detail.tryout.title)}.pdf`, background);
+      await savePageAsPdf(captureRef.current, `tryout-${slug(detail.student.name)}-${slug(detail.tryout.title)}-attempt-${selected.attempt_number}.pdf`, background);
     } catch {
       toast.danger(t.pdfFailed);
     } finally {
@@ -191,7 +191,7 @@ export default function TryoutStudentResultPage({ params }: { params: Promise<{ 
 
   const { student, tryout, attempts } = detail;
   const newest = attempts[0];
-  const selected = attempts.find((a) => a.session_id === selectedId) ?? newest;
+  const selected = attempts.find((a) => a.session_id === attemptParam) ?? newest;
   const description = t.detailDescription(tryout.title, tryout.program_code);
 
   return (
@@ -207,15 +207,23 @@ export default function TryoutStudentResultPage({ params }: { params: Promise<{ 
       }
     >
       <div className="space-y-6">
-        <TryoutResultView {...viewOf(detail, selected)} onSelectAttempt={setSelectedId} />
+        <TryoutResultView {...viewOf(detail, selected)} attemptHref={(id) => `/admin/results/${tryoutId}/${studentId}?attempt=${id}`} />
         <StaffAttemptSection key={selected.session_id} attempt={selected} />
       </div>
       <div aria-hidden inert data-theme="light" style={{ colorScheme: "light" }} className="fixed top-0 -left-300 w-275">
         <div ref={captureRef} className="space-y-6 bg-background p-8 text-foreground">
           <PageHeading title={student.name} description={description} leading={<GradientAvatar user={student} size="lg" />} size="compact" />
-          <TryoutResultView {...viewOf(detail, newest)} />
+          <TryoutResultView {...viewOf(detail, selected)} />
         </div>
       </div>
     </AppShell>
+  );
+}
+
+export default function TryoutStudentResultPage({ params }: { params: Promise<{ tryoutId: string; studentId: string }> }) {
+  return (
+    <Suspense>
+      <TryoutStudentResultContent params={params} />
+    </Suspense>
   );
 }
