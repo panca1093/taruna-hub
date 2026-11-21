@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import type { EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { ListItem } from "@tiptap/extension-list";
-import { TableCell, TableHeader, TableKit } from "@tiptap/extension-table";
+import { Table, TableCell, TableHeader, TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
 import { cn } from "@/lib/cn";
-import type { RichDoc } from "@/lib/rich-doc";
+import { MAX_TABLE_ROWS, type RichDoc } from "@/lib/rich-doc";
 import { ImageNode, MathNode, ShapeNode } from "./rich-text/nodes";
 import { useRichTextGroup } from "./rich-text/group";
 
@@ -21,10 +21,33 @@ const CELL_CONTENT = "(paragraph | bulletList | orderedList | shape | image)+";
 const SchemaTableCell = TableCell.extend({ content: CELL_CONTENT });
 const SchemaTableHeader = TableHeader.extend({ content: CELL_CONTENT });
 
+function tableRowCount(editor: Editor) {
+  const { $from } = editor.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    if ($from.node(depth).type.name === "table") return $from.node(depth).childCount;
+  }
+  return 0;
+}
+
+// The stock Tab adds a row from the last cell, which would skip the row limit.
+const LimitedTable = Table.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      Tab: () => {
+        if (this.editor.commands.goToNextCell()) return true;
+        if (!this.editor.can().addRowAfter()) return false;
+        if (tableRowCount(this.editor) >= MAX_TABLE_ROWS) return true;
+        return this.editor.chain().addRowAfter().goToNextCell().run();
+      },
+    };
+  },
+});
+
 /** Scrolls only the nearest scrollable ancestor (the modal body), clear of the sticky toolbar; the page behind never moves. */
 function scrollSelectionIntoView(view: EditorView) {
   let box: HTMLElement | null = view.dom.parentElement;
-  while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+  while (box && !(/(auto|scroll)/.test(getComputedStyle(box).overflowY) && box.scrollHeight > box.clientHeight)) box = box.parentElement;
   if (!box) return false;
   const caret = view.coordsAtPos(view.state.selection.head);
   const bounds = box.getBoundingClientRect();
@@ -78,7 +101,8 @@ export function RichTextField({
         listItem: false,
       }),
       SchemaListItem,
-      TableKit.configure({ table: { resizable: false }, tableCell: false, tableHeader: false }),
+      TableKit.configure({ table: false, tableCell: false, tableHeader: false }),
+      LimitedTable.configure({ resizable: false }),
       SchemaTableCell,
       SchemaTableHeader,
       MathNode,

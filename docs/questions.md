@@ -85,14 +85,22 @@ read, the student runtime (`RuntimeService.Subtest`) and the review (`ResultServ
 the editor did not change passes validation and creates no version. Text that cannot be made valid (more than 2000
 nodes, say) is shown as converted and refused with the usual reason when saved.
 
-What the conversion guarantees is the behaviour of the old client renderer (`web/components/latex.tsx` on `main`
+What the conversion guarantees is, with the exceptions listed below, the behaviour of the old client renderer (`web/components/latex.tsx` on `main`
 before the rich-document change), and `model/richdoc_test.go` pins it case by case: a line is split on `$...$` first
 and only the pieces between formulas get `**bold**` / `*italic*` (so `*Jika $x=2$ maka*` keeps its stars); a run of
 two or more consecutive list lines is one list of the first line's kind even when bullet and numbered lines mix, and a
-lone list line stays a literal paragraph; `
-` and `` are line breaks and never reach a text node; a formula whose
-LaTeX is blank (`$ $`) stays literal text. One known difference: an old `![alt](data:...)` line rendered as an image,
-but the document model refuses `data:` URLs, so it reads as literal text.
+lone list line stays a literal paragraph; `\r\n` and `\r` are line breaks and never reach a text node; a formula whose
+LaTeX is blank (`$ $`) stays literal text.
+
+Known differences from the old renderer:
+
+- An old `![alt](data:...)` line rendered as an image, but the document model refuses `data:` URLs, so it reads as
+  literal text.
+- Text with Windows line endings (`\r\n`) now forms lists and images, where the old renderer showed those lines
+  literally.
+- A lone carriage return (`\r`) is a paragraph break; the old renderer showed a space.
+- A single list-looking line followed by text is its own paragraph.
+- A bare `$$` shows literally.
 
 At API startup `QuestionService.BackfillDocs` writes the converted documents into rows that still have none. It takes
 `pg_try_advisory_lock` on a dedicated connection: a second replica that cannot get the lock logs it, skips the

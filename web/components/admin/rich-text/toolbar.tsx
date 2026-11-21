@@ -115,7 +115,7 @@ function PopoverButton({
   const open = group.popover?.kind === kind && !!group.active && !disabled;
   const close = () => group.closePopover(kind);
   return (
-    <Popover isOpen={open} onOpenChange={(next) => (next && group.active ? group.openPopover(kind) : close())}>
+    <Popover isOpen={open} onOpenChange={(next) => (next && !disabled && group.active ? group.openPopover(kind) : close())}>
       <Popover.Trigger<"button">
         render={(props) => (
           <button

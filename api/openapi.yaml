@@ -5851,13 +5851,14 @@ components:
         `hardBreak` and `math` (`attrs.latex`).
 
         Nesting: a `paragraph` holds inline nodes; lists hold `listItem` of paragraphs and nested lists
-        (`orderedList` may carry `attrs.start`); a table has 1 to 30 rows of 1 to 12 cells whose
+        (`orderedList` may carry `attrs.start`, 0 to 1048576); a table has 1 to 30 rows of 1 to 12 cells whose
         `attrs.colspan` and `attrs.rowspan` are 1 to 12 and which hold paragraphs, lists, shapes and
         images, never another table; list items hold no images or shapes. `math.attrs.latex` is 1 to 2000
         characters. `image` carries exactly one of `attrs.asset_id` or an `http(s)` `attrs.src`; the
-        server never accepts a new `src`: a write is refused (`doc_attr`) unless the question already
+        server refuses a new `src` on create and on update (`doc_attr`) unless the question already
         holds the identical `src` in its current version, which is how content that came from the old text
-        format keeps its URL images when it is saved again. Trailing empty paragraphs are dropped and
+        format keeps its URL images when it is saved again. The one exception is spreadsheet and DOCX
+        import, which converts `![alt](http…)` lines into `src` images. Trailing empty paragraphs are dropped and
         neighbouring text with the same marks is merged. A document has at most 2000 nodes, depth 12 and
         100 KB once normalised. Violations answer `422` on the field that holds the document.
       properties:

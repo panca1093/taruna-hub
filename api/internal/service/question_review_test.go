@@ -59,10 +59,15 @@ func TestUneditedLegacyRowResavesWithoutAVersion(t *testing.T) {
 		"trailing blank lines":   "isi\n- a\n- b\n\n\n",
 		"image at the end":       "teks\n![peta](https://x.test/a.png)\n",
 		"image then blank lines": "![](http://x.test/a.png)\r\n\r\n",
+		"whitespace explanation": "isi\x00explanation:  \n ",
 	}
 	for name, text := range cases {
 		t.Run(name, func(t *testing.T) {
-			id, _ := insertLegacy(t, h, tenant, text, "Karena *begitu*")
+			explanation := "Karena *begitu*"
+			if content, expl, ok := strings.Cut(text, "\x00explanation:"); ok {
+				text, explanation = content, expl
+			}
+			id, _ := insertLegacy(t, h, tenant, text, explanation)
 			got, err := h.svc.Get(context.Background(), h.scope(tenant), h.principal(tenant, model.RoleAdmin), id)
 			if err != nil {
 				t.Fatalf("get: %v", err)

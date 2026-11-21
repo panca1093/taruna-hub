@@ -63,6 +63,8 @@ func TestNormalizeDocAccepts(t *testing.T) {
 			`{"type":"doc","content":[{"type":"orderedList","content":[{"type":"listItem","content":[{"type":"paragraph"}]}]}]}`},
 		{"ordered list keeps start", `{"type":"doc","content":[{"type":"orderedList","attrs":{"start":3},"content":[{"type":"listItem","content":[{"type":"paragraph"}]}]}]}`,
 			`{"type":"doc","content":[{"type":"orderedList","attrs":{"start":3},"content":[{"type":"listItem","content":[{"type":"paragraph"}]}]}]}`},
+		{"ordered list keeps start zero", `{"type":"doc","content":[{"type":"orderedList","attrs":{"start":0},"content":[{"type":"listItem","content":[{"type":"paragraph"}]}]}]}`,
+			`{"type":"doc","content":[{"type":"orderedList","attrs":{"start":0},"content":[{"type":"listItem","content":[{"type":"paragraph"}]}]}]}`},
 		{"nested bullet lists", `{"type":"doc","content":[{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph"},{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph"}]}]}]}]}]}`,
 			`{"type":"doc","content":[{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph"},{"type":"bulletList","content":[{"type":"listItem","content":[{"type":"paragraph"}]}]}]}]}]}`},
 		{"table cell attrs", `{"type":"doc","content":[{"type":"table","content":[{"type":"tableRow","content":[{"type":"tableHeader","attrs":{"colspan":2,"rowspan":1,"colwidth":null},"content":[{"type":"paragraph"}]},{"type":"tableCell","attrs":{"colspan":1,"rowspan":3},"content":[{"type":"shape","attrs":{"kind":"bola"}},{"type":"image","attrs":{"asset_id":"` + id + `"}}]}]}]}]}`,
@@ -129,7 +131,8 @@ func TestNormalizeDocRejects(t *testing.T) {
 		{"image long alt", wrap(`{"type":"image","attrs":{"asset_id":"` + id + `","alt":"` + strings.Repeat("a", 201) + `"}}`), ReasonDocAttr},
 		{"colspan too big", wrap(`{"type":"table","content":[{"type":"tableRow","content":[{"type":"tableCell","attrs":{"colspan":13},"content":[` + p + `]}]}]}`), ReasonDocAttr},
 		{"rowspan fractional", wrap(`{"type":"table","content":[{"type":"tableRow","content":[{"type":"tableCell","attrs":{"rowspan":1.5},"content":[` + p + `]}]}]}`), ReasonDocAttr},
-		{"start zero", wrap(`{"type":"orderedList","attrs":{"start":0},"content":[{"type":"listItem","content":[` + p + `]}]}`), ReasonDocAttr},
+		{"start negative", wrap(`{"type":"orderedList","attrs":{"start":-1},"content":[{"type":"listItem","content":[` + p + `]}]}`), ReasonDocAttr},
+		{"start too large", wrap(`{"type":"orderedList","attrs":{"start":1048577},"content":[{"type":"listItem","content":[` + p + `]}]}`), ReasonDocAttr},
 		{"start string", wrap(`{"type":"orderedList","attrs":{"start":"2"},"content":[{"type":"listItem","content":[` + p + `]}]}`), ReasonDocAttr},
 	}
 	for _, tc := range cases {

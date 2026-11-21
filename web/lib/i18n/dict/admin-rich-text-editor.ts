@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale } from "@/lib/i18n/locale-context";
+import { MAX_TABLE_COLS, MAX_TABLE_ROWS } from "@/lib/rich-doc";
 
 const id = {
   formatToolbar: "Format tulisan",
@@ -44,8 +45,8 @@ const id = {
   noTableInTableHint: "Tabel tidak bisa disisipkan di dalam tabel",
   noTableInListHint: "Tabel tidak bisa disisipkan di dalam butir daftar",
   noBlockInListHint: "Gambar dan bangun ruang tidak bisa disisipkan di dalam butir daftar",
-  maxRowsHint: "Maksimal 30 baris",
-  maxColsHint: "Maksimal 12 kolom",
+  maxRowsHint: `Maksimal ${MAX_TABLE_ROWS} baris`,
+  maxColsHint: `Maksimal ${MAX_TABLE_COLS} kolom`,
   imageTitle: "Sisipkan gambar",
   imagePick: "Pilih file",
   imageHint: "PNG, JPG atau WebP, maks 5 MB",
@@ -111,8 +112,8 @@ const en: typeof id = {
   noTableInTableHint: "A table can't be inserted inside a table",
   noTableInListHint: "A table can't be inserted inside a list item",
   noBlockInListHint: "Images and solid shapes can't be inserted inside a list item",
-  maxRowsHint: "At most 30 rows",
-  maxColsHint: "At most 12 columns",
+  maxRowsHint: `At most ${MAX_TABLE_ROWS} rows`,
+  maxColsHint: `At most ${MAX_TABLE_COLS} columns`,
   imageTitle: "Insert image",
   imagePick: "Choose file",
   imageHint: "PNG, JPG or WebP, 5 MB max",

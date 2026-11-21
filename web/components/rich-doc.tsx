@@ -41,7 +41,7 @@ function RichImage({ attrs }: { attrs: Record<string, unknown> }) {
     <figure className="rich-image" data-rich-image data-loaded={state}>
       {url && (
         // eslint-disable-next-line @next/next/no-img-element -- a short-lived presigned URL cannot go through the optimizer
-        <img src={url} alt={alt} data-asset-id={assetId || undefined} onLoad={() => setLoaded({ url, ok: true })} onError={() => setLoaded({ url, ok: false })} />
+        <img src={url} alt={alt} data-asset-id={assetId || undefined} onLoad={(e) => !e.currentTarget.dataset.inlined && setLoaded({ url, ok: true })} onError={(e) => !e.currentTarget.dataset.inlined && setLoaded({ url, ok: false })} />
       )}
       {state === undefined && <span role="status" aria-label={t.imageLoading} className="block h-24 w-full animate-pulse rounded-chip bg-surface-secondary" />}
       {state === "error" && <span role="status">{t.imageFailed}</span>}

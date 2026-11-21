@@ -337,7 +337,7 @@ func imageAttrs(in map[string]any, rules docRules) (map[string]any, string) {
 }
 
 func startAttrs(in map[string]any) (map[string]any, string) {
-	value, present := intAttr(in, model.AttrStart, 1, maxAttrStartVal)
+	value, present := intAttr(in, model.AttrStart, 0, maxAttrStartVal)
 	if present == attrBad {
 		return nil, ReasonDocAttr
 	}
@@ -405,6 +405,9 @@ func resolveDoc(doc model.RichDoc) model.RichDoc {
 func docOfLegacyText(text string) model.RichDoc {
 	converted := model.DocFromLegacyText(text)
 	if out, reason := normalizeDocWith(converted, docRules{legacy: true}); reason == "" {
+		if model.DocEmpty(out) {
+			return model.EmptyDoc()
+		}
 		return out
 	}
 	return converted

@@ -142,8 +142,10 @@ export async function inlineImages(root: HTMLElement, fallback = "", resolve?: (
           if (!response.ok) throw new Error(`image fetch ${response.status}`);
           blob = await response.blob();
         }
+        const dataUrl = await readAsDataUrl(blob);
+        img.dataset.inlined = "1";
         img.removeAttribute("srcset");
-        img.src = await readAsDataUrl(blob);
+        img.src = dataUrl;
         await img.decode();
       } catch {
         const box = document.createElement("span");
@@ -151,6 +153,7 @@ export async function inlineImages(root: HTMLElement, fallback = "", resolve?: (
         box.textContent = img.alt || fallback;
         // The image stays in the tree, hidden, because React still owns that node.
         img.hidden = true;
+        img.dataset.inlined = "1";
         img.removeAttribute("srcset");
         img.src = BLANK_PIXEL;
         img.after(box);
