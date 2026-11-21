@@ -179,7 +179,7 @@ func TestExportSecondRunOnFinishedIsNoOp(t *testing.T) {
 
 func TestExportMissingRendererFailsOnTheLastAttempt(t *testing.T) {
 	h := newExportHarness(t)
-	e, err := h.svc.Request(context.Background(), h.scope(h.tenant), h.principal(h.tenant, h.admin), model.ExportTryoutPDF, nil)
+	e, err := h.svc.Request(context.Background(), h.scope(h.tenant), h.principal(h.tenant, h.admin), model.ExportTryoutResultsXLSX, nil)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
@@ -251,8 +251,8 @@ func TestExportListIsNewestFirstAndFiltersKind(t *testing.T) {
 	h := newExportHarness(t)
 	ctx := context.Background()
 	first, second := h.request(t), h.request(t)
-	if _, err := h.svc.Request(ctx, h.scope(h.tenant), h.principal(h.tenant, h.admin), model.ExportTryoutPDF, nil); err != nil {
-		t.Fatalf("request pdf: %v", err)
+	if _, err := h.svc.Request(ctx, h.scope(h.tenant), h.principal(h.tenant, h.admin), model.ExportTryoutResultsXLSX, nil); err != nil {
+		t.Fatalf("request xlsx: %v", err)
 	}
 	list, err := h.svc.List(ctx, h.scope(h.tenant), h.principal(h.tenant, h.admin), testExportKind, 1)
 	if err != nil || len(list) != 1 || list[0].ID != second.ID {

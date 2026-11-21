@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	ExportTryoutPDF         = "tryout_pdf"
 	ExportTryoutResultsCSV  = "tryout_results_csv"
 	ExportTryoutResultsXLSX = "tryout_results_xlsx"
 )

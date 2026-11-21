@@ -383,3 +383,53 @@ func TestTryoutBodyIsBoundedBeforeItIsMapped(t *testing.T) {
 		t.Fatalf("oversized body produced %d field errors, want it refused before it is mapped", got)
 	}
 }
+
+func TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree(t *testing.T) {
+	f := newAuthFixture(t, false)
+	e := f.echo(t)
+	tenantA, tenantB := f.active[0], f.active[1]
+	hostA, hostB := f.host(tenantA.Slug), f.host(tenantB.Slug)
+	admin := curriculumToken(t, f, tenantA, model.RoleAdmin)
+	operator := curriculumToken(t, f, tenantA, model.RoleOperator)
+	student := curriculumToken(t, f, tenantA, model.RoleStudent)
+	adminB := curriculumToken(t, f, tenantB, model.RoleAdmin)
+
+	program := questionCurriculum(t, e, hostA, admin)
+	question := createTryoutQuestion(t, e, hostA, admin, program)
+	created := decodeTryout(t, sendTryoutJSON(e, http.MethodPost, hostA, "/api/v1/tryouts", tryoutBody(program, question.ID.String()), admin))
+	path := "/api/v1/tryouts/" + created.ID.String() + "/print"
+
+	for name, token := range map[string]string{"admin": admin, "operator": operator} {
+		rec := getWithToken(e, hostA, path, token)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s = %d %s, want 200", name, rec.Code, rec.Body.String())
+		}
+		var body tryoutPrintResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Title != created.Title || body.TenantName == "" || len(body.Subtests) != 1 || len(body.Subtests[0].Questions) != 1 {
+			t.Fatalf("%s body = %+v, want the title, tenant name and one question", name, body)
+		}
+		printed := body.Subtests[0].Questions[0]
+		if printed.Type != "pg" || printed.Content != question.Content || len(printed.Options) != 2 || printed.Options[0].Label != "3" || printed.Options[1].Label != "4" {
+			t.Errorf("%s question = %+v, want the stem and both labels in stored order", name, printed)
+		}
+		for _, leaked := range []string{`"correct"`, `"explanation"`, `"points"`, `"id"`} {
+			if strings.Contains(rec.Body.String(), leaked) {
+				t.Errorf("%s body carries %s: %s", name, leaked, rec.Body.String())
+			}
+		}
+	}
+	if rec := getWithToken(e, hostA, path, student); rec.Code != http.StatusForbidden {
+		t.Errorf("student = %d, want 403", rec.Code)
+	}
+	if rec := getWithToken(e, hostA, path, ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous = %d, want 401", rec.Code)
+	}
+	for _, id := range []string{created.ID.String(), uuid.NewString(), "not-a-uuid"} {
+		if rec := getWithToken(e, hostB, "/api/v1/tryouts/"+id+"/print", adminB); rec.Code != http.StatusNotFound {
+			t.Errorf("tenant B on %s = %d, want 404", id, rec.Code)
+		}
+	}
+}

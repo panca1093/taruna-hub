@@ -8,12 +8,14 @@ import { AppShell } from "@/components/app-shell";
 import { LatexText } from "@/components/latex";
 import { Panel } from "@/components/page-blocks";
 import { SummaryBox } from "@/components/admin/summary-box";
-import { ExportStatus } from "@/components/admin/export-status";
+import { TryoutPrint } from "@/components/admin/tryout-print";
 import { DifficultyBadge, QuestionTypeBadge, TryoutStatusBadge } from "@/components/status-badge";
 import { SelectInput, SwitchInput, TextInput, TextareaInput } from "@/components/ui/form";
 import { QuestionPickerDrawer, type PickedQuestion } from "@/components/admin/question-picker-drawer";
-import { api, ApiError, errorText, type Program, type Tryout } from "@/lib/api/client";
+import { api, ApiError, errorText, type Program, type Tryout, type TryoutPrint as TryoutPrintData } from "@/lib/api/client";
+import { savePagesAsPdf } from "@/lib/capture-pdf";
 import type { ScoringMode } from "@/lib/types";
+import { useLocale } from "@/lib/i18n/locale-context";
 import { useAdminTryoutBuilderT } from "@/lib/i18n/dict/admin-tryout-builder";
 import { useTryoutPdfT } from "@/lib/i18n/dict/tryout-pdf";
 
@@ -119,8 +121,9 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
   const router = useRouter();
   const t = useAdminTryoutBuilderT();
   const pdfT = useTryoutPdfT();
-  const [pdfRequesting, setPdfRequesting] = useState(false);
-  const [pdfRefresh, setPdfRefresh] = useState(0);
+  const { locale } = useLocale();
+  const [pdf, setPdf] = useState<{ status: "idle" | "preparing" | "error" | "done"; page: number; total: number; error?: string }>({ status: "idle", page: 0, total: 0 });
+  const [printData, setPrintData] = useState<{ key: number; data: TryoutPrintData } | null>(null);
   const isEditing = !!tryoutId;
 
   const [programs, setPrograms] = useState<Program[] | null>(null);
@@ -308,17 +311,30 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
     }
   };
 
-  const requestPdf = async () => {
+  const startPdf = async () => {
     if (!tryout) return;
-    setPdfRequesting(true);
+    setPdf({ status: "preparing", page: 0, total: 0 });
     try {
-      await api.tryouts.requestPdf(tryout.id);
-      setPdfRefresh((n) => n + 1);
-      toast.success(pdfT.toastQueued, { description: pdfT.toastQueuedDescription });
+      const data = await api.tryouts.print(tryout.id);
+      setPrintData({ key: Date.now(), data });
     } catch (err) {
+      setPdf({ status: "error", page: 0, total: 0, error: errorText(err, pdfT.failedFallback) });
+      toast.danger(pdfT.toastFailed, { description: errorText(err, pdfT.failedFallback) });
+    }
+  };
+
+  const capturePdf = async (pages: HTMLElement[]) => {
+    const slug = (printData?.data.title ?? "tryout").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "tryout";
+    try {
+      const background = getComputedStyle(pages[0]).backgroundColor;
+      await savePagesAsPdf(pages, `${slug}.pdf`, background, (page, total) => setPdf({ status: "preparing", page, total }));
+      setPdf({ status: "done", page: 0, total: 0 });
+      toast.success(pdfT.toastDone);
+    } catch (err) {
+      setPdf({ status: "error", page: 0, total: 0, error: errorText(err, pdfT.failedFallback) });
       toast.danger(pdfT.toastFailed, { description: errorText(err, pdfT.failedFallback) });
     } finally {
-      setPdfRequesting(false);
+      setPrintData(null);
     }
   };
 
@@ -356,8 +372,8 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
       actions={
         <div className="flex gap-2">
           {tryout && (
-            <Button variant="secondary" size="sm" isDisabled={saving || working || dirty || pdfRequesting} onPress={() => void requestPdf()}>
-              {pdfRequesting ? pdfT.requesting : pdfT.request}
+            <Button variant="secondary" size="sm" isDisabled={saving || working || dirty || pdf.status === "preparing"} onPress={() => void startPdf()}>
+              {pdf.status !== "preparing" ? pdfT.request : pdf.total > 0 ? pdfT.preparing(pdf.page, pdf.total) : pdfT.preparingStart}
             </Button>
           )}
           {tryout && (
@@ -386,7 +402,19 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
           </div>
         )}
 
-        {tryout && <ExportStatus kind="tryout_pdf" refreshKey={pdfRefresh} />}
+        {pdf.status === "error" && (
+          <div className="flex items-center gap-3 text-small text-danger" role="alert">
+            <span>{pdf.error}</span>
+            <Button variant="secondary" size="sm" isDisabled={dirty} onPress={() => void startPdf()}>
+              {pdfT.retry}
+            </Button>
+          </div>
+        )}
+        {pdf.status === "done" && (
+          <p className="text-small text-success" role="status">
+            {pdfT.toastDone}
+          </p>
+        )}
 
         <Panel as="section" className="flex flex-col gap-4">
           <h2 className="font-display text-heading-sm">{t.infoHeading}</h2>
@@ -616,6 +644,17 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
             });
             updateSubtest(pickerFor, { questionIds: ids });
           }}
+        />
+      )}
+      {printData && (
+        <TryoutPrint
+          key={printData.key}
+          title={printData.data.title}
+          tenantName={printData.data.tenant_name}
+          date={new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "id-ID", { dateStyle: "long", timeZone: "Asia/Jakarta" }).format(new Date())}
+          subtests={printData.data.subtests.map((subtest) => ({ name: subtest.name, durationSeconds: subtest.duration_seconds, questions: subtest.questions }))}
+          labels={pdfT}
+          onLaidOut={(pages) => void capturePdf(pages)}
         />
       )}
     </AppShell>

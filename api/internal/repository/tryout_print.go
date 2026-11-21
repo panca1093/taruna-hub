@@ -13,7 +13,7 @@ import (
 )
 
 // PrintTryout reads a tryout in the order the admin stored it, through the frozen version of each assignment.
-// The query names stem and option labels only; keys, explanations and option points are never selected.
+// The query names type, stem and option labels only; keys, explanations and option points are never selected.
 func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UUID) (model.PrintTryout, error) {
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -23,8 +23,8 @@ func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UU
 
 	var out model.PrintTryout
 	err = tx.QueryRow(ctx,
-		`SELECT t.title, t.revision, n.name FROM tryouts t JOIN tenants n ON n.id = t.tenant_id
-		  WHERE t.tenant_id = $1 AND t.id = $2`, tenantID, id).Scan(&out.Title, &out.Revision, &out.TenantName)
+		`SELECT t.title, n.name FROM tryouts t JOIN tenants n ON n.id = t.tenant_id
+		  WHERE t.tenant_id = $1 AND t.id = $2`, tenantID, id).Scan(&out.Title, &out.TenantName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.PrintTryout{}, ErrNotFound
@@ -33,7 +33,7 @@ func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UU
 	}
 
 	rows, err := tx.Query(ctx, `
-		SELECT s.id, s.name, s.duration_seconds, v.content,
+		SELECT s.id, s.name, s.duration_seconds, v.type, v.content,
 		       COALESCE((SELECT jsonb_agg(o.obj ->> 'label' ORDER BY o.ord)
 		                   FROM jsonb_array_elements(v.options) WITH ORDINALITY AS o(obj, ord)), '[]'::jsonb)
 		  FROM tryout_subtests s
@@ -50,9 +50,9 @@ func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UU
 		var subtestID uuid.UUID
 		var name string
 		var duration int
-		var content *string
+		var kind, content *string
 		var rawOptions []byte
-		if err := rows.Scan(&subtestID, &name, &duration, &content, &rawOptions); err != nil {
+		if err := rows.Scan(&subtestID, &name, &duration, &kind, &content, &rawOptions); err != nil {
 			return model.PrintTryout{}, fmt.Errorf("scan print question: %w", err)
 		}
 		at, seen := index[subtestID]
@@ -61,14 +61,14 @@ func (r *TryoutRepository) PrintTryout(ctx context.Context, tenantID, id uuid.UU
 			index[subtestID] = at
 			out.Subtests = append(out.Subtests, model.PrintSubtest{Name: name, DurationSeconds: duration})
 		}
-		if content == nil {
+		if content == nil || kind == nil {
 			continue
 		}
 		var labels []string
 		if err := json.Unmarshal(rawOptions, &labels); err != nil {
 			return model.PrintTryout{}, fmt.Errorf("decode print options: %w", err)
 		}
-		out.Subtests[at].Questions = append(out.Subtests[at].Questions, model.PrintQuestion{Content: *content, Options: labels})
+		out.Subtests[at].Questions = append(out.Subtests[at].Questions, model.PrintQuestion{Type: *kind, Content: *content, Options: labels})
 	}
 	if err := rows.Err(); err != nil {
 		return model.PrintTryout{}, fmt.Errorf("read print questions: %w", err)

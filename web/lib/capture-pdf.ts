@@ -1,14 +1,20 @@
 import { toJpeg } from "html-to-image";
 
 const A4_WIDTH_PT = 595.28;
+const A4_HEIGHT_PT = 841.89;
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
-/** A one-page PDF whose page is the image: A4 wide, as tall as the image needs. */
-function singleImagePdf(jpeg: Uint8Array, imgW: number, imgH: number): Blob {
-  const pageW = A4_WIDTH_PT;
-  const pageH = Math.round(pageW * (imgH / imgW) * 100) / 100;
-  const content = `q ${pageW} 0 0 ${pageH} 0 0 cm /Im0 Do Q`;
+interface PdfPage {
+  jpeg: Uint8Array;
+  imgW: number;
+  imgH: number;
+  pageW: number;
+  pageH: number;
+}
+
+/** A PDF with one page per image; each page is exactly the size it is given and the image fills it. */
+function imagePdf(pages: PdfPage[]): Blob {
   const parts: Uint8Array[] = [];
   const offsets: number[] = [];
   let size = 0;
@@ -28,28 +34,56 @@ function singleImagePdf(jpeg: Uint8Array, imgW: number, imgH: number): Blob {
   };
   push(bytes("%PDF-1.4\n"));
   object(1, "<< /Type /Catalog /Pages 2 0 R >>");
-  object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>");
-  object(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>`);
-  object(4, `<< /Length ${content.length} >>`, bytes(content));
-  object(5, `<< /Type /XObject /Subtype /Image /Width ${imgW} /Height ${imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>`, jpeg);
+  object(2, `<< /Type /Pages /Kids [${pages.map((_, i) => `${3 + i * 3} 0 R`).join(" ")}] /Count ${pages.length} >>`);
+  pages.forEach(({ jpeg, imgW, imgH, pageW, pageH }, i) => {
+    const page = 3 + i * 3;
+    const content = `q ${pageW} 0 0 ${pageH} 0 0 cm /Im0 Do Q`;
+    object(page, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Contents ${page + 1} 0 R /Resources << /XObject << /Im0 ${page + 2} 0 R >> >> >>`);
+    object(page + 1, `<< /Length ${content.length} >>`, bytes(content));
+    object(page + 2, `<< /Type /XObject /Subtype /Image /Width ${imgW} /Height ${imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>`, jpeg);
+  });
+  const count = 3 + pages.length * 3;
   const xref = size;
-  push(bytes(`xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`));
+  push(bytes(`xref\n0 ${count}\n0000000000 65535 f \n${offsets.slice(1).map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}trailer\n<< /Size ${count} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`));
   return new Blob(parts as BlobPart[], { type: "application/pdf" });
 }
 
-/** Renders the node to one PDF page exactly as it looks and saves it; `background` fills what the node leaves transparent. */
-export async function savePageAsPdf(node: HTMLElement, fileName: string, background: string) {
-  const pixelRatio = 2;
-  const dataUrl = await toJpeg(node, { quality: 0.95, pixelRatio, backgroundColor: background, cacheBust: true });
+async function captureJpeg(node: HTMLElement, background: string) {
+  const dataUrl = await toJpeg(node, { quality: 0.95, pixelRatio: 2, backgroundColor: background, cacheBust: true });
   const jpeg = new Uint8Array(await (await fetch(dataUrl)).arrayBuffer());
   const bitmap = await createImageBitmap(new Blob([jpeg as BlobPart], { type: "image/jpeg" }));
   const { width, height } = bitmap;
   bitmap.close();
-  const blob = singleImagePdf(jpeg, width, height);
+  return { jpeg, imgW: width, imgH: height };
+}
+
+function download(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Renders the node to one PDF page exactly as it looks and saves it; `background` fills what the node leaves transparent. */
+export async function savePageAsPdf(node: HTMLElement, fileName: string, background: string) {
+  const shot = await captureJpeg(node, background);
+  const pageW = A4_WIDTH_PT;
+  const pageH = Math.round(pageW * (shot.imgH / shot.imgW) * 100) / 100;
+  download(imagePdf([{ ...shot, pageW, pageH }]), fileName);
+}
+
+/**
+ * Captures each element as one A4 portrait page of a single PDF, one after the other so only one bitmap is alive at
+ * a time. `onProgress` gets the 1-based page about to be captured and the total.
+ */
+export async function savePagesAsPdf(pages: HTMLElement[], fileName: string, background: string, onProgress?: (page: number, total: number) => void) {
+  await document.fonts.ready;
+  const shots: PdfPage[] = [];
+  for (const [i, node] of pages.entries()) {
+    onProgress?.(i + 1, pages.length);
+    shots.push({ ...(await captureJpeg(node, background)), pageW: A4_WIDTH_PT, pageH: A4_HEIGHT_PT });
+  }
+  download(imagePdf(shots), fileName);
 }

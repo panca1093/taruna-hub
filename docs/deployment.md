@@ -9,7 +9,7 @@ browser ──https──▶ Cloudflare ──https + client cert──▶ Caddy
                                                                     ├─ tarunaedu.com/*      → web:3000
                                                                     ├─ www.tarunaedu.com    → redirect
                                                                     └─ files.tarunaedu.com  → rustfs:9000
-postgres, redis, rustfs, gotenberg, worker: compose network only, no published ports
+postgres, redis, rustfs, worker: compose network only, no published ports
 ```
 
 The repository is public: never commit the VPS IP, SSH user or app path. GitHub holds no server

@@ -91,7 +91,7 @@ func TestResultExportEndpoint(t *testing.T) {
 	for name, body := range map[string]any{
 		"bad format":     map[string]any{"format": "pdf"},
 		"missing format": map[string]any{},
-		"unknown field":  map[string]any{"format": "csv", "kind": "tryout_pdf"},
+		"unknown field":  map[string]any{"format": "csv", "kind": "tryout_results_xlsx"},
 		"bad uuid":       map[string]any{"format": "csv", "tryout_id": "nope"},
 	} {
 		if rec := f.call(http.MethodPost, path, body, f.tokenAdminA); rec.Code != http.StatusUnprocessableEntity {

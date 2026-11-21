@@ -661,28 +661,28 @@ For every slice, use this verification loop:
 
 <a id="p20"></a>
 
-### P20 — Asynchronous tryout PDF
+### P20 — Tryout PDF
 
-**Status:** done, lean — shared `exports` jobs (migration 000023, queue `exports`, 60-second re-authorized download links; [docs/exports.md](../docs/exports.md)) and `POST /tryouts/{id}/pdf-exports` rendered by a Gotenberg 8.34 sidecar with file-only Chromium, embedded KaTeX and inlined images ([docs/tryout-pdf.md](../docs/tryout-pdf.md)); builder "Unduh PDF" action plus export status, driven browser → API → worker → PostgreSQL/MinIO on 2026-11-08. Open: a real worker-process restart and observed email delivery (see boxes). Student and kecermatan PDFs stay out (D11) · **Size:** M · **Depends:** P02, P06, P08
+**Status:** done, lean — shared `exports` jobs (migration 000023, queue `exports`, 60-second re-authorized download links; [docs/exports.md](../docs/exports.md)) now carry the P21 result exports only. The tryout PDF was first built server-side with Gotenberg (2026-11-08) and **replaced on 2026-11-21** by an owner decision: the admin's browser lays out answer-free content from `GET /tryouts/{id}/print` as A4 pages and captures them into one PDF ([docs/tryout-pdf.md](../docs/tryout-pdf.md); FR-ADM-TRY-12 superseded, see RECONCILIATION §2); migration 000029 drops the `tryout_pdf` export kind. The browser check of the new flow is pending (main session). Student and kecermatan PDFs stay out (D11) · **Size:** M · **Depends:** P02, P06, P08
 
 **Outcome:** Authorized staff download a printable tryout with rendered math/images and no answers.
 
-**DB / backend / integration:** question_exports, durable render job, original assigned revision/order, bounded renderer, private artifact/status/ready notification.
+**DB / backend / integration:** staff-only answer-free print read (frozen versions, stored order); no render job, artifact or notification since 2026-11-21.
 
-**Files / frontend:** PDF worker/artifact services/migrations; web tryout builder/list export control and job status/download.
+**Files / frontend:** `web/components/admin/tryout-print.tsx` (A4 layout and pagination), `web/lib/capture-pdf.ts`, tryout builder "Unduh PDF" with progress/error/retry.
 
-**Interfaces:** Produces admin/operator-only PDF artifacts, isolated by tenant and original definition revision.
+**Interfaces:** Admin/operator-only print read isolated by tenant; the PDF is built in the requesting browser and never stored.
 
 **Acceptance scenarios:**
 
-- [x] PDF has title, subtest name/duration, numbering, original option order, images/math and school/date footer.
-  - 2026-11-08: the Tryout UTBK SMA PDF from the builder has the title, both subtests with durations, per-subtest numbering, options in stored order, typeset math and a "Taruna Eduka · date · Halaman n / 2" footer; a 7-page fixture with an inlined image renders legibly (`gotenberg_smoke_test.go`).
-- [x] Inspect render input and output: no keys/explanations; shuffle settings do not change PDF order.
-  - `TestTryoutPDFWorkerRendersStoredOrderWithoutKeys` (both randomize flags on; explanations, points and key ids absent from every file sent to Gotenberg); the demo PDF keeps stored order where the exam had shuffled it, and `pdftotext` finds none of the review explanations.
-- [ ] Worker restart completes/retries one artifact without cross-tenant download or arbitrary URL/file fetch.
-  - A re-delivered job on a ready export is a no-op, a converter 500 retries then fails visibly, another tenant's tryout fails without rendering, download links 404 across tenants, and Chromium blocked `http://` and `file:///etc/passwd` fetches. Open: no real worker process was killed mid-render.
-- [ ] Multi-page math/image fixture renders legibly; failure is visible; ready notification arrives.
-  - Multi-page render and visible `renderer_unavailable` failure are proven; the `export-ready` email is queued once per export (three rows in the demo), but local SMTP is unconfigured so delivery was not observed.
+- [ ] PDF has title, subtest name/duration, numbering, original option order, images/math and school/date footer.
+  - Browser check pending by main session (layout, fonts, KaTeX, footer "Halaman n / N"). `GET /tryouts/{id}/print` returns stored order with frozen option labels (`TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree`).
+- [ ] Inspect render input and output: no keys/explanations; shuffle settings do not change PDF order.
+  - Input proven: the print read selects type, stem and option labels only, and the test asserts no `correct`, `explanation`, `points` or option ids in the body. Output inspection pending by main session.
+- [x] Print read is staff-only and tenant-scoped.
+  - Student `403`, anonymous `401`, other tenant's or unknown id `404` (`TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree`).
+- [ ] Multi-page math/image fixture paginates legibly (no question split, no lone subtest heading); failure is visible with retry.
+  - Browser check pending by main session. The worker-restart and ready-notification scenarios no longer apply (no job).
 
 **Decision / verification gate:** D11 scope/copy alignment. Student and kecermatan PDFs remain unapproved post-MVP/open requests.
 
