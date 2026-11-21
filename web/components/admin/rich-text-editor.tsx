@@ -64,7 +64,8 @@ export function RichTextField({
   const editor = useEditor({
     immediatelyRender: false,
     extensions,
-    content: value,
+    // A doc with no blocks has nowhere to put the cursor, so an empty value starts as Tiptap's own empty paragraph.
+    content: value.content.length > 0 ? value : undefined,
     editorProps: {
       attributes: { class: cn("rich-text px-3.5 py-3 outline-none", SIZE_CLASS[size]), "aria-label": ariaLabel ?? label, role: "textbox", "aria-multiline": "true" },
     },
