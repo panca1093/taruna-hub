@@ -124,7 +124,7 @@ export default function MonitoringPage() {
       header: t.colStudent,
       render: (s) => (
         <div className="flex items-center gap-2.5">
-          <GradientAvatar user={{ name: s.student_name }} size="sm" />
+          <GradientAvatar user={{ name: s.student_name, avatar: s.student_avatar }} size="sm" />
           <div className="min-w-0">
             <p className="font-medium text-foreground">{s.student_name}</p>
             <p className="text-label text-muted">{s.tryout_title}</p>

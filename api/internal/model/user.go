@@ -86,6 +86,14 @@ func AgeAt(birthDate, now time.Time) int {
 	return age
 }
 
+// ShownAvatar is the avatar to show for a user: the pick, or the automatic one when there is none.
+func ShownAvatar(id uuid.UUID, key, gender *string, birthDate *time.Time) string {
+	if key != nil {
+		return *key
+	}
+	return DefaultAvatarKey(id, gender, birthDate, time.Now())
+}
+
 // ValidAvatarKey reports whether key names one of the thirty-five built-in avatars, a01 to a35.
 func ValidAvatarKey(key string) bool {
 	if len(key) != 3 || key[0] != 'a' || key[1] < '0' || key[1] > '3' || key[2] < '0' || key[2] > '9' {

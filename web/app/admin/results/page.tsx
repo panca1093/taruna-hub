@@ -258,7 +258,7 @@ export default function ResultsPage() {
             {board.entries.map((row) => (
               <div key={row.user_id} className="flex items-center gap-3 rounded-tile border border-border bg-surface px-4 py-3 text-small">
                 <span className="w-6 shrink-0 text-center font-mono text-label font-semibold text-muted">{row.rank}</span>
-                <GradientAvatar user={{ name: row.student_name }} size="sm" />
+                <GradientAvatar user={{ name: row.student_name, avatar: row.student_avatar }} size="sm" />
                 <span className="min-w-0 flex-1 truncate font-medium text-foreground">{row.student_name}</span>
                 <span className="text-label text-muted">{t.attemptCount(row.attempts_counted)}</span>
                 <span className="font-mono font-semibold text-foreground">{row.average_score}</span>

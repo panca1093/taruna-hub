@@ -28,6 +28,9 @@ type ActiveSession struct {
 	SessionID      uuid.UUID
 	UserID         uuid.UUID
 	StudentName    string
+	AvatarKey      *string
+	Gender         *string
+	BirthDate      *time.Time
 	TryoutID       uuid.UUID
 	TryoutTitle    string
 	AttemptNumber  int

@@ -24,10 +24,10 @@ const TOPUP_ROWS = 2;
 type Block<T> = { data: T | null; failed: boolean; syncedAt: Date | null };
 const idle = { data: null, failed: false, syncedAt: null };
 
-function QueueRow({ name, kind, tone, title, lines, href, action }: { name: string; kind: string; tone: "warning" | "success"; title: string; lines: string[]; href: string; action: string }) {
+function QueueRow({ name, avatar, kind, tone, title, lines, href, action }: { name: string; avatar: string; kind: string; tone: "warning" | "success"; title: string; lines: string[]; href: string; action: string }) {
   return (
     <li className="flex items-start gap-3 border-t border-border py-4 first:border-t-0 first:pt-0">
-      <GradientAvatar user={{ name }} size="sm" />
+      <GradientAvatar user={{ name, avatar }} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-small font-medium text-foreground">{title}</p>
@@ -165,7 +165,7 @@ export default function AdminDashboardPage() {
                     <tr key={s.session_id} className="border-b border-border last:border-b-0">
                       <td className="px-6 py-4 sm:px-7">
                         <div className="flex items-center gap-2.5">
-                          <GradientAvatar user={{ name: s.student_name }} size="sm" />
+                          <GradientAvatar user={{ name: s.student_name, avatar: s.student_avatar }} size="sm" />
                           <div className="min-w-0">
                             <p className="truncate font-medium text-foreground">{s.student_name}</p>
                             <p className="truncate text-label text-muted">{s.tryout_title}</p>
@@ -208,12 +208,12 @@ export default function AdminDashboardPage() {
             <ul>
               {orders.failed && <li className="py-3 text-label text-warning">{orders.data ? t.syncStale : t.queueOrdersError}</li>}
               {pendingOrders.map((o) => (
-                <QueueRow key={o.id} name={o.student_name} kind={t.queueKindOrder} tone="warning" title={o.student_name} lines={[o.product_title, formatIDR(o.price)]} href="/admin/orders" action={t.queueOrderAction} />
+                <QueueRow key={o.id} name={o.student_name} avatar={o.student_avatar} kind={t.queueKindOrder} tone="warning" title={o.student_name} lines={[o.product_title, formatIDR(o.price)]} href="/admin/orders" action={t.queueOrderAction} />
               ))}
               {orderRest > 0 && <li className="border-t border-border py-3 text-label text-muted">{t.queueOrderMore(orderRest)}</li>}
               {topups.failed && <li className="border-t border-border py-3 text-label text-warning first:border-t-0">{topups.data ? t.syncStale : t.queueTopupsError}</li>}
               {pendingTopups.map((p) => (
-                <QueueRow key={p.id} name={p.student_name} kind={t.queueKindTopup} tone="success" title={t.topupItem(p.student_name)} lines={[formatIDR(p.amount)]} href="/admin/topups" action={t.queueTopupAction} />
+                <QueueRow key={p.id} name={p.student_name} avatar={p.student_avatar} kind={t.queueKindTopup} tone="success" title={t.topupItem(p.student_name)} lines={[formatIDR(p.amount)]} href="/admin/topups" action={t.queueTopupAction} />
               ))}
               {topupRest > 0 && <li className="border-t border-border py-3 text-label text-muted">{t.queueTopupMore(topupRest)}</li>}
             </ul>
