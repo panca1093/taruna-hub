@@ -72,6 +72,7 @@ func TestResultEndpointsRoles(t *testing.T) {
 	staffRoutes := map[string]string{
 		"results":     "/api/v1/admin/results",
 		"leaderboard": "/api/v1/admin/tryouts/" + f.tryout.ID.String() + "/leaderboard",
+		"student":     studentResultsPath(f.studentA.ID, f.tryout.ID),
 	}
 	for name, path := range staffRoutes {
 		if rec := f.call(http.MethodGet, path, nil, ""); rec.Code != http.StatusUnauthorized {
@@ -162,12 +163,93 @@ func TestResultRawResponsesHideTheKeyUntilRelease(t *testing.T) {
 		t.Error("result after release must say explanations are released")
 	}
 
-	staff := decodeInto[staffResultListResponse](t, f.call(http.MethodGet, "/api/v1/admin/results?tryout_id="+f.tryout.ID.String(), nil, f.tokenOperatorA))
-	if staff.Total != 1 || staff.Results[0].Rank != 1 || staff.Results[0].IRTWarning || len(staff.Results[0].Subtests) != 2 {
+	staff := decodeInto[staffResultStudentListResponse](t, f.call(http.MethodGet, "/api/v1/admin/results?tryout_id="+f.tryout.ID.String(), nil, f.tokenOperatorA))
+	if staff.Total != 1 || staff.Results[0].Rank != 1 || staff.Results[0].IRTWarning || staff.Results[0].AttemptsCompleted != 1 {
 		t.Errorf("staff results = %+v, want one rank 1 row without an IRT warning (weighted tryout)", staff)
 	}
 	board := decodeInto[leaderboardResponse](t, f.call(http.MethodGet, "/api/v1/admin/tryouts/"+f.tryout.ID.String()+"/leaderboard", nil, f.tokenAdminA))
 	if board.Total != 1 || board.Entries[0].Rank != 1 || board.Entries[0].AverageScore != 50 {
 		t.Errorf("leaderboard = %+v, want one entry averaging 50", board)
+	}
+}
+
+func studentResultsPath(student, tryout uuid.UUID) string {
+	return "/api/v1/admin/results/students/" + student.String() + "/tryouts/" + tryout.String()
+}
+
+func TestStaffStudentResultsOverHTTP(t *testing.T) {
+	f := newRuntimeHTTPFixture(t)
+	f.enroll(t, f.studentA)
+	f.enroll(t, f.secondStudent)
+	first := f.completeAttempt(t, f.tokenA)
+	second := f.completeAttempt(t, f.tokenA)
+
+	list := decodeInto[staffResultStudentListResponse](t, f.call(http.MethodGet, "/api/v1/admin/results?tryout_id="+f.tryout.ID.String(), nil, f.tokenOperatorA))
+	if list.Total != 1 || len(list.Results) != 1 {
+		t.Fatalf("list = %+v, want one student row for two attempts and an idle second student absent", list)
+	}
+	row := list.Results[0]
+	if row.StudentID != f.studentA.ID || row.TryoutID != f.tryout.ID || row.AttemptsCompleted != 2 || row.LatestScore != 50 ||
+		row.AverageScore != 50 || row.Rank != 1 || row.ParticipantCount != 1 || row.ScoringMode != "weighted" || row.IRTWarning ||
+		row.StudentName == "" || row.TryoutTitle == "" || row.ProgramCode == "" || !strings.HasPrefix(row.StudentAvatar, "a") {
+		t.Errorf("row = %+v, want the grouped row of the student", row)
+	}
+	raw := f.call(http.MethodGet, "/api/v1/admin/results", nil, f.tokenAdminA).Body.String()
+	for _, key := range []string{"student_avatar", "last_completed_at", "attempts_completed", "latest_score"} {
+		if !strings.Contains(raw, `"`+key+`"`) {
+			t.Errorf("list body lacks %q: %s", key, raw)
+		}
+	}
+	for _, key := range []string{"session_id", "subtests", "user_id"} {
+		if strings.Contains(raw, `"`+key+`"`) {
+			t.Errorf("list body still carries per-attempt key %q: %s", key, raw)
+		}
+	}
+
+	path := studentResultsPath(f.studentA.ID, f.tryout.ID)
+	detail := decodeInto[staffResultStudentDetailResponse](t, f.call(http.MethodGet, path, nil, f.tokenOperatorA))
+	if detail.Student.ID != f.studentA.ID || detail.Student.Name == "" || !strings.HasPrefix(detail.Student.Avatar, "a") ||
+		detail.Tryout.ID != f.tryout.ID || detail.Tryout.ProgramName == "" || detail.Tryout.ProgramCode == "" || detail.Tryout.ScoringMode != "weighted" {
+		t.Errorf("detail head = %+v", detail)
+	}
+	own := decodeInto[resultDetailResponse](t, f.call(http.MethodGet, sessionPath(second, "/result"), nil, f.tokenA))
+	if detail.Ranking != own.Ranking || detail.Ranking.AttemptsCounted != 2 {
+		t.Errorf("ranking = %+v, student's own = %+v, want the same", detail.Ranking, own.Ranking)
+	}
+	if len(detail.Attempts) != 2 || detail.Attempts[0].SessionID != second || detail.Attempts[1].SessionID != first ||
+		detail.Attempts[0].AttemptNumber != 2 || len(detail.Attempts[0].Subtests) != 2 || detail.Attempts[0].Score != 50 {
+		t.Errorf("attempts = %+v, want two newest first with two subtests each", detail.Attempts)
+	}
+	if s := detail.Attempts[0].Subtests[0]; s.Name != "Subtes 1" || s.Position != 1 || s.Score != 100 || s.CorrectCount != 1 || s.QuestionCount != 1 {
+		t.Errorf("first subtest = %+v, want 100 with 1 of 1 correct", s)
+	}
+
+	for name, c := range map[string]struct {
+		path, token string
+		want        int
+	}{
+		"anonymous":           {path, "", http.StatusUnauthorized},
+		"student":             {path, f.tokenA, http.StatusForbidden},
+		"another tenant":      {path, f.tokenAdmB, http.StatusUnauthorized},
+		"unknown student":     {studentResultsPath(uuid.New(), f.tryout.ID), f.tokenAdminA, http.StatusNotFound},
+		"unknown tryout":      {studentResultsPath(f.studentA.ID, uuid.New()), f.tokenAdminA, http.StatusNotFound},
+		"no completed result": {studentResultsPath(f.secondStudent.ID, f.tryout.ID), f.tokenAdminA, http.StatusNotFound},
+		"malformed student":   {"/api/v1/admin/results/students/nope/tryouts/" + f.tryout.ID.String(), f.tokenAdminA, http.StatusNotFound},
+		"malformed tryout":    {"/api/v1/admin/results/students/" + f.studentA.ID.String() + "/tryouts/nope", f.tokenAdminA, http.StatusNotFound},
+	} {
+		if rec := f.call(http.MethodGet, c.path, nil, c.token); rec.Code != c.want {
+			t.Errorf("%s: status = %d %s, want %d", name, rec.Code, rec.Body.String(), c.want)
+		}
+	}
+
+	for q, want := range map[string]int{"WALLET": 1, "zzz": 0, "%25": 0} {
+		got := decodeInto[staffResultStudentListResponse](t, f.call(http.MethodGet, "/api/v1/admin/results?q="+q, nil, f.tokenAdminA))
+		if len(got.Results) != want || got.Total != want {
+			t.Errorf("q=%s = %d of %d rows, want %d", q, len(got.Results), got.Total, want)
+		}
+	}
+	long := f.call(http.MethodGet, "/api/v1/admin/results?q="+strings.Repeat("x", 101), nil, f.tokenAdminA)
+	if long.Code != http.StatusUnprocessableEntity || errorBody(t, long).Fields["q"] == "" {
+		t.Errorf("101-character q = %d %s, want 422 with a q field error", long.Code, long.Body.String())
 	}
 }
