@@ -435,8 +435,8 @@ export default function QuestionsPage() {
           size="xl"
           footer={
             <div className="flex w-full items-center gap-2">
-              <Button variant="secondary" className="mr-auto" onPress={() => setDraftPreview(latestDraft.current)}>
-                <Eye className="size-4" /> {t.previewDraft}
+              <Button variant="secondary" className="mr-auto" aria-label={t.previewDraft} onPress={() => setDraftPreview(latestDraft.current)}>
+                <Eye className="size-4" /> <span className="hidden sm:inline">{t.previewDraft}</span>
               </Button>
               <Button variant="ghost" onPress={() => setEditorOpen(false)}>
                 {t.cancel}
