@@ -6,7 +6,8 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import { SolidShape } from "@/components/solid-shape";
 import { api } from "@/lib/api/client";
-import { SHAPE_KINDS, type ShapeKind } from "@/lib/rich-doc";
+import { KATEX_OPTIONS, SHAPE_KINDS, type ShapeKind } from "@/lib/rich-doc";
+import { useRichDocT } from "@/lib/i18n/dict/rich-doc";
 import { useAdminRichTextEditorT } from "@/lib/i18n/dict/admin-rich-text-editor";
 import { useRichTextGroup } from "./group";
 
@@ -21,18 +22,19 @@ const MathView = ({ node, getPos }: ReactNodeViewProps) => {
           const pos = getPos();
           if (pos !== undefined) group.openPopover("math", { pos, latex });
         }}
-        dangerouslySetInnerHTML={{ __html: katex.renderToString(latex, { throwOnError: false }) }}
+        dangerouslySetInnerHTML={{ __html: katex.renderToString(latex, KATEX_OPTIONS) }}
       />
     </NodeViewWrapper>
   );
 };
 
 const ShapeView = ({ node }: ReactNodeViewProps) => {
+  const t = useRichDocT();
   const kind = SHAPE_KINDS.includes(node.attrs.kind) ? (node.attrs.kind as ShapeKind) : SHAPE_KINDS[0];
   const caption = String(node.attrs.caption ?? "");
   return (
     <NodeViewWrapper as="figure" className="rich-shape" data-drag-handle="">
-      <SolidShape kind={kind} />
+      <SolidShape kind={kind} label={caption || t.shapes[kind]} />
       {caption && <figcaption>{caption}</figcaption>}
     </NodeViewWrapper>
   );

@@ -17,7 +17,7 @@ interface Group {
   activate: (editor: Editor, label: string) => void;
   release: (editor: Editor) => void;
   openPopover: (kind: PopoverKind, math?: MathEdit) => void;
-  closePopover: () => void;
+  closePopover: (kind?: PopoverKind) => void;
 }
 
 const GroupContext = createContext<Group | null>(null);
@@ -28,9 +28,13 @@ export function RichTextGroup({ children }: { children: ReactNode }) {
   const [popover, setPopover] = useState<Group["popover"]>(null);
 
   const activate = useCallback((editor: Editor, label: string) => setFocus({ editor, label }), []);
-  const release = useCallback((editor: Editor) => setFocus((f) => (f?.editor === editor ? null : f)), []);
+  const release = useCallback((editor: Editor) => {
+    setFocus((f) => (f?.editor === editor ? null : f));
+    setPopover(null);
+  }, []);
   const openPopover = useCallback((kind: PopoverKind, math?: MathEdit) => setPopover({ kind, math }), []);
-  const closePopover = useCallback(() => setPopover(null), []);
+  // A late close from a popover that is no longer the open one (an upload finishing) must not close its successor.
+  const closePopover = useCallback((kind?: PopoverKind) => setPopover((p) => (kind === undefined || p?.kind === kind ? null : p)), []);
 
   const value = useMemo<Group>(
     () => ({ active: focus?.editor ?? null, label: focus?.label ?? "", popover, activate, release, openPopover, closePopover }),

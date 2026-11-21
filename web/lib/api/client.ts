@@ -659,6 +659,8 @@ export const api = {
     uploadProof: (file: File) => uploadAsset(file, "payment_proof"),
     uploadQuestionImage: (file: File) => uploadAsset(file, "question_image"),
     url: (id: string) => authed<AssetLink>(`/api/v1/assets/${id}/url` as keyof paths),
+    /** The raw bytes, for the browser PDF: the storage bucket has no CORS, so the presigned link cannot be fetched. */
+    content: (id: string) => authedBlob(`/api/v1/assets/${id}/content` as keyof paths),
   },
 
   exports: {

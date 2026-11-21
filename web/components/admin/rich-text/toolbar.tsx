@@ -18,7 +18,16 @@ import {
 import { SolidShape } from "@/components/solid-shape";
 import { api, errorText } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
-import { SHAPE_KINDS, type ShapeKind } from "@/lib/rich-doc";
+import {
+  KATEX_OPTIONS,
+  MAX_FORMULA_LENGTH,
+  MAX_IMAGE_ALT,
+  MAX_SHAPE_CAPTION,
+  MAX_TABLE_COLS,
+  MAX_TABLE_ROWS,
+  SHAPE_KINDS,
+  type ShapeKind,
+} from "@/lib/rich-doc";
 import { useAdminRichTextEditorT } from "@/lib/i18n/dict/admin-rich-text-editor";
 import { useRichTextGroup, type MathEdit, type PopoverKind } from "./group";
 
@@ -29,10 +38,10 @@ const TABLE_COLS = 6;
 
 const toolClass = (pressed = false, danger = false) =>
   cn(
-    "inline-flex h-8.5 min-w-8.5 items-center justify-center gap-1.5 rounded-chip px-2 text-label font-medium whitespace-nowrap transition-colors outline-none",
-    "focus-visible:outline-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-35",
-    pressed ? "bg-accent-soft text-accent" : "text-foreground hover:bg-surface-tertiary",
-    danger && "hover:text-danger",
+    "inline-flex h-8.5 min-w-8 items-center justify-center gap-1 rounded-chip px-1.5 text-label font-medium whitespace-nowrap transition-colors outline-none",
+    "focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-35",
+    pressed ? "bg-accent-soft text-accent" : "text-foreground enabled:hover:bg-surface-tertiary",
+    danger && "enabled:hover:text-danger",
   );
 
 const keepSelection = (e: React.MouseEvent) => e.preventDefault();
@@ -42,13 +51,17 @@ function ToolButton({
   pressed,
   disabled,
   danger,
+  hint,
+  title,
   onPress,
   children,
 }: {
+  title?: string;
   label: string;
   pressed?: boolean;
   disabled?: boolean;
   danger?: boolean;
+  hint?: string;
   onPress: () => void;
   children: ReactNode;
 }) {
@@ -58,6 +71,7 @@ function ToolButton({
       aria-label={label}
       aria-pressed={pressed}
       disabled={disabled}
+      title={disabled && hint ? hint : title}
       className={toolClass(pressed, danger)}
       onMouseDown={keepSelection}
       onClick={onPress}
@@ -67,13 +81,14 @@ function ToolButton({
   );
 }
 
-const Divider = () => <span aria-hidden="true" className="mx-1 h-4.5 w-px bg-border" />;
+const Divider = () => <span aria-hidden="true" className="mx-0.5 h-4.5 w-px bg-border" />;
 
 function PopoverButton({
   kind,
   icon: Icon,
   label,
   disabled,
+  hint,
   title,
   children,
 }: {
@@ -81,16 +96,26 @@ function PopoverButton({
   icon: LucideIcon;
   label: string;
   disabled: boolean;
+  hint?: string;
   title: string;
   children: (editor: Editor, close: () => void) => ReactNode;
 }) {
   const group = useRichTextGroup();
-  const open = group.popover?.kind === kind;
+  const open = group.popover?.kind === kind && !!group.active && !disabled;
+  const close = () => group.closePopover(kind);
   return (
-    <Popover isOpen={open && !!group.active} onOpenChange={(next) => (next && group.active ? group.openPopover(kind) : group.closePopover())}>
+    <Popover isOpen={open} onOpenChange={(next) => (next && group.active ? group.openPopover(kind) : close())}>
       <Popover.Trigger<"button">
         render={(props) => (
-          <button {...props} type="button" disabled={disabled} aria-expanded={open} aria-haspopup="dialog" className={toolClass(open)} />
+          <button
+            {...props}
+            type="button"
+            disabled={disabled}
+            title={disabled && hint ? hint : undefined}
+            aria-expanded={open}
+            aria-haspopup="dialog"
+            className={toolClass(open)}
+          />
         )}
       >
         <Icon className="size-4" />
@@ -98,7 +123,7 @@ function PopoverButton({
       </Popover.Trigger>
       <Popover.Content placement="bottom start" className="max-w-popover">
         <Popover.Dialog className="flex w-80 max-w-full flex-col gap-3 p-3.5 outline-none" aria-label={title}>
-          {group.active && children(group.active, group.closePopover)}
+          {group.active && children(group.active, close)}
         </Popover.Dialog>
       </Popover.Content>
     </Popover>
@@ -126,7 +151,7 @@ function MathBody({ editor, edit, onDone }: { editor: Editor; edit?: MathEdit; o
   const [latex, setLatex] = useState(edit?.latex ?? "");
   const input = useRef<HTMLInputElement>(null);
   const trimmed = latex.trim();
-  const preview = useMemo(() => (trimmed ? katex.renderToString(trimmed, { throwOnError: false }) : ""), [trimmed]);
+  const preview = useMemo(() => (trimmed ? katex.renderToString(trimmed, KATEX_OPTIONS) : ""), [trimmed]);
 
   const addChip = (value: string) => {
     const el = input.current;
@@ -175,6 +200,7 @@ function MathBody({ editor, edit, onDone }: { editor: Editor; edit?: MathEdit; o
           autoFocus
           fullWidth
           autoComplete="off"
+          maxLength={MAX_FORMULA_LENGTH}
           value={latex}
           placeholder={t.mathInputPlaceholder}
           onChange={(e) => setLatex(e.target.value)}
@@ -246,7 +272,7 @@ function ImageBody({ editor, onDone }: { editor: Editor; onDone: () => void }) {
     setState({ status: "uploading" });
     try {
       const asset = await api.assets.uploadQuestionImage(file);
-      if (!editor.isDestroyed) editor.chain().focus().insertContent({ type: "image", attrs: { asset_id: asset.id, alt: file.name, src: null } }).run();
+      if (!editor.isDestroyed) editor.chain().focus().insertContent({ type: "image", attrs: { asset_id: asset.id, alt: file.name.replace(/\.[^.]*$/, "").slice(0, MAX_IMAGE_ALT), src: null } }).run();
       onDone();
     } catch (err) {
       setState({ status: "error", message: errorText(err, t.imageUploadFailed) });
@@ -312,6 +338,7 @@ function ShapeBody({ editor, onDone }: { editor: Editor; onDone: () => void }) {
         <Input
           fullWidth
           autoComplete="off"
+          maxLength={MAX_SHAPE_CAPTION}
           value={caption}
           placeholder={t.shapeCaptionPlaceholder}
           onChange={(e) => setCaption(e.target.value)}
@@ -330,6 +357,20 @@ function ShapeBody({ editor, onDone }: { editor: Editor; onDone: () => void }) {
   );
 }
 
+function tableSize(editor: Editor) {
+  const { $from } = editor.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const node = $from.node(depth);
+    if (node.type.name !== "table") continue;
+    let cols = 0;
+    node.forEach((row) => {
+      cols = Math.max(cols, row.childCount);
+    });
+    return { rows: node.childCount, cols };
+  }
+  return { rows: 0, cols: 0 };
+}
+
 export function RichTextToolbar({ className }: { className?: string }) {
   const t = useAdminRichTextEditorT();
   const group = useRichTextGroup();
@@ -346,6 +387,9 @@ export function RichTextToolbar({ className }: { className?: string }) {
             bulletList: editor.isActive("bulletList"),
             orderedList: editor.isActive("orderedList"),
             inTable: editor.isActive("table"),
+            inListItem: editor.isActive("listItem"),
+            tableRows: tableSize(editor).rows,
+            tableCols: tableSize(editor).cols,
             canUndo: editor.can().undo(),
             canRedo: editor.can().redo(),
           }
@@ -356,9 +400,14 @@ export function RichTextToolbar({ className }: { className?: string }) {
     if (active) command(active.chain().focus()).run();
   };
   const off = !active;
+  const noTable = state?.inTable || state?.inListItem;
+  const noBlock = state?.inListItem;
+  const tableHint = state?.inTable ? t.noTableInTableHint : state?.inListItem ? t.noTableInListHint : undefined;
+  const labelClass = "hidden @3xl:inline";
 
   return (
-    <div className={cn("sticky top-0 z-10 rounded-tile border border-border bg-surface shadow-soft", className)}>
+    <div data-rich-toolbar className={cn("sticky -top-0.75 z-10 -mt-0.75 bg-overlay pt-0.75", className)}>
+    <div className="@container rounded-tile border border-border bg-surface shadow-soft">
       <div role="toolbar" aria-label={t.formatToolbar} className="flex flex-wrap items-center gap-0.5 px-2 py-1.5">
         <ToolButton label={t.undo} disabled={off || !state?.canUndo} onPress={run((c) => c.undo())}>
           <Undo2 className="size-4" />
@@ -377,25 +426,25 @@ export function RichTextToolbar({ className }: { className?: string }) {
           <span className="text-small font-semibold underline">U</span>
         </ToolButton>
         <Divider />
-        <ToolButton label={t.bulletList} pressed={state?.bulletList ?? false} disabled={off} onPress={run((c) => c.toggleBulletList())}>
+        <ToolButton label={t.bulletList} title={t.bulletList} pressed={state?.bulletList ?? false} disabled={off} onPress={run((c) => c.toggleBulletList())}>
           <List className="size-4" />
-          {t.bulletList}
+          <span className={labelClass}>{t.bulletList}</span>
         </ToolButton>
-        <ToolButton label={t.numberedList} pressed={state?.orderedList ?? false} disabled={off} onPress={run((c) => c.toggleOrderedList())}>
+        <ToolButton label={t.numberedList} title={t.numberedList} pressed={state?.orderedList ?? false} disabled={off} onPress={run((c) => c.toggleOrderedList())}>
           <ListOrdered className="size-4" />
-          {t.numberedList}
+          <span className={labelClass}>{t.numberedList}</span>
         </ToolButton>
         <Divider />
         <PopoverButton kind="math" icon={Sigma} label={t.math} title={t.mathInsertTitle} disabled={off}>
           {(editor, close) => <MathBody key={group.popover?.math?.pos ?? "new"} editor={editor} edit={group.popover?.math} onDone={close} />}
         </PopoverButton>
-        <PopoverButton kind="table" icon={TableIcon} label={t.table} title={t.tableTitle} disabled={off}>
+        <PopoverButton kind="table" icon={TableIcon} label={t.table} title={t.tableTitle} disabled={off || !!noTable} hint={tableHint}>
           {(editor, close) => <TableBody editor={editor} onDone={close} />}
         </PopoverButton>
-        <PopoverButton kind="image" icon={ImageIcon} label={t.image} title={t.imageTitle} disabled={off}>
+        <PopoverButton kind="image" icon={ImageIcon} label={t.image} title={t.imageTitle} disabled={off || !!noBlock} hint={t.noBlockInListHint}>
           {(editor, close) => <ImageBody editor={editor} onDone={close} />}
         </PopoverButton>
-        <PopoverButton kind="shape" icon={Shapes} label={t.shape} title={t.shapeTitle} disabled={off}>
+        <PopoverButton kind="shape" icon={Shapes} label={t.shape} title={t.shapeTitle} disabled={off || !!noBlock} hint={t.noBlockInListHint}>
           {(editor, close) => <ShapeBody editor={editor} onDone={close} />}
         </PopoverButton>
         <span className="sr-only" aria-live="polite">
@@ -405,10 +454,10 @@ export function RichTextToolbar({ className }: { className?: string }) {
       {state?.inTable && (
         <div role="toolbar" aria-label={t.tableToolbar} className="flex flex-wrap items-center gap-0.5 rounded-b-tile border-t border-border bg-surface-secondary px-2 py-1.5">
           <span className="pr-1.5 pl-1 text-label font-semibold text-foreground">{t.tableLabel}</span>
-          <ToolButton label={t.addRow} onPress={run((c) => c.addRowAfter())}>
+          <ToolButton label={t.addRow} disabled={(state?.tableRows ?? 0) >= MAX_TABLE_ROWS} hint={t.maxRowsHint} onPress={run((c) => c.addRowAfter())}>
             {t.addRow}
           </ToolButton>
-          <ToolButton label={t.addColumn} onPress={run((c) => c.addColumnAfter())}>
+          <ToolButton label={t.addColumn} disabled={(state?.tableCols ?? 0) >= MAX_TABLE_COLS} hint={t.maxColsHint} onPress={run((c) => c.addColumnAfter())}>
             {t.addColumn}
           </ToolButton>
           <Divider />
@@ -423,6 +472,7 @@ export function RichTextToolbar({ className }: { className?: string }) {
           </ToolButton>
         </div>
       )}
+    </div>
     </div>
   );
 }

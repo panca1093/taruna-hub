@@ -196,10 +196,10 @@ function ReviewItem({
 
   const list = (values: string[]) =>
     values.map((value, i) => (
-      <span key={value}>
+      <div key={value} className="inline">
         {i > 0 && ", "}
         <RichDoc doc={optionLabel(value)} className="inline-block align-top" />
-      </span>
+      </div>
     ));
 
   return (
@@ -211,14 +211,14 @@ function ReviewItem({
         <span>{index + 1}.</span>
         <RichDoc doc={q.content} className="min-w-0 flex-1" />
       </div>
-      <p className="mt-3 text-caption leading-loose text-muted">
-        {t.yourAnswerPrefix} <strong className="font-semibold text-foreground">{blank ? t.emptyAnswer : list(q.answer)}</strong>
+      <div className="mt-3 text-caption leading-loose text-muted">
+        {t.yourAnswerPrefix} <div className="inline font-semibold text-foreground">{blank ? t.emptyAnswer : list(q.answer)}</div>
         {points != null && <span className="ml-1">{t.pointsSuffix(points)}</span>}
-      </p>
+      </div>
       {!q.option_weighted && q.correct.length > 0 && (
-        <p className="text-caption leading-loose text-muted">
-          {t.correctAnswerPrefix} <strong className="font-semibold text-foreground">{list(q.correct)}</strong>
-        </p>
+        <div className="text-caption leading-loose text-muted">
+          {t.correctAnswerPrefix} <div className="inline font-semibold text-foreground">{list(q.correct)}</div>
+        </div>
       )}
       <NoteBox className="mt-4">{!isDocEmpty(q.explanation) ? <RichDoc doc={q.explanation!} /> : t.noExplanation}</NoteBox>
     </article>

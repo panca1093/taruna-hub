@@ -54,11 +54,11 @@ const SHAPES: Record<ShapeKind, ReactNode> = {
 };
 
 /** Line drawing of a solid in the current text colour; hidden edges are dashed. */
-export function SolidShape({ kind, className }: { kind: ShapeKind; className?: string }) {
+export function SolidShape({ kind, className, label }: { kind: ShapeKind; className?: string; label?: string }) {
   return (
     <svg
       viewBox="0 0 100 100"
-      aria-hidden="true"
+      {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })}
       className={cn("fill-none stroke-current", className)}
       strokeWidth={2}
       strokeLinejoin="round"

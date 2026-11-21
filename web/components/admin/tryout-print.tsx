@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RichDoc } from "@/components/rich-doc";
+import { api } from "@/lib/api/client";
 import { inlineImages } from "@/lib/capture-pdf";
 import { docFromText, type RichDoc as RichDocValue } from "@/lib/rich-doc";
 
@@ -141,6 +142,8 @@ function BlockView({ block, labels }: { block: Block; labels: TryoutPrintLabels 
   );
 }
 
+const assetBytes = (img: HTMLImageElement) => (img.dataset.assetId && !img.src.startsWith("data:") ? api.assets.content(img.dataset.assetId) : null);
+
 /** Asset images resolve their link after mount; wait until each has loaded or failed (ten seconds at most). */
 async function richImagesSettled(root: HTMLElement) {
   const deadline = Date.now() + 10_000;
@@ -182,7 +185,7 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
       const container = measureRef.current;
       if (!container) return;
       await richImagesSettled(container);
-      await inlineImages(container, imageFailedRef.current);
+      await inlineImages(container, imageFailedRef.current, assetBytes);
       if (cancelled) return;
       const heights = Array.from(container.querySelectorAll<HTMLElement>("[data-block]")).map((el) => el.getBoundingClientRect().height);
       setPages(paginate(heights, keep, BODY_H));
@@ -197,7 +200,7 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
     if (!pages || !root) return;
     let cancelled = false;
     void richImagesSettled(root)
-      .then(() => inlineImages(root, imageFailedRef.current))
+      .then(() => inlineImages(root, imageFailedRef.current, assetBytes))
       .then(() => {
         if (!cancelled) onLaidOutRef.current(Array.from(root.querySelectorAll<HTMLElement>("[data-print-page]")));
       });

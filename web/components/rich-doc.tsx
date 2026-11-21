@@ -6,7 +6,7 @@ import "katex/dist/katex.min.css";
 import { api } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { useRichDocT } from "@/lib/i18n/dict/rich-doc";
-import { SHAPE_KINDS, type RichDoc as RichDocValue, type RichNode, type ShapeKind } from "@/lib/rich-doc";
+import { KATEX_OPTIONS, SHAPE_KINDS, type RichDoc as RichDocValue, type RichNode, type ShapeKind } from "@/lib/rich-doc";
 import { SolidShape } from "@/components/solid-shape";
 
 const isShapeKind = (kind: unknown): kind is ShapeKind => (SHAPE_KINDS as readonly unknown[]).includes(kind);
@@ -41,10 +41,20 @@ function RichImage({ attrs }: { attrs: Record<string, unknown> }) {
     <figure className="rich-image" data-rich-image data-loaded={state}>
       {url && (
         // eslint-disable-next-line @next/next/no-img-element -- a short-lived presigned URL cannot go through the optimizer
-        <img src={url} alt={alt} onLoad={() => setLoaded({ url, ok: true })} onError={() => setLoaded({ url, ok: false })} />
+        <img src={url} alt={alt} data-asset-id={assetId || undefined} onLoad={() => setLoaded({ url, ok: true })} onError={() => setLoaded({ url, ok: false })} />
       )}
       {state === undefined && <span role="status" aria-label={t.imageLoading} className="block h-24 w-full animate-pulse rounded-chip bg-surface-secondary" />}
       {state === "error" && <span role="status">{t.imageFailed}</span>}
+    </figure>
+  );
+}
+
+function RichShape({ kind, caption }: { kind: ShapeKind; caption: string }) {
+  const t = useRichDocT();
+  return (
+    <figure className="rich-shape">
+      <SolidShape kind={kind} label={caption || t.shapes[kind]} />
+      {caption && <figcaption>{caption}</figcaption>}
     </figure>
   );
 }
@@ -105,17 +115,11 @@ function renderNode(node: RichNode, key: number): ReactNode {
       );
     case "math": {
       const latex = typeof attrs.latex === "string" ? attrs.latex : "";
-      return <span key={key} className="rich-math" dangerouslySetInnerHTML={{ __html: katex.renderToString(latex, { throwOnError: false }) }} />;
+      return <span key={key} className="rich-math" dangerouslySetInnerHTML={{ __html: katex.renderToString(latex, KATEX_OPTIONS) }} />;
     }
     case "shape": {
       if (!isShapeKind(attrs.kind)) return null;
-      const caption = typeof attrs.caption === "string" ? attrs.caption : "";
-      return (
-        <figure key={key} className="rich-shape">
-          <SolidShape kind={attrs.kind} />
-          {caption && <figcaption>{caption}</figcaption>}
-        </figure>
-      );
+      return <RichShape key={key} kind={attrs.kind} caption={typeof attrs.caption === "string" ? attrs.caption : ""} />;
     }
     case "image":
       return <RichImage key={key} attrs={attrs} />;

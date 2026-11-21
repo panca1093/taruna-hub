@@ -256,6 +256,15 @@ export default function QuestionsPage() {
     setEditorOpen(true);
   };
 
+  // bodyOf drops empty options, so the server's options[i] counts the kept ones; the form keys errors by draft position.
+  const draftFieldErrors = (draft: QuestionDraft, fields: Record<string, string>) => {
+    if (draft.type === "benar_salah") return fields;
+    const kept = draft.options.flatMap((option, index) => (isDocEmpty(option.label) ? [] : [index]));
+    return Object.fromEntries(
+      Object.entries(fields).map(([key, message]) => [key.replace(/^options\[(\d+)\]/, (_, i: string) => `options[${kept[Number(i)] ?? Number(i)}]`), message]),
+    );
+  };
+
   // The body only names ids the server gave back; a new option's placeholder is resolved server-side.
   const bodyOf = (draft: QuestionDraft) => {
     const options = draft.type === "benar_salah" ? draft.options : draft.options.filter((option) => !isDocEmpty(option.label));
@@ -299,7 +308,7 @@ export default function QuestionsPage() {
         // from the version someone else saved.
         setReloadKey((key) => key + 1);
       } else {
-        if (err instanceof ApiError && err.fields) setFormErrors(err.fields);
+        if (err instanceof ApiError && err.fields) setFormErrors(draftFieldErrors(draft, err.fields));
         toast.danger(t.toastSaveFailed, { description: errorText(err, t.loadErrorDescription) });
       }
     } finally {

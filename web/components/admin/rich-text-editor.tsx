@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import type { EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
-import { TableKit } from "@tiptap/extension-table";
+import { ListItem } from "@tiptap/extension-list";
+import { TableCell, TableHeader, TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
 import { cn } from "@/lib/cn";
 import type { RichDoc } from "@/lib/rich-doc";
@@ -12,6 +14,29 @@ import { useRichTextGroup } from "./rich-text/group";
 
 export { RichTextGroup } from "./rich-text/group";
 export { RichTextToolbar } from "./rich-text/toolbar";
+
+// These content rules are the API's allow-list; the editor schema must not accept what the server rejects.
+const SchemaListItem = ListItem.extend({ content: "paragraph (paragraph | bulletList | orderedList)*" });
+const CELL_CONTENT = "(paragraph | bulletList | orderedList | shape | image)+";
+const SchemaTableCell = TableCell.extend({ content: CELL_CONTENT });
+const SchemaTableHeader = TableHeader.extend({ content: CELL_CONTENT });
+
+/** Scrolls only the nearest scrollable ancestor (the modal body), clear of the sticky toolbar; the page behind never moves. */
+function scrollSelectionIntoView(view: EditorView) {
+  let box: HTMLElement | null = view.dom.parentElement;
+  while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+  if (!box) return false;
+  const caret = view.coordsAtPos(view.state.selection.head);
+  const bounds = box.getBoundingClientRect();
+  const toolbar = box.querySelector<HTMLElement>("[data-rich-toolbar]");
+  const top = bounds.top + (toolbar?.offsetHeight ?? 0) + SCROLL_MARGIN;
+  const bottom = bounds.bottom - SCROLL_MARGIN;
+  if (caret.top < top) box.scrollTop -= top - caret.top;
+  else if (caret.bottom > bottom) box.scrollTop += caret.bottom - bottom;
+  return true;
+}
+
+const SCROLL_MARGIN = 16;
 
 const SIZE_CLASS = { option: "min-h-6", explanation: "min-h-26", content: "min-h-55" } as const;
 
@@ -50,8 +75,12 @@ export function RichTextField({
         code: false,
         strike: false,
         link: false,
+        listItem: false,
       }),
-      TableKit.configure({ table: { resizable: false } }),
+      SchemaListItem,
+      TableKit.configure({ table: { resizable: false }, tableCell: false, tableHeader: false }),
+      SchemaTableCell,
+      SchemaTableHeader,
       MathNode,
       ShapeNode,
       ImageNode,
@@ -67,6 +96,7 @@ export function RichTextField({
     // A doc with no blocks has nowhere to put the cursor, so an empty value starts as Tiptap's own empty paragraph.
     content: value.content.length > 0 ? value : undefined,
     editorProps: {
+      handleScrollToSelection: scrollSelectionIntoView,
       attributes: { class: cn("rich-text px-3.5 py-3 outline-none", SIZE_CLASS[size]), "aria-label": ariaLabel ?? label, role: "textbox", "aria-multiline": "true" },
     },
     onUpdate: ({ editor: instance }) => onChange(instance.getJSON() as RichDoc),

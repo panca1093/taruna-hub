@@ -6,6 +6,15 @@ export type RichNode = components["schemas"]["RichNode"];
 export const SHAPE_KINDS = ["kubus", "balok", "tabung", "kerucut", "bola", "limas", "prisma"] as const;
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
 
+/** Same bounds the API enforces on a formula; keeps a hostile LaTeX string from freezing the page. */
+export const KATEX_OPTIONS = { throwOnError: false, maxSize: 10, maxExpand: 100, strict: "ignore" } as const;
+
+export const MAX_TABLE_ROWS = 30;
+export const MAX_TABLE_COLS = 12;
+export const MAX_IMAGE_ALT = 200;
+export const MAX_SHAPE_CAPTION = 200;
+export const MAX_FORMULA_LENGTH = 2000;
+
 export const emptyDoc = (): RichDoc => ({ type: "doc", content: [] });
 
 export function docFromText(text: string): RichDoc {
