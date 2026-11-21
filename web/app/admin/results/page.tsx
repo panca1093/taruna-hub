@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button, toast } from "@heroui/react";
-import { AlertTriangle, BarChart3, CloudOff, Download, Trophy, TriangleAlert } from "lucide-react";
+import { BarChart3, CloudOff, Download, Trophy, TriangleAlert } from "lucide-react";
 import { ExportStatus } from "@/components/admin/export-status";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
@@ -10,13 +11,15 @@ import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
 import { StatusChip } from "@/components/status-badge";
-import { FormModal } from "@/components/ui/form-modal";
-import { SelectInput } from "@/components/ui/form";
-import { api, errorText, type Leaderboard, type Program, type StaffResult, type TryoutSummary, type ViolationTimeline } from "@/lib/api/client";
+import { SelectInput, TextInput } from "@/components/ui/form";
+import { api, errorText, type Leaderboard, type Program, type StaffResultStudentRow, type TryoutSummary } from "@/lib/api/client";
 import { useResultsT } from "@/lib/i18n/dict/results";
 
 const PAGE_SIZE = 50;
 const BOARD_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 300;
+
+const rowKey = (r: StaffResultStudentRow) => `${r.student_id}:${r.tryout_id}`;
 
 const formatDateTime = (iso: string) =>
   new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(
@@ -31,37 +34,17 @@ export default function ResultsPage() {
   const [programFilter, setProgramFilter] = useState("all");
   const [exportKey, setExportKey] = useState(0);
   const [requesting, setRequesting] = useState<"csv" | "xlsx" | null>(null);
-  const [rows, setRows] = useState<StaffResult[] | null>(null);
+  const router = useRouter();
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [rows, setRows] = useState<StaffResultStudentRow[] | null>(null);
   const [total, setTotal] = useState(0);
   const [board, setBoard] = useState<Leaderboard | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [detail, setDetail] = useState<StaffResult | null>(null);
-  const [violations, setViolations] = useState<ViolationTimeline | null>(null);
-  const [violationsFailed, setViolationsFailed] = useState(false);
-
-  const openDetail = (row: StaffResult) => {
-    setViolations(null);
-    setViolationsFailed(false);
-    setDetail(row);
-  };
-
-  useEffect(() => {
-    if (!detail) return;
-    let cancelled = false;
-    api.monitoring
-      .violations(detail.session_id)
-      .then((loaded) => {
-        if (!cancelled) setViolations(loaded);
-      })
-      .catch(() => {
-        if (!cancelled) setViolationsFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [detail]);
+  const generationRef = useRef(0);
+  const loadingMoreRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,12 +63,26 @@ export default function ResultsPage() {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = searchInput.trim();
+      if (next === search) return;
+      setRows(null);
+      setLoadFailed(false);
+      setSearch(next);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, search]);
+
+  useEffect(() => {
     let cancelled = false;
+    generationRef.current += 1;
     const tryoutId = tryoutFilter === "all" ? undefined : tryoutFilter;
     api.results
-      .list({ tryout_id: tryoutId, program_id: programFilter === "all" ? undefined : programFilter, limit: PAGE_SIZE })
+      .list({ tryout_id: tryoutId, program_id: programFilter === "all" ? undefined : programFilter, q: search || undefined, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
         setRows(page.results);
         setTotal(page.total);
       })
@@ -103,7 +100,7 @@ export default function ResultsPage() {
     return () => {
       cancelled = true;
     };
-  }, [tryoutFilter, programFilter, reloadKey]);
+  }, [tryoutFilter, programFilter, search, reloadKey]);
 
   const retry = () => {
     setRows(null);
@@ -142,36 +139,45 @@ export default function ResultsPage() {
   };
 
   const loadMore = async () => {
+    if (loadingMoreRef.current) return;
+    const generation = generationRef.current;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       const page = await api.results.list({
         tryout_id: tryoutFilter === "all" ? undefined : tryoutFilter,
         program_id: programFilter === "all" ? undefined : programFilter,
+        q: search || undefined,
         limit: PAGE_SIZE,
         offset: rows?.length ?? 0,
       });
+      if (generationRef.current !== generation) return;
       setRows((prev) => {
-        const seen = new Set((prev ?? []).map((row) => row.session_id));
-        return [...(prev ?? []), ...page.results.filter((row) => !seen.has(row.session_id))];
+        const seen = new Set((prev ?? []).map(rowKey));
+        return [...(prev ?? []), ...page.results.filter((row) => !seen.has(rowKey(row)))];
       });
       setTotal(page.total);
     } catch (err) {
+      if (generationRef.current !== generation) return;
       toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
     } finally {
-      setLoadingMore(false);
+      if (generationRef.current === generation) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
     }
   };
 
   const tryoutOptions = [{ id: "all", label: t.allTryouts }, ...tryouts.map((tr) => ({ id: tr.id, label: tr.title }))];
   const programOptions = [{ id: "all", label: t.allPrograms }, ...programs.map((p) => ({ id: p.id, label: p.name }))];
 
-  const columns: Column<StaffResult>[] = [
+  const columns: Column<StaffResultStudentRow>[] = [
     {
       key: "student",
       header: t.colStudent,
       render: (r) => (
         <div className="flex items-center gap-2.5">
-          <GradientAvatar user={{ name: r.student_name }} size="sm" />
+          <GradientAvatar user={{ name: r.student_name, avatar: r.student_avatar }} size="sm" />
           <span className="font-medium text-foreground">{r.student_name}</span>
         </div>
       ),
@@ -186,8 +192,9 @@ export default function ResultsPage() {
         </div>
       ),
     },
-    { key: "attempt", header: t.colAttempt, render: (r) => <span className="text-muted">#{r.attempt_number}</span> },
-    { key: "score", header: t.colScore, render: (r) => <span className="font-mono font-semibold text-foreground">{r.score}</span> },
+    { key: "attempts", header: t.colAttempt, render: (r) => <span className="font-mono text-label">{r.attempts_completed}</span> },
+    { key: "average", header: t.colAverage, render: (r) => <span className="font-mono font-semibold text-foreground">{r.average_score}</span> },
+    { key: "latest", header: t.colLatest, render: (r) => <span className="font-mono text-label">{r.latest_score}</span> },
     { key: "rank", header: t.colRank, render: (r) => `${r.rank} / ${r.participant_count}` },
     {
       key: "irt",
@@ -201,7 +208,7 @@ export default function ResultsPage() {
           <span className="text-muted">—</span>
         ),
     },
-    { key: "completedAt", header: t.colCompleted, render: (r) => formatDateTime(r.completed_at) },
+    { key: "lastCompleted", header: t.colLastCompleted, render: (r) => formatDateTime(r.last_completed_at) },
   ];
 
   return (
@@ -219,6 +226,16 @@ export default function ResultsPage() {
       }
     >
       <div className="mb-4 flex flex-wrap gap-3">
+        <div className="w-full max-w-xs">
+          <TextInput
+            label={t.fieldSearch}
+            placeholder={t.searchPlaceholder}
+            type="search"
+            maxLength={100}
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+          />
+        </div>
         <div className="w-full max-w-xs">
           <SelectInput label={t.fieldTryout} options={tryoutOptions} selectedKey={tryoutFilter} onSelectionChange={(k) => changeTryout(k ?? "all")} />
         </div>
@@ -272,7 +289,7 @@ export default function ResultsPage() {
         <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
       ) : (
         <>
-          <DataTable columns={columns} rows={rows} rowKey={(r) => r.session_id} onRowClick={openDetail} />
+          <DataTable columns={columns} rows={rows} rowKey={rowKey} onRowClick={(r) => router.push(`/admin/results/${r.tryout_id}/${r.student_id}`)} />
           {rows.length < total && (
             <div className="mt-4 flex justify-center">
               <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
@@ -282,102 +299,6 @@ export default function ResultsPage() {
           )}
         </>
       )}
-
-      <FormModal
-        isOpen={!!detail}
-        onOpenChange={(open) => !open && setDetail(null)}
-        title={detail?.student_name ?? ""}
-        description={detail?.tryout_title}
-        size="lg"
-        footer={
-          <Button variant="ghost" onPress={() => setDetail(null)}>
-            {t.close}
-          </Button>
-        }
-      >
-        {detail && (
-          <>
-            <div className="flex items-center gap-3">
-              <GradientAvatar user={{ name: detail.student_name }} size="lg" />
-              <div className="flex-1">
-                <p className="font-display text-title text-foreground">{detail.student_name}</p>
-                <p className="text-label text-muted">{detail.tryout_title}</p>
-              </div>
-              {detail.irt_warning && (
-                <StatusChip tone="warning" className="gap-1">
-                  <Icon icon={TriangleAlert} size="xs" /> {t.irtWarningBadge}
-                </StatusChip>
-              )}
-            </div>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-tile border border-border p-5 text-small sm:grid-cols-4">
-              <div>
-                <dt className="mb-1 text-label text-muted">{t.detailTotalScore}</dt>
-                <dd className="font-mono text-title font-semibold text-foreground">{detail.score} / 100</dd>
-              </div>
-              <div>
-                <dt className="mb-1 text-label text-muted">{t.detailAverage}</dt>
-                <dd className="font-mono text-title font-semibold text-foreground">{detail.average_score}</dd>
-              </div>
-              <div>
-                <dt className="mb-1 text-label text-muted">{t.detailRank}</dt>
-                <dd className="font-medium text-foreground">
-                  {detail.rank} / {detail.participant_count}
-                </dd>
-              </div>
-              <div>
-                <dt className="mb-1 text-label text-muted">{t.detailCompleted}</dt>
-                <dd className="font-medium text-foreground">{formatDateTime(detail.completed_at)}</dd>
-              </div>
-            </dl>
-            <div>
-              <h3 className="mb-3 font-display text-title">{t.subtestBreakdownTitle}</h3>
-              <ul className="space-y-2">
-                {detail.subtests.map((s) => (
-                  <li
-                    key={s.subtest_id}
-                    className="flex items-center justify-between gap-3 rounded-control border border-border px-4 py-3 text-small"
-                  >
-                    <span className="font-medium text-foreground">{s.name}</span>
-                    <span className="flex items-center gap-3 text-label text-muted">
-                      <span>{t.correctOf(s.correct_count, s.question_count)}</span>
-                      <span className="font-mono font-semibold text-foreground">{s.score}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              {violationsFailed ? (
-                <p className="text-caption text-danger">{t.violationsError}</p>
-              ) : violations === null ? (
-                <p className="text-caption text-muted">{t.loading}</p>
-              ) : (
-                <>
-                  <h3 className="mb-3 font-display text-title">{t.violationHistoryTitle(violations.total)}</h3>
-                  {violations.violations.length === 0 ? (
-                    <p className="text-caption text-muted">{t.noViolations}</p>
-                  ) : (
-                    <ul>
-                      {violations.violations.map((v) => (
-                        <li key={v.id} className="relative flex items-baseline gap-3 py-3 not-last:after:absolute not-last:after:top-7 not-last:after:-bottom-3 not-last:after:left-1 not-last:after:w-px not-last:after:bg-border">
-                          <span className="z-10 size-2 shrink-0 rounded-full bg-danger" aria-hidden />
-                          <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3">
-                            <span className="flex items-center gap-2 text-small font-medium text-foreground">
-                              <Icon icon={AlertTriangle} size="xs" className="text-danger" />
-                              {v.type === "screenshot_attempt" ? t.violationScreenshot : t.violationFullscreenExit}
-                            </span>
-                            <time className="text-label text-muted">{formatDateTime(v.occurred_at)}</time>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-            </div>
-          </>
-        )}
-      </FormModal>
     </AppShell>
   );
 }
