@@ -48,8 +48,8 @@ function imagePdf(pages: PdfPage[]): Blob {
   return new Blob(parts as BlobPart[], { type: "application/pdf" });
 }
 
-async function captureJpeg(node: HTMLElement, background: string, options: { cacheBust: boolean; fontEmbedCSS?: string }) {
-  const dataUrl = await toJpeg(node, { quality: 0.95, pixelRatio: 2, backgroundColor: background, ...options });
+async function captureJpeg(node: HTMLElement, background: string, fontEmbedCSS: string) {
+  const dataUrl = await toJpeg(node, { quality: 0.95, pixelRatio: 2, backgroundColor: background, cacheBust: false, fontEmbedCSS });
   const jpeg = new Uint8Array(await (await fetch(dataUrl)).arrayBuffer());
   const bitmap = await createImageBitmap(new Blob([jpeg as BlobPart], { type: "image/jpeg" }));
   const { width, height } = bitmap;
@@ -84,7 +84,7 @@ export async function fontEmbedCSSOf(node: HTMLElement) {
 
 /** Captures one element as a page that stays in memory until `savePdf` writes the file. */
 export async function capturePage(node: HTMLElement, background: string, size: PdfPageSize, fontEmbedCSS: string): Promise<CapturedPage> {
-  const shot = await captureJpeg(node, background, { cacheBust: false, fontEmbedCSS });
+  const shot = await captureJpeg(node, background, fontEmbedCSS);
   return { ...shot, ...pageSizeOf(shot, size) };
 }
 
@@ -94,8 +94,8 @@ export function savePdf(pages: CapturedPage[], fileName: string) {
 
 /** Renders the node to one PDF page exactly as it looks and saves it; `background` fills what the node leaves transparent. */
 export async function savePageAsPdf(node: HTMLElement, fileName: string, background: string) {
-  const shot = await captureJpeg(node, background, { cacheBust: true });
-  download(imagePdf([{ ...shot, ...pageSizeOf(shot, "content") }]), fileName);
+  await inlineImages(node);
+  savePdf([await capturePage(node, background, "content", await fontEmbedCSSOf(node))], fileName);
 }
 
 /**
