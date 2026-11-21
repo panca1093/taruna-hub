@@ -159,7 +159,7 @@ function KolomScreen({
           {soal ? (
             <>
               <h1 className="mt-7 font-sans text-xl font-semibold tracking-normal text-foreground sm:text-2xl">{t.soalPrompt}</h1>
-              <div className="mt-5 grid gap-1 sm:gap-3" style={columns(soal.shown.length, units)}>
+              <div className="item-shown-row mt-5" style={{ "--item-units": units } as React.CSSProperties}>
                 {soal.shown.map((label) => (
                   <div key={label} className="flex min-w-0 items-center justify-center rounded-tile border border-dashed border-rose bg-surface px-0 py-3 sm:px-2">
                     <KecermatanItem elements={labelOf(label)?.elements ?? []} fit className="item-fit font-extrabold" elementClassName="item-fit-el" />
