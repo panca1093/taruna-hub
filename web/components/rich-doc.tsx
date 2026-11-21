@@ -131,3 +131,22 @@ function renderNode(node: RichNode, key: number): ReactNode {
 export function RichDoc({ doc, className }: { doc: RichDocValue; className?: string }) {
   return <div className={cn("rich-text", className)}>{(doc?.content ?? []).map((node, i) => renderNode(node, i))}</div>;
 }
+
+function summaryParts(node: RichNode, out: ReactNode[]) {
+  if (node.type === "text") out.push(node.text ?? "");
+  else if (node.type === "math") {
+    const latex = typeof node.attrs?.latex === "string" ? node.attrs.latex : "";
+    out.push(<span key={out.length} className="rich-math" dangerouslySetInnerHTML={{ __html: katex.renderToString(latex, KATEX_OPTIONS) }} />);
+  } else {
+    (node.content ?? []).forEach((child) => summaryParts(child, out));
+    if (node.content?.length) out.push(" ");
+  }
+}
+
+/** One-line reading of a document for dense rows: its text with formulas typeset; tables flatten, images and shapes drop. */
+export function RichDocSummary({ doc }: { doc: RichDocValue }) {
+  const parts: ReactNode[] = [];
+  doc.content.forEach((node) => summaryParts(node, parts));
+  return <>{parts}</>;
+}
+

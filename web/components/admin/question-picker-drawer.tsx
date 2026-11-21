@@ -7,7 +7,7 @@ import { DifficultyBadge, ProgramBadge, QuestionTypeBadge } from "@/components/s
 import { SelectInput } from "@/components/ui/form";
 import { api, errorText, type Program, type Question } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
-import { docText } from "@/lib/rich-doc";
+import { RichDocSummary } from "@/components/rich-doc";
 import { useAdminQuestionPickerDrawerT } from "@/lib/i18n/dict/admin-question-picker-drawer";
 
 const PAGE_SIZE = 50;
@@ -241,7 +241,7 @@ export function QuestionPickerDrawer({
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="line-clamp-2 text-small text-foreground">
-                            {docText(question.content)}
+                            <RichDocSummary doc={question.content} />
                           </p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             {program && <ProgramBadge code={program.code} />}

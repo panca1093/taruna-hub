@@ -15,7 +15,7 @@ import { api, ApiError, errorText, type Program, type Tryout, type TryoutPrint a
 import { savePagesAsPdf } from "@/lib/capture-pdf";
 import type { ScoringMode } from "@/lib/types";
 import { useLocale } from "@/lib/i18n/locale-context";
-import { docText } from "@/lib/rich-doc";
+import { RichDocSummary } from "@/components/rich-doc";
 import { useAdminTryoutBuilderT } from "@/lib/i18n/dict/admin-tryout-builder";
 import { useTryoutPdfT } from "@/lib/i18n/dict/tryout-pdf";
 
@@ -583,7 +583,7 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
                           <div key={questionId} className="flex items-center gap-2 rounded-chip bg-surface-secondary px-2.5 py-1.5">
                             <span className="font-mono text-label text-muted">#{question?.number ?? "?"}</span>
                             <span className="line-clamp-1 min-w-0 flex-1 text-caption text-foreground">
-                              {question ? docText(question.content) : questionId}
+                              {question ? <RichDocSummary doc={question.content} /> : questionId}
                             </span>
                             {question && <QuestionTypeBadge type={question.type} />}
                             {question && <DifficultyBadge difficulty={question.difficulty} />}

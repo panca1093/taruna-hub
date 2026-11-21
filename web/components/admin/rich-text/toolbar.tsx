@@ -1,5 +1,6 @@
 "use client";
 
+import { NodeSelection, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Input, Popover } from "@heroui/react";
 import { useEditorState, type Editor } from "@tiptap/react";
@@ -30,6 +31,16 @@ import {
 } from "@/lib/rich-doc";
 import { useAdminRichTextEditorT } from "@/lib/i18n/dict/admin-rich-text-editor";
 import { useRichTextGroup, type MathEdit, type PopoverKind } from "./group";
+
+// A selected image or shape would be replaced by the next insert, so the cursor moves into a paragraph after it.
+const leaveNodeSelection = ({ tr, state }: { tr: Transaction; state: EditorState }) => {
+  const selection = tr.selection;
+  if (!(selection instanceof NodeSelection)) return true;
+  const after = selection.to;
+  if (!tr.doc.resolve(after).nodeAfter?.isTextblock) tr.insert(after, state.schema.nodes.paragraph.create());
+  tr.setSelection(TextSelection.create(tr.doc, after + 1));
+  return true;
+};
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -244,7 +255,7 @@ function TableBody({ editor, onDone }: { editor: Editor; onDone: () => void }) {
             onMouseEnter={() => setSize(cell)}
             onFocus={() => setSize(cell)}
             onClick={() => {
-              editor.chain().focus().insertTable({ rows: cell.rows, cols: cell.cols, withHeaderRow: true }).run();
+              editor.chain().focus().command(leaveNodeSelection).insertTable({ rows: cell.rows, cols: cell.cols, withHeaderRow: true }).run();
               onDone();
             }}
             className={cn(
@@ -272,7 +283,7 @@ function ImageBody({ editor, onDone }: { editor: Editor; onDone: () => void }) {
     setState({ status: "uploading" });
     try {
       const asset = await api.assets.uploadQuestionImage(file);
-      if (!editor.isDestroyed) editor.chain().focus().insertContent({ type: "image", attrs: { asset_id: asset.id, alt: file.name.replace(/\.[^.]*$/, "").slice(0, MAX_IMAGE_ALT), src: null } }).run();
+      if (!editor.isDestroyed) editor.chain().focus().command(leaveNodeSelection).insertContent({ type: "image", attrs: { asset_id: asset.id, alt: file.name.replace(/\.[^.]*$/, "").slice(0, MAX_IMAGE_ALT), src: null } }).command(leaveNodeSelection).run();
       onDone();
     } catch (err) {
       setState({ status: "error", message: errorText(err, t.imageUploadFailed) });
@@ -310,7 +321,7 @@ function ShapeBody({ editor, onDone }: { editor: Editor; onDone: () => void }) {
   const [kind, setKind] = useState<ShapeKind>(SHAPE_KINDS[0]);
   const [caption, setCaption] = useState("");
   const submit = () => {
-    editor.chain().focus().insertContent({ type: "shape", attrs: { kind, caption: caption.trim() } }).run();
+    editor.chain().focus().command(leaveNodeSelection).insertContent({ type: "shape", attrs: { kind, caption: caption.trim() } }).command(leaveNodeSelection).run();
     onDone();
   };
   return (

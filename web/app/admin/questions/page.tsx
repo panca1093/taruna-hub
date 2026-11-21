@@ -7,7 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
-import { RichDoc as RichDocView } from "@/components/rich-doc";
+import { RichDoc as RichDocView, RichDocSummary } from "@/components/rich-doc";
 import { DifficultyBadge, ProgramBadge, QuestionTypeBadge } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput } from "@/components/ui/form";
@@ -15,7 +15,7 @@ import { QuestionEditor, type QuestionDraft, draftOf, emptyDraft } from "@/compo
 import { ImportQuestionsModal } from "@/components/admin/import-questions-modal";
 import { api, ApiError, errorText, type Program, type Question } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
-import { docText, isDocEmpty, type RichDoc } from "@/lib/rich-doc";
+import { isDocEmpty, type RichDoc } from "@/lib/rich-doc";
 import { useAdminQuestionsPageT } from "@/lib/i18n/dict/admin-questions-page";
 
 const PAGE_SIZE = 50;
@@ -339,7 +339,9 @@ export default function QuestionsPage() {
       header: t.columns.content,
       className: "max-w-md",
       render: (question) => (
-        <div className="line-clamp-2 text-small">{docText(question.content)}</div>
+        <div className="line-clamp-2 text-small">
+          <RichDocSummary doc={question.content} />
+        </div>
       ),
     },
     {
@@ -555,7 +557,9 @@ export default function QuestionsPage() {
           }
         >
           {deleteTarget && (
-            <p className="text-small text-foreground">{docText(deleteTarget.content)}</p>
+            <p className="text-small text-foreground">
+              <RichDocSummary doc={deleteTarget.content} />
+            </p>
           )}
         </FormModal>
       </AppShell>
