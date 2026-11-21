@@ -4,20 +4,34 @@ import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
   request: "Unduh PDF",
-  requesting: "Memproses...",
-  toastQueued: "PDF sedang disiapkan",
-  toastQueuedDescription: "Unduh dari daftar ekspor di bawah setelah statusnya Siap.",
-  toastFailed: "PDF tidak dapat diminta",
+  preparing: (page: number, total: number) => `Halaman ${page} dari ${total}`,
+  preparingStart: "Menyiapkan...",
+  toastFailed: "PDF tidak dapat dibuat",
   failedFallback: "Coba lagi sebentar lagi.",
+  retry: "Coba lagi",
+  toastDone: "PDF telah diunduh",
+  imageFailed: "Gambar tidak dapat dimuat",
+  subtestMeta: (minutes: number, questions: number) => `${minutes} menit · ${questions} soal`,
+  pageOf: (page: number, total: number) => `Halaman ${page} / ${total}`,
+  answerLine: "Jawaban:",
+  trueLabel: "Benar",
+  falseLabel: "Salah",
 };
 
 const en: typeof id = {
   request: "Download PDF",
-  requesting: "Working...",
-  toastQueued: "The PDF is being prepared",
-  toastQueuedDescription: "Download it from the export list below once its status is Ready.",
-  toastFailed: "The PDF could not be requested",
+  preparing: (page: number, total: number) => `Page ${page} of ${total}`,
+  preparingStart: "Preparing...",
+  toastFailed: "The PDF could not be created",
   failedFallback: "Try again in a moment.",
+  retry: "Try again",
+  toastDone: "The PDF was downloaded",
+  imageFailed: "The image could not be loaded",
+  subtestMeta: (minutes: number, questions: number) => `${minutes} ${minutes === 1 ? "minute" : "minutes"} · ${questions} ${questions === 1 ? "question" : "questions"}`,
+  pageOf: (page: number, total: number) => `Page ${page} / ${total}`,
+  answerLine: "Answer:",
+  trueLabel: "True",
+  falseLabel: "False",
 };
 
 export function useTryoutPdfT() {

@@ -147,6 +147,19 @@ func (s *TryoutService) Get(ctx context.Context, scope HostScope, principal mode
 	return tryout, nil
 }
 
+// Print is the answer-free read behind the browser-generated PDF; staff only, through the caller's tenant.
+func (s *TryoutService) Print(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) (model.PrintTryout, error) {
+	tenantID, err := questionTenant(scope, principal)
+	if err != nil {
+		return model.PrintTryout{}, err
+	}
+	out, err := s.repo.PrintTryout(ctx, tenantID, id)
+	if err != nil {
+		return model.PrintTryout{}, tryoutError(err)
+	}
+	return out, nil
+}
+
 func (s *TryoutService) Create(ctx context.Context, scope HostScope, principal model.Principal, input TryoutInput) (model.Tryout, error) {
 	tenantID, err := questionTenant(scope, principal)
 	if err != nil {

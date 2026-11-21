@@ -41,6 +41,7 @@ The source PRD's post-MVP roadmap remains outside this release: predictive analy
 | Provider placeholders could look complete | Old plan proposes WhatsApp no-op to unblock work | Unconfigured state explicit; real channel delivery required for full-scope release |
 | CI omits lint and test coverage is narrow | Current lint fails; only error-handler tests exist | P00 enforces lint; per-slice behavioral/integration/browser verification |
 | Calendar/budget is obsolete | Original August deadline is historical; v1.3 itself calls for repricing | Relative sizing only; new calendar/cost depends on staffing/provider decisions and certification |
+| Tryout PDF generated in the browser (2026-11-21) | FR-ADM-TRY-12 asks for an asynchronous PDF through the job queue with a ready notification and download link | **Superseded by owner decision 2026-11-21:** the tryout PDF is produced in the admin's browser by capturing the frontend's own layout (as the per-student result PDFs are), with no Gotenberg sidecar, no export job and no ready email. FR-ADM-TRY-09..11 and 13 are unchanged. Accepted trade-offs: the text in the PDF is an image (not selectable or searchable), the admin waits in the tab while it renders, and there is no export history for it. See [docs/tryout-pdf.md](../docs/tryout-pdf.md) |
 | Student profile self-edit (2026-10-31) | PRD §4 gives students no profile-write FR; the workspace handoff gate G09 left it open | Owner approved student self-edit of name and phone only; email stays admin-managed; password change needs the current password and revokes other sessions. `PATCH /api/v1/me` is student-only. PRD unchanged |
 
 ## 3. Original slice migration
@@ -143,7 +144,7 @@ Each row is a distinct **definition** from PRD §5, not a loose ID reference in 
 | FR-ADM-TRY-09 | Original-order PDF contents | [§4.8](ARCHITECTURE.md#48-tryout-scoring-results-monitoring-and-reporting) | [P20](PLAN.md#p20) | — |
 | FR-ADM-TRY-10 | No keys or explanations in PDF | [§4.8](ARCHITECTURE.md#48-tryout-scoring-results-monitoring-and-reporting) | [P20](PLAN.md#p20) | — |
 | FR-ADM-TRY-11 | Rendered math in PDF | [§4.8](ARCHITECTURE.md#48-tryout-scoring-results-monitoring-and-reporting) | [P20](PLAN.md#p20) | — |
-| FR-ADM-TRY-12 | Async PDF and ready notification/link | [§4.8](ARCHITECTURE.md#48-tryout-scoring-results-monitoring-and-reporting) | [P20](PLAN.md#p20) | — |
+| FR-ADM-TRY-12 | Async PDF and ready notification/link (superseded 2026-11-21: generated in the browser, see §2) | [§4.8](ARCHITECTURE.md#48-tryout-scoring-results-monitoring-and-reporting) | [P20](PLAN.md#p20) | — |
 | FR-ADM-TRY-13 | Tenant identity and print-date footer | [§4.8](ARCHITECTURE.md#48-tryout-scoring-results-monitoring-and-reporting) | [P20](PLAN.md#p20) | — |
 | FR-ADM-PRD-01 | Individual product definition | [§4.5](ARCHITECTURE.md#45-catalog-purchases-wallet-and-grants) | [P11](PLAN.md#p11) | — |
 | FR-ADM-PRD-02 | Bundle product definition | [§4.5](ARCHITECTURE.md#45-catalog-purchases-wallet-and-grants) | [P11](PLAN.md#p11) | — |

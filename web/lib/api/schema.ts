@@ -1852,27 +1852,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/tryouts/{id}/pdf-exports": {
+    "/api/v1/tryouts/{id}/print": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Request the printable PDF of a tryout
-         * @description Admin and Operator only; a Student answers `403`. Answers `202` with the `Export` to poll through
-         *     `GET /api/v1/exports/{id}` and download through `POST /api/v1/exports/{id}/download-link`. The file lists
-         *     the tryout's subtests, questions and options in the order the admin stored them (shuffle settings are
-         *     ignored) with images and typeset math, and never carries answer keys, explanations or points. Its `params`
-         *     are `{tryout_id, revision}`: the PDF describes that definition revision, and a render that finds the tryout
-         *     at another revision fails with `error_code` `tryout_changed`. Other failure codes are `tryout_not_found`,
-         *     `pdf_too_large`, `renderer_unavailable` and `render_failed`. `503` with code `pdf_unavailable` means no PDF
-         *     converter is configured on this deployment, and no job is queued. Drafts can be exported too.
+         * The answer-free content of a tryout, for the browser-generated PDF
+         * @description Admin and Operator only; an id of another tenant answers `404`. Subtests, questions and options come out
+         *     in the order the admin stored them, read through each assignment's frozen version (the same one an
+         *     exam would show), with the question type, the stem as stored and the option labels. It never carries
+         *     option ids, points, correct answers or explanations. The admin's browser lays this out and captures it as
+         *     the printable PDF (FR-ADM-TRY-09 to 13); there is no server-side PDF.
          */
-        post: {
+        get: {
             parameters: {
                 query?: never;
                 header?: never;
@@ -1883,29 +1878,22 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description The queued export */
-                202: {
+                /** @description The printable content */
+                200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Export"];
+                        "application/json": components["schemas"]["TryoutPrint"];
                     };
                 };
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
                 404: components["responses"]["NotFound"];
-                /** @description No PDF converter is configured (`pdf_unavailable`) or the export service is unavailable. */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
             };
         };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4352,8 +4340,7 @@ export interface paths {
          * List the tenant's exports
          * @description Admin and Operator only (D02: a role guard). Every export of the configured tenant, newest first. `kind`
          *     narrows to one kind. The file itself is read through `POST /api/v1/exports/{id}/download-link` once the
-         *     export is `ready`. Exports are created by the endpoint of the slice that owns the kind (tryout PDF,
-         *     results CSV or XLSX), which answers `202` with an `Export`.
+         *     export is `ready`. Exports are created by the endpoint of the slice that owns the kind (results CSV or XLSX), which answers `202` with an `Export`.
          */
         get: {
             parameters: {
@@ -7766,6 +7753,23 @@ export interface components {
             updated_at: string;
             subtests: components["schemas"]["Subtest"][];
         };
+        TryoutPrint: {
+            tenant_name: string;
+            title: string;
+            subtests: {
+                name: string;
+                duration_seconds: number;
+                questions: {
+                    /** @enum {string} */
+                    type: "pg" | "pg_multi" | "isian" | "benar_salah";
+                    content: string;
+                    /** @description Labels in stored order; empty for `isian`. */
+                    options: {
+                        label: string;
+                    }[];
+                }[];
+            }[];
+        };
         TryoutList: {
             /** @description Counts only — GET one tryout for its subtests and assignments. */
             tryouts: components["schemas"]["TryoutSummary"][];
@@ -8234,7 +8238,7 @@ export interface components {
             program_id?: string;
         };
         /** @enum {string} */
-        ExportKind: "tryout_pdf" | "tryout_results_csv" | "tryout_results_xlsx";
+        ExportKind: "tryout_results_csv" | "tryout_results_xlsx";
         /**
          * @description A durable artifact request. `queued` and `running` are in progress, `ready` has a file, `failed` ends with an
          *     `error_code`. The storage key is never exposed.
@@ -8283,7 +8287,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready" | "website_not_published" | "website_revision_conflict" | "website_content_invalid" | "pdf_unavailable" | "export_not_ready" | "last_admin";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready" | "website_not_published" | "website_revision_conflict" | "website_content_invalid" | "export_not_ready" | "last_admin";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */

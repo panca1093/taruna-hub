@@ -1,7 +1,7 @@
-# Exports (shared foundation for P20 and P21)
+# Exports (shared foundation, used by P21)
 
-Durable artifacts rendered by a background job: the tryout PDF (P20) and the tryout results CSV/XLSX (P21). This
-page covers the shared parts. Each kind's content, params and create endpoint belong to its own slice.
+Durable artifacts rendered by a background job: the tryout results CSV/XLSX (P21). The tryout PDF is not one of them: it is
+generated in the browser ([tryout-pdf.md](tryout-pdf.md)). This page covers the shared parts. Migration 000029 deleted the existing `tryout_pdf` rows; their stored objects stay in the bucket under `<tenant>/export/<id>`, and the down migration restores the CHECK but not the rows. Each kind's content, params and create endpoint belong to its own slice.
 
 ## Data model
 
@@ -9,7 +9,7 @@ Table `exports` (migration 000023), one row per request.
 
 | Column | Meaning |
 |---|---|
-| `kind` | `tryout_pdf`, `tryout_results_csv` or `tryout_results_xlsx` (CHECK) |
+| `kind` | `tryout_results_csv` or `tryout_results_xlsx` (CHECK; migration 000029 dropped `tryout_pdf`) |
 | `params` | JSON the owning slice defined; the renderer reads it, nothing else |
 | `status` | `queued`, `running`, `ready`, `failed` |
 | `requested_by` | staff user, composite FK with `tenant_id` |
@@ -61,7 +61,7 @@ Renderer, in `api/cmd/worker/exports.go`:
 
 ```go
 func registerExportRenderers(svc *service.ExportService, deps exportDeps) {
-	svc.Register(model.ExportTryoutPDF, newTryoutPDFRenderer(deps.pool, deps.store, deps.logger))
+	svc.Register(model.ExportTryoutResultsCSV, service.NewResultExportRenderer(...))
 }
 ```
 
@@ -71,9 +71,9 @@ func registerExportRenderers(svc *service.ExportService, deps exportDeps) {
 Create endpoint, in the slice's handler: validate the params, then
 
 ```go
-return h.acceptExport(c, model.ExportTryoutPDF, params) // 202 with the Export body
+return h.acceptExport(c, model.ExportTryoutResultsCSV, params) // 202 with the Export body
 ```
 
 and register the route with `Authenticate(h.auth)` plus the staff guard. Frontend: render
-`<ExportStatus kind="tryout_pdf" refreshKey={n} />` from `components/admin/export-status.tsx` and bump `refreshKey`
+`<ExportStatus kind="tryout_results_csv" refreshKey={n} />` from `components/admin/export-status.tsx` and bump `refreshKey`
 after the `202`; it polls every 3 seconds while any of the latest five is queued or running.

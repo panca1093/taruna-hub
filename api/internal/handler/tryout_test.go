@@ -383,3 +383,143 @@ func TestTryoutBodyIsBoundedBeforeItIsMapped(t *testing.T) {
 		t.Fatalf("oversized body produced %d field errors, want it refused before it is mapped", got)
 	}
 }
+
+func TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree(t *testing.T) {
+	const (
+		explanationMarker = "PEMBAHASAN-RAHASIA-88"
+		pointsMarker      = 77.25
+	)
+	f := newAuthFixture(t, false)
+	e := f.echo(t)
+	tenantA, tenantB := f.active[0], f.active[1]
+	hostA, hostB := f.host(tenantA.Slug), f.host(tenantB.Slug)
+	admin := curriculumToken(t, f, tenantA, model.RoleAdmin)
+	operator := curriculumToken(t, f, tenantA, model.RoleOperator)
+	student := curriculumToken(t, f, tenantA, model.RoleStudent)
+	adminB := curriculumToken(t, f, tenantB, model.RoleAdmin)
+
+	program := questionCurriculum(t, e, hostA, admin)
+	secrets := []string{explanationMarker, "77.25"}
+	keyed := func(content string, weighted bool, optionIDs [3]string, labels ...string) questionResponse {
+		body := pgQuestionBody(program)
+		body["content"] = content
+		body["explanation"] = explanationMarker
+		body["option_weighted"] = weighted
+		options := make([]any, 0, len(labels))
+		for i, label := range labels {
+			option := map[string]any{"id": optionIDs[i], "label": label}
+			if weighted {
+				points := 1.0
+				if i == 1 {
+					points = pointsMarker
+				}
+				option["points"] = points
+			}
+			options = append(options, option)
+		}
+		body["options"] = options
+		body["correct"] = []string{optionIDs[0]}
+		if weighted {
+			delete(body, "correct")
+		}
+		rec := sendQuestionJSON(e, http.MethodPost, hostA, "/api/v1/questions", body, admin)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create question: status = %d body = %s", rec.Code, rec.Body.String())
+		}
+		q := decodeQuestion(t, rec)
+		secrets = append(secrets, q.ID.String(), q.VersionID.String())
+		for _, option := range q.Options {
+			secrets = append(secrets, option.ID)
+		}
+		if len(q.Options) != len(labels) {
+			t.Fatalf("created question has %d options, want %d", len(q.Options), len(labels))
+		}
+		return q
+	}
+	zulu := keyed("Soal Zulu pertama", false, [3]string{"kunci-rahasia-31", "opsi-rahasia-32", "opsi-rahasia-33"}, "Zeta", "Alfa", "Mu")
+	alfa := keyed("Soal Alfa kedua", true, [3]string{"bobot-rahasia-41", "bobot-rahasia-42", ""}, "Satu", "Dua")
+	mike := keyed("Soal Mike ketiga", false, [3]string{"kunci-rahasia-51", "opsi-rahasia-52", ""}, "Tiga", "Empat")
+
+	body := tryoutBody(program)
+	body["randomize_questions"], body["randomize_options"] = true, true
+	body["subtests"] = []any{
+		map[string]any{"name": "Subtes Zulu", "duration_seconds": 3600, "questions": []any{map[string]any{"question_id": zulu.ID.String()}, map[string]any{"question_id": alfa.ID.String()}}},
+		map[string]any{"name": "Subtes Alfa", "duration_seconds": 600, "questions": []any{map[string]any{"question_id": mike.ID.String()}}},
+	}
+	rec := sendTryoutJSON(e, http.MethodPost, hostA, "/api/v1/tryouts", body, admin)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create tryout: status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	created := decodeTryout(t, rec)
+	for _, subtest := range created.Subtests {
+		for _, question := range subtest.Questions {
+			secrets = append(secrets, question.VersionID.String())
+		}
+	}
+
+	edit := updateBodyOf(zulu)
+	edit["content"] = "Soal Zulu SUDAH-DIUBAH"
+	if rec := sendQuestionJSON(e, http.MethodPut, hostA, "/api/v1/questions/"+zulu.ID.String(), edit, admin); rec.Code != http.StatusOK {
+		t.Fatalf("edit question: status = %d body = %s", rec.Code, rec.Body.String())
+	}
+	path := "/api/v1/tryouts/" + created.ID.String() + "/print"
+
+	for name, token := range map[string]string{"admin": admin, "operator": operator} {
+		rec := getWithToken(e, hostA, path, token)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s = %d %s, want 200", name, rec.Code, rec.Body.String())
+		}
+		var printed tryoutPrintResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &printed); err != nil {
+			t.Fatal(err)
+		}
+		if printed.Title != created.Title || printed.TenantName == "" || len(printed.Subtests) != 2 {
+			t.Fatalf("%s body = %+v, want the title, tenant name and two subtests", name, printed)
+		}
+		first, second := printed.Subtests[0], printed.Subtests[1]
+		if first.Name != "Subtes Zulu" || second.Name != "Subtes Alfa" || len(first.Questions) != 2 || len(second.Questions) != 1 {
+			t.Fatalf("%s subtests = %+v, want stored order Zulu(2) then Alfa(1) despite the randomize flags", name, printed.Subtests)
+		}
+		labels := func(q printQuestionResponse) []string {
+			out := []string{}
+			for _, option := range q.Options {
+				out = append(out, option.Label)
+			}
+			return out
+		}
+		if first.Questions[0].Content != "Soal Zulu pertama" || first.Questions[1].Content != "Soal Alfa kedua" || second.Questions[0].Content != "Soal Mike ketiga" {
+			t.Errorf("%s stems = %q, %q, %q, want stored order with the frozen (pre-edit) stem", name, first.Questions[0].Content, first.Questions[1].Content, second.Questions[0].Content)
+		}
+		if got := strings.Join(labels(first.Questions[0]), ","); got != "Zeta,Alfa,Mu" {
+			t.Errorf("%s options = %s, want stored order Zeta,Alfa,Mu", name, got)
+		}
+		if got := strings.Join(labels(first.Questions[1]), ","); got != "Satu,Dua" {
+			t.Errorf("%s weighted options = %s, want Satu,Dua", name, got)
+		}
+		raw := rec.Body.String()
+		if strings.Contains(raw, "SUDAH-DIUBAH") {
+			t.Errorf("%s body carries the edited stem, want the frozen version", name)
+		}
+		for _, secret := range secrets {
+			if secret != "" && strings.Contains(raw, secret) {
+				t.Errorf("%s body carries %q: %s", name, secret, raw)
+			}
+		}
+		for _, leaked := range []string{`"correct"`, `"explanation"`, `"points"`, `"id"`} {
+			if strings.Contains(raw, leaked) {
+				t.Errorf("%s body carries %s: %s", name, leaked, raw)
+			}
+		}
+	}
+	if rec := getWithToken(e, hostA, path, student); rec.Code != http.StatusForbidden {
+		t.Errorf("student = %d, want 403", rec.Code)
+	}
+	if rec := getWithToken(e, hostA, path, ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous = %d, want 401", rec.Code)
+	}
+	for _, id := range []string{created.ID.String(), uuid.NewString(), "not-a-uuid"} {
+		if rec := getWithToken(e, hostB, "/api/v1/tryouts/"+id+"/print", adminB); rec.Code != http.StatusNotFound {
+			t.Errorf("tenant B on %s = %d, want 404", id, rec.Code)
+		}
+	}
+}

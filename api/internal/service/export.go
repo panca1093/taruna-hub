@@ -50,7 +50,6 @@ const (
 )
 
 var knownExportKinds = map[string]bool{
-	model.ExportTryoutPDF:         true,
 	model.ExportTryoutResultsCSV:  true,
 	model.ExportTryoutResultsXLSX: true,
 }

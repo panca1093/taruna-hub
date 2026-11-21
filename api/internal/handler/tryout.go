@@ -159,6 +159,57 @@ func (h *Handler) GetTryout(c echo.Context) error {
 	return c.JSON(http.StatusOK, tryoutResponseOf(tryout))
 }
 
+type printOptionResponse struct {
+	Label string `json:"label"`
+}
+
+type printQuestionResponse struct {
+	Type    string                `json:"type"`
+	Content string                `json:"content"`
+	Options []printOptionResponse `json:"options"`
+}
+
+type printSubtestResponse struct {
+	Name            string                  `json:"name"`
+	DurationSeconds int                     `json:"duration_seconds"`
+	Questions       []printQuestionResponse `json:"questions"`
+}
+
+type tryoutPrintResponse struct {
+	TenantName string                 `json:"tenant_name"`
+	Title      string                 `json:"title"`
+	Subtests   []printSubtestResponse `json:"subtests"`
+}
+
+// PrintTryout feeds the admin's browser PDF: stored order, frozen versions, no keys, points or explanations.
+func (h *Handler) PrintTryout(c echo.Context) error {
+	scope, principal, ok := curriculumCaller(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return httpx.NotFound(tryoutNotFound)
+	}
+	printed, err := h.tryouts.Print(c.Request().Context(), scope, principal, id)
+	if err != nil {
+		return tryoutError(err)
+	}
+	out := tryoutPrintResponse{TenantName: printed.TenantName, Title: printed.Title, Subtests: make([]printSubtestResponse, 0, len(printed.Subtests))}
+	for _, subtest := range printed.Subtests {
+		item := printSubtestResponse{Name: subtest.Name, DurationSeconds: subtest.DurationSeconds, Questions: make([]printQuestionResponse, 0, len(subtest.Questions))}
+		for _, question := range subtest.Questions {
+			options := make([]printOptionResponse, 0, len(question.Options))
+			for _, label := range question.Options {
+				options = append(options, printOptionResponse{Label: label})
+			}
+			item.Questions = append(item.Questions, printQuestionResponse{Type: question.Type, Content: question.Content, Options: options})
+		}
+		out.Subtests = append(out.Subtests, item)
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
 const maxTryoutBody = 256 << 10
 
 func bindTryout(c echo.Context, dst any) error {

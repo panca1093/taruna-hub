@@ -181,7 +181,7 @@ func TestExportListOrderingAndLimit(t *testing.T) {
 		rec := f.call(http.MethodPost, "/api/v1/test-exports?kind=tryout_results_csv", f.tokenAdminA)
 		ids = append(ids, decodeExport(t, rec).ID)
 	}
-	f.call(http.MethodPost, "/api/v1/test-exports?kind=tryout_pdf", f.tokenAdminA)
+	f.call(http.MethodPost, "/api/v1/test-exports?kind=tryout_results_xlsx", f.tokenAdminA)
 
 	var list exportListResponse
 	rec := f.call(http.MethodGet, "/api/v1/exports?kind=tryout_results_csv&limit=2", f.tokenOperatorA)

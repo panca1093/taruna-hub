@@ -44,7 +44,7 @@ tags:
   - name: assets
     description: Private image uploads, finalization and short-lived download links
   - name: exports
-    description: Durable PDF, CSV and XLSX artifacts rendered by background jobs, their progress and authorized downloads
+    description: Durable CSV and XLSX artifacts rendered by background jobs, their progress and authorized downloads
   - name: orders
     description: Wallet and manual-transfer checkout, order review by staff, and the access an order opens
   - name: topups
@@ -1384,19 +1384,16 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
-  /api/v1/tryouts/{id}/pdf-exports:
-    post:
-      tags: [tryouts, exports]
-      summary: Request the printable PDF of a tryout
+  /api/v1/tryouts/{id}/print:
+    get:
+      tags: [tryouts]
+      summary: The answer-free content of a tryout, for the browser-generated PDF
       description: |
-        Admin and Operator only; a Student answers `403`. Answers `202` with the `Export` to poll through
-        `GET /api/v1/exports/{id}` and download through `POST /api/v1/exports/{id}/download-link`. The file lists
-        the tryout's subtests, questions and options in the order the admin stored them (shuffle settings are
-        ignored) with images and typeset math, and never carries answer keys, explanations or points. Its `params`
-        are `{tryout_id, revision}`: the PDF describes that definition revision, and a render that finds the tryout
-        at another revision fails with `error_code` `tryout_changed`. Other failure codes are `tryout_not_found`,
-        `pdf_too_large`, `renderer_unavailable` and `render_failed`. `503` with code `pdf_unavailable` means no PDF
-        converter is configured on this deployment, and no job is queued. Drafts can be exported too.
+        Admin and Operator only; an id of another tenant answers `404`. Subtests, questions and options come out
+        in the order the admin stored them, read through each assignment's frozen version (the same one an
+        exam would show), with the question type, the stem as stored and the option labels. It never carries
+        option ids, points, correct answers or explanations. The admin's browser lays this out and captures it as
+        the printable PDF (FR-ADM-TRY-09 to 13); there is no server-side PDF.
       security:
         - bearerAuth: []
       parameters:
@@ -1407,24 +1404,18 @@ paths:
             type: string
             format: uuid
       responses:
-        "202":
-          description: The queued export
+        "200":
+          description: The printable content
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Export"
+                $ref: "#/components/schemas/TryoutPrint"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
-        "503":
-          description: No PDF converter is configured (`pdf_unavailable`) or the export service is unavailable.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/products:
     get:
@@ -3321,8 +3312,7 @@ paths:
       description: |
         Admin and Operator only (D02: a role guard). Every export of the configured tenant, newest first. `kind`
         narrows to one kind. The file itself is read through `POST /api/v1/exports/{id}/download-link` once the
-        export is `ready`. Exports are created by the endpoint of the slice that owns the kind (tryout PDF,
-        results CSV or XLSX), which answers `202` with an `Export`.
+        export is `ready`. Exports are created by the endpoint of the slice that owns the kind (results CSV or XLSX), which answers `202` with an `Export`.
       security:
         - bearerAuth: []
       parameters:
@@ -6250,6 +6240,49 @@ components:
           items:
             $ref: "#/components/schemas/Subtest"
 
+    TryoutPrint:
+      type: object
+      additionalProperties: false
+      required: [tenant_name, title, subtests]
+      properties:
+        tenant_name:
+          type: string
+        title:
+          type: string
+        subtests:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, duration_seconds, questions]
+            properties:
+              name:
+                type: string
+              duration_seconds:
+                type: integer
+              questions:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [type, content, options]
+                  properties:
+                    type:
+                      type: string
+                      enum: [pg, pg_multi, isian, benar_salah]
+                    content:
+                      type: string
+                    options:
+                      type: array
+                      description: Labels in stored order; empty for `isian`.
+                      items:
+                        type: object
+                        additionalProperties: false
+                        required: [label]
+                        properties:
+                          label:
+                            type: string
+
     TryoutList:
       type: object
       additionalProperties: false
@@ -7123,7 +7156,7 @@ components:
 
     ExportKind:
       type: string
-      enum: [tryout_pdf, tryout_results_csv, tryout_results_xlsx]
+      enum: [tryout_results_csv, tryout_results_xlsx]
 
     Export:
       type: object
@@ -7240,7 +7273,6 @@ components:
                 - website_not_published
                 - website_revision_conflict
                 - website_content_invalid
-                - pdf_unavailable
                 - export_not_ready
                 - last_admin
             message:
