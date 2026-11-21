@@ -107,7 +107,7 @@ user id picks within what is left, so a user keeps the same face while their gen
 fields empty (staff, and students from before sign-up asked) the id picks among all thirty-five. Sign-up
 requires both fields; `gender` is `male` or `female`, `birth_date` is `YYYY-MM-DD`, not in the future and
 not before 1900. The grouping was sorted by eye from a low-resolution sheet and is not yet confirmed by the
-owner. Staff lists do not carry other users' avatars yet, so a list shows the neutral placeholder.
+owner. Staff rows carry the resolved key through `model.ShownAvatar` (never null): `avatar` on admin users, and `student_avatar` on leaderboard, monitoring, orders and top-ups, as results rows already did.
 
 `name` is trimmed and 1 to 100 characters. `phone` is optional and goes through the same
 `NormalizePhone` as register. Uniqueness is left to the `(tenant, phone)` unique index, so saving the

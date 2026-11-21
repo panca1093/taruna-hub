@@ -30,7 +30,7 @@ func NewTopupRepository(db *pgxpool.Pool) *TopupRepository {
 	return &TopupRepository{db: db}
 }
 
-const topupColumns = `t.id, t.number, t.tenant_id, t.user_id, u.name, t.amount::text, t.method, t.status,
+const topupColumns = `t.id, t.number, t.tenant_id, t.user_id, u.name, u.avatar_key, u.gender, u.birth_date, t.amount::text, t.method, t.status,
 	t.idempotency_key, t.proof_asset_id, t.reject_reason, t.reviewed_by, t.approved_at, t.rejected_at,
 	t.created_at, t.updated_at,
 	(SELECT a.redirect_url FROM payment_attempts a WHERE a.topup_id = t.id AND a.status IN ('pending', 'failed'))`
@@ -220,7 +220,7 @@ func (r *TopupRepository) find(ctx context.Context, q queryer, where string, for
 
 func scanTopup(row pgx.Row) (model.Topup, error) {
 	var t model.Topup
-	err := row.Scan(&t.ID, &t.Number, &t.TenantID, &t.UserID, &t.StudentName, &t.Amount, &t.Method, &t.Status,
+	err := row.Scan(&t.ID, &t.Number, &t.TenantID, &t.UserID, &t.StudentName, &t.AvatarKey, &t.Gender, &t.BirthDate, &t.Amount, &t.Method, &t.Status,
 		&t.Key, &t.ProofAssetID, &t.RejectReason, &t.ReviewedBy, &t.ApprovedAt, &t.RejectedAt,
 		&t.CreatedAt, &t.UpdatedAt, &t.RedirectURL)
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -109,9 +109,11 @@ function BlockView({ block, labels }: { block: Block; labels: TryoutPrintLabels 
   }
   if (block.kind === "subtest") {
     return (
-      <div className="border-b border-border pb-4 pt-2">
-        <h2 className="font-display text-heading-sm text-foreground">{block.name}</h2>
-        <p className="text-small text-muted">{labels.subtestMeta(block.minutes, block.count)}</p>
+      <div className="pb-4">
+        <div className="border-b border-border pb-4 pt-2">
+          <h2 className="font-display text-heading-sm text-foreground">{block.name}</h2>
+          <p className="text-small text-muted">{labels.subtestMeta(block.minutes, block.count)}</p>
+        </div>
       </div>
     );
   }

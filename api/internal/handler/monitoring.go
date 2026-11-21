@@ -48,6 +48,7 @@ type activeSessionResponse struct {
 	SessionID      uuid.UUID              `json:"session_id"`
 	UserID         uuid.UUID              `json:"user_id"`
 	StudentName    string                 `json:"student_name"`
+	StudentAvatar  string                 `json:"student_avatar"`
 	TryoutID       uuid.UUID              `json:"tryout_id"`
 	TryoutTitle    string                 `json:"tryout_title"`
 	AttemptNumber  int                    `json:"attempt_number"`
@@ -122,8 +123,8 @@ func (h *Handler) ActiveSessions(c echo.Context) error {
 	body := activeSessionListResponse{Sessions: make([]activeSessionResponse, 0, len(rows)), Total: total, ServerTime: time.Now().UTC()}
 	for _, r := range rows {
 		item := activeSessionResponse{
-			SessionID: r.SessionID, UserID: r.UserID, StudentName: r.StudentName, TryoutID: r.TryoutID, TryoutTitle: r.TryoutTitle,
-			AttemptNumber: r.AttemptNumber, StartedAt: r.StartedAt, ViolationCount: r.ViolationCount,
+			SessionID: r.SessionID, UserID: r.UserID, StudentName: r.StudentName, StudentAvatar: model.ShownAvatar(r.UserID, r.AvatarKey, r.Gender, r.BirthDate),
+			TryoutID: r.TryoutID, TryoutTitle: r.TryoutTitle, AttemptNumber: r.AttemptNumber, StartedAt: r.StartedAt, ViolationCount: r.ViolationCount,
 		}
 		if r.Subtest != nil {
 			item.Subtest = &activeSubtestResponse{SubtestID: r.Subtest.ID, Name: r.Subtest.Name, Position: r.Subtest.Position, StartedAt: r.Subtest.StartedAt}

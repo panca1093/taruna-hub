@@ -32,6 +32,7 @@ const (
 type adminUserResponse struct {
 	ID            uuid.UUID  `json:"id"`
 	Name          string     `json:"name"`
+	Avatar        string     `json:"avatar"`
 	Email         *string    `json:"email"`
 	Phone         *string    `json:"phone"`
 	Role          model.Role `json:"role"`
@@ -93,7 +94,7 @@ type studentAccessListResponse struct {
 
 func adminUserOf(u model.User) adminUserResponse {
 	return adminUserResponse{
-		ID: u.ID, Name: u.Name, Email: u.Email, Phone: u.Phone, Role: u.Role, IsActive: u.IsActive,
+		ID: u.ID, Name: u.Name, Avatar: model.ShownAvatar(u.ID, u.AvatarKey, u.Gender, u.BirthDate), Email: u.Email, Phone: u.Phone, Role: u.Role, IsActive: u.IsActive,
 		Balance: u.Balance, EmailVerified: u.EmailVerifiedAt != nil, CreatedAt: u.CreatedAt,
 	}
 }

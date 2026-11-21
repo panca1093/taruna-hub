@@ -74,6 +74,7 @@ type leaderboardEntryResponse struct {
 	Rank            int       `json:"rank"`
 	UserID          uuid.UUID `json:"user_id"`
 	StudentName     string    `json:"student_name"`
+	StudentAvatar   string    `json:"student_avatar"`
 	AverageScore    float64   `json:"average_score"`
 	AttemptsCounted int       `json:"attempts_counted"`
 }
@@ -224,7 +225,7 @@ func (h *Handler) TryoutLeaderboard(c echo.Context) error {
 	body := leaderboardResponse{Entries: make([]leaderboardEntryResponse, 0, len(standings)), Total: total}
 	for _, s := range standings {
 		body.Entries = append(body.Entries, leaderboardEntryResponse{
-			Rank: s.Rank, UserID: s.UserID, StudentName: s.Name, AverageScore: s.Average, AttemptsCounted: s.Attempts,
+			Rank: s.Rank, UserID: s.UserID, StudentName: s.Name, StudentAvatar: model.ShownAvatar(s.UserID, s.AvatarKey, s.Gender, s.BirthDate), AverageScore: s.Average, AttemptsCounted: s.Attempts,
 		})
 	}
 	return c.JSON(http.StatusOK, body)

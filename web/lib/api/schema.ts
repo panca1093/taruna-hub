@@ -8002,6 +8002,11 @@ export interface components {
             /** Format: uuid */
             id: string;
             name: string;
+            /**
+             * @description The avatar to show, resolved like `User.avatar` (the user's pick, or the automatic one). Never null.
+             * @example a03
+             */
+            avatar: string;
             email: string | null;
             phone: string | null;
             /** @enum {string} */
@@ -8206,6 +8211,11 @@ export interface components {
             /** Format: uuid */
             student_id: string;
             student_name: string;
+            /**
+             * @description The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+             * @example a03
+             */
+            student_avatar: string;
             /** Format: uuid */
             product_id: string;
             /** @enum {string} */
@@ -8310,6 +8320,11 @@ export interface components {
             /** Format: uuid */
             student_id: string;
             student_name: string;
+            /**
+             * @description The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+             * @example a03
+             */
+            student_avatar: string;
             /** @example 50000.00 */
             amount: string;
             /**
@@ -8518,6 +8533,11 @@ export interface components {
             /** Format: uuid */
             user_id: string;
             student_name: string;
+            /**
+             * @description The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+             * @example a03
+             */
+            student_avatar: string;
             average_score: number;
             attempts_counted: number;
         };
@@ -8583,6 +8603,11 @@ export interface components {
             /** Format: uuid */
             user_id: string;
             student_name: string;
+            /**
+             * @description The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+             * @example a03
+             */
+            student_avatar: string;
             /** Format: uuid */
             tryout_id: string;
             tryout_title: string;

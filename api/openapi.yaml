@@ -6845,13 +6845,18 @@ components:
     AdminUser:
       type: object
       additionalProperties: false
-      required: [id, name, email, phone, role, is_active, balance, email_verified, created_at]
+      required: [id, name, avatar, email, phone, role, is_active, balance, email_verified, created_at]
       properties:
         id:
           type: string
           format: uuid
         name:
           type: string
+        avatar:
+          type: string
+          pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+          description: The avatar to show, resolved like `User.avatar` (the user's pick, or the automatic one). Never null.
+          example: a03
         email:
           type: string
           nullable: true
@@ -7235,7 +7240,7 @@ components:
     Order:
       type: object
       additionalProperties: false
-      required: [id, code, status, payment_method, student_id, student_name, product_id, product_type, product_title,
+      required: [id, code, status, payment_method, student_id, student_name, student_avatar, product_id, product_type, product_title,
                  price, items, proof_asset_id, cancel_reason, created_at, confirmed_at, cancelled_at,
                  kecermatan_test_id, included_attempts, redirect_url, payment_exception]
       description: The checkout snapshot. Editing or deleting the product later changes nothing here.
@@ -7277,6 +7282,11 @@ components:
           format: uuid
         student_name:
           type: string
+        student_avatar:
+          type: string
+          pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+          description: The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+          example: a03
         product_id:
           type: string
           format: uuid
@@ -7437,7 +7447,7 @@ components:
     Topup:
       type: object
       additionalProperties: false
-      required: [id, code, status, method, student_id, student_name, amount, proof_asset_id, reject_reason,
+      required: [id, code, status, method, student_id, student_name, student_avatar, amount, proof_asset_id, reject_reason,
                  created_at, approved_at, rejected_at, redirect_url]
       properties:
         redirect_url:
@@ -7462,6 +7472,11 @@ components:
           format: uuid
         student_name:
           type: string
+        student_avatar:
+          type: string
+          pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+          description: The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+          example: a03
         amount:
           type: string
           example: "50000.00"
@@ -7851,7 +7866,7 @@ components:
     LeaderboardEntry:
       type: object
       additionalProperties: false
-      required: [rank, user_id, student_name, average_score, attempts_counted]
+      required: [rank, user_id, student_name, student_avatar, average_score, attempts_counted]
       properties:
         rank:
           type: integer
@@ -7860,6 +7875,11 @@ components:
           format: uuid
         student_name:
           type: string
+        student_avatar:
+          type: string
+          pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+          description: The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+          example: a03
         average_score:
           type: number
         attempts_counted:
@@ -7963,8 +7983,8 @@ components:
     ActiveSession:
       type: object
       additionalProperties: false
-      required: [session_id, user_id, student_name, tryout_id, tryout_title, attempt_number, started_at, subtest,
-                 violation_count]
+      required: [session_id, user_id, student_name, student_avatar, tryout_id, tryout_title, attempt_number, started_at,
+                 subtest, violation_count]
       properties:
         session_id:
           type: string
@@ -7974,6 +7994,11 @@ components:
           format: uuid
         student_name:
           type: string
+        student_avatar:
+          type: string
+          pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+          description: The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+          example: a03
         tryout_id:
           type: string
           format: uuid
