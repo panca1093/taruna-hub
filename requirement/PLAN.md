@@ -663,7 +663,7 @@ For every slice, use this verification loop:
 
 ### P20 — Tryout PDF
 
-**Status:** done, lean — shared `exports` jobs (migration 000023, queue `exports`, 60-second re-authorized download links; [docs/exports.md](../docs/exports.md)) now carry the P21 result exports only. The tryout PDF was first built server-side with Gotenberg (2026-11-08) and **replaced on 2026-11-21** by an owner decision: the admin's browser lays out answer-free content from `GET /tryouts/{id}/print` as A4 pages and captures them into one PDF ([docs/tryout-pdf.md](../docs/tryout-pdf.md); FR-ADM-TRY-12 superseded, see RECONCILIATION §2); migration 000029 drops the `tryout_pdf` export kind. The browser check of the new flow is pending (main session). Student and kecermatan PDFs stay out (D11) · **Size:** M · **Depends:** P02, P06, P08
+**Status:** done, lean — shared `exports` jobs (migration 000023, queue `exports`, 60-second re-authorized download links; [docs/exports.md](../docs/exports.md)) now carry the P21 result exports only. The tryout PDF was first built server-side with Gotenberg (2026-11-08) and **replaced on 2026-11-21** by an owner decision: the admin's browser lays out answer-free content from `GET /tryouts/{id}/print` as A4 pages and captures them into one PDF ([docs/tryout-pdf.md](../docs/tryout-pdf.md); FR-ADM-TRY-12 superseded, see RECONCILIATION §2); migration 000029 drops the `tryout_pdf` export kind. Browser-checked 2026-11-21 (6-page PDF, light and dark app theme); an image in the PDF and the failure/retry state are not yet demoed. Student and kecermatan PDFs stay out (D11) · **Size:** M · **Depends:** P02, P06, P08
 
 **Outcome:** Authorized staff download a printable tryout with rendered math/images and no answers.
 
@@ -676,13 +676,13 @@ For every slice, use this verification loop:
 **Acceptance scenarios:**
 
 - [ ] PDF has title, subtest name/duration, numbering, original option order, images/math and school/date footer.
-  - Browser check pending by main session (layout, fonts, KaTeX, footer "Halaman n / N"). `GET /tryouts/{id}/print` returns stored order with frozen option labels (`TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree`).
-- [ ] Inspect render input and output: no keys/explanations; shuffle settings do not change PDF order.
-  - Input proven: the print read selects type, stem and option labels only, and the test asserts no `correct`, `explanation`, `points` or option ids in the body. Output inspection pending by main session.
+  - Browser 2026-11-21, "Tryout UTBK SMA" from the builder: title, both subtests with duration and question count, per-subtest numbering, options in stored order, typeset math and a "Taruna Eduka · 21 November 2026 · Halaman n / 6" footer on white pages, also when the app is in dark mode. Stored order and the frozen stem are asserted by `TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree`. Left open: no question carries an image yet, so an image in the PDF is not demoed.
+- [x] Inspect render input and output: no keys/explanations; shuffle settings do not change PDF order.
+  - Input: the print read selects type, stem and option labels only; the test runs with both shuffle flags on and asserts stored order and no `correct`, `explanation`, `points`, option ids or their values in the body. Output: the six captured pages of the 2026-11-21 browser run show stems and options only.
 - [x] Print read is staff-only and tenant-scoped.
   - Student `403`, anonymous `401`, other tenant's or unknown id `404` (`TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree`).
 - [ ] Multi-page math/image fixture paginates legibly (no question split, no lone subtest heading); failure is visible with retry.
-  - Browser check pending by main session. The worker-restart and ready-notification scenarios no longer apply (no job).
+  - Browser 2026-11-21: 40 questions paginate into 6 pages with no question split and no lone heading, and math stays legible on every page. Left open: an image fixture and the failure/retry state were not demoed. The worker-restart and ready-notification scenarios no longer apply (no job).
 
 **Decision / verification gate:** D11 scope/copy alignment. Student and kecermatan PDFs remain unapproved post-MVP/open requests.
 

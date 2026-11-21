@@ -81,7 +81,8 @@ export async function savePageAsPdf(node: HTMLElement, fileName: string, backgro
  */
 export async function savePagesAsPdf(pages: HTMLElement[], fileName: string, background: string, onProgress?: (page: number, total: number) => void, signal?: AbortSignal) {
   await document.fonts.ready;
-  const fontEmbedCSS = pages.length > 0 ? await getFontEmbedCSS(pages[0]) : "";
+  // Fonts are collected from the pages' shared parent: page 1 alone may not use the math faces later pages need.
+  const fontEmbedCSS = pages.length > 0 ? await getFontEmbedCSS(pages[0].parentElement ?? pages[0]) : "";
   const shots: PdfPage[] = [];
   for (const [i, node] of pages.entries()) {
     signal?.throwIfAborted();
