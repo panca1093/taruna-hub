@@ -4,19 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, toast } from "@heroui/react";
 import { BarChart3, CloudOff, Download, Trophy, TriangleAlert } from "lucide-react";
-import { ExportStatus } from "@/components/admin/export-status";
 import { AppShell } from "@/components/app-shell";
+import { useBulkSheetPdf } from "@/components/capture-stage";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
 import { StatusChip } from "@/components/status-badge";
+import { TryoutResultCaptureSheet } from "@/components/tryout-result-capture-sheet";
 import { SelectInput, TextInput } from "@/components/ui/form";
 import { api, errorText, type Leaderboard, type Program, type StaffResultStudentRow, type TryoutSummary } from "@/lib/api/client";
 import { useResultsT } from "@/lib/i18n/dict/results";
 
 const PAGE_SIZE = 50;
 const BOARD_SIZE = 20;
+const MAX_SELECTED = 30;
 const SEARCH_DEBOUNCE_MS = 300;
 
 const rowKey = (r: StaffResultStudentRow) => `${r.student_id}:${r.tryout_id}`;
@@ -32,8 +34,8 @@ export default function ResultsPage() {
   const [tryoutFilter, setTryoutFilter] = useState("all");
   const [programs, setPrograms] = useState<Program[]>([]);
   const [programFilter, setProgramFilter] = useState("all");
-  const [exportKey, setExportKey] = useState(0);
-  const [requesting, setRequesting] = useState<"csv" | "xlsx" | null>(null);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const bulk = useBulkSheetPdf();
   const router = useRouter();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -67,6 +69,7 @@ export default function ResultsPage() {
       const next = searchInput.trim();
       if (next === search) return;
       setRows(null);
+      setSelected(new Set());
       setLoadFailed(false);
       setSearch(next);
     }, SEARCH_DEBOUNCE_MS);
@@ -110,6 +113,7 @@ export default function ResultsPage() {
 
   const changeTryout = (next: string) => {
     setRows(null);
+    setSelected(new Set());
     setBoard(null);
     setLoadFailed(false);
     setTryoutFilter(next);
@@ -117,25 +121,26 @@ export default function ResultsPage() {
 
   const changeProgram = (next: string) => {
     setRows(null);
+    setSelected(new Set());
     setLoadFailed(false);
     setProgramFilter(next);
   };
 
-  const requestExport = async (format: "csv" | "xlsx") => {
-    setRequesting(format);
-    try {
-      await api.results.requestExport({
-        format,
-        tryout_id: tryoutFilter === "all" ? undefined : tryoutFilter,
-        program_id: programFilter === "all" ? undefined : programFilter,
-      });
-      setExportKey((key) => key + 1);
-      toast.success(t.exportRequested, { description: t.exportRequestedDescription });
-    } catch (err) {
-      toast.danger(t.exportErrorTitle, { description: errorText(err, t.exportErrorDescription) });
-    } finally {
-      setRequesting(null);
-    }
+  const working = bulk.status === "working";
+
+  const downloadPdf = async () => {
+    const chosen = (rows ?? []).filter((r) => selected.has(rowKey(r)));
+    if (chosen.length === 0) return;
+    const saved = await bulk.run(
+      chosen,
+      async (row) => {
+        const detail = await api.results.student(row.student_id, row.tryout_id);
+        if (detail.attempts.length === 0) throw new Error("no completed attempt");
+        return <TryoutResultCaptureSheet detail={detail} attempt={detail.attempts[0]} />;
+      },
+      `hasil-tryout-${chosen.length}-siswa-${new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Jakarta" })}.pdf`,
+    );
+    if (saved) toast.success(t.bulkDone(chosen.length));
   };
 
   const loadMore = async () => {
@@ -216,13 +221,9 @@ export default function ResultsPage() {
       title={t.pageTitle}
       description={rows === null ? undefined : t.resultCount(total)}
       actions={
-        <div className="flex gap-2">
-          {(["csv", "xlsx"] as const).map((format) => (
-            <Button key={format} variant="secondary" size="sm" onPress={() => void requestExport(format)} isDisabled={requesting !== null}>
-              <Icon icon={Download} size="xs" /> {format === "csv" ? t.exportCsv : t.exportXlsx}
-            </Button>
-          ))}
-        </div>
+        <Button variant="primary" size="sm" isDisabled={selected.size === 0 || working} onPress={() => void downloadPdf()}>
+          <Icon icon={Download} size="xs" /> {working ? t.bulkProgress(bulk.page, bulk.total) : t.bulkPdf(selected.size)}
+        </Button>
       }
     >
       <div className="mb-4 flex flex-wrap gap-3">
@@ -242,11 +243,6 @@ export default function ResultsPage() {
         <div className="w-full max-w-xs">
           <SelectInput label={t.fieldProgram} options={programOptions} selectedKey={programFilter} onSelectionChange={(k) => changeProgram(k ?? "all")} />
         </div>
-      </div>
-
-      <div className="mb-6 flex flex-col gap-4">
-        <ExportStatus kind="tryout_results_csv" refreshKey={exportKey} />
-        <ExportStatus kind="tryout_results_xlsx" refreshKey={exportKey} />
       </div>
 
       {board && board.entries.length > 0 && (
@@ -289,7 +285,29 @@ export default function ResultsPage() {
         <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
       ) : (
         <>
-          <DataTable columns={columns} rows={rows} rowKey={rowKey} onRowClick={(r) => router.push(`/admin/results/${r.tryout_id}/${r.student_id}`)} />
+          {bulk.status === "error" && (
+            <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-tile border border-danger bg-danger-soft px-4 py-3 text-caption text-danger">
+              <span>
+                <strong className="font-medium">{t.bulkFailedTitle}.</strong> {t.bulkFailed(Math.max(bulk.page - 1, 0), bulk.total)}
+              </span>
+              <Button variant="secondary" size="sm" onPress={() => void downloadPdf()}>
+                {t.bulkRetry}
+              </Button>
+            </div>
+          )}
+          {selected.size >= MAX_SELECTED && <p className="mb-3 text-label text-muted">{t.bulkCap(MAX_SELECTED)}</p>}
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={rowKey}
+            onRowClick={(r) => router.push(`/admin/results/${r.tryout_id}/${r.student_id}`)}
+            selectedKeys={selected}
+            onSelectionChange={setSelected}
+            maxSelected={MAX_SELECTED}
+            isSelectionDisabled={working}
+            selectAllLabel={t.selectAll}
+            selectRowLabel={(r) => t.selectRow(r.student_name)}
+          />
           {rows.length < total && (
             <div className="mt-4 flex justify-center">
               <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
@@ -299,6 +317,7 @@ export default function ResultsPage() {
           )}
         </>
       )}
+      {bulk.stage}
     </AppShell>
   );
 }

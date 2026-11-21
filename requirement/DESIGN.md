@@ -327,6 +327,10 @@ The question editor is an observed specialized pattern: compact formatting toolb
 
 Guidelines: place count, search/filter controls, and any primary action above the table. Make active filters visible and provide a clear reset. Right-align comparable numeric columns when useful. Keep IDs in mono and secondary styling. With `onRowClick`, rows are focusable, show a focus ring, and open on Enter/Space; explicit links/buttons in rows are still preferred for multiple row actions.
 
+Row selection is opt-in: pass `selectedKeys` and `onSelectionChange` (keys come from `rowKey`) and DataTable adds a leading checkbox column (native checkbox, `size-4.5 accent-accent`, labelled through `selectAllLabel` / `selectRowLabel` from the dict). The header checkbox selects or clears every loaded selectable row and shows the indeterminate state; row checkboxes never trigger `onRowClick`. `isRowSelectable` disables rows, `maxSelected` caps the selection (further rows are disabled and the page shows a hint), `isSelectionDisabled` locks it while an action runs. Place the bulk action in the page header, labelled with the count ("Unduh PDF (3)"), disabled at zero. Selection lives in the page, persists across "load more", and is cleared when a filter or search changes.
+
+Bulk PDF downloads (staff results lists) render one result sheet at a time through `useBulkSheetPdf` ([capture-stage](../web/components/capture-stage.tsx)) and the same capture sheet the detail page prints, one page per student with the page height following the sheet.
+
 Order status filters are rounded-full custom buttons with 14px medium labels, 14px horizontal / 6px vertical padding, accent fill when selected, and neutral border when inactive. For new filter controls, expose the selection state semantically and support keyboard activation.
 
 Student result rows are bordered 6px-radius links with 14px horizontal / 10px vertical padding, program badge, truncated title, score, and metadata. Dates hide below `sm`; core identity and score stay visible.

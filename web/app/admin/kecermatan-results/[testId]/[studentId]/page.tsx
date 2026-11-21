@@ -4,11 +4,12 @@ import { use, useEffect, useRef, useState } from "react";
 import { Button, toast } from "@heroui/react";
 import { BarChart3, CloudOff, Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { CaptureStage } from "@/components/capture-stage";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
+import { KecermatanResultCaptureSheet } from "@/components/kecermatan-result-capture-sheet";
 import { KecermatanResultView } from "@/components/kecermatan-result-view";
-import { PageHeading } from "@/components/page-heading";
 import { LinkButton } from "@/components/ui/link-button";
 import { ApiError, api, type KecermatanStaffStudentDetail } from "@/lib/api/client";
 import { savePageAsPdf } from "@/lib/capture-pdf";
@@ -127,17 +128,9 @@ export default function KecermatanStudentResultPage({ params }: { params: Promis
       <div className="space-y-6">
         <KecermatanResultView progress={progress} attempts={attempts} loadAttempt={loadAttempt} />
       </div>
-      <div aria-hidden inert data-theme="light" style={{ colorScheme: "light" }} className="fixed top-0 -left-300 w-275">
-        <div ref={captureRef} className="space-y-6 bg-background p-8 text-foreground">
-          <PageHeading
-            title={student.name}
-            description={`${test.title} · ${t.detailDescription(test.program_code, detail.remaining_attempts)}`}
-            leading={<GradientAvatar user={student} size="lg" />}
-            size="compact"
-          />
-          <KecermatanResultView progress={progress} attempts={attempts} loadAttempt={loadAttempt} initialOpenId={null} />
-        </div>
-      </div>
+      <CaptureStage>
+        <KecermatanResultCaptureSheet ref={captureRef} detail={detail} />
+      </CaptureStage>
     </AppShell>
   );
 }
