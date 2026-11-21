@@ -1,3 +1,5 @@
+-- Lossy by design: the text columns keep text, formulas, bold/italic and simple lists, but tables become " | " lines
+-- and shapes and uploaded images disappear. Documents are dropped; so are the per-option docs below.
 ALTER TABLE question_versions
     DROP COLUMN content_doc,
     DROP COLUMN explanation_doc;

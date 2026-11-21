@@ -20,8 +20,8 @@ object key, never a URL: a signed link is minted per request and lives 60 second
 |---|---|---|
 | repository | `repository/asset.go` | SQL only; every method takes the tenant, except the purge scan |
 | service | `service/asset.go` | every rule, and the small `ObjectStore` interface it needs |
-| infra | `infra/storage.go` | the minio-go implementation: `Put`, `Delete`, `PresignGet`, `EnsureBucket` |
-| handler | `handler/asset.go` | multipart parsing, the body cap, error mapping |
+| infra | `infra/storage.go` | the minio-go implementation: `Put`, `Get`, `Delete`, `PresignGet`, `EnsureBucket` |
+| handler | `handler/asset.go` | multipart parsing, the body cap, error mapping, the byte stream |
 
 ## The object key
 
@@ -53,6 +53,12 @@ The stored `content_type` is the detected one. Rejections write nothing: no obje
 |---|---|---|
 | `POST /api/v1/assets` | any tenant user; `payment_proof` student/admin/operator, `question_image` admin/operator | `201` `{id, purpose, content_type, size_bytes, status}`, always `staged` |
 | `GET /api/v1/assets/{id}/url` | the uploader, or admin/operator of the tenant for a `final` asset | `200` `{url, expires_at}`, `Cache-Control: private, no-store` |
+| `GET /api/v1/assets/{id}/content` | exactly the same callers (one shared decision, `AssetService.readable`) | `200` the object bytes, `Content-Type` as detected at upload, `Content-Length`, `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff`; `401`, the uniform `404`, `503` as for `/url` |
+
+`/content` exists because a browser cannot read the storage bucket across origins: the tryout PDF is built in the
+page, and a presigned link that cannot be fetched with `fetch()` cannot put a question image into it. It goes through
+the API's normal CORS middleware (credentials, the `Authorization` header). The bytes are read through
+`ObjectStore.Get` and streamed, never buffered whole; the size on the response is the one recorded at upload.
 
 Every route is `no-store` and behind `Authenticate`. A purpose the role may not upload is `403`; an
 unknown purpose is `422` on `purpose`. With `S3_ENDPOINT` unset every route answers `503`
@@ -63,10 +69,18 @@ unknown purpose is `422` on `purpose`. With `S3_ENDPOINT` unset every route answ
 A foreign tenant's id, an unknown id, a malformed id and an asset the caller may not touch all answer
 the **same `404`**, never `403` (the convention from the wallet), so ids cannot be probed. A staged
 asset is readable only by its uploader — an admin cannot download it until it is final.
-A student therefore reads only their own uploads; `DownloadURL` allows the uploader or staff, and a student
-may also read a `final` `question_image` of their tenant (question images render in the exam and review,
-like the `item_image` rule). A staged one stays with the uploader and staff. Question saves finalize the
-images their documents name through `FinalizePurposeTx`, which refuses another purpose or tenant as not found.
+A student therefore reads only their own uploads, plus one exception: a student may read **any** `final`
+`question_image` of their tenant (question images render in the exam and review). That is deliberately coarse:
+the unguessable asset id (a random UUID, 122 bits) is the only gate. It is not tied to the student's sessions, so a
+student who learns an id can fetch an image of a question they never attempted, and an image that belongs only to an
+explanation is readable before the review is released. Tying the read to the student's sessions (as the
+`item_image` rule does through `KecermatanItemVisible`) is a known follow-up. A staged one stays with the uploader.
+The read decision lives in one place, `AssetService.readable`, shared by `/url` and `/content`.
+
+Question saves finalize the images their documents name through `FinalizePurposeTx`, which refuses another purpose
+or tenant as not found and applies one more rule: a `staged` image can be attached only by the user who uploaded it,
+so nobody can adopt another person's pending upload by id; an image that is already `final` can be reused by any
+staff member of the tenant. Every refusal is the same not-found, so the answer discloses nothing.
 
 Authorization runs on every `url` call, but a link already issued works for anyone who holds it until it
 expires; that is why the TTL is 60 seconds and the response is never cached.

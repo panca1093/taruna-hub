@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"regexp"
 	"strings"
@@ -85,6 +86,8 @@ type QuestionInput struct {
 	Correct        []string
 	// BaseVersion is the version the editor started from; a mismatch is a 409, never a silent write.
 	BaseVersion int
+	// docRules is set by the service, never by the transport: what image src the documents may carry.
+	docRules docRules
 }
 
 // QuestionFilter is the validated list query.
@@ -109,9 +112,40 @@ func NewQuestionService(db *pgxpool.Pool, repo *repository.QuestionRepository, a
 	return &QuestionService{db: db, repo: repo, assets: assets}
 }
 
-// BackfillDocs gives every question version stored as text its documents and returns how many it converted.
-func (s *QuestionService) BackfillDocs(ctx context.Context) (int, error) {
-	return s.repo.BackfillDocs(ctx, backfillBatch)
+// BackfillDocs gives every question version stored as text its documents and returns how many it converted. An
+// instance that cannot take the lock, or a row that cannot be converted, is logged and passed over: reads fall back
+// to the converted text, so neither stops the server from starting.
+func (s *QuestionService) BackfillDocs(ctx context.Context, logger *slog.Logger) (int, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	result, err := s.repo.BackfillDocs(ctx, backfillBatch, convertLegacyVersion)
+	if err != nil {
+		return result.Converted, err
+	}
+	if !result.Locked {
+		logger.Info("question document backfill skipped: another instance is running it")
+	}
+	for _, skipped := range result.Skipped {
+		logger.Error("question version left as text", slog.String("version_id", skipped.ID.String()), slog.String("error", skipped.Err.Error()))
+	}
+	return result.Converted, nil
+}
+
+// convertLegacyVersion is the same conversion a read of that row applies.
+func convertLegacyVersion(l repository.LegacyVersion) (repository.VersionDocs, error) {
+	var options []model.QuestionOption
+	if err := json.Unmarshal(l.Options, &options); err != nil {
+		return repository.VersionDocs{}, fmt.Errorf("decode options: %w", err)
+	}
+	if options == nil {
+		options = []model.QuestionOption{}
+	}
+	model.OptionsWithDocs(options)
+	resolveOptions(options)
+	return repository.VersionDocs{
+		Content: docOfLegacyText(l.Content), Explanation: docOfLegacyText(l.Explanation), Options: options,
+	}, nil
 }
 
 // questionTenant pins every query to the host's tenant and refuses a principal from another one.
@@ -139,6 +173,7 @@ func (s *QuestionService) List(ctx context.Context, scope HostScope, principal m
 	if err != nil {
 		return nil, 0, fmt.Errorf("list questions: %w", err)
 	}
+	resolveQuestions(questions)
 	return questions, total, nil
 }
 
@@ -151,6 +186,7 @@ func (s *QuestionService) Get(ctx context.Context, scope HostScope, principal mo
 	if err != nil {
 		return model.Question{}, questionError(err)
 	}
+	resolveQuestion(&question)
 	return question, nil
 }
 
@@ -177,6 +213,7 @@ func (s *QuestionService) Create(ctx context.Context, scope HostScope, principal
 			return err
 		}
 		created, err = s.repo.FindCurrentTx(ctx, tx, tenantID, id, false)
+		resolveQuestion(&created)
 		return questionError(err)
 	})
 	if err != nil {
@@ -193,13 +230,16 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 	if input.BaseVersion < 1 {
 		return model.Question{}, &InputError{Fields: map[string]string{"base_version": ReasonBaseVersion}}
 	}
+	// Look the question up before checking the body so another tenant's id answers 404 and leaks nothing.
+	existing, err := s.repo.Find(ctx, tenantID, id)
+	if err != nil {
+		return model.Question{}, questionError(err)
+	}
+	resolveQuestion(&existing)
+	input.docRules = docRules{srcs: questionSrcs(existing)}
 	input, err = scalarOf(input)
 	if err != nil {
 		return model.Question{}, err
-	}
-	// Look the question up before checking the body so another tenant's id answers 404 and leaks nothing.
-	if _, err := s.repo.Find(ctx, tenantID, id); err != nil {
-		return model.Question{}, questionError(err)
 	}
 	if err := s.checkRefs(ctx, tenantID, input); err != nil {
 		return model.Question{}, err
@@ -214,6 +254,8 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 		if input.BaseVersion != current.Version {
 			return ErrQuestionStale
 		}
+		resolveQuestion(&current)
+		input.docRules = docRules{srcs: questionSrcs(current)}
 		input, err = validatedOptions(input, current.Options)
 		if err != nil {
 			return err
@@ -233,6 +275,7 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 			return questionError(err)
 		}
 		out, err = s.repo.FindCurrentTx(ctx, tx, tenantID, id, false)
+		resolveQuestion(&out)
 		return questionError(err)
 	})
 	if err != nil {
@@ -306,10 +349,10 @@ func scalarOf(input QuestionInput) (QuestionInput, error) {
 		fields["type"] = ReasonQuestionType
 	}
 	var reason string
-	if input.Content, reason = validatedDoc(input.Content, true, maxContentLen, ReasonQuestionContent); reason != "" {
+	if input.Content, reason = validatedDocWith(input.Content, true, maxContentLen, ReasonQuestionContent, input.docRules); reason != "" {
 		fields["content"] = reason
 	}
-	if input.Explanation, reason = validatedDoc(input.Explanation, false, maxExplanationLen, ReasonQuestionExpl); reason != "" {
+	if input.Explanation, reason = validatedDocWith(input.Explanation, false, maxExplanationLen, ReasonQuestionExpl, input.docRules); reason != "" {
 		fields["explanation"] = reason
 	}
 	if !knownDifficulty(input.Difficulty) {
@@ -366,7 +409,7 @@ func validatedOptions(input QuestionInput, existing []model.QuestionOption) (Que
 			fields["correct"] = ReasonCorrect
 		}
 	default:
-		options, remap, _ := resolvedOptions(input.Options, existing, fields)
+		options, remap, _ := resolvedOptions(input.Options, existing, fields, input.docRules)
 		if len(options) < minOptions || len(options) > maxOptions {
 			fields["options"] = ReasonOptions
 		}
@@ -409,7 +452,7 @@ func validatedOptions(input QuestionInput, existing []model.QuestionOption) (Que
 }
 
 // Placeholder ids are noted so `correct` keeps pointing at the option the editor meant.
-func resolvedOptions(input []QuestionOptionInput, existing []model.QuestionOption, fields map[string]string) ([]QuestionOptionInput, map[string]string, bool) {
+func resolvedOptions(input []QuestionOptionInput, existing []model.QuestionOption, fields map[string]string, rules docRules) ([]QuestionOptionInput, map[string]string, bool) {
 	owned := make(map[string]bool, len(existing))
 	for _, option := range existing {
 		owned[option.ID] = true
@@ -421,7 +464,7 @@ func resolvedOptions(input []QuestionOptionInput, existing []model.QuestionOptio
 	ok := true
 	for i, option := range input {
 		path := fmt.Sprintf("options[%d]", i)
-		doc, reason := validatedDoc(option.Label, true, maxOptionLabelLen, ReasonOptionLabel)
+		doc, reason := validatedDocWith(option.Label, true, maxOptionLabelLen, ReasonOptionLabel, rules)
 		option.Label = doc
 		label := strings.ToLower(strings.TrimSpace(model.DocText(doc)))
 		if label == "" {
@@ -544,6 +587,15 @@ func sameTrueFalse(options []QuestionOptionInput) bool {
 	return len(want) == 0
 }
 
+// questionSrcs is every image src the version already holds, which an update may keep.
+func questionSrcs(q model.Question) map[string]bool {
+	docs := []model.RichDoc{q.Content, q.Explanation}
+	for _, option := range q.Options {
+		docs = append(docs, option.Doc)
+	}
+	return docSrcs(docs...)
+}
+
 // sameContent is the "saving an unchanged question writes nothing" rule.
 func sameContent(current model.Question, input QuestionInput) bool {
 	if current.ProgramID != input.ProgramID || current.SubjectID != input.SubjectID ||
@@ -634,7 +686,7 @@ func questionOf(input QuestionInput) model.Question {
 	}
 	for _, option := range input.Options {
 		out.Options = append(out.Options, model.QuestionOption{
-			ID: option.ID, Label: model.DocText(option.Label), Doc: option.Label, Points: option.Points,
+			ID: option.ID, Label: model.DocLegacyText(option.Label), Doc: option.Label, Points: option.Points,
 		})
 	}
 	return out

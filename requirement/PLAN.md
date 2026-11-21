@@ -297,7 +297,7 @@ For every slice, use this verification loop:
       Immutable versions are done and tested (P08 assigns frozen versions); the master/copy half is deferred.
 - [x] Upload malformed and valid rows, see real errors, confirm exact accepted set per D08; retry creates no duplicates.
 - [ ] LaTeX/images preview correctly; filters/IDs work; HTML and spreadsheet-formula input is handled safely.
-      API side proven by tests: documents validated and normalised, images finalized with the version, students read final question images, search over the text projection, import converted to documents, legacy rows backfilled. The browser demo of LaTeX/images in the editor, exam, review and PDF is pending (main session).
+      API side proven by tests: documents validated and normalised, images finalized with the version, students read final question images (link and bytes, for the browser-built PDF), search over the legacy-text projection, import converted to documents, legacy rows converted on read with the old renderer's behaviour and backfilled without blocking start-up. The browser demo of LaTeX/images in the editor, exam, review and PDF is pending (main session).
 
 **Decision / verification gate:** D08 resolved 2026-10-28 (confirmed accepted set, atomic commit); D04 resolved. No hardcoded import preview counts as done.
 

@@ -83,8 +83,8 @@ func TestQuestionDocumentsRoundTripNormalisedAndSearchable(t *testing.T) {
 	if got := created.Options[0].Doc.Content[0].Content[0]; got.Type != model.NodeMath || got.Attrs[model.AttrLatex] != "3" {
 		t.Errorf("option doc = %+v, want a math node", got)
 	}
-	if created.Options[0].Label != "3" {
-		t.Errorf("stored option label = %q, want the plain-text projection", created.Options[0].Label)
+	if created.Options[0].Label != "$3$" {
+		t.Errorf("stored option label = %q, want the legacy text projection", created.Options[0].Label)
 	}
 
 	again, err := h.svc.Get(context.Background(), h.scope(tenant), h.principal(tenant, model.RoleAdmin), created.ID)
@@ -103,7 +103,7 @@ func TestQuestionDocumentsRoundTripNormalisedAndSearchable(t *testing.T) {
 	if err := h.pool.QueryRow(context.Background(), `SELECT content FROM question_versions WHERE id = $1`, created.VersionID).Scan(&text); err != nil {
 		t.Fatal(err)
 	}
-	if want := model.DocText(created.Content); text != want {
+	if want := model.DocLegacyText(created.Content); text != want {
 		t.Errorf("content column = %q, want the projection %q", text, want)
 	}
 }
@@ -252,7 +252,7 @@ func TestBackfillDocsConvertsLegacyRowsOnceAndKeepsTheText(t *testing.T) {
 	_, versionID := insertLegacy(t, h, tenant, "Hitung $x^2$ lalu **tebal**", "Karena *begitu*")
 	ctx := context.Background()
 
-	if n, err := h.svc.BackfillDocs(ctx); err != nil || n < 1 {
+	if n, err := h.svc.BackfillDocs(ctx, nil); err != nil || n < 1 {
 		t.Fatalf("backfill = %d, %v, want the legacy row converted", n, err)
 	}
 	var content, explanation, options string
@@ -280,7 +280,7 @@ func TestBackfillDocsConvertsLegacyRowsOnceAndKeepsTheText(t *testing.T) {
 		t.Errorf("stored content doc = %+v, %v", doc, err)
 	}
 
-	if n, err := h.svc.BackfillDocs(ctx); err != nil || n != 0 {
+	if n, err := h.svc.BackfillDocs(ctx, nil); err != nil || n != 0 {
 		t.Errorf("second backfill = %d, %v, want nothing left to convert", n, err)
 	}
 }

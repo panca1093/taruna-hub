@@ -9,6 +9,7 @@ import (
 	"image"
 	_ "image/jpeg" // registers the decoder DecodeConfig and Decode dispatch on
 	_ "image/png"  // registers the decoder DecodeConfig and Decode dispatch on
+	"io"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,6 +52,15 @@ type ObjectStore interface {
 	// Delete succeeds on a missing object, so a retried purge can finish.
 	Delete(ctx context.Context, key string) error
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
+	// Get opens the object for reading; the caller closes it.
+	Get(ctx context.Context, key string) (io.ReadCloser, error)
+}
+
+// AssetContent is the object's bytes with the content type and size recorded when it was uploaded.
+type AssetContent struct {
+	Body        io.ReadCloser
+	ContentType string
+	Size        int64
 }
 
 // AssetLink is a presigned GET; it grants access to whoever holds it until ExpiresAt.
@@ -155,10 +165,68 @@ func (s *AssetService) FinalizePurposeTx(ctx context.Context, tx pgx.Tx, scope H
 	if err != nil {
 		return model.Asset{}, assetRepoError(err)
 	}
-	if asset.Purpose != purpose {
+	if asset.Purpose != purpose || !canAttachQuestionAsset(asset, principal) {
 		return model.Asset{}, ErrAssetNotFound
 	}
 	return s.FinalizeTx(ctx, tx, scope, principal, id)
+}
+
+// canAttachQuestionAsset: a staged image belongs to the staff member who uploaded it, so nobody can adopt another
+// person's pending upload by guessing its id; an image that is already final may be reused by any staff of the tenant.
+func canAttachQuestionAsset(a model.Asset, p model.Principal) bool {
+	if a.Status == model.AssetFinal {
+		return isStaff(p.Role) || isUploader(a, p)
+	}
+	return isUploader(a, p)
+}
+
+// readable is the one rule behind both the presigned link and the byte stream: the uploader, then staff for a
+// final asset, then a student for a final question image of the tenant (the unguessable id is the only gate, see
+// docs/assets.md) or a kecermatan item image of a test the student has an attempt on. Anything else, in any
+// tenant, is ErrAssetNotFound.
+func (s *AssetService) readable(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) (model.Asset, error) {
+	tenantID, err := walletTenant(scope, principal)
+	if err != nil {
+		return model.Asset{}, err
+	}
+	asset, err := s.repo.Find(ctx, s.db, tenantID, id)
+	if err != nil {
+		return model.Asset{}, assetRepoError(err)
+	}
+	if isUploader(asset, principal) || (asset.Status == model.AssetFinal && isStaff(principal.Role)) {
+		return asset, nil
+	}
+	visible := false
+	if asset.Status == model.AssetFinal && principal.Role == model.RoleStudent {
+		switch asset.Purpose {
+		case model.PurposeQuestionImage:
+			visible = true
+		case model.PurposeItemImage:
+			if visible, err = s.repo.KecermatanItemVisible(ctx, s.db, tenantID, principal.UserID, id); err != nil {
+				return model.Asset{}, assetRepoError(err)
+			}
+		}
+	}
+	if !visible {
+		return model.Asset{}, ErrAssetNotFound
+	}
+	return asset, nil
+}
+
+// Content streams the object itself, for a browser that cannot read the bucket across origins.
+func (s *AssetService) Content(ctx context.Context, scope HostScope, principal model.Principal, id uuid.UUID) (AssetContent, error) {
+	if s.store == nil {
+		return AssetContent{}, ErrStorageUnavailable
+	}
+	asset, err := s.readable(ctx, scope, principal, id)
+	if err != nil {
+		return AssetContent{}, err
+	}
+	body, err := s.store.Get(ctx, asset.ObjectKey)
+	if err != nil {
+		return AssetContent{}, fmt.Errorf("read asset object: %w", err)
+	}
+	return AssetContent{Body: body, ContentType: asset.ContentType, Size: asset.SizeBytes}, nil
 }
 
 // DownloadURL re-authorizes on every call; a staged asset is the uploader's alone.
@@ -166,29 +234,9 @@ func (s *AssetService) DownloadURL(ctx context.Context, scope HostScope, princip
 	if s.store == nil {
 		return AssetLink{}, ErrStorageUnavailable
 	}
-	tenantID, err := walletTenant(scope, principal)
+	asset, err := s.readable(ctx, scope, principal, id)
 	if err != nil {
 		return AssetLink{}, err
-	}
-	asset, err := s.repo.Find(ctx, s.db, tenantID, id)
-	if err != nil {
-		return AssetLink{}, assetRepoError(err)
-	}
-	if !isUploader(asset, principal) && !(asset.Status == model.AssetFinal && isStaff(principal.Role)) {
-		visible := false
-		if asset.Status == model.AssetFinal && principal.Role == model.RoleStudent {
-			switch asset.Purpose {
-			case model.PurposeQuestionImage:
-				visible = true
-			case model.PurposeItemImage:
-				if visible, err = s.repo.KecermatanItemVisible(ctx, s.db, tenantID, principal.UserID, id); err != nil {
-					return AssetLink{}, assetRepoError(err)
-				}
-			}
-		}
-		if !visible {
-			return AssetLink{}, ErrAssetNotFound
-		}
 	}
 	expires := time.Now().Add(s.urlTTL)
 	link, err := s.store.PresignGet(ctx, asset.ObjectKey, s.urlTTL)

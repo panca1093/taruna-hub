@@ -45,6 +45,16 @@ func (m *memStore) Delete(_ context.Context, key string) error {
 	return nil
 }
 
+func (m *memStore) Get(_ context.Context, key string) (io.ReadCloser, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	data, ok := m.objects[key]
+	if !ok {
+		return nil, errors.New("no such object")
+	}
+	return io.NopCloser(bytes.NewReader(data)), nil
+}
+
 func (m *memStore) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
 	return "https://storage.test/" + key, nil
 }

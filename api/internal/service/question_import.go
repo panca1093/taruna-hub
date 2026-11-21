@@ -412,6 +412,7 @@ func importRowOf(sheet importSheet, refs importRefs, number int, cells []string)
 		input: input,
 	}
 
+	input.docRules = docRules{legacy: true}
 	if scalars, err := scalarOf(input); err != nil {
 		importFieldErrors(err, note, optionColumns)
 	} else if validated, err := validatedOptions(scalars, nil); err != nil {

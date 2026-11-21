@@ -1137,10 +1137,13 @@ export interface paths {
          *     the limits answers `422` with the offending field (`content`, `explanation`, `options[i].label`)
          *     in `fields`. `content` needs at least one visible element (text, math, a shape or an image) and
          *     at most 20000 characters of text; an option label needs the same with at most 2000; the
-         *     explanation may be the empty document. Images are attached by `attrs.asset_id` of a `staged` or
-         *     `final` `question_image` asset of this tenant: saving finalizes it in the same transaction, and an
-         *     unknown asset, another tenant's or one of another purpose answers `422` on the field holding it.
-         *     `data:` and `javascript:` URLs are refused everywhere.
+         *     explanation may be the empty document. Images are attached by `attrs.asset_id` of a `question_image`
+         *     asset of this tenant: saving finalizes it in the same transaction. A `staged` image may be attached
+         *     only by the staff member who uploaded it; a `final` one by any Admin or Operator of the tenant. An
+         *     unknown asset, another tenant's, one of another purpose and someone else's staged upload all answer
+         *     the same `422` (`doc_asset`) on the field holding it. `attrs.src` is refused on create (`doc_attr`);
+         *     `data:` and `javascript:` URLs are refused everywhere. Trailing empty paragraphs are removed, so
+         *     a document the editor ends with one saves the same as without.
          */
         post: {
             parameters: {
@@ -1225,7 +1228,10 @@ export interface paths {
          * @description Editing never rewrites what a tryout already used: when the normalized payload differs from
          *     the current version, a new immutable version is appended and the head row moves to it, in one
          *     transaction with that row locked. A payload identical to the current version answers `200` with
-         *     the same version and writes nothing.
+         *     the same version and writes nothing. That holds for a question stored before documents existed
+         *     too: the document it is read as is already normalised, so saving it back unedited creates no
+         *     version. An image `attrs.src` is accepted only when the identical `src` is already in the
+         *     current version (content, explanation or an option); a new one answers `422` (`doc_attr`).
          *
          *     `base_version` is the version the editor started from. If someone else has saved since, it no
          *     longer matches and the answer is `409`; the editor must reload rather than overwrite. An option
@@ -4301,7 +4307,10 @@ export interface paths {
          * @description Authorizes on every call: the asset must be in the caller's tenant, and the caller must be the
          *     uploader or an Admin or Operator. A `staged` asset is downloadable only by its uploader. A Student
          *     may also read a `final` `question_image` of the tenant, which is how question images render in
-         *     the exam and the review; a `final` `item_image` is readable by a Student only as the Kecermatan
+         *     the exam and the review. That is not tied to the student's own sessions: any signed-in Student of
+         *     the tenant who knows the unguessable asset id can fetch the link, explanation images included and
+         *     before the review is released, so the id is the only gate (tying it to the student's sessions is a
+         *     known follow-up). A `final` `item_image` is readable by a Student only as the Kecermatan
          *     attempt allows. The
          *     link is a presigned GET valid for 60 seconds — whoever holds it can read the object until
          *     then, so ask again instead of keeping it. The response is `Cache-Control: private, no-store`.
@@ -4327,6 +4336,61 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["AssetURL"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                404: components["responses"]["NotFound"];
+                503: components["responses"]["Unavailable"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assets/{id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The asset's bytes
+         * @description The same authorization as `GET /api/v1/assets/{id}/url`, decided by the same code, answered with
+         *     the object itself instead of a link. A browser cannot read the storage bucket across origins,
+         *     so this is how a page that builds a file from question images (the tryout PDF) gets their bytes.
+         *     The body is the object as uploaded, `Content-Type` is the type detected at upload (`image/png`,
+         *     `image/jpeg` or `image/webp`) and the response is `Cache-Control: private, no-store` with
+         *     `X-Content-Type-Options: nosniff`. An id of another tenant, an unknown or malformed id and an
+         *     asset the caller may not read all answer the same `404`, never `403`. The same note about
+         *     students and final `question_image` assets applies as for `/url`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The image bytes */
+                200: {
+                    headers: {
+                        "Cache-Control"?: string;
+                        "X-Content-Type-Options"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/png": string;
+                        "image/jpeg": string;
+                        "image/webp": string;
                     };
                 };
                 401: components["responses"]["Unauthorized"];
@@ -7516,10 +7580,13 @@ export interface components {
          *     Nesting: a `paragraph` holds inline nodes; lists hold `listItem` of paragraphs and nested lists
          *     (`orderedList` may carry `attrs.start`); a table has 1 to 30 rows of 1 to 12 cells whose
          *     `attrs.colspan` and `attrs.rowspan` are 1 to 12 and which hold paragraphs, lists, shapes and
-         *     images, never another table. `math.attrs.latex` is 1 to 2000 characters. `image` carries exactly
-         *     one of `attrs.asset_id` or, for legacy content only, an `http(s)` `attrs.src`. A document has at
-         *     most 2000 nodes, depth 12 and 100 KB once normalised. Violations answer `422` on the field that
-         *     holds the document.
+         *     images, never another table; list items hold no images or shapes. `math.attrs.latex` is 1 to 2000
+         *     characters. `image` carries exactly one of `attrs.asset_id` or an `http(s)` `attrs.src`; the
+         *     server never accepts a new `src`: a write is refused (`doc_attr`) unless the question already
+         *     holds the identical `src` in its current version, which is how content that came from the old text
+         *     format keeps its URL images when it is saved again. Trailing empty paragraphs are dropped and
+         *     neighbouring text with the same marks is merged. A document has at most 2000 nodes, depth 12 and
+         *     100 KB once normalised. Violations answer `422` on the field that holds the document.
          */
         RichDoc: {
             /** @enum {string} */

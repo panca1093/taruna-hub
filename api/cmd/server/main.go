@@ -67,9 +67,9 @@ func run() error {
 		return err
 	}
 
-	// Immutable version rows are rewritten here on purpose: only the document columns are added, so what every
-	// student and review screen renders is unchanged.
-	converted, err := service.NewQuestionService(pool, repository.NewQuestionRepository(pool), nil).BackfillDocs(ctx)
+	// Immutable version rows are rewritten here on purpose: only the document columns are added, and reads already
+	// show the same converted documents. A replica that loses the lock skips this and still serves.
+	converted, err := service.NewQuestionService(pool, repository.NewQuestionRepository(pool), nil).BackfillDocs(ctx, logger)
 	if err != nil {
 		return fmt.Errorf("backfill question documents: %w", err)
 	}

@@ -333,7 +333,7 @@ func insertQuestionVersion(ctx context.Context, tx pgx.Tx, tenantID, questionID 
 	stored := make([]model.QuestionOption, len(q.Options))
 	copy(stored, q.Options)
 	for i := range stored {
-		stored[i].Label = model.DocText(stored[i].Doc)
+		stored[i].Label = model.DocLegacyText(stored[i].Doc)
 	}
 	options, err := json.Marshal(stored)
 	if err != nil {
@@ -356,8 +356,8 @@ func insertQuestionVersion(ctx context.Context, tx pgx.Tx, tenantID, questionID 
 		        type, content, difficulty, explanation, option_weighted, case_sensitive, options, correct, created_by,
 		        content_doc, explanation_doc)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-		questionID, tenantID, version, q.ProgramID, q.SubjectID, q.ChapterID, q.Type, model.DocText(q.Content),
-		q.Difficulty, model.DocText(q.Explanation), q.OptionWeighted, q.CaseSensitive, options, correct, createdBy,
+		questionID, tenantID, version, q.ProgramID, q.SubjectID, q.ChapterID, q.Type, model.DocLegacyText(q.Content),
+		q.Difficulty, model.DocLegacyText(q.Explanation), q.OptionWeighted, q.CaseSensitive, options, correct, createdBy,
 		contentDoc, explanationDoc)
 	if err != nil {
 		return mapQuestionError("create question version", err)
@@ -404,7 +404,8 @@ func decodeQuestionJSON(q *model.Question, options, correct []byte, content, exp
 	return nil
 }
 
-// decodeOptions reads a stored options array; an option written before documents existed gets its doc from its label.
+// decodeOptions reads a stored options array; an option written before documents existed keeps its label as legacy
+// text on its doc, for the service to convert.
 func decodeOptions(raw []byte) ([]model.QuestionOption, error) {
 	var options []model.QuestionOption
 	if err := json.Unmarshal(raw, &options); err != nil {
@@ -419,91 +420,153 @@ func decodeOptions(raw []byte) ([]model.QuestionOption, error) {
 // backfillLockKey is the advisory lock that keeps two API instances from converting the same rows.
 const backfillLockKey = 7_001_030
 
-// BackfillDocs converts every question version stored without documents, batch rows at a time, and returns how
-// many it converted. The text columns and option labels are left exactly as they were: only the documents are added.
-func (r *QuestionRepository) BackfillDocs(ctx context.Context, batch int) (int, error) {
+// LegacyVersion is a question version stored before documents existed, as the columns hold it.
+type LegacyVersion struct {
+	ID          uuid.UUID
+	Content     string
+	Explanation string
+	Options     []byte
+}
+
+// VersionDocs is what the service made of a LegacyVersion; the repository writes it as given.
+type VersionDocs struct {
+	Content     model.RichDoc
+	Explanation model.RichDoc
+	Options     []model.QuestionOption
+}
+
+// SkippedVersion is a legacy row the converter refused; it stays as it was and reads fall back to its text.
+type SkippedVersion struct {
+	ID  uuid.UUID
+	Err error
+}
+
+// BackfillResult is what one backfill run did. Locked is false when another instance holds the lock, in which
+// case nothing was read or written.
+type BackfillResult struct {
+	Locked    bool
+	Converted int
+	Skipped   []SkippedVersion
+}
+
+// BackfillDocs hands every version without documents to convert, batch rows at a time in id order, and writes
+// what it returns. Only the document columns and the option docs change; the text columns stay as they were.
+// It does not wait for the advisory lock: an instance that cannot take it reports Locked=false and the caller
+// serves anyway, since reads fall back to the text. A row convert refuses is reported in Skipped and passed over.
+//
+// The scan is `content_doc IS NULL AND id > $last ORDER BY id` over the primary key, once per start-up; it ends
+// at the first short batch, so a fully converted table costs one pass over the primary key index.
+func (r *QuestionRepository) BackfillDocs(ctx context.Context, batch int, convert func(LegacyVersion) (VersionDocs, error)) (BackfillResult, error) {
 	conn, err := r.db.Acquire(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("acquire backfill connection: %w", err)
+		return BackfillResult{}, fmt.Errorf("acquire backfill connection: %w", err)
 	}
 	defer conn.Release()
-	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, backfillLockKey); err != nil {
-		return 0, fmt.Errorf("take backfill lock: %w", err)
+	var locked bool
+	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, backfillLockKey).Scan(&locked); err != nil {
+		return BackfillResult{}, fmt.Errorf("take backfill lock: %w", err)
 	}
-	defer func() { _, _ = conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock($1)`, backfillLockKey) }()
-
-	total := 0
-	for {
-		n, err := r.backfillBatch(ctx, conn, batch)
-		if err != nil {
-			return total, err
+	if !locked {
+		return BackfillResult{}, nil
+	}
+	defer func() {
+		var released bool
+		err := conn.QueryRow(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock($1)`, backfillLockKey).Scan(&released)
+		if err != nil || !released {
+			// A connection that may still hold the lock must not go back to the pool; closing it frees the lock.
+			_ = conn.Conn().Close(context.WithoutCancel(ctx))
 		}
-		total += n
+	}()
+
+	result := BackfillResult{Locked: true}
+	last := uuid.Nil
+	for {
+		n, next, err := r.backfillBatch(ctx, conn, last, batch, convert, &result)
+		if err != nil {
+			return result, err
+		}
+		last = next
 		if n < batch {
-			return total, nil
+			return result, nil
 		}
 	}
 }
 
-func (r *QuestionRepository) backfillBatch(ctx context.Context, conn *pgxpool.Conn, batch int) (int, error) {
+// backfillBatch returns how many rows it read and the id of the last one, converted or skipped.
+func (r *QuestionRepository) backfillBatch(ctx context.Context, conn *pgxpool.Conn, after uuid.UUID, batch int, convert func(LegacyVersion) (VersionDocs, error), result *BackfillResult) (int, uuid.UUID, error) {
 	tx, err := conn.Begin(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("begin backfill: %w", err)
+		return 0, after, fmt.Errorf("begin backfill: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 
 	rows, err := tx.Query(ctx,
 		`SELECT id, content, explanation, options FROM question_versions
-		  WHERE content_doc IS NULL ORDER BY id LIMIT $1 FOR UPDATE`, batch)
+		  WHERE content_doc IS NULL AND id > $1 ORDER BY id LIMIT $2 FOR UPDATE`, after, batch)
 	if err != nil {
-		return 0, fmt.Errorf("read legacy versions: %w", err)
+		return 0, after, fmt.Errorf("read legacy versions: %w", err)
 	}
-	type legacy struct {
-		id                   uuid.UUID
-		content, explanation string
-		options              []byte
-	}
-	var found []legacy
+	var found []LegacyVersion
 	for rows.Next() {
-		var l legacy
-		if err := rows.Scan(&l.id, &l.content, &l.explanation, &l.options); err != nil {
+		var l LegacyVersion
+		if err := rows.Scan(&l.ID, &l.Content, &l.Explanation, &l.Options); err != nil {
 			rows.Close()
-			return 0, fmt.Errorf("scan legacy version: %w", err)
+			return 0, after, fmt.Errorf("scan legacy version: %w", err)
 		}
 		found = append(found, l)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("read legacy versions: %w", err)
+		return 0, after, fmt.Errorf("read legacy versions: %w", err)
 	}
 
+	converted := 0
 	for _, l := range found {
-		options, err := decodeOptions(l.options)
+		docs, err := convert(l)
+		if err == nil {
+			err = writeVersionDocs(ctx, tx, l.ID, docs)
+		}
 		if err != nil {
-			return 0, fmt.Errorf("backfill version %s: %w", l.id, err)
+			result.Skipped = append(result.Skipped, SkippedVersion{ID: l.ID, Err: err})
+			continue
 		}
-		optionsJSON, err := json.Marshal(options)
-		if err != nil {
-			return 0, fmt.Errorf("encode options of %s: %w", l.id, err)
-		}
-		contentDoc, err := json.Marshal(model.DocFromLegacyText(l.content))
-		if err != nil {
-			return 0, fmt.Errorf("encode content of %s: %w", l.id, err)
-		}
-		explanationDoc, err := json.Marshal(model.DocFromLegacyText(l.explanation))
-		if err != nil {
-			return 0, fmt.Errorf("encode explanation of %s: %w", l.id, err)
-		}
-		if _, err := tx.Exec(ctx,
-			`UPDATE question_versions SET content_doc = $2, explanation_doc = $3, options = $4 WHERE id = $1`,
-			l.id, contentDoc, explanationDoc, optionsJSON); err != nil {
-			return 0, fmt.Errorf("backfill version %s: %w", l.id, err)
-		}
+		converted++
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("commit backfill: %w", err)
+		return 0, after, fmt.Errorf("commit backfill: %w", err)
 	}
-	return len(found), nil
+	result.Converted += converted
+	if len(found) == 0 {
+		return 0, after, nil
+	}
+	return len(found), found[len(found)-1].ID, nil
+}
+
+// writeVersionDocs runs inside a savepoint, so one row's failed write cannot abort the batch's transaction.
+func writeVersionDocs(ctx context.Context, tx pgx.Tx, id uuid.UUID, docs VersionDocs) error {
+	options, err := json.Marshal(docs.Options)
+	if err != nil {
+		return fmt.Errorf("encode options: %w", err)
+	}
+	content, err := json.Marshal(docs.Content)
+	if err != nil {
+		return fmt.Errorf("encode content: %w", err)
+	}
+	explanation, err := json.Marshal(docs.Explanation)
+	if err != nil {
+		return fmt.Errorf("encode explanation: %w", err)
+	}
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("savepoint: %w", err)
+	}
+	if _, err := sp.Exec(ctx,
+		`UPDATE question_versions SET content_doc = $2, explanation_doc = $3, options = $4 WHERE id = $1`,
+		id, content, explanation, options); err != nil {
+		_ = sp.Rollback(context.WithoutCancel(ctx))
+		return fmt.Errorf("write documents: %w", err)
+	}
+	return sp.Commit(ctx)
 }
 
 // likePattern escapes the wildcards so `%` and `_` only ever match themselves.

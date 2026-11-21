@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -89,6 +90,28 @@ func (h *Handler) AssetURL(c echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderCacheControl, "private, no-store")
 	return c.JSON(http.StatusOK, assetURLResponse{URL: link.URL, ExpiresAt: link.ExpiresAt})
+}
+
+// AssetContent streams the object under the rules of AssetURL; a browser cannot read the bucket across origins.
+func (h *Handler) AssetContent(c echo.Context) error {
+	scope, principal, ok := walletCaller(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	id, err := assetID(c)
+	if err != nil {
+		return err
+	}
+	content, err := h.assets.Content(c.Request().Context(), scope, principal, id)
+	if err != nil {
+		return assetError(err)
+	}
+	defer func() { _ = content.Body.Close() }()
+	header := c.Response().Header()
+	header.Set(echo.HeaderCacheControl, "private, no-store")
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set(echo.HeaderContentLength, strconv.FormatInt(content.Size, 10))
+	return c.Stream(http.StatusOK, content.ContentType, content.Body)
 }
 
 // assetID is a 404 for anything that is not a uuid, never a 400 that would confirm a shape.

@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,6 +25,9 @@ type linkStore struct{}
 
 func (linkStore) Put(context.Context, string, []byte, string) error { return nil }
 func (linkStore) Delete(context.Context, string) error              { return nil }
+func (linkStore) Get(context.Context, string) (io.ReadCloser, error) {
+	return nil, errors.New("not stored")
+}
 func (linkStore) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
 	return "https://storage.test/" + key, nil
 }
