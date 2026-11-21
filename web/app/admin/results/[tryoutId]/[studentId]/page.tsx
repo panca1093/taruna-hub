@@ -140,9 +140,9 @@ function TryoutStudentResultContent({ params }: { params: Promise<{ tryoutId: st
 
   const listCrumb = { label: t.pageTitle, href: "/admin/results" };
 
-  if (state === "notFound") {
+  if (state === "notFound" || (state === "ready" && detail?.attempts.length === 0)) {
     return (
-      <AppShell title={t.pageTitle}>
+      <AppShell title={t.pageTitle} breadcrumb={[listCrumb]}>
         <EmptyState
           icon={BarChart3}
           title={t.detailNotFoundTitle}
@@ -181,7 +181,7 @@ function TryoutStudentResultContent({ params }: { params: Promise<{ tryoutId: st
     );
   }
 
-  if (state === "loading" || !detail || detail.attempts.length === 0) {
+  if (state === "loading" || !detail) {
     return (
       <AppShell title={t.pageTitle} breadcrumb={[listCrumb]}>
         <p className="py-14 text-center text-caption text-muted">{t.detailLoading}</p>

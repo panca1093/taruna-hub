@@ -199,7 +199,7 @@ func TestStaffResultsNameSearchPaginationAndOrder(t *testing.T) {
 		names = append(names, r.StudentName)
 	}
 	if total != 5 || strings.Join(names, ",") != "Abe First,Lia_Satu,Mia Satu,Percent 100%,Zed Last" {
-		t.Errorf("order = %v of %d, want rank, last activity, then name", names, total)
+		t.Errorf("order = %v of %d, want last activity, then name (rank first only when one tryout is selected)", names, total)
 	}
 	again, _ := h.staffRows(t, StaffResultFilter{})
 	for i := range all {
