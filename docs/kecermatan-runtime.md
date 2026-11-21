@@ -132,7 +132,11 @@ it once after deploying a new default version, so the history and the progress a
 | `GET /my/kecermatan-tests`, `/{id}` | student: credits, in-progress attempt, history, a product to buy more from |
 | `GET /my/kecermatan-sessions/{id}` | owner: phase `kolom` / `pause` / `completed` |
 | `GET /my/kecermatan-sessions/{id}/result`, `/review` | owner, completed only (`409 kecermatan_result_not_ready` before) |
-| `GET /admin/kecermatan-results`, `/{id}` | Admin and Operator: completed attempts, per-kolom counts |
+| `GET /admin/kecermatan-results` | Admin and Operator: one row per student and test with progress; filters `test_id`, `program_id`, `q` (student name, at most 100 characters), `limit`, `offset` |
+| `GET /admin/kecermatan-results/students/{student_id}/tests/{test_id}` | Admin and Operator: the student's progress and completed attempts on that test |
+| `GET /admin/kecermatan-results/{id}` | Admin and Operator: one completed attempt, per-kolom counts |
+
+The staff result page's PDF is captured in the browser from the detail page; there is no server export.
 
 The review returns the N/2 generated columns and, per kolom, the column it replayed and its stored answers, so an
 attempt is reproduced exactly.

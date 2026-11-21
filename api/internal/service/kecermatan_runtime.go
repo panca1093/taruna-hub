@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -44,6 +45,7 @@ const (
 	kecDueBatch         = 50
 	defaultKecResultLen = 50
 	maxKecResultLen     = 100
+	maxKecSearchRunes   = 100
 )
 
 const (
@@ -175,8 +177,22 @@ type KecAnswerAck struct {
 type KecResultFilter struct {
 	TestID    *uuid.UUID
 	ProgramID *uuid.UUID
+	Search    string
 	Limit     int
 	Offset    int
+}
+
+// KecStudentSummary is one student's standing on one test, as staff see it.
+type KecStudentSummary struct {
+	model.KecStudentRow
+	Avatar   string
+	Progress *KecProgress
+}
+
+// KecStudentResults is the detail behind a summary: the completed attempts newest first.
+type KecStudentResults struct {
+	KecStudentSummary
+	Attempts []model.KecAttempt
 }
 
 type KecermatanRuntimeOption func(*KecermatanRuntimeService)
@@ -552,8 +568,8 @@ func (s *KecermatanRuntimeService) Review(ctx context.Context, scope HostScope, 
 	return out, err
 }
 
-// StaffResults lists every completed attempt of the tenant.
-func (s *KecermatanRuntimeService) StaffResults(ctx context.Context, scope HostScope, principal model.Principal, filter KecResultFilter) ([]model.KecResultRow, int, error) {
+// StaffResults lists one row per student and test with at least one completed attempt.
+func (s *KecermatanRuntimeService) StaffResults(ctx context.Context, scope HostScope, principal model.Principal, filter KecResultFilter) ([]KecStudentSummary, int, error) {
 	tenantID, err := questionTenant(scope, principal)
 	if err != nil {
 		return nil, 0, err
@@ -571,12 +587,68 @@ func (s *KecermatanRuntimeService) StaffResults(ctx context.Context, scope HostS
 	if filter.Offset < 0 {
 		fields["offset"] = ReasonKecResultQuery
 	}
+	if utf8.RuneCountInString(filter.Search) > maxKecSearchRunes {
+		fields["q"] = ReasonKecResultQuery
+	}
 	if len(fields) > 0 {
 		return nil, 0, &InputError{Fields: fields}
 	}
-	return s.repo.ListResults(ctx, tenantID, repository.KecermatanResultFilter{
-		TestID: filter.TestID, ProgramID: filter.ProgramID, Limit: filter.Limit, Offset: filter.Offset,
+	rows, total, err := s.repo.ListStudentResults(ctx, tenantID, repository.KecermatanStudentFilter{
+		TestID: filter.TestID, ProgramID: filter.ProgramID, Search: filter.Search, Limit: filter.Limit, Offset: filter.Offset,
 	})
+	if err != nil {
+		return nil, 0, kecError(err)
+	}
+	pairs := make([]repository.KecermatanPair, len(rows))
+	for i, row := range rows {
+		pairs[i] = repository.KecermatanPair{StudentID: row.StudentID, TestID: row.TestID}
+	}
+	attempts, err := s.repo.CompletedAttempts(ctx, s.db, tenantID, pairs)
+	if err != nil {
+		return nil, 0, kecError(err)
+	}
+	out := make([]KecStudentSummary, len(rows))
+	for i, row := range rows {
+		out[i] = kecSummaryOf(row, attempts[pairs[i]])
+	}
+	return out, total, nil
+}
+
+// StaffStudentResults is one student's progress and completed attempts on one test. A student or test outside
+// the tenant, or a student without a completed attempt, is not found.
+func (s *KecermatanRuntimeService) StaffStudentResults(ctx context.Context, scope HostScope, principal model.Principal, studentID, testID uuid.UUID) (KecStudentResults, error) {
+	tenantID, err := questionTenant(scope, principal)
+	if err != nil {
+		return KecStudentResults{}, err
+	}
+	if !isStaff(principal.Role) {
+		return KecStudentResults{}, ErrRuntimeForbidden
+	}
+	return loadKecStudentResults(ctx, s.repo, s.db, tenantID, studentID, testID)
+}
+
+func loadKecStudentResults(ctx context.Context, repo *repository.KecermatanRuntimeRepository, db *pgxpool.Pool, tenantID, studentID, testID uuid.UUID) (KecStudentResults, error) {
+	rows, _, err := repo.ListStudentResults(ctx, tenantID, repository.KecermatanStudentFilter{StudentID: &studentID, TestID: &testID, Limit: 1})
+	if err != nil {
+		return KecStudentResults{}, kecError(err)
+	}
+	if len(rows) == 0 {
+		return KecStudentResults{}, ErrKecSessionNotFound
+	}
+	pair := repository.KecermatanPair{StudentID: studentID, TestID: testID}
+	attempts, err := repo.CompletedAttempts(ctx, db, tenantID, []repository.KecermatanPair{pair})
+	if err != nil {
+		return KecStudentResults{}, kecError(err)
+	}
+	return KecStudentResults{KecStudentSummary: kecSummaryOf(rows[0], attempts[pair]), Attempts: attempts[pair]}, nil
+}
+
+func kecSummaryOf(row model.KecStudentRow, attempts []model.KecAttempt) KecStudentSummary {
+	return KecStudentSummary{
+		KecStudentRow: row,
+		Avatar:        avatarOf(model.User{ID: row.StudentID, AvatarKey: row.AvatarKey, Gender: row.Gender, BirthDate: row.BirthDate}),
+		Progress:      kecProgressOf(attempts),
+	}
 }
 
 // StaffResult is one completed attempt with its per-kolom counts.

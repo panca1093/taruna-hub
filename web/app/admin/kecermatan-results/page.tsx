@@ -1,25 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Button } from "@heroui/react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button, toast } from "@heroui/react";
 import { BarChart3, CloudOff, Download } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
-import { FormModal } from "@/components/ui/form-modal";
-import { SelectInput } from "@/components/ui/form";
-import {
-  api,
-  type KecermatanStaffResult,
-  type KecermatanStaffResultDetail,
-  type KecermatanTestSummary,
-  type Program,
-} from "@/lib/api/client";
+import { SelectInput, TextInput } from "@/components/ui/form";
+import { api, errorText, type KecermatanStaffStudentRow, type KecermatanTestSummary, type Program } from "@/lib/api/client";
 import { useKecermatanResultsT } from "@/lib/i18n/dict/results";
 
 const PAGE_SIZE = 100;
+const SEARCH_DEBOUNCE_MS = 300;
 
 const formatDateTime = (iso: string) =>
   new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(
@@ -27,22 +22,24 @@ const formatDateTime = (iso: string) =>
   );
 
 // Exports the rows on screen only; the bulk CSV/XLSX export is P21.
-function downloadCsv(rows: KecermatanStaffResult[], t: ReturnType<typeof useKecermatanResultsT>) {
+function downloadCsv(rows: KecermatanStaffStudentRow[], t: ReturnType<typeof useKecermatanResultsT>) {
   const lines = rows.map((r) =>
     [
-      r.test_title,
       r.student_name,
-      r.attempt_number,
-      r.benar_total,
-      r.salah_total,
-      r.kosong_total,
-      r.scores.kecepatan,
-      r.scores.ketahanan,
-      r.scores.ketelitian,
-      r.scores.nilai_akhir,
-      r.completed_at,
+      r.test_title,
+      r.program_code,
+      r.attempts_completed,
+      r.progress.nilai_gabungan,
+      r.progress.kecepatan,
+      r.progress.ketahanan,
+      r.progress.ketelitian,
+      r.remaining_attempts,
+      r.last_completed_at,
     ]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+      .map((v) => {
+        const text = String(v);
+        return `"${(/^[=+\-@\t\r]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
+      })
       .join(","),
   );
   const csv = [t.csvHeaders.join(","), ...lines].join("\n");
@@ -55,18 +52,24 @@ function downloadCsv(rows: KecermatanStaffResult[], t: ReturnType<typeof useKece
   URL.revokeObjectURL(url);
 }
 
+const rowKey = (r: KecermatanStaffStudentRow) => `${r.student_id}:${r.test_id}`;
+
 export default function KecermatanResultsPage() {
   const t = useKecermatanResultsT();
+  const router = useRouter();
   const [tests, setTests] = useState<KecermatanTestSummary[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [testFilter, setTestFilter] = useState("all");
   const [programFilter, setProgramFilter] = useState("all");
-  const [rows, setRows] = useState<KecermatanStaffResult[] | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [rows, setRows] = useState<KecermatanStaffStudentRow[] | null>(null);
   const [total, setTotal] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [detail, setDetail] = useState<KecermatanStaffResult | null>(null);
-  const [breakdown, setBreakdown] = useState<KecermatanStaffResultDetail | null>(null);
+  const generationRef = useRef(0);
+  const loadingMoreRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,15 +88,36 @@ export default function KecermatanResultsPage() {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = searchInput.trim();
+      if (next === search) return;
+      setRows(null);
+      setLoadFailed(false);
+      setSearch(next);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, search]);
+
+  const filters = {
+    test_id: testFilter === "all" ? undefined : testFilter,
+    program_id: programFilter === "all" ? undefined : programFilter,
+    q: search || undefined,
+  };
+
+  useEffect(() => {
     let cancelled = false;
+    generationRef.current += 1;
     api.kecermatanResults
       .list({
         test_id: testFilter === "all" ? undefined : testFilter,
         program_id: programFilter === "all" ? undefined : programFilter,
+        q: search || undefined,
         limit: PAGE_SIZE,
       })
       .then((page) => {
         if (cancelled) return;
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
         setRows(page.results);
         setTotal(page.total);
       })
@@ -103,88 +127,96 @@ export default function KecermatanResultsPage() {
     return () => {
       cancelled = true;
     };
-  }, [testFilter, programFilter, reloadKey]);
+  }, [testFilter, programFilter, search, reloadKey]);
 
-  useEffect(() => {
-    if (!detail) return;
-    let cancelled = false;
-    api.kecermatanResults
-      .get(detail.session_id)
-      .then((loaded) => {
-        if (!cancelled) setBreakdown(loaded);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [detail]);
+  const loadMore = async () => {
+    if (loadingMoreRef.current) return;
+    const generation = generationRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await api.kecermatanResults.list({ ...filters, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      if (generationRef.current !== generation) return;
+      setRows((prev) => {
+        const seen = new Set((prev ?? []).map(rowKey));
+        return [...(prev ?? []), ...page.results.filter((row) => !seen.has(rowKey(row)))];
+      });
+      setTotal(page.total);
+    } catch (err) {
+      if (generationRef.current !== generation) return;
+      toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
+    } finally {
+      if (generationRef.current === generation) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  };
 
   const testOptions = [{ id: "all", label: t.allTests }, ...tests.map((test) => ({ id: test.id, label: test.title }))];
   const programOptions = [{ id: "all", label: t.allPrograms }, ...programs.map((p) => ({ id: p.id, label: p.name }))];
 
-  const columns: Column<KecermatanStaffResult>[] = [
+  const columns: Column<KecermatanStaffStudentRow>[] = [
     {
       key: "student",
       header: t.colStudent,
       render: (r) => (
         <div className="flex items-center gap-2.5">
-          <GradientAvatar user={{ name: r.student_name }} size="sm" />
+          <GradientAvatar user={{ name: r.student_name, avatar: r.student_avatar }} size="sm" />
           <span className="font-medium text-foreground">{r.student_name}</span>
         </div>
       ),
     },
     { key: "test", header: t.colTest, render: (r) => r.test_title },
-    { key: "attempt", header: t.colAttempt, render: (r) => <span className="text-muted">#{r.attempt_number}</span> },
-    { key: "bsk", header: t.colBsk, render: (r) => <span className="font-mono text-label">{r.benar_total}/{r.salah_total}/{r.kosong_total}</span> },
-    {
-      key: "composites",
-      header: t.colComposites,
-      render: (r) => (
-        <span className="font-mono text-label">
-          {r.scores.kecepatan} / {r.scores.ketahanan} / {r.scores.ketelitian}
-        </span>
-      ),
-    },
-    { key: "nilai", header: t.colFinalScore, render: (r) => <span className="font-mono font-semibold text-foreground">{r.scores.nilai_akhir}</span> },
+    { key: "attempts", header: t.colAttempts, render: (r) => <span className="font-mono text-label">{r.attempts_completed}</span> },
+    { key: "combined", header: t.colCombined, render: (r) => <span className="font-mono font-semibold text-foreground">{r.progress.nilai_gabungan}</span> },
+    { key: "speed", header: t.colSpeed, render: (r) => <span className="font-mono text-label">{r.progress.kecepatan}</span> },
+    { key: "stamina", header: t.colStamina, render: (r) => <span className="font-mono text-label">{r.progress.ketahanan}</span> },
+    { key: "accuracy", header: t.colAccuracy, render: (r) => <span className="font-mono text-label">{r.progress.ketelitian}</span> },
     { key: "quota", header: t.colQuota, render: (r) => <span className="font-mono text-label">{r.remaining_attempts}</span> },
-    { key: "completedAt", header: t.colCompleted, render: (r) => formatDateTime(r.completed_at) },
+    { key: "lastCompleted", header: t.colLastCompleted, render: (r) => formatDateTime(r.last_completed_at) },
   ];
 
-  const body =
-    loadFailed ? (
-      <EmptyState
-        icon={CloudOff}
-        title={t.loadErrorTitle}
-        description={t.loadErrorDescription}
-        action={
-          <Button
-            variant="primary"
-            size="sm"
-            onPress={() => {
-              setLoadFailed(false);
-              setRows(null);
-              setReloadKey((key) => key + 1);
-            }}
-          >
-            {t.retry}
-          </Button>
-        }
-      />
-    ) : rows === null ? (
-      <p className="py-14 text-center text-caption text-muted">{t.loading}</p>
-    ) : rows.length === 0 ? (
-      <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
-    ) : (
+  const body = loadFailed ? (
+    <EmptyState
+      icon={CloudOff}
+      title={t.loadErrorTitle}
+      description={t.loadErrorDescription}
+      action={
+        <Button
+          variant="primary"
+          size="sm"
+          onPress={() => {
+            setLoadFailed(false);
+            setRows(null);
+            setReloadKey((key) => key + 1);
+          }}
+        >
+          {t.retry}
+        </Button>
+      }
+    />
+  ) : rows === null ? (
+    <p className="py-14 text-center text-caption text-muted">{t.loading}</p>
+  ) : rows.length === 0 ? (
+    <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
+  ) : (
+    <>
       <DataTable
         columns={columns}
         rows={rows}
-        rowKey={(r) => r.session_id}
-        onRowClick={(row) => {
-          setBreakdown(null);
-          setDetail(row);
-        }}
+        rowKey={rowKey}
+        onRowClick={(row) => router.push(`/admin/kecermatan-results/${row.test_id}/${row.student_id}`)}
       />
-    );
+      {rows.length < total && (
+        <div className="mt-4 flex justify-center">
+          <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
+            {loadingMore ? t.loadingMore : t.loadMore}
+          </Button>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <AppShell
@@ -198,12 +230,23 @@ export default function KecermatanResultsPage() {
     >
       <div className="mb-4 flex flex-wrap gap-3">
         <div className="w-full max-w-xs">
+          <TextInput
+            label={t.fieldSearch}
+            placeholder={t.searchPlaceholder}
+            type="search"
+            maxLength={100}
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+          />
+        </div>
+        <div className="w-full max-w-xs">
           <SelectInput
             label={t.fieldTest}
             options={testOptions}
             selectedKey={testFilter}
             onSelectionChange={(k) => {
               setRows(null);
+              setLoadFailed(false);
               setTestFilter(k ?? "all");
             }}
           />
@@ -215,6 +258,7 @@ export default function KecermatanResultsPage() {
             selectedKey={programFilter}
             onSelectionChange={(k) => {
               setRows(null);
+              setLoadFailed(false);
               setProgramFilter(k ?? "all");
             }}
           />
@@ -222,70 +266,6 @@ export default function KecermatanResultsPage() {
       </div>
 
       {body}
-
-      <FormModal
-        isOpen={!!detail}
-        onOpenChange={(open) => !open && setDetail(null)}
-        title={detail?.student_name ?? ""}
-        description={detail?.test_title}
-        size="lg"
-        footer={
-          <Button variant="ghost" onPress={() => setDetail(null)}>
-            {t.close}
-          </Button>
-        }
-      >
-        {detail && (
-          <>
-            <div className="flex items-center gap-3">
-              <GradientAvatar user={{ name: detail.student_name }} size="lg" />
-              <div className="flex-1">
-                <p className="font-display text-title text-foreground">{detail.student_name}</p>
-                <p className="text-label text-muted">
-                  {detail.test_title} — {t.attemptLabel(detail.attempt_number)}
-                </p>
-              </div>
-            </div>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-tile border border-border p-5 text-small sm:grid-cols-4">
-              <div>
-                <dt className="mb-1 text-label text-muted">{t.detailSpeed}</dt>
-                <dd className="font-mono text-title font-semibold text-foreground">{detail.scores.kecepatan}</dd>
-              </div>
-              <div>
-                <dt className="mb-1 text-label text-muted">{t.detailStamina}</dt>
-                <dd className="font-mono text-title font-semibold text-foreground">{detail.scores.ketahanan}</dd>
-              </div>
-              <div>
-                <dt className="mb-1 text-label text-muted">{t.detailAccuracy}</dt>
-                <dd className="font-mono text-title font-semibold text-foreground">{detail.scores.ketelitian}</dd>
-              </div>
-              <div>
-                <dt className="mb-1 text-label text-muted">{t.detailFinalScore}</dt>
-                <dd className="font-mono text-title font-semibold text-accent">{detail.scores.nilai_akhir}</dd>
-              </div>
-            </dl>
-            <div>
-              <h3 className="mb-3 font-display text-title">{t.columnBreakdownTitle}</h3>
-              {breakdown === null ? (
-                <p className="text-caption text-muted">{t.loading}</p>
-              ) : (
-                <ul className="space-y-2">
-                  {breakdown.kolom.map((k) => (
-                    <li key={k.number} className="flex items-center justify-between gap-3 rounded-control border border-border px-4 py-3 text-small">
-                      <span className="font-medium text-foreground">{t.columnLabel(k.number)}</span>
-                      <span className="flex items-center gap-3 font-mono text-label text-muted">
-                        <span className="text-success">{t.correct(k.benar)}</span>
-                        <span className="text-danger">{t.incorrect(k.salah)}</span>
-                        <span>{t.blank(k.kosong)}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </>
-        )}
-      </FormModal>
     </AppShell>
   );
 }

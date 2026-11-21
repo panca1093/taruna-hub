@@ -252,6 +252,7 @@ func (h *Handler) Register(e *echo.Echo, apiMiddleware ...echo.MiddlewareFunc) {
 	v1.GET("/my/kecermatan-sessions/:id/review", h.KecermatanReview, httpx.NoStore(), Authenticate(h.auth), student)
 	v1.GET("/admin/kecermatan-results", h.StaffKecermatanResults, httpx.NoStore(), Authenticate(h.auth), staff)
 	v1.GET("/admin/kecermatan-results/:id", h.StaffKecermatanResult, httpx.NoStore(), Authenticate(h.auth), staff)
+	v1.GET("/admin/kecermatan-results/students/:student_id/tests/:test_id", h.StaffKecermatanStudentResults, httpx.NoStore(), Authenticate(h.auth), staff)
 
 	// Any tenant user may upload; the purpose narrows who, and every read is re-authorized in the service.
 	v1.POST("/assets", h.UploadAsset, httpx.NoStore(), Authenticate(h.auth))

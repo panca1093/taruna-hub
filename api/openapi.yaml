@@ -5011,8 +5011,14 @@ paths:
   /api/v1/admin/kecermatan-results:
     get:
       tags: [kecermatan-runtime]
-      summary: Completed kecermatan attempts of the tenant
-      description: Admin and Operator. Newest first, filtered by test and/or program. No student-facing review is exposed here.
+      summary: Kecermatan results of the tenant, one row per student and test
+      description: |
+        Admin and Operator. A student who attempted a test more than once is one row: the attempts are the detail
+        behind it (`GET /api/v1/admin/kecermatan-results/students/{student_id}/tests/{test_id}`). Only students with
+        at least one completed attempt appear. Most recently active first (`last_completed_at`), then by name.
+        `test_id` and `program_id` narrow the rows; `q` is a case-insensitive substring of the student's name, with
+        `%` and `_` literal. The composite scores are the student's progress on that test, computed exactly as the
+        student sees them. No student-facing review is exposed here.
       security:
         - bearerAuth: []
       parameters:
@@ -5028,6 +5034,12 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
         - name: limit
           in: query
           required: false
@@ -5044,11 +5056,11 @@ paths:
             minimum: 0
       responses:
         "200":
-          description: A page of results
+          description: One page of student rows
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/KecermatanStaffResultList"
+                $ref: "#/components/schemas/KecermatanStaffStudentList"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -5060,6 +5072,7 @@ paths:
     get:
       tags: [kecermatan-runtime]
       summary: One completed attempt with its per-kolom counts
+      description: Admin and Operator. Opened from a student's detail; `id` is the attempt (session) id.
       security:
         - bearerAuth: []
       parameters:
@@ -5071,6 +5084,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/KecermatanStaffResultDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/admin/kecermatan-results/students/{student_id}/tests/{test_id}:
+    get:
+      tags: [kecermatan-runtime]
+      summary: One student's progress and completed attempts on one kecermatan test
+      description: |
+        Admin and Operator. The same picture the student sees on their own result page: the combined score of their
+        latest attempts (`progress`) and the completed attempts newest first.
+        A student or test that is not the tenant's, or a student with no completed attempt on the test, is `404`.
+        Per-kolom counts of one attempt come from `GET /api/v1/admin/kecermatan-results/{id}`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: test_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The student's results on the test
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KecermatanStaffStudentDetail"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -9396,18 +9447,6 @@ components:
           type: integer
           description: The student's unused credits on this test now, not at completion time.
 
-    KecermatanStaffResultList:
-      type: object
-      additionalProperties: false
-      required: [results, total]
-      properties:
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/KecermatanStaffResult"
-        total:
-          type: integer
-
     KecermatanStaffResultDetail:
       allOf:
         - $ref: "#/components/schemas/KecermatanStaffResult"
@@ -9418,6 +9457,103 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/KecermatanKolomResult"
+
+    KecermatanStaffStudentRow:
+      type: object
+      additionalProperties: false
+      required: [student_id, student_name, student_avatar, test_id, test_title, program_id, program_code,
+                 attempts_completed, progress, last_completed_at, remaining_attempts]
+      description: One student on one test; the attempts are behind `GET /api/v1/admin/kecermatan-results/students/{student_id}/tests/{test_id}`.
+      properties:
+        student_id:
+          type: string
+          format: uuid
+        student_name:
+          type: string
+        student_avatar:
+          type: string
+          pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+          description: The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+          example: a03
+        test_id:
+          type: string
+          format: uuid
+        test_title:
+          type: string
+        program_id:
+          type: string
+          format: uuid
+        program_code:
+          type: string
+        attempts_completed:
+          type: integer
+          minimum: 1
+        progress:
+          $ref: "#/components/schemas/KecermatanProgress"
+        last_completed_at:
+          type: string
+          format: date-time
+        remaining_attempts:
+          type: integer
+          description: The student's unused credits on this test now.
+
+    KecermatanStaffStudentList:
+      type: object
+      additionalProperties: false
+      required: [results, total]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/KecermatanStaffStudentRow"
+        total:
+          type: integer
+          description: Student rows matching the filters, not attempts.
+
+    KecermatanStaffStudentDetail:
+      type: object
+      additionalProperties: false
+      required: [student, test, remaining_attempts, progress, attempts]
+      properties:
+        student:
+          type: object
+          additionalProperties: false
+          required: [id, name, avatar]
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            avatar:
+              type: string
+              pattern: "^a(0[1-9]|[12][0-9]|3[0-5])$"
+        test:
+          type: object
+          additionalProperties: false
+          required: [id, title, program_id, program_code, program_name]
+          properties:
+            id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            program_id:
+              type: string
+              format: uuid
+            program_code:
+              type: string
+            program_name:
+              type: string
+        remaining_attempts:
+          type: integer
+        progress:
+          $ref: "#/components/schemas/KecermatanProgress"
+        attempts:
+          type: array
+          description: Completed attempts, newest first.
+          items:
+            $ref: "#/components/schemas/KecermatanAttempt"
 
     WebsiteHome:
       type: object

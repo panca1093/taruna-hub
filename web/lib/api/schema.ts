@@ -6783,14 +6783,20 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Completed kecermatan attempts of the tenant
-         * @description Admin and Operator. Newest first, filtered by test and/or program. No student-facing review is exposed here.
+         * Kecermatan results of the tenant, one row per student and test
+         * @description Admin and Operator. A student who attempted a test more than once is one row: the attempts are the detail
+         *     behind it (`GET /api/v1/admin/kecermatan-results/students/{student_id}/tests/{test_id}`). Only students with
+         *     at least one completed attempt appear. Most recently active first (`last_completed_at`), then by name.
+         *     `test_id` and `program_id` narrow the rows; `q` is a case-insensitive substring of the student's name, with
+         *     `%` and `_` literal. The composite scores are the student's progress on that test, computed exactly as the
+         *     student sees them. No student-facing review is exposed here.
          */
         get: {
             parameters: {
                 query?: {
                     test_id?: string;
                     program_id?: string;
+                    q?: string;
                     limit?: number;
                     offset?: number;
                 };
@@ -6800,13 +6806,13 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description A page of results */
+                /** @description One page of student rows */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["KecermatanStaffResultList"];
+                        "application/json": components["schemas"]["KecermatanStaffStudentList"];
                     };
                 };
                 401: components["responses"]["Unauthorized"];
@@ -6829,7 +6835,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One completed attempt with its per-kolom counts */
+        /**
+         * One completed attempt with its per-kolom counts
+         * @description Admin and Operator. Opened from a student's detail; `id` is the attempt (session) id.
+         */
         get: {
             parameters: {
                 query?: never;
@@ -6848,6 +6857,54 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["KecermatanStaffResultDetail"];
+                    };
+                };
+                401: components["responses"]["Unauthorized"];
+                403: components["responses"]["Forbidden"];
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/kecermatan-results/students/{student_id}/tests/{test_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One student's progress and completed attempts on one kecermatan test
+         * @description Admin and Operator. The same picture the student sees on their own result page: the combined score of their
+         *     latest attempts (`progress`) and the completed attempts newest first.
+         *     A student or test that is not the tenant's, or a student with no completed attempt on the test, is `404`.
+         *     Per-kolom counts of one attempt come from `GET /api/v1/admin/kecermatan-results/{id}`.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    student_id: string;
+                    test_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The student's results on the test */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KecermatanStaffStudentDetail"];
                     };
                 };
                 401: components["responses"]["Unauthorized"];
@@ -9274,12 +9331,57 @@ export interface components {
             /** @description The student's unused credits on this test now, not at completion time. */
             remaining_attempts: number;
         };
-        KecermatanStaffResultList: {
-            results: components["schemas"]["KecermatanStaffResult"][];
-            total: number;
-        };
         KecermatanStaffResultDetail: components["schemas"]["KecermatanStaffResult"] & {
             kolom: components["schemas"]["KecermatanKolomResult"][];
+        };
+        /** @description One student on one test; the attempts are behind `GET /api/v1/admin/kecermatan-results/students/{student_id}/tests/{test_id}`. */
+        KecermatanStaffStudentRow: {
+            /** Format: uuid */
+            student_id: string;
+            student_name: string;
+            /**
+             * @description The avatar to show, resolved like `User.avatar` (the student's pick, or the automatic one). Never null.
+             * @example a03
+             */
+            student_avatar: string;
+            /** Format: uuid */
+            test_id: string;
+            test_title: string;
+            /** Format: uuid */
+            program_id: string;
+            program_code: string;
+            attempts_completed: number;
+            progress: components["schemas"]["KecermatanProgress"];
+            /** Format: date-time */
+            last_completed_at: string;
+            /** @description The student's unused credits on this test now. */
+            remaining_attempts: number;
+        };
+        KecermatanStaffStudentList: {
+            results: components["schemas"]["KecermatanStaffStudentRow"][];
+            /** @description Student rows matching the filters, not attempts. */
+            total: number;
+        };
+        KecermatanStaffStudentDetail: {
+            student: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                avatar: string;
+            };
+            test: {
+                /** Format: uuid */
+                id: string;
+                title: string;
+                /** Format: uuid */
+                program_id: string;
+                program_code: string;
+                program_name: string;
+            };
+            remaining_attempts: number;
+            progress: components["schemas"]["KecermatanProgress"];
+            /** @description Completed attempts, newest first. */
+            attempts: components["schemas"]["KecermatanAttempt"][];
         };
         WebsiteHome: {
             /** @description Plain text. Counted in Unicode code points after trimming. */

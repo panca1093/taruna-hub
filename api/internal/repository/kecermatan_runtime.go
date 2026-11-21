@@ -21,12 +21,20 @@ var ErrKecermatanActiveExists = errors.New("an attempt is already in progress")
 // ErrKecermatanCredit means a completion found no credit to consume; the CHECK on enrollments backs it.
 var ErrKecermatanCredit = errors.New("no kecermatan credit to consume")
 
-// KecermatanResultFilter is already validated by the service; the repository only turns it into SQL.
-type KecermatanResultFilter struct {
+// KecermatanStudentFilter is already validated by the service; the repository only turns it into SQL.
+type KecermatanStudentFilter struct {
+	StudentID *uuid.UUID
 	TestID    *uuid.UUID
 	ProgramID *uuid.UUID
+	Search    string
 	Limit     int
 	Offset    int
+}
+
+// KecermatanPair is one student on one test.
+type KecermatanPair struct {
+	StudentID uuid.UUID
+	TestID    uuid.UUID
 }
 
 // KecermatanRuntimeRepository persists attempts, kolom timelines, answers and results. Every rule (credits,
@@ -435,41 +443,94 @@ func (r *KecermatanRuntimeRepository) Result(ctx context.Context, q dbtx, tenant
 	return scanKecResult(q.QueryRow(ctx, sql, args...))
 }
 
-func (r *KecermatanRuntimeRepository) ListResults(ctx context.Context, tenantID uuid.UUID, f KecermatanResultFilter) ([]model.KecResultRow, int, error) {
+// ListStudentResults is one row per student and test with at least one completed attempt, most recently active
+// first. total counts those rows.
+func (r *KecermatanRuntimeRepository) ListStudentResults(ctx context.Context, tenantID uuid.UUID, f KecermatanStudentFilter) ([]model.KecStudentRow, int, error) {
 	if tenantID == uuid.Nil {
 		return nil, 0, ErrScopeRequired
 	}
 	where := []string{"r.tenant_id = $1"}
 	args := []any{tenantID}
+	add := func(cond string, v any) {
+		args = append(args, v)
+		where = append(where, fmt.Sprintf(cond, len(args)))
+	}
+	if f.StudentID != nil {
+		add("r.user_id = $%d", *f.StudentID)
+	}
 	if f.TestID != nil {
-		args = append(args, *f.TestID)
-		where = append(where, fmt.Sprintf("r.test_id = $%d", len(args)))
+		add("r.test_id = $%d", *f.TestID)
 	}
 	if f.ProgramID != nil {
-		args = append(args, *f.ProgramID)
-		where = append(where, fmt.Sprintf("t.program_id = $%d", len(args)))
+		add("t.program_id = $%d", *f.ProgramID)
 	}
-	from := kecResultFrom + ` WHERE ` + strings.Join(where, " AND ")
+	if f.Search != "" {
+		add(`u.name ILIKE $%d ESCAPE '\'`, likePattern(f.Search))
+	}
+	from := ` FROM kecermatan_results r
+	JOIN users u ON u.id = r.user_id AND u.tenant_id = r.tenant_id
+	JOIN kecermatan_tests t ON t.id = r.test_id AND t.tenant_id = r.tenant_id
+	JOIN programs pr ON pr.id = t.program_id AND pr.tenant_id = t.tenant_id
+	LEFT JOIN enrollments e ON e.tenant_id = r.tenant_id AND e.user_id = r.user_id AND e.kecermatan_test_id = r.test_id
+	WHERE ` + strings.Join(where, " AND ") + `
+	GROUP BY r.user_id, r.test_id, u.name, u.avatar_key, u.gender, u.birth_date, t.title, t.program_id, pr.code, pr.name,
+	         e.attempts_purchased, e.attempts_used`
 	var total int
-	if err := r.db.QueryRow(ctx, `SELECT count(*)`+from, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count kecermatan results: %w", err)
+	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM (SELECT 1`+from+`) g`, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count kecermatan student results: %w", err)
 	}
 	args = append(args, f.Limit, f.Offset)
-	rows, err := r.db.Query(ctx, `SELECT `+kecResultColumns+from+
-		fmt.Sprintf(` ORDER BY r.completed_at DESC, r.session_id DESC LIMIT $%d OFFSET $%d`, len(args)-1, len(args)), args...)
+	rows, err := r.db.Query(ctx, `SELECT r.user_id, u.name, u.avatar_key, u.gender, u.birth_date, r.test_id, t.title, t.program_id,
+	pr.code, pr.name, count(*), max(r.completed_at),
+	GREATEST(COALESCE(e.attempts_purchased, 0) - COALESCE(e.attempts_used, 0), 0)`+from+
+		fmt.Sprintf(` ORDER BY max(r.completed_at) DESC, u.name, r.user_id, r.test_id LIMIT $%d OFFSET $%d`, len(args)-1, len(args)), args...)
 	if err != nil {
-		return nil, 0, fmt.Errorf("list kecermatan results: %w", err)
+		return nil, 0, fmt.Errorf("list kecermatan student results: %w", err)
 	}
 	defer rows.Close()
-	out := make([]model.KecResultRow, 0, f.Limit)
+	out := []model.KecStudentRow{}
 	for rows.Next() {
-		row, err := scanKecResult(rows)
-		if err != nil {
-			return nil, 0, err
+		var s model.KecStudentRow
+		if err := rows.Scan(&s.StudentID, &s.StudentName, &s.AvatarKey, &s.Gender, &s.BirthDate, &s.TestID, &s.TestTitle,
+			&s.ProgramID, &s.ProgramCode, &s.ProgramName, &s.AttemptsCompleted, &s.LastCompletedAt, &s.RemainingAttempts); err != nil {
+			return nil, 0, fmt.Errorf("scan kecermatan student result: %w", err)
 		}
-		out = append(out, row)
+		out = append(out, s)
 	}
 	return out, total, rows.Err()
+}
+
+// CompletedAttempts is the completed attempts of the given students and tests, newest first within each pair.
+func (r *KecermatanRuntimeRepository) CompletedAttempts(ctx context.Context, q dbtx, tenantID uuid.UUID, pairs []KecermatanPair) (map[KecermatanPair][]model.KecAttempt, error) {
+	if tenantID == uuid.Nil {
+		return nil, ErrScopeRequired
+	}
+	students, tests := make([]uuid.UUID, len(pairs)), make([]uuid.UUID, len(pairs))
+	for i, p := range pairs {
+		students[i], tests[i] = p.StudentID, p.TestID
+	}
+	rows, err := q.Query(ctx, `
+		SELECT s.user_id, s.test_id, s.id, s.attempt_number, s.status, s.started_at, s.completed_at, r.nilai_akhir::float8,
+		       r.kecepatan::float8, r.ketahanan::float8, r.ketelitian::float8
+		  FROM kecermatan_results r
+		  JOIN kecermatan_sessions s ON s.id = r.session_id AND s.tenant_id = r.tenant_id
+		 WHERE r.tenant_id = $1 AND (r.user_id, r.test_id) IN (SELECT * FROM unnest($2::uuid[], $3::uuid[]))
+		 ORDER BY s.user_id, s.test_id, s.attempt_number DESC`, tenantID, students, tests)
+	if err != nil {
+		return nil, fmt.Errorf("list completed kecermatan attempts: %w", err)
+	}
+	defer rows.Close()
+	out := map[KecermatanPair][]model.KecAttempt{}
+	for rows.Next() {
+		var key KecermatanPair
+		var a model.KecAttempt
+		if err := rows.Scan(&key.StudentID, &key.TestID, &a.SessionID, &a.AttemptNumber, &a.Status, &a.StartedAt, &a.CompletedAt,
+			&a.NilaiAkhir, &a.Kecepatan, &a.Ketahanan, &a.Ketelitian); err != nil {
+			return nil, fmt.Errorf("scan completed kecermatan attempt: %w", err)
+		}
+		out[key] = append(out[key], a)
+	}
+	return out, rows.Err()
 }
 
 // Attempts is a student's history on one test, newest first.

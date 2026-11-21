@@ -293,9 +293,37 @@ func TestKecermatanRuntimeFlowNeverLeaksKeysDuringAnAttempt(t *testing.T) {
 	wantCode(t, f.call(http.MethodPost, f.testPath("/sessions"), nil, f.tokenA), http.StatusConflict, "kecermatan_no_credit")
 
 	// Staff read completed results only.
-	list := decodeInto[kecStaffResultsResponse](t, f.call(http.MethodGet, "/api/v1/admin/kecermatan-results?test_id="+f.test.ID.String(), nil, f.tokenOperatorA))
-	if list.Total != 1 || len(list.Results) != 1 || list.Results[0].SessionID != sid || list.Results[0].StudentName == "" {
-		t.Fatalf("staff list = %+v, want the one result with the student's name", list)
+	list := decodeInto[kecStaffStudentsResponse](t, f.call(http.MethodGet, "/api/v1/admin/kecermatan-results?test_id="+f.test.ID.String(), nil, f.tokenOperatorA))
+	if list.Total != 1 || len(list.Results) != 1 || list.Results[0].StudentID != f.studentA.ID || list.Results[0].StudentName == "" ||
+		list.Results[0].AttemptsCompleted != 1 || list.Results[0].Progress.AttemptsCounted != 1 || !strings.HasPrefix(list.Results[0].StudentAvatar, "a") {
+		t.Fatalf("staff list = %+v, want the one student row with name, avatar and progress", list)
+	}
+	assertNoSecretKeys(t, "staff list", f.call(http.MethodGet, "/api/v1/admin/kecermatan-results", nil, f.tokenAdminA).Body.String(), "missing", "seed", "columns", "answers")
+	studentPath := "/api/v1/admin/kecermatan-results/students/" + f.studentA.ID.String() + "/tests/" + f.test.ID.String()
+	studentDetail := decodeInto[kecStaffStudentDetailResponse](t, f.call(http.MethodGet, studentPath, nil, f.tokenOperatorA))
+	if studentDetail.Student.ID != f.studentA.ID || studentDetail.Test.ID != f.test.ID || len(studentDetail.Attempts) != 1 ||
+		studentDetail.Attempts[0].SessionID != sid || studentDetail.Progress.AttemptsCounted != 1 || studentDetail.Test.ProgramName == "" {
+		t.Errorf("student detail = %+v, want the student, the test and the one completed attempt", studentDetail)
+	}
+	for name, c := range map[string]struct {
+		method, path, token string
+		want                int
+	}{
+		"student lists":           {http.MethodGet, "/api/v1/admin/kecermatan-results", f.tokenA, http.StatusForbidden},
+		"student reads detail":    {http.MethodGet, studentPath, f.tokenA, http.StatusForbidden},
+		"anonymous detail":        {http.MethodGet, studentPath, "", http.StatusUnauthorized},
+		"another tenant detail":   {http.MethodGet, studentPath, f.tokenAdmB, http.StatusUnauthorized},
+		"unknown student":         {http.MethodGet, "/api/v1/admin/kecermatan-results/students/" + uuid.NewString() + "/tests/" + f.test.ID.String(), f.tokenAdminA, http.StatusNotFound},
+		"malformed test":          {http.MethodGet, "/api/v1/admin/kecermatan-results/students/" + f.studentA.ID.String() + "/tests/nope", f.tokenAdminA, http.StatusNotFound},
+		"second student, no work": {http.MethodGet, "/api/v1/admin/kecermatan-results/students/" + f.secondStudent.ID.String() + "/tests/" + f.test.ID.String(), f.tokenAdminA, http.StatusNotFound},
+	} {
+		if rec := f.call(c.method, c.path, nil, c.token); rec.Code != c.want {
+			t.Errorf("%s: status = %d %s, want %d", name, rec.Code, rec.Body.String(), c.want)
+		}
+	}
+	longQ := f.call(http.MethodGet, "/api/v1/admin/kecermatan-results?q="+strings.Repeat("x", 101), nil, f.tokenAdminA)
+	if longQ.Code != http.StatusUnprocessableEntity || errorBody(t, longQ).Fields["q"] == "" {
+		t.Errorf("101-character q = %d %s, want 422 with a q field error", longQ.Code, longQ.Body.String())
 	}
 	detail := decodeInto[kecStaffResultDetailResponse](t, f.call(http.MethodGet, "/api/v1/admin/kecermatan-results/"+sid.String(), nil, f.tokenAdminA))
 	if len(detail.Kolom) != 10 || detail.BenarTotal != result.BenarTotal {
