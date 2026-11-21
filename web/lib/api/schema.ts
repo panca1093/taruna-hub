@@ -7791,10 +7791,10 @@ export interface components {
                 questions: {
                     /** @enum {string} */
                     type: "pg" | "pg_multi" | "isian" | "benar_salah";
-                    content: string;
+                    content: components["schemas"]["RichDoc"];
                     /** @description Labels in stored order; empty for `isian`. */
                     options: {
-                        label: string;
+                        label: components["schemas"]["RichDoc"];
                     }[];
                 }[];
             }[];
