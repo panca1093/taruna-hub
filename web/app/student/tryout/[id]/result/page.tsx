@@ -1,17 +1,16 @@
 "use client";
 
 import { Suspense, use, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@heroui/react";
 import { ArrowRight, Clock, CloudOff, Lock } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
 import { Icon } from "@/components/icon";
-import { Panel, ScoreBar } from "@/components/page-blocks";
+import { Panel } from "@/components/page-blocks";
+import { TryoutResultView } from "@/components/tryout-result-view";
 import { LinkButton } from "@/components/ui/link-button";
 import { api, ApiError, type StudentTryout, type TryoutResultDetail } from "@/lib/api/client";
-import { cn } from "@/lib/cn";
 import { useLocale } from "@/lib/i18n/locale-context";
 import { useTryoutResultT } from "@/lib/i18n/dict/tryout-result";
 
@@ -113,12 +112,8 @@ function ResultContent({ tryoutId, attemptParam }: { tryoutId: string; attemptPa
     );
   }
 
-  const correct = result.subtests.reduce((sum, s) => sum + s.correct_count, 0);
-  const total = result.subtests.reduce((sum, s) => sum + s.question_count, 0);
   const completed = overview.attempts.filter((a) => a.status === "completed");
   const reviewHref = `/student/tryout/${tryoutId}/review?attempt=${result.session_id}`;
-
-  const stat = "rounded-tile border border-border bg-surface p-5 sm:p-5.5";
 
   return (
     <AppShell
@@ -138,94 +133,35 @@ function ResultContent({ tryoutId, attemptParam }: { tryoutId: string; attemptPa
       }
     >
       <div className="space-y-6">
-        <div className="grid gap-4 lg:grid-cols-4 lg:gap-6">
-          <Panel as="section" tone="peach" radius="hero" className="flex flex-col items-center justify-center text-center lg:row-span-2">
-            <p className="text-label text-foreground/80">{t.scoreLabel}</p>
-            <p className="font-display my-5 text-score">{result.score}</p>
-            <p className="text-label text-foreground/80">{t.scoreOutOf}</p>
-          </Panel>
-          <div className={stat}>
-            <p className="font-display text-hero-lg">{correct}</p>
-            <p className="mt-1.5 text-micro text-muted">{t.statCorrect}</p>
-          </div>
-          <div className={stat}>
-            <p className="font-display text-hero-lg">{total}</p>
-            <p className="mt-1.5 text-micro text-muted">{t.statQuestions}</p>
-          </div>
-          <div className={stat}>
-            <p className="font-display text-hero-lg">{t.rankValue(result.ranking.rank, result.ranking.participant_count)}</p>
-            <p className="mt-1.5 text-micro text-muted">{t.statRank}</p>
-            <p className="mt-1 text-micro text-muted">{t.rankNote(result.ranking.average_score, result.ranking.attempts_counted)}</p>
-          </div>
-          <Panel as="section" radius="card" className="lg:col-span-3">
-            {result.explanations_released ? (
-              <>
-                <h2 className="font-display mb-3 text-heading-sm">{t.learnTitle}</h2>
-                <p className="text-caption leading-relaxed text-muted">{t.learnBody}</p>
-              </>
-            ) : (
-              <div className="flex items-start gap-3">
-                <Icon icon={Clock} size="sm" className="mt-1 text-rose" />
-                <div>
-                  <h2 className="font-display mb-3 text-heading-sm">{t.heldTitle}</h2>
-                  <p className="text-caption leading-relaxed text-muted">{t.heldBody}</p>
-                  {result.explanation_release_at && (
-                    <p className="mt-1 text-caption font-medium">{t.heldUntil(formatDate(result.explanation_release_at))}</p>
-                  )}
+        <TryoutResultView
+          score={result.score}
+          subtests={result.subtests}
+          ranking={result.ranking}
+          attempts={completed}
+          currentSessionId={result.session_id}
+          attemptHref={(sessionId) => `/student/tryout/${tryoutId}/result?attempt=${sessionId}`}
+          aside={
+            <Panel as="section" radius="card" className="lg:col-span-3">
+              {result.explanations_released ? (
+                <>
+                  <h2 className="font-display mb-3 text-heading-sm">{t.learnTitle}</h2>
+                  <p className="text-caption leading-relaxed text-muted">{t.learnBody}</p>
+                </>
+              ) : (
+                <div className="flex items-start gap-3">
+                  <Icon icon={Clock} size="sm" className="mt-1 text-rose" />
+                  <div>
+                    <h2 className="font-display mb-3 text-heading-sm">{t.heldTitle}</h2>
+                    <p className="text-caption leading-relaxed text-muted">{t.heldBody}</p>
+                    {result.explanation_release_at && (
+                      <p className="mt-1 text-caption font-medium">{t.heldUntil(formatDate(result.explanation_release_at))}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </Panel>
-        </div>
-
-        <Panel as="section">
-          <h2 className="font-display mb-5 text-heading-sm">{t.subtestScoresTitle}</h2>
-          <div className="grid gap-5">
-            {result.subtests.map((s) => (
-              <ScoreBar
-                key={s.subtest_id}
-                label={s.name}
-                valueLabel={`${s.score} / 100 · ${t.correctCount(s.correct_count, s.question_count)}`}
-                value={s.score}
-              />
-            ))}
-          </div>
-        </Panel>
-
-        {completed.length > 0 && (
-          <Panel as="section">
-            <h2 className="font-display text-heading-sm">{t.historyTitle}</h2>
-            <ul className="mt-2 divide-y divide-border">
-              {completed.map((attempt) => {
-                const isCurrent = attempt.session_id === result.session_id;
-                return (
-                  <li key={attempt.session_id}>
-                    <Link
-                      href={`/student/tryout/${tryoutId}/result?attempt=${attempt.session_id}`}
-                      aria-current={isCurrent ? "page" : undefined}
-                      className={cn(
-                        "flex items-center justify-between gap-4 rounded-control px-3 py-4 text-caption outline-none transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-focus",
-                        isCurrent && "bg-accent-soft",
-                      )}
-                    >
-                      <span>
-                        <span className="block">
-                          {t.attemptLabel(attempt.attempt_number)}
-                          {isCurrent && <span className="ml-2 text-micro text-muted">{t.currentAttempt}</span>}
-                        </span>
-                        {attempt.completed_at && <span className="mt-1 block text-micro text-muted">{formatDate(attempt.completed_at)}</span>}
-                      </span>
-                      <span className="flex items-center gap-5">
-                        <span className="font-display text-heading">{attempt.score ?? "–"}</span>
-                        <Icon icon={ArrowRight} size="sm" />
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </Panel>
-        )}
+              )}
+            </Panel>
+          }
+        />
 
         <div className="flex flex-wrap items-center gap-3.5">
           <LinkButton href={`/student/tryout/${tryoutId}`} variant="secondary" size="md">

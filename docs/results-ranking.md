@@ -28,12 +28,15 @@ asset links, and a student still cannot download staff-uploaded question images.
 For results of IRT-mode sessions, `irt_warning` is true when any question version in the attempt has fewer than 30
 distinct students (`IRTMinStudents`) with a non-blank answer in a completed session. Retakes count once, blank answers and
 running sessions do not count, and a new question version starts at 0. The count is per version across tryouts. It appears
-on `GET /admin/results` only; weighted scoring is untouched.
+on `GET /admin/results` and its student detail only; weighted scoring is untouched.
 
 ## Staff
 
-`GET /admin/results` (Admin, Operator) lists completed attempts with score, the student's current rank, subtests and
-`irt_warning`, filterable by tryout and student name, paginated like orders. The leaderboard endpoint is staff-only too.
+`GET /admin/results` (Admin, Operator) lists one row per student and tryout with attempt count, average, latest score,
+the student's current rank and `irt_warning`, filterable by tryout, program and student name, paginated like orders. Order: most recent activity first; with a
+`tryout_id` filter, rank first (ranks of different tryouts are not comparable).
+`GET /admin/results/students/{student_id}/tryouts/{tryout_id}` gives that student's ranking and completed attempts
+with their subtests. The leaderboard endpoint is staff-only too.
 
 ## Not here
 

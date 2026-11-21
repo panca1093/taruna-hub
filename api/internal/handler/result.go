@@ -83,27 +83,53 @@ type leaderboardResponse struct {
 	Total   int                        `json:"total"`
 }
 
-type staffResultResponse struct {
-	SessionID        uuid.UUID               `json:"session_id"`
-	TryoutID         uuid.UUID               `json:"tryout_id"`
-	TryoutTitle      string                  `json:"tryout_title"`
-	ProgramCode      string                  `json:"program_code"`
-	ScoringMode      string                  `json:"scoring_mode"`
-	UserID           uuid.UUID               `json:"user_id"`
-	StudentName      string                  `json:"student_name"`
-	AttemptNumber    int                     `json:"attempt_number"`
-	Score            float64                 `json:"score"`
-	AverageScore     float64                 `json:"average_score"`
-	Rank             int                     `json:"rank"`
-	ParticipantCount int                     `json:"participant_count"`
-	IRTWarning       bool                    `json:"irt_warning"`
-	CompletedAt      time.Time               `json:"completed_at"`
-	Subtests         []resultSubtestResponse `json:"subtests"`
+type staffResultStudentRowResponse struct {
+	StudentID         uuid.UUID `json:"student_id"`
+	StudentName       string    `json:"student_name"`
+	StudentAvatar     string    `json:"student_avatar"`
+	TryoutID          uuid.UUID `json:"tryout_id"`
+	TryoutTitle       string    `json:"tryout_title"`
+	ProgramCode       string    `json:"program_code"`
+	ScoringMode       string    `json:"scoring_mode"`
+	AttemptsCompleted int       `json:"attempts_completed"`
+	AverageScore      float64   `json:"average_score"`
+	LatestScore       float64   `json:"latest_score"`
+	Rank              int       `json:"rank"`
+	ParticipantCount  int       `json:"participant_count"`
+	IRTWarning        bool      `json:"irt_warning"`
+	LastCompletedAt   time.Time `json:"last_completed_at"`
 }
 
-type staffResultListResponse struct {
-	Results []staffResultResponse `json:"results"`
-	Total   int                   `json:"total"`
+type staffResultStudentListResponse struct {
+	Results []staffResultStudentRowResponse `json:"results"`
+	Total   int                             `json:"total"`
+}
+
+type staffResultAttemptResponse struct {
+	SessionID     uuid.UUID               `json:"session_id"`
+	AttemptNumber int                     `json:"attempt_number"`
+	Score         float64                 `json:"score"`
+	CompletedAt   time.Time               `json:"completed_at"`
+	IRTWarning    bool                    `json:"irt_warning"`
+	Subtests      []resultSubtestResponse `json:"subtests"`
+}
+
+type staffResultStudentDetailResponse struct {
+	Student struct {
+		ID     uuid.UUID `json:"id"`
+		Name   string    `json:"name"`
+		Avatar string    `json:"avatar"`
+	} `json:"student"`
+	Tryout struct {
+		ID          uuid.UUID `json:"id"`
+		Title       string    `json:"title"`
+		ProgramID   uuid.UUID `json:"program_id"`
+		ProgramCode string    `json:"program_code"`
+		ProgramName string    `json:"program_name"`
+		ScoringMode string    `json:"scoring_mode"`
+	} `json:"tryout"`
+	Ranking  rankingResponse              `json:"ranking"`
+	Attempts []staffResultAttemptResponse `json:"attempts"`
 }
 
 func (h *Handler) TryoutSessionResult(c echo.Context) error {
@@ -232,18 +258,54 @@ func (h *Handler) StaffResults(c echo.Context) error {
 	if err != nil {
 		return resultError(err)
 	}
-	body := staffResultListResponse{Results: make([]staffResultResponse, 0, len(rows)), Total: total}
+	body := staffResultStudentListResponse{Results: make([]staffResultStudentRowResponse, 0, len(rows)), Total: total}
 	for _, r := range rows {
-		item := staffResultResponse{
-			SessionID: r.SessionID, TryoutID: r.TryoutID, TryoutTitle: r.TryoutTitle, ProgramCode: r.ProgramCode,
-			ScoringMode: r.ScoringMode, UserID: r.UserID, StudentName: r.StudentName, AttemptNumber: r.AttemptNumber,
-			Score: r.Score, AverageScore: r.Average, Rank: r.Rank, ParticipantCount: r.Participants,
-			IRTWarning: r.IRTWarning, CompletedAt: r.CompletedAt, Subtests: make([]resultSubtestResponse, 0, len(r.Subtests)),
+		body.Results = append(body.Results, staffResultStudentRowResponse{
+			StudentID: r.StudentID, StudentName: r.StudentName, StudentAvatar: r.Avatar, TryoutID: r.TryoutID,
+			TryoutTitle: r.TryoutTitle, ProgramCode: r.ProgramCode, ScoringMode: r.ScoringMode,
+			AttemptsCompleted: r.AttemptsCompleted, AverageScore: r.Average, LatestScore: r.LatestScore, Rank: r.Rank,
+			ParticipantCount: r.Participants, IRTWarning: r.IRTWarning, LastCompletedAt: r.LastCompletedAt,
+		})
+	}
+	return c.JSON(http.StatusOK, body)
+}
+
+func (h *Handler) StaffStudentResults(c echo.Context) error {
+	scope, principal, ok := runtimeCaller(c)
+	if !ok {
+		return httpx.Unauthorized(sessionInvalid)
+	}
+	studentID, err := uuid.Parse(c.Param("student_id"))
+	if err != nil {
+		return httpx.NotFound(studentResultNotFound)
+	}
+	tryoutID, err := uuid.Parse(c.Param("tryout_id"))
+	if err != nil {
+		return httpx.NotFound(studentResultNotFound)
+	}
+	detail, err := h.results.StaffStudentResults(c.Request().Context(), scope, principal, studentID, tryoutID)
+	if err != nil {
+		return resultError(err)
+	}
+	s := detail.Student
+	var body staffResultStudentDetailResponse
+	body.Student.ID, body.Student.Name, body.Student.Avatar = s.StudentID, s.StudentName, s.Avatar
+	body.Tryout.ID, body.Tryout.Title, body.Tryout.ProgramID = s.TryoutID, s.TryoutTitle, s.ProgramID
+	body.Tryout.ProgramCode, body.Tryout.ProgramName, body.Tryout.ScoringMode = s.ProgramCode, s.ProgramName, s.ScoringMode
+	body.Ranking = rankingResponse{
+		Rank: detail.Ranking.Rank, ParticipantCount: detail.Ranking.Participants,
+		AverageScore: detail.Ranking.Average, AttemptsCounted: detail.Ranking.Attempts,
+	}
+	body.Attempts = make([]staffResultAttemptResponse, 0, len(detail.Attempts))
+	for _, a := range detail.Attempts {
+		item := staffResultAttemptResponse{
+			SessionID: a.SessionID, AttemptNumber: a.AttemptNumber, Score: a.Score, CompletedAt: a.CompletedAt,
+			IRTWarning: a.IRTWarning, Subtests: make([]resultSubtestResponse, 0, len(a.Subtests)),
 		}
-		for _, p := range r.Subtests {
+		for _, p := range a.Subtests {
 			item.Subtests = append(item.Subtests, partResultResponseOf(p))
 		}
-		body.Results = append(body.Results, item)
+		body.Attempts = append(body.Attempts, item)
 	}
 	return c.JSON(http.StatusOK, body)
 }

@@ -176,18 +176,20 @@ func (r *ResultRepository) ReviewQuestions(ctx context.Context, q dbtx, tenantID
 	return out, rows.Err()
 }
 
-// StaffResultFilter is already validated by the service.
+// StaffResultFilter is already validated by the service. StudentID narrows to one student for the detail.
 type StaffResultFilter struct {
 	TryoutID  *uuid.UUID
 	ProgramID *uuid.UUID
+	StudentID *uuid.UUID
 	Search    string
 	Limit     int
 	Offset    int
 }
 
-// StaffResults lists completed attempts, best current rank first, each with its student's current rank. The IRT flag
-// and the subtest breakdown are filled in by the caller for the page only.
-func (r *ResultRepository) StaffResults(ctx context.Context, q dbtx, tenantID uuid.UUID, f StaffResultFilter) ([]model.StaffResult, int, error) {
+// StaffStudentResults lists one row per student and tryout with at least one completed attempt. With a tryout filter
+// the best current rank comes first; without one ranks of different tryouts are not comparable, so the most recently
+// active comes first. Rank and average come from the same averageSQL as the leaderboard.
+func (r *ResultRepository) StaffStudentResults(ctx context.Context, q dbtx, tenantID uuid.UUID, f StaffResultFilter) ([]model.StaffStudentResult, int, error) {
 	if tenantID == uuid.Nil {
 		return nil, 0, ErrScopeRequired
 	}
@@ -196,36 +198,78 @@ func (r *ResultRepository) StaffResults(ctx context.Context, q dbtx, tenantID uu
 		search = likePattern(f.Search)
 	}
 	const from = `
-		  FROM tryout_results r
-		  JOIN st ON st.user_id = r.user_id AND st.tryout_id = r.tryout_id
-		  JOIN users u ON u.id = r.user_id AND u.tenant_id = r.tenant_id
-		  JOIN tryouts t ON t.id = r.tryout_id AND t.tenant_id = r.tenant_id
-		  JOIN programs p ON p.id = t.program_id AND p.tenant_id = t.tenant_id
-		 WHERE r.tenant_id = $1 AND ($3 = '' OR u.name ILIKE $3 ESCAPE '\') AND ($4::uuid IS NULL OR t.program_id = $4)`
-	cte := `WITH st AS (` + averageSQL + ` AND ($2::uuid IS NULL OR tryout_id = $2))`
+		  FROM g
+		  JOIN st ON st.user_id = g.user_id AND st.tryout_id = g.tryout_id
+		  JOIN users u ON u.id = g.user_id AND u.tenant_id = $1
+		  JOIN tryouts t ON t.id = g.tryout_id AND t.tenant_id = $1
+		  JOIN programs p ON p.id = t.program_id AND p.tenant_id = $1
+		 WHERE ($3 = '' OR u.name ILIKE $3 ESCAPE '\') AND ($4::uuid IS NULL OR t.program_id = $4)`
+	const cte = `WITH st AS (` + averageSQL + ` AND ($2::uuid IS NULL OR tryout_id = $2)),
+		g AS (
+		    SELECT user_id, tryout_id, count(*) AS attempts, max(completed_at) AS last_at,
+		           (array_agg(score ORDER BY completed_at DESC, attempt_number DESC))[1] AS latest
+		      FROM tryout_results
+		     WHERE tenant_id = $1 AND ($2::uuid IS NULL OR tryout_id = $2) AND ($5::uuid IS NULL OR user_id = $5)
+		     GROUP BY user_id, tryout_id)`
 	var total int
-	if err := q.QueryRow(ctx, cte+` SELECT count(*)`+from, tenantID, f.TryoutID, search, f.ProgramID).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count staff results: %w", err)
+	if err := q.QueryRow(ctx, cte+` SELECT count(*)`+from, tenantID, f.TryoutID, search, f.ProgramID, f.StudentID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count staff student results: %w", err)
 	}
 	rows, err := q.Query(ctx, cte+`
-		SELECT r.session_id, r.tryout_id, t.title, p.code, r.scoring_mode, r.user_id, u.name, r.attempt_number,
-		       r.score::float8, st.average::float8, st.rnk, st.participants, r.completed_at`+from+`
-		 ORDER BY CASE WHEN $2::uuid IS NULL THEN 0 ELSE st.rnk END, r.completed_at DESC, r.session_id
-		 LIMIT $5 OFFSET $6`, tenantID, f.TryoutID, search, f.ProgramID, f.Limit, f.Offset)
+		SELECT g.user_id, u.name, u.avatar_key, u.gender, u.birth_date, g.tryout_id, t.title, t.program_id, p.code, p.name,
+		       t.scoring_mode, g.attempts, st.result_count, st.average::float8, g.latest::float8, st.rnk, st.participants, g.last_at`+from+`
+		 ORDER BY CASE WHEN $2::uuid IS NULL THEN 0 ELSE st.rnk END, g.last_at DESC, u.name, g.user_id, g.tryout_id
+		 LIMIT $6 OFFSET $7`, tenantID, f.TryoutID, search, f.ProgramID, f.StudentID, f.Limit, f.Offset)
 	if err != nil {
-		return nil, 0, fmt.Errorf("list staff results: %w", err)
+		return nil, 0, fmt.Errorf("list staff student results: %w", err)
 	}
 	defer rows.Close()
-	out := []model.StaffResult{}
+	out := []model.StaffStudentResult{}
 	for rows.Next() {
-		var s model.StaffResult
-		if err := rows.Scan(&s.SessionID, &s.TryoutID, &s.TryoutTitle, &s.ProgramCode, &s.ScoringMode, &s.UserID,
-			&s.StudentName, &s.AttemptNumber, &s.Score, &s.Average, &s.Rank, &s.Participants, &s.CompletedAt); err != nil {
-			return nil, 0, fmt.Errorf("scan staff result: %w", err)
+		var s model.StaffStudentResult
+		if err := rows.Scan(&s.StudentID, &s.StudentName, &s.AvatarKey, &s.Gender, &s.BirthDate, &s.TryoutID, &s.TryoutTitle,
+			&s.ProgramID, &s.ProgramCode, &s.ProgramName, &s.ScoringMode, &s.AttemptsCompleted, &s.AttemptsCounted, &s.Average, &s.LatestScore,
+			&s.Rank, &s.Participants, &s.LastCompletedAt); err != nil {
+			return nil, 0, fmt.Errorf("scan staff student result: %w", err)
 		}
 		out = append(out, s)
 	}
 	return out, total, rows.Err()
+}
+
+// StudentTryout names one student on one tryout.
+type StudentTryout struct{ StudentID, TryoutID uuid.UUID }
+
+// StaffAttempts reads the completed attempts of the given students on the given tryouts, newest first.
+func (r *ResultRepository) StaffAttempts(ctx context.Context, q dbtx, tenantID uuid.UUID, pairs []StudentTryout) (map[StudentTryout][]model.StaffAttempt, error) {
+	if tenantID == uuid.Nil {
+		return nil, ErrScopeRequired
+	}
+	students := make([]uuid.UUID, len(pairs))
+	tryouts := make([]uuid.UUID, len(pairs))
+	for i, p := range pairs {
+		students[i], tryouts[i] = p.StudentID, p.TryoutID
+	}
+	rows, err := q.Query(ctx, `
+		SELECT r.user_id, r.tryout_id, r.session_id, r.attempt_number, r.score::float8, r.scoring_mode, r.completed_at
+		  FROM tryout_results r
+		  JOIN unnest($2::uuid[], $3::uuid[]) AS want(user_id, tryout_id) ON want.user_id = r.user_id AND want.tryout_id = r.tryout_id
+		 WHERE r.tenant_id = $1
+		 ORDER BY r.completed_at DESC, r.attempt_number DESC`, tenantID, students, tryouts)
+	if err != nil {
+		return nil, fmt.Errorf("list staff attempts: %w", err)
+	}
+	defer rows.Close()
+	out := map[StudentTryout][]model.StaffAttempt{}
+	for rows.Next() {
+		var key StudentTryout
+		var a model.StaffAttempt
+		if err := rows.Scan(&key.StudentID, &key.TryoutID, &a.SessionID, &a.AttemptNumber, &a.Score, &a.ScoringMode, &a.CompletedAt); err != nil {
+			return nil, fmt.Errorf("scan staff attempt: %w", err)
+		}
+		out[key] = append(out[key], a)
+	}
+	return out, rows.Err()
 }
 
 // SessionParts reads the settled subtest scores of the given sessions, in subtest order.

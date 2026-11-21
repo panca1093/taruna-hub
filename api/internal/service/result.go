@@ -207,9 +207,15 @@ type StaffResultFilter struct {
 	Offset    int
 }
 
-// StaffResults lists completed attempts for Admin and Operator. IRTWarning is set only on results of IRT-mode
-// sessions and is never part of a student response.
-func (s *ResultService) StaffResults(ctx context.Context, scope HostScope, principal model.Principal, f StaffResultFilter) ([]model.StaffResult, int, error) {
+// StaffStudentRow is one student on one tryout. IRTWarning is staff-only and never part of a student response.
+type StaffStudentRow struct {
+	model.StaffStudentResult
+	Avatar     string
+	IRTWarning bool
+}
+
+// StaffResults lists one row per student and tryout with at least one completed attempt, for Admin and Operator.
+func (s *ResultService) StaffResults(ctx context.Context, scope HostScope, principal model.Principal, f StaffResultFilter) ([]StaffStudentRow, int, error) {
 	tenantID, err := staffTenant(scope, principal)
 	if err != nil {
 		return nil, 0, err
@@ -222,39 +228,115 @@ func (s *ResultService) StaffResults(ctx context.Context, scope HostScope, princ
 	if len(fields) > 0 {
 		return nil, 0, &InputError{Fields: fields}
 	}
-	rows, total, err := s.repo.StaffResults(ctx, s.db, tenantID, repository.StaffResultFilter{
+	rows, total, err := s.repo.StaffStudentResults(ctx, s.db, tenantID, repository.StaffResultFilter{
 		TryoutID: f.TryoutID, ProgramID: f.ProgramID, Search: f.Search, Limit: f.Limit, Offset: f.Offset,
 	})
 	if err != nil {
 		return nil, 0, runtimeError(err)
 	}
+	out := make([]StaffStudentRow, len(rows))
 	if len(rows) == 0 {
-		return rows, total, nil
+		return out, total, nil
 	}
-	ids := make([]uuid.UUID, 0, len(rows))
-	var irtIDs []uuid.UUID
-	for _, r := range rows {
-		ids = append(ids, r.SessionID)
-		if r.ScoringMode == "irt" {
-			irtIDs = append(irtIDs, r.SessionID)
-		}
+	pairs := make([]repository.StudentTryout, len(rows))
+	for i, r := range rows {
+		pairs[i] = repository.StudentTryout{StudentID: r.StudentID, TryoutID: r.TryoutID}
 	}
-	parts, err := s.repo.SessionParts(ctx, s.db, tenantID, ids)
+	attempts, err := s.repo.StaffAttempts(ctx, s.db, tenantID, pairs)
 	if err != nil {
 		return nil, 0, runtimeError(err)
 	}
-	under := map[uuid.UUID]bool{}
-	if len(irtIDs) > 0 {
-		if under, err = s.repo.IRTUnderThreshold(ctx, s.db, tenantID, irtIDs, s.irtMin); err != nil {
-			return nil, 0, runtimeError(err)
+	under, err := s.irtFlags(ctx, tenantID, attempts)
+	if err != nil {
+		return nil, 0, err
+	}
+	for i, r := range rows {
+		out[i] = StaffStudentRow{StaffStudentResult: r, Avatar: staffAvatarOf(r)}
+		for _, a := range attempts[pairs[i]] {
+			if under[a.SessionID] {
+				out[i].IRTWarning = true
+			}
 		}
 	}
-	for i := range rows {
-		rows[i].IRTWarning = under[rows[i].SessionID]
-		for _, p := range parts[rows[i].SessionID] {
+	return out, total, nil
+}
+
+func staffAvatarOf(r model.StaffStudentResult) string {
+	return avatarOf(model.User{ID: r.StudentID, AvatarKey: r.AvatarKey, Gender: r.Gender, BirthDate: r.BirthDate})
+}
+
+// irtFlags flags the IRT-mode attempts that hold a question version answered by too few distinct students.
+func (s *ResultService) irtFlags(ctx context.Context, tenantID uuid.UUID, attempts map[repository.StudentTryout][]model.StaffAttempt) (map[uuid.UUID]bool, error) {
+	var ids []uuid.UUID
+	for _, list := range attempts {
+		for _, a := range list {
+			if a.ScoringMode == "irt" {
+				ids = append(ids, a.SessionID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return map[uuid.UUID]bool{}, nil
+	}
+	under, err := s.repo.IRTUnderThreshold(ctx, s.db, tenantID, ids, s.irtMin)
+	if err != nil {
+		return nil, runtimeError(err)
+	}
+	return under, nil
+}
+
+// StaffStudentDetail is one student's standing and completed attempts on one tryout.
+type StaffStudentDetail struct {
+	Student  StaffStudentRow
+	Ranking  model.Ranking
+	Attempts []model.StaffAttempt
+}
+
+// StaffStudentResults is one student's completed attempts on one tryout, newest first. A student or tryout outside
+// the tenant, or a student without a completed attempt, is not found.
+func (s *ResultService) StaffStudentResults(ctx context.Context, scope HostScope, principal model.Principal, studentID, tryoutID uuid.UUID) (StaffStudentDetail, error) {
+	tenantID, err := staffTenant(scope, principal)
+	if err != nil {
+		return StaffStudentDetail{}, err
+	}
+	rows, _, err := s.repo.StaffStudentResults(ctx, s.db, tenantID, repository.StaffResultFilter{TryoutID: &tryoutID, StudentID: &studentID, Limit: 1})
+	if err != nil {
+		return StaffStudentDetail{}, runtimeError(err)
+	}
+	if len(rows) == 0 {
+		return StaffStudentDetail{}, ErrStudentResultNotFound
+	}
+	row := rows[0]
+	pair := repository.StudentTryout{StudentID: studentID, TryoutID: tryoutID}
+	byPair, err := s.repo.StaffAttempts(ctx, s.db, tenantID, []repository.StudentTryout{pair})
+	if err != nil {
+		return StaffStudentDetail{}, runtimeError(err)
+	}
+	attempts := byPair[pair]
+	ids := make([]uuid.UUID, len(attempts))
+	for i, a := range attempts {
+		ids[i] = a.SessionID
+	}
+	parts, err := s.repo.SessionParts(ctx, s.db, tenantID, ids)
+	if err != nil {
+		return StaffStudentDetail{}, runtimeError(err)
+	}
+	under, err := s.irtFlags(ctx, tenantID, byPair)
+	if err != nil {
+		return StaffStudentDetail{}, err
+	}
+	detail := StaffStudentDetail{
+		Student:  StaffStudentRow{StaffStudentResult: row, Avatar: staffAvatarOf(row)},
+		Ranking:  model.Ranking{Rank: row.Rank, Participants: row.Participants, Average: row.Average, Attempts: row.AttemptsCounted},
+		Attempts: attempts,
+	}
+	for i := range detail.Attempts {
+		a := &detail.Attempts[i]
+		a.IRTWarning = under[a.SessionID]
+		for _, p := range parts[a.SessionID] {
 			p.Score = percent(p.EarnedPoints, p.MaxPoints)
-			rows[i].Subtests = append(rows[i].Subtests, p)
+			a.Subtests = append(a.Subtests, p)
 		}
 	}
-	return rows, total, nil
+	return detail, nil
 }

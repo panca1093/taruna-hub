@@ -43,6 +43,41 @@ type StaffResult struct {
 	Subtests      []PartResult
 }
 
+// StaffStudentResult is one student on one tryout with at least one completed attempt. The avatar inputs travel
+// with it so the service resolves the avatar exactly like User.avatar.
+type StaffStudentResult struct {
+	StudentID         uuid.UUID
+	StudentName       string
+	AvatarKey         *string
+	Gender            *string
+	BirthDate         *time.Time
+	TryoutID          uuid.UUID
+	TryoutTitle       string
+	ProgramID         uuid.UUID
+	ProgramCode       string
+	ProgramName       string
+	ScoringMode       string
+	AttemptsCompleted int
+	AttemptsCounted   int
+	Average           float64
+	LatestScore       float64
+	Rank              int
+	Participants      int
+	LastCompletedAt   time.Time
+}
+
+// StaffAttempt is one completed attempt as the staff detail lists it. IRTWarning and Subtests are filled in by the
+// service.
+type StaffAttempt struct {
+	SessionID     uuid.UUID
+	AttemptNumber int
+	Score         float64
+	ScoringMode   string
+	CompletedAt   time.Time
+	IRTWarning    bool
+	Subtests      []PartResult
+}
+
 // ReviewQuestion is a snapshotted question with its explanation. Correct is already on AttemptQuestion; both only
 // leave the service after the tryout's release time.
 type ReviewQuestion struct {

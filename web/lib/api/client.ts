@@ -45,12 +45,15 @@ export type RuntimeSubtestState = components["schemas"]["RuntimeSubtestState"];
 export type RuntimeSubtest = components["schemas"]["RuntimeSubtest"];
 export type RuntimeQuestion = components["schemas"]["RuntimeQuestion"];
 export type TryoutResult = components["schemas"]["TryoutResult"];
+export type TryoutRanking = components["schemas"]["TryoutRanking"];
 export type TryoutResultDetail = components["schemas"]["TryoutResultDetail"];
 export type TryoutReview = components["schemas"]["TryoutReview"];
 export type ReviewQuestion = components["schemas"]["ReviewQuestion"];
 export type Leaderboard = components["schemas"]["Leaderboard"];
-export type StaffResult = components["schemas"]["StaffResult"];
-export type StaffResultList = components["schemas"]["StaffResultList"];
+export type StaffResultStudentRow = components["schemas"]["StaffResultStudentRow"];
+export type StaffResultStudentList = components["schemas"]["StaffResultStudentList"];
+export type StaffResultStudentDetail = components["schemas"]["StaffResultStudentDetail"];
+export type StaffResultAttempt = components["schemas"]["StaffResultAttempt"];
 export type AttemptSummary = components["schemas"]["AttemptSummary"];
 export type AttemptList = components["schemas"]["AttemptList"];
 export type AnswerAck = components["schemas"]["AnswerAck"];
@@ -735,10 +738,14 @@ export const api = {
       authed<ViolationTimeline>(`/api/v1/admin/tryout-sessions/${sessionId}/violations` as keyof paths),
   },
 
-  /** Staff results: completed attempts with each student's current rank, and the per-tryout leaderboard. */
+  /** Staff results: one row per student and tryout with the current rank, the per-student detail, and the per-tryout leaderboard. */
   results: {
     list: (filters: StaffResultFilters = {}) =>
-      authed<StaffResultList>(`/api/v1/admin/results${queryOf(filters)}` as keyof paths),
+      authed<StaffResultStudentList>(`/api/v1/admin/results${queryOf(filters)}` as keyof paths),
+    student: (studentId: string, tryoutId: string) =>
+      authed<StaffResultStudentDetail>(
+        `/api/v1/admin/results/students/${studentId}/tryouts/${tryoutId}` as keyof paths,
+      ),
     /** 202 with the queued export; poll it through `exports.list`. */
     requestExport: (body: ResultExportBody) => mutate<Export>("POST", "/api/v1/results/exports", body),
     leaderboard: (tryoutId: string, limit?: number) =>

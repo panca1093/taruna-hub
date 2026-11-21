@@ -299,7 +299,7 @@ func TestResultStaffListFiltersByProgram(t *testing.T) {
 	h.take(t, p, tr, map[uuid.UUID]string{q1.ID: optID(t, q1, "4")})
 	ctx := context.Background()
 	rows, total, err := h.rs.StaffResults(ctx, h.scopeA(), h.staff(model.RoleAdmin), StaffResultFilter{ProgramID: &tr.ProgramID})
-	if err != nil || total != 1 || len(rows) != 1 || rows[0].Score != 100 || rows[0].Rank != 1 {
+	if err != nil || total != 1 || len(rows) != 1 || rows[0].LatestScore != 100 || rows[0].Rank != 1 {
 		t.Fatalf("program filter = %+v of %d (err %v), want the one result", rows, total, err)
 	}
 	other := uuid.New()
