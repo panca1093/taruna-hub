@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, toast } from "@heroui/react";
-import { CheckCircle2, CloudOff, FileQuestion, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { CheckCircle2, CloudOff, Eye, FileQuestion, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
-import { LatexText } from "@/components/latex";
+import { RichDoc as RichDocView } from "@/components/rich-doc";
 import { DifficultyBadge, ProgramBadge, QuestionTypeBadge } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput } from "@/components/ui/form";
@@ -15,9 +15,102 @@ import { QuestionEditor, type QuestionDraft, draftOf, emptyDraft } from "@/compo
 import { ImportQuestionsModal } from "@/components/admin/import-questions-modal";
 import { api, ApiError, errorText, type Program, type Question } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
+import { docText, isDocEmpty, type RichDoc } from "@/lib/rich-doc";
 import { useAdminQuestionsPageT } from "@/lib/i18n/dict/admin-questions-page";
 
 const PAGE_SIZE = 50;
+
+interface PreviewView {
+  type: Question["type"];
+  content: RichDoc;
+  options: { id: string; label: RichDoc; points?: number }[];
+  correct: string[];
+  optionWeighted: boolean;
+  explanation: RichDoc;
+}
+
+const viewOfQuestion = (question: Question): PreviewView => ({
+  type: question.type,
+  content: question.content,
+  options: question.options,
+  correct: question.correct,
+  optionWeighted: question.option_weighted,
+  explanation: question.explanation,
+});
+
+// Mirrors what bodyOf sends: empty options are dropped, except the fixed true/false pair.
+const viewOfDraft = (draft: QuestionDraft): PreviewView => ({
+  type: draft.type,
+  content: draft.content,
+  options: draft.options
+    .filter((option) => draft.type === "benar_salah" || !isDocEmpty(option.label))
+    .map((option, index) => ({ id: option.id ?? `option-${index}`, label: option.label, points: option.points })),
+  correct: draft.type === "isian" ? draft.correct.map((answer) => answer.trim()).filter((answer) => answer !== "") : draft.correct,
+  optionWeighted: draft.type === "pg" && draft.optionWeighted,
+  explanation: draft.explanation,
+});
+
+function QuestionPreview({
+  view,
+  header,
+  correctAnswerLabel,
+  explanationLabel,
+}: {
+  view: PreviewView;
+  header: ReactNode;
+  correctAnswerLabel: string;
+  explanationLabel: string;
+}) {
+  return (
+    <>
+      {header}
+      <RichDocView doc={view.content} className="leading-relaxed text-foreground" />
+      {view.type === "isian" ? (
+        <div className="rounded-control border border-success/30 bg-success-soft px-3.5 py-3 text-small">
+          <p className="mb-1 text-label font-medium tracking-wide text-success-soft-foreground uppercase">{correctAnswerLabel}</p>
+          {view.correct.map((answer) => (
+            <p key={answer} className="font-medium text-success-soft-foreground">{answer}</p>
+          ))}
+        </div>
+      ) : view.optionWeighted ? (
+        <div className="space-y-2">
+          {view.options.map((option) => (
+            <div key={option.id} className="flex items-center gap-2.5 rounded-control border border-border px-3.5 py-2.5 text-small">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-caption font-semibold text-accent-soft-foreground">
+                {option.points ?? 1}
+              </span>
+              <RichDocView doc={option.label} className="min-w-0 flex-1 text-foreground" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {view.options.map((option) => {
+            const correct = view.correct.includes(option.id);
+            return (
+              <div
+                key={option.id}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-control border px-3.5 py-2.5 text-small",
+                  correct ? "border-success/40 bg-success-soft" : "border-border",
+                )}
+              >
+                {correct ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <span className="size-4 shrink-0" />}
+                <RichDocView doc={option.label} className={cn("min-w-0 flex-1", correct ? "font-medium text-success-soft-foreground" : "text-foreground")} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!isDocEmpty(view.explanation) && (
+        <div className="rounded-control border border-dashed border-border bg-surface-secondary px-3.5 py-3 text-small">
+          <p className="mb-1 text-label font-medium tracking-wide text-muted uppercase">{explanationLabel}</p>
+          <RichDocView doc={view.explanation} />
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function QuestionsPage() {
   const t = useAdminQuestionsPageT();
@@ -43,6 +136,11 @@ export default function QuestionsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [preview, setPreview] = useState<Question | null>(null);
+  const [draftPreview, setDraftPreview] = useState<QuestionDraft | null>(null);
+  const latestDraft = useRef<QuestionDraft | null>(null);
+  const trackDraft = useCallback((draft: QuestionDraft) => {
+    latestDraft.current = draft;
+  }, []);
 
   const typeOptions = [
     { id: "all", label: t.filterAllType },
@@ -160,7 +258,7 @@ export default function QuestionsPage() {
 
   // The body only names ids the server gave back; a new option's placeholder is resolved server-side.
   const bodyOf = (draft: QuestionDraft) => {
-    const options = draft.type === "benar_salah" ? draft.options : draft.options.filter((option) => option.label.trim() !== "");
+    const options = draft.type === "benar_salah" ? draft.options : draft.options.filter((option) => !isDocEmpty(option.label));
     const keptIds = new Set(options.map((option) => option.id));
     return {
       program_id: draft.programId,
@@ -232,9 +330,7 @@ export default function QuestionsPage() {
       header: t.columns.content,
       className: "max-w-md",
       render: (question) => (
-        <div className="line-clamp-2 text-small">
-          <LatexText text={question.content} />
-        </div>
+        <div className="line-clamp-2 text-small">{docText(question.content)}</div>
       ),
     },
     {
@@ -327,14 +423,17 @@ export default function QuestionsPage() {
           title={editing ? t.editTitle : t.createTitle}
           size="xl"
           footer={
-            <>
+            <div className="flex w-full items-center gap-2">
+              <Button variant="secondary" className="mr-auto" onPress={() => setDraftPreview(latestDraft.current)}>
+                <Eye className="size-4" /> {t.previewDraft}
+              </Button>
               <Button variant="ghost" onPress={() => setEditorOpen(false)}>
                 {t.cancel}
               </Button>
               <Button variant="primary" type="submit" form="question-editor-form" isDisabled={saving}>
                 {saving ? t.saving : t.saveQuestion}
               </Button>
-            </>
+            </div>
           }
         >
           {draftInitial && (
@@ -345,6 +444,37 @@ export default function QuestionsPage() {
               errors={formErrors}
               saving={saving}
               onSubmit={(draft) => void handleSave(draft)}
+              onDraftChange={trackDraft}
+            />
+          )}
+        </FormModal>
+
+        <FormModal
+          isOpen={!!draftPreview}
+          onOpenChange={(open) => !open && setDraftPreview(null)}
+          title={t.draftPreviewTitle}
+          size="lg"
+          footer={
+            <Button variant="ghost" onPress={() => setDraftPreview(null)}>
+              {t.close}
+            </Button>
+          }
+        >
+          {draftPreview && (
+            <QuestionPreview
+              view={viewOfDraft(draftPreview)}
+              correctAnswerLabel={t.correctAnswer}
+              explanationLabel={t.explanation}
+              header={
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {programOf(draftPreview.programId) && <ProgramBadge code={programOf(draftPreview.programId)!.code} />}
+                  <QuestionTypeBadge type={draftPreview.type} />
+                  <DifficultyBadge difficulty={draftPreview.difficulty} />
+                  {draftPreview.type === "pg" && draftPreview.optionWeighted && (
+                    <span className="text-caption text-muted">{t.optionWeighted}</span>
+                  )}
+                </div>
+              }
             />
           )}
         </FormModal>
@@ -378,63 +508,24 @@ export default function QuestionsPage() {
           }
         >
           {preview && (
-            <>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {programOf(preview.program_id) && <ProgramBadge code={programOf(preview.program_id)!.code} />}
-                <QuestionTypeBadge type={preview.type} />
-                <DifficultyBadge difficulty={preview.difficulty} />
-                <span className="text-caption text-muted">
-                  {subjectName(preview)}
-                  {chapterName(preview) ? ` / ${chapterName(preview)}` : ""} · ID {preview.number} ·{" "}
-                  {t.versionLabel(preview.version)}
-                  {preview.option_weighted ? ` · ${t.optionWeighted}` : ""}
-                </span>
-              </div>
-              <div className="leading-relaxed text-foreground">
-                <LatexText text={preview.content} />
-              </div>
-              {preview.type === "isian" ? (
-                <div className="rounded-control border border-success/30 bg-success-soft px-3.5 py-3 text-small">
-                  <p className="mb-1 text-label font-medium tracking-wide text-success-soft-foreground uppercase">{t.correctAnswer}</p>
-                  {preview.correct.map((answer) => (
-                    <p key={answer} className="font-medium text-success-soft-foreground">{answer}</p>
-                  ))}
+            <QuestionPreview
+              view={viewOfQuestion(preview)}
+              correctAnswerLabel={t.correctAnswer}
+              explanationLabel={t.explanation}
+              header={
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {programOf(preview.program_id) && <ProgramBadge code={programOf(preview.program_id)!.code} />}
+                  <QuestionTypeBadge type={preview.type} />
+                  <DifficultyBadge difficulty={preview.difficulty} />
+                  <span className="text-caption text-muted">
+                    {subjectName(preview)}
+                    {chapterName(preview) ? ` / ${chapterName(preview)}` : ""} · ID {preview.number} ·{" "}
+                    {t.versionLabel(preview.version)}
+                    {preview.option_weighted ? ` · ${t.optionWeighted}` : ""}
+                  </span>
                 </div>
-              ) : preview.option_weighted ? (
-                <div className="space-y-2">
-                  {preview.options.map((option) => (
-                    <div key={option.id} className="flex items-center gap-2.5 rounded-control border border-border px-3.5 py-2.5 text-small">
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-caption font-semibold text-accent-soft-foreground">
-                        {option.points ?? 1}
-                      </span>
-                      <LatexText text={option.label} className="text-foreground" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {preview.options.map((option) => {
-                    const correct = preview.correct.includes(option.id);
-                    return (
-                      <div
-                        key={option.id}
-                        className={cn(
-                          "flex items-center gap-2.5 rounded-control border px-3.5 py-2.5 text-small",
-                          correct ? "border-success/40 bg-success-soft" : "border-border",
-                        )}
-                      >
-                        {correct ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <span className="size-4 shrink-0" />}
-                        <LatexText text={option.label} className={correct ? "font-medium text-success-soft-foreground" : "text-foreground"} />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="rounded-control border border-dashed border-border bg-surface-secondary px-3.5 py-3 text-small">
-                <p className="mb-1 text-label font-medium tracking-wide text-muted uppercase">{t.explanation}</p>
-                <LatexText text={preview.explanation} />
-              </div>
-            </>
+              }
+            />
           )}
         </FormModal>
 
@@ -455,9 +546,7 @@ export default function QuestionsPage() {
           }
         >
           {deleteTarget && (
-            <p className="text-small text-foreground">
-              <LatexText text={deleteTarget.content} />
-            </p>
+            <p className="text-small text-foreground">{docText(deleteTarget.content)}</p>
           )}
         </FormModal>
       </AppShell>

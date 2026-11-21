@@ -508,6 +508,124 @@
 }
 
 /* ---------------------------------------------------------------------- */
+/* Rich text: question content shared by the admin editor (Tiptap's       */
+/* ProseMirror element carries .rich-text) and the read-only RichDoc      */
+/* renderer. Selectors target third-party and renderer DOM, so this is    */
+/* the documented exception to "no global CSS for one component".         */
+/* ---------------------------------------------------------------------- */
+
+@layer components {
+  .rich-text {
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
+  .rich-text:focus,
+  .rich-text:focus-visible {
+    outline: none;
+  }
+  .rich-text p {
+    margin: 0 0 0.45em;
+    min-height: 1lh;
+  }
+  .rich-text > :last-child {
+    margin-bottom: 0;
+  }
+  .rich-text ul,
+  .rich-text ol {
+    margin: 0 0 0.45em;
+    padding-left: 1.4em;
+  }
+  .rich-text ul {
+    list-style: disc;
+  }
+  .rich-text ol {
+    list-style: decimal;
+  }
+  .rich-text li > p {
+    margin: 0;
+  }
+  .rich-text .rich-table,
+  .rich-text .tableWrapper {
+    margin: 0.375rem 0 0.625rem;
+    overflow-x: auto;
+  }
+  .rich-text table {
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  .rich-text th,
+  .rich-text td {
+    position: relative;
+    min-width: 4.5rem;
+    padding: 0.375rem 0.875rem;
+    border: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+  .rich-text th {
+    background: var(--surface-secondary);
+    font-weight: 600;
+  }
+  .rich-text td p,
+  .rich-text th p {
+    margin: 0;
+  }
+  .rich-text .selectedCell {
+    background: var(--accent-soft);
+  }
+  .rich-text .rich-math {
+    padding: 1px 3px;
+    border-radius: 4px;
+  }
+  .rich-text.ProseMirror .rich-math:hover {
+    background: var(--accent-soft);
+  }
+  .rich-text .rich-shape {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: fit-content;
+    margin: 0.375rem 0 0.625rem;
+    padding: 4px 8px;
+    border-radius: var(--radius-chip);
+  }
+  .rich-text .rich-shape svg {
+    width: 7.75rem;
+    height: 7.75rem;
+  }
+  .rich-text .rich-shape figcaption {
+    font-size: var(--text-label);
+    color: var(--muted);
+  }
+  .rich-text .rich-image {
+    margin: 0.375rem 0 0.625rem;
+  }
+  .rich-text .rich-image img {
+    display: block;
+    max-width: 100%;
+    max-height: 15rem;
+    border-radius: var(--radius-chip);
+  }
+  .rich-text p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .rich-text .ProseMirror-selectednode {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@utility grid-cols-question-form {
+  grid-template-columns: minmax(0, 1fr) 19rem;
+}
+
+/* ---------------------------------------------------------------------- */
 /* Signature: the countdown ring gradient + supporting utilities          */
 /* ---------------------------------------------------------------------- */
 

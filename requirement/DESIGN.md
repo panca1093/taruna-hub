@@ -411,7 +411,23 @@ Reuse these before writing page-local markup. All are small, prop-driven, and to
 
 Layout utilities in `globals.css` replace arbitrary grid values: `grid-cols-detail` (main + 17.5rem aside), `grid-cols-hero-pair`, `grid-cols-wallet`, `grid-cols-score`, `max-w-popover`. Use them with `lg:`/`md:` variants; do not write `grid-cols-[...]` in components.
 
-Tinted tokens added for these: `bg-peach`, `bg-accent-soft`, `text-rose` / `bg-rose`, `bg-success-soft` with `text-success-soft-foreground` (prototype green), `bg-rail-active`, `bg-sidebar-hover`, `logo-plate`.
+Tinted tokens added for these: `bg-peach`, `bg-accent-soft`, `text-rose` / `bg-rose`, `bg-success-soft` with `text-success-soft-foreground` (prototype green), `bg-rail-active`, `bg-sidebar-hover`, `logo-plate`. `grid-cols-question-form` (main + 19rem aside) lays out the question form.
+
+### 6.11 Rich text: editor, renderer and shapes
+
+Question content, options and explanations are rich documents (Tiptap/ProseMirror JSON, `RichDoc` in the OpenAPI contract), never markdown or HTML.
+
+**Editor** ([rich-text-editor.tsx](../web/components/admin/rich-text-editor.tsx), parts in `components/admin/rich-text/`). One `RichTextGroup` wraps every field of a form, one sticky `RichTextToolbar` serves them all ("toolbar bersama"), and each `RichTextField` is one Tiptap editor (content, each option, explanation).
+- The toolbar acts on the field that last took focus. The focused field shows an accent border with a soft ring; a correct option shows the success border and tint. A field keeps a single editor instance for its whole life and pushes the JSON up on every update; never recreate editors per keystroke.
+- Toolbar buttons keep the editor selection (`mousedown` default is prevented). Row 1: undo, redo | bold, italic, underline | bullets, numbered | Rumus, Tabel, Gambar, Bangun ruang. Toggle buttons use `aria-pressed` and the accent-soft fill; undo/redo disable when unavailable; everything disables until a field has focus. A screen-reader-only live region says which field is being written in.
+- When the cursor is in a table, row 2 appears on `surface-secondary`: + Baris, + Kolom | Hapus baris, Hapus kolom, Hapus tabel (hover turns danger).
+- Popovers are HeroUI `Popover` anchored to their toolbar button (Escape closes, focus returns to the editor): **Rumus** has quick-insert chips, a LaTeX input, a live KaTeX preview and Enter to insert, and clicking a formula in the text reopens it for editing; **Tabel** is a 6 by 5 size grid with an "n baris × m kolom" label, inserted with a header row; **Gambar** picks PNG/JPG/WebP up to 5 MB, uploads as a `question_image` asset and shows uploading and error states; **Bangun ruang** picks one of the seven solids with an optional caption.
+- Atoms (formula, shape, image) show the accent outline when selected. Images resolve their presigned link through `api.assets.url`.
+- The form puts the sticky toolbar and the writing fields in the wide left column and a quiet `surface-secondary` panel (Klasifikasi, Jawaban) on the right; below `lg` the panel stacks above the writing column. There is no inline preview: the modal footer has a "Pratinjau" button that opens the draft the way a student sees it.
+
+**`.rich-text` class** (one `@layer components` block in `globals.css`). It styles both the editor (set on the ProseMirror element through `editorProps.attributes.class`) and the read-only renderer, from tokens only. It is the documented exception to "no global CSS for one component" because its selectors target third-party and renderer DOM. DOM contract: root `div.rich-text`; `p`, `strong`, `em`, `u`, `br`, `ul`, `ol`, `li`; tables as `div.rich-table > table > tbody > tr > th|td` (the editor's `div.tableWrapper` is styled the same, both scroll horizontally); `span.rich-math`; `figure.rich-shape > svg + figcaption`; `figure.rich-image > img`. The last child of a block loses its bottom margin so a one-line option has no trailing gap, and an empty paragraph keeps one line. Editor internals styled there: placeholder (`p.is-editor-empty:first-child::before`), `.selectedCell`, `.ProseMirror-selectednode`, no outline on the editor.
+
+**Renderer and shapes.** [RichDoc](../web/components/rich-doc.tsx) renders a document read-only with that DOM, so students, previews and the editor look identical; use `docText` from `lib/rich-doc.ts` for single-line rows, titles and aria labels. [SolidShape](../web/components/solid-shape.tsx) draws the seven solids (kubus, balok, tabung, kerucut, bola, limas, prisma) as `currentColor` line art with dashed hidden edges, sized by its container.
 
 ### 6.9 Public marketing patterns
 
