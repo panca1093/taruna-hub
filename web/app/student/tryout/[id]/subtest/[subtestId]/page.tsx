@@ -8,7 +8,7 @@ import { AlertTriangle, ArrowRight, CloudOff, Maximize, WifiOff } from "lucide-r
 import { ExamTimerPill } from "@/components/countdown-ring";
 import { Icon } from "@/components/icon";
 import { NoteBox, Panel } from "@/components/page-blocks";
-import { LatexText } from "@/components/latex";
+import { RichDoc } from "@/components/rich-doc";
 import { QuestionTypeBadge } from "@/components/status-badge";
 import { LanguageToggle } from "@/components/language-toggle";
 import { api, ApiError, type RuntimeSubtest, type StudentTryout } from "@/lib/api/client";
@@ -400,7 +400,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                 </div>
 
                 <div className="mb-7 max-w-4xl text-lg leading-loose font-medium">
-                  <LatexText text={question.content} />
+                  <RichDoc doc={question.content} />
                 </div>
 
                 <div className="space-y-2.5">
@@ -418,7 +418,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                             {selected && <span className="size-2 rounded-full bg-accent" />}
                           </span>
                           {letterBadge(i)}
-                          <LatexText text={opt.label} />
+                          <RichDoc doc={opt.label} className="min-w-0 flex-1 text-left" />
                         </button>
                       );
                     })}
@@ -437,7 +437,7 @@ export default function SubtestPage({ params }: { params: Promise<{ id: string; 
                             {selected && <span className="size-2 rounded-chip bg-white" />}
                           </span>
                           {letterBadge(i)}
-                          <LatexText text={opt.label} />
+                          <RichDoc doc={opt.label} className="min-w-0 flex-1 text-left" />
                         </button>
                       );
                     })}

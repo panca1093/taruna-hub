@@ -6319,7 +6319,7 @@ components:
                       type: string
                       enum: [pg, pg_multi, isian, benar_salah]
                     content:
-                      type: string
+                      $ref: "#/components/schemas/RichDoc"
                     options:
                       type: array
                       description: Labels in stored order; empty for `isian`.
@@ -6329,7 +6329,7 @@ components:
                         required: [label]
                         properties:
                           label:
-                            type: string
+                            $ref: "#/components/schemas/RichDoc"
 
     TryoutList:
       type: object

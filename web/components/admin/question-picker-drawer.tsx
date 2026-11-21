@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Drawer, Button, toast } from "@heroui/react";
 import { Search } from "lucide-react";
-import { LatexText } from "@/components/latex";
 import { DifficultyBadge, ProgramBadge, QuestionTypeBadge } from "@/components/status-badge";
 import { SelectInput } from "@/components/ui/form";
 import { api, errorText, type Program, type Question } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
+import { docText } from "@/lib/rich-doc";
 import { useAdminQuestionPickerDrawerT } from "@/lib/i18n/dict/admin-question-picker-drawer";
 
 const PAGE_SIZE = 50;
@@ -15,7 +15,7 @@ const PAGE_SIZE = 50;
 /** What the builder needs to render an assigned row before and after a save. */
 export interface PickedQuestion {
   id: string;
-  content: string;
+  content: Question["content"];
   type: Question["type"];
   difficulty: Question["difficulty"];
   number: number;
@@ -241,7 +241,7 @@ export function QuestionPickerDrawer({
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="line-clamp-2 text-small text-foreground">
-                            <LatexText text={question.content} />
+                            {docText(question.content)}
                           </p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             {program && <ProgramBadge code={program.code} />}
