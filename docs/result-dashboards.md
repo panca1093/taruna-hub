@@ -3,7 +3,7 @@
 Staff filter completed results. The server-side CSV/XLSX export planned for P21 was removed on 2026-11-21: results
 are downloaded as PDFs of the per-student result page, built in the browser (see
 [RECONCILIATION](../requirement/RECONCILIATION.md) section 2). There is no export endpoint, job or table (migration
-000031); files stored by the old exports stay in the bucket under `<tenant>/export/<id>` and are not purged.
+000031); files stored by the old exports stay in the bucket under `<tenant>/export/<id>` and are not purged. River jobs still queued on the removed `exports` queue stay in `river_job` as dead rows after deploy and may be deleted by hand.
 
 ## Dashboards
 
@@ -23,4 +23,4 @@ are downloaded as PDFs of the per-student result page, built in the browser (see
 
 Admin and Operator only; every query is scoped to the tenant.
 
-There is no kecermatan spreadsheet export; the kecermatan page keeps its client-side CSV of the rows on screen.
+There is no spreadsheet export of any kind, for tryout or kecermatan results.

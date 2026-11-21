@@ -100,7 +100,7 @@ export async function savePageAsPdf(node: HTMLElement, fileName: string, backgro
 
 /**
  * Captures each element as one page of a single PDF, one after the other so only one bitmap is decoded at
- * a time (the JPEG bytes of every page are kept until the file is written). `size` defaults to A4 portrait pages.
+ * a time (the JPEG bytes of every page are kept until the file is written). Pages are A4 portrait.
  * `onProgress` gets the 1-based page about to be captured and the total; an aborted `signal` stops before the next
  * page and before the download.
  */
@@ -110,7 +110,6 @@ export async function savePagesAsPdf(
   background: string,
   onProgress?: (page: number, total: number) => void,
   signal?: AbortSignal,
-  size: PdfPageSize = "a4",
 ) {
   // Fonts are collected from the pages' shared parent: page 1 alone may not use the math faces later pages need.
   const fontEmbedCSS = pages.length > 0 ? await fontEmbedCSSOf(pages[0].parentElement ?? pages[0]) : "";
@@ -118,7 +117,7 @@ export async function savePagesAsPdf(
   for (const [i, node] of pages.entries()) {
     signal?.throwIfAborted();
     onProgress?.(i + 1, pages.length);
-    shots.push(await capturePage(node, background, size, fontEmbedCSS));
+    shots.push(await capturePage(node, background, "a4", fontEmbedCSS));
   }
   signal?.throwIfAborted();
   savePdf(shots, fileName);

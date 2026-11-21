@@ -22,7 +22,7 @@ export function TryoutResultCaptureSheet({ detail, attempt, ref }: { detail: Sta
       <PageHeading
         title={detail.student.name}
         description={t.detailDescription(detail.tryout.title, detail.tryout.program_code)}
-        leading={<GradientAvatar user={detail.student} size="lg" />}
+        leading={<GradientAvatar user={detail.student} size="lg" eager />}
         size="compact"
       />
       <TryoutResultView {...viewOf(detail, attempt)} />

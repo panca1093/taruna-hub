@@ -193,7 +193,7 @@ export default function KecermatanResultsPage() {
       {bulk.status === "error" && (
         <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-tile border border-danger bg-danger-soft px-4 py-3 text-caption text-danger">
           <span>
-            <strong className="font-medium">{t.bulkFailedTitle}.</strong> {t.bulkFailed(Math.max(bulk.page - 1, 0), bulk.total)}
+            <strong className="font-medium">{t.bulkFailedTitle}.</strong> {t.bulkFailed(bulk.done, bulk.total)}
           </span>
           <Button variant="secondary" size="sm" onPress={() => void downloadPdf()}>
             {t.bulkRetry}

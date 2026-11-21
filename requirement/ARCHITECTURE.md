@@ -152,7 +152,7 @@ Question import accepts XLSX/CSV/DOCX templates, validates file-derived content,
 
 ### 4.4 Assets and item packages
 
-The API owns asset authorization and finalization. Branding/cover assets may be public; payment proofs, unreleased content, answer-key snapshots, are private. Persist object keys, not long-lived signed URLs. Re-authorize downloads and issue short-lived access after tenant/role checks. Signed URLs grant access to whoever holds them until expiry; they do not themselves enforce the current logged-in tenant. [GCS signed URLs](https://docs.cloud.google.com/storage/docs/access-control/signed-urls)
+The API owns asset authorization and finalization. Branding/cover assets may be public; payment proofs, unreleased content and answer-key snapshots are private. Persist object keys, not long-lived signed URLs. Re-authorize downloads and issue short-lived access after tenant/role checks. Signed URLs grant access to whoever holds them until expiry; they do not themselves enforce the current logged-in tenant. [GCS signed URLs](https://docs.cloud.google.com/storage/docs/access-control/signed-urls)
 
 Validate decoded file type and byte size, not extension alone. Enforce 5MB per image, PNG/JPG/WebP package images, and reject SVG in item packages. For symbol CSV/TXT/XLSX or multi-image/ZIP imports, stage uploads and parsed elements as temporary preview data; confirmation commits accepted elements only. A crashed/rejected preview does not mutate the package; clean up abandoned staged assets.
 

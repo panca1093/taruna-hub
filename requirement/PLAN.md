@@ -690,7 +690,7 @@ For every slice, use this verification loop:
 
 ### P21 — Result dashboards and result PDFs
 
-**Status:** done, lean — tryout results filter by tryout and program with the IRT flag and kecermatan results gain composites and remaining attempts ([docs/result-dashboards.md](../docs/result-dashboards.md)); driven in the browser on 2026-11-08. The server-side CSV/XLSX export built on 2026-11-08 (`POST /results/exports`, `exports` table and queue, `export-ready` email) was **removed on 2026-11-21** by owner decision (RECONCILIATION §2; migration 000031): results are downloaded as browser-built PDFs of the per-student result page. Backend removal done; the PDF UI is pending in the same PR · **Size:** M · **Depends:** P02, P06, P17, P18
+**Status:** done, lean — tryout results filter by tryout and program with the IRT flag and kecermatan results gain composites and remaining attempts ([docs/result-dashboards.md](../docs/result-dashboards.md)); driven in the browser on 2026-11-08. The server-side CSV/XLSX export built on 2026-11-08 (`POST /results/exports`, `exports` table and queue, `export-ready` email) was **removed on 2026-11-21** by owner decision (RECONCILIATION §2; migration 000031): results are downloaded as browser-built PDFs of the per-student result page. Backend removal and the browser PDF UI (single and combined) are done; the combined PDF is capped at 30 rows and its failure banner, retry and leaving the page mid-download were not demoed · **Size:** M · **Depends:** P02, P06, P17, P18
 
 **Outcome:** Staff filter results and download per-student result PDFs, one or several selected students combined, built in the browser.
 
@@ -703,7 +703,7 @@ For every slice, use this verification loop:
 **Acceptance scenarios:**
 
 - [x] Filter tryout/program returns expected rows and IRT flag; kecermatan shows counts/composites/final score/date/quota.
-  - `TestResultStaffListFiltersByProgram` and the kecermatan staff-list test (counts, composites, final score, date, remaining attempts, test/program filters); the results page and new kecermatan columns render in the browser.
+  - `TestStaffResultsGroupPerStudentAndTryoutWithTheLeaderboardRank` (tryout and program filters), `TestResultEndpointsRoles` (`program_id` 422 and filtered rows over HTTP) and `TestKecermatanStaffResultsGroupPerStudentAndTest` (counts, composites, final score, date, remaining attempts, test/program filters); the results page and new kecermatan columns render in the browser.
 - [x] Staff download one student's result, or several selected students combined, as a PDF built in the browser.
   - Browser 2026-11-21 on a copy of the local database: three tryout results selected with the header checkbox gave one 3-page PDF and seven kecermatan results one 7-page PDF, one student per page with the page height following the content; the detail page's single PDF has the same page size and look as that student's page in the combined file. Not demoed: the 30-row cap, the failure banner with retry, and leaving the page mid-download.
 - The former CSV/XLSX, export-link isolation and worker-retry boxes were dropped with the server-side export on 2026-11-21 (RECONCILIATION §2).

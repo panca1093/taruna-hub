@@ -17,7 +17,7 @@ export function KecermatanResultCaptureSheet({ detail, ref }: { detail: Kecermat
       <PageHeading
         title={student.name}
         description={`${test.title} · ${t.detailDescription(test.program_code, detail.remaining_attempts)}`}
-        leading={<GradientAvatar user={student} size="lg" />}
+        leading={<GradientAvatar user={student} size="lg" eager />}
         size="compact"
       />
       <KecermatanResultView progress={progress} attempts={attempts} loadAttempt={loadAttempt} initialOpenId={null} />

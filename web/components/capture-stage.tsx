@@ -12,7 +12,13 @@ export function CaptureStage({ children, ref }: { children?: React.ReactNode; re
   );
 }
 
-const nextPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+const BACKGROUND_TAB_PAINT_MS = 250;
+
+const nextPaint = () =>
+  Promise.race([
+    new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    new Promise<void>((resolve) => setTimeout(resolve, BACKGROUND_TAB_PAINT_MS)),
+  ]);
 
 /**
  * Builds one PDF from many result sheets, one sheet at a time: each sheet is mounted in the stage, captured as a page
@@ -20,7 +26,7 @@ const nextPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() 
  */
 export function useBulkSheetPdf() {
   const [sheet, setSheet] = useState<React.ReactNode>(null);
-  const [progress, setProgress] = useState({ status: "idle" as "idle" | "working" | "error", page: 0, total: 0 });
+  const [progress, setProgress] = useState({ status: "idle" as "idle" | "working" | "error", page: 0, total: 0, done: 0 });
   const sheetRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -38,7 +44,7 @@ export function useBulkSheetPdf() {
 
   /**
    * `load` resolves the sheet of one item. Any rejection fails the whole run: no file is saved and `status` becomes
-   * "error" with `page` the item that failed. Resolves to whether the file was saved; an abort resolves false quietly.
+   * "error" with `done` the number of sheets captured before it failed. Resolves to whether the file was saved; an abort resolves false quietly.
    */
   const run = useCallback(
     async <T,>(items: T[], load: (item: T, signal: AbortSignal) => Promise<React.ReactNode>, fileName: string) => {
@@ -51,7 +57,7 @@ export function useBulkSheetPdf() {
       try {
         for (const [i, item] of items.entries()) {
           signal.throwIfAborted();
-          setProgress({ status: "working", page: i + 1, total: items.length });
+          setProgress({ status: "working", page: i + 1, total: items.length, done: pages.length });
           const node = await load(item, signal);
           signal.throwIfAborted();
           setSheet(node);
@@ -66,10 +72,10 @@ export function useBulkSheetPdf() {
         }
         signal.throwIfAborted();
         savePdf(pages, fileName);
-        setProgress({ status: "idle", page: 0, total: 0 });
+        setProgress({ status: "idle", page: 0, total: 0, done: 0 });
         return true;
       } catch {
-        if (!signal.aborted) setProgress((p) => ({ ...p, status: "error" }));
+        if (!signal.aborted) setProgress((p) => ({ ...p, status: "error", done: pages.length }));
         return false;
       } finally {
         setSheet(null);
