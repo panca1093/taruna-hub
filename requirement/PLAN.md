@@ -279,7 +279,7 @@ For every slice, use this verification loop:
 
 ### P07 — Question bank and imports
 
-**Status:** P07a and P07b done — four question types with immutable versions, filters, the bank page and the confirmed XLSX/CSV/DOCX import; D08 is confirmed (preview, confirmed accepted set, one atomic commit). Rich documents (Tiptap JSON with tables, lists, shapes, math and `question_image` images) are done on the API with a startup backfill of existing questions; the editor/student/PDF rendering demo is pending. Master content, copy and per-question weights are deferred · **Size:** L · **Depends:** P05, P06
+**Status:** P07a and P07b done — four question types with immutable versions, filters, the bank page and the confirmed XLSX/CSV/DOCX import; D08 is confirmed (preview, confirmed accepted set, one atomic commit). Rich documents (Tiptap JSON with tables, lists, shapes, math and `question_image` images) are done end to end with a startup backfill of existing questions and the WYSIWYG question form (Tiptap, shared toolbar, preview dialog); browser-checked 2026-11-21 in the form, the student exam page and the tryout PDF, with the review page not demoed. Master content, copy and per-question weights are deferred · **Size:** L · **Depends:** P05, P06
 
 **Outcome:** Staff create four question types or import real documents and maintain tenant/master content safely.
 
@@ -296,8 +296,8 @@ For every slice, use this verification loop:
 - [ ] Tenant copy survives master edit; current assignments retain old question/scoring/explanation revision.
       Immutable versions are done and tested (P08 assigns frozen versions); the master/copy half is deferred.
 - [x] Upload malformed and valid rows, see real errors, confirm exact accepted set per D08; retry creates no duplicates.
-- [ ] LaTeX/images preview correctly; filters/IDs work; HTML and spreadsheet-formula input is handled safely.
-      API side proven by tests: documents validated and normalised, images finalized with the version, students read final question images (link and bytes, for the browser-built PDF), search over the legacy-text projection, import converted to documents, legacy rows converted on read with the old renderer's behaviour and backfilled without blocking start-up. The browser demo of LaTeX/images in the editor, exam, review and PDF is pending (main session).
+- [x] LaTeX/images preview correctly; filters/IDs work; HTML and spreadsheet-formula input is handled safely.
+      API side proven by tests: documents validated and normalised, images finalized with the version, students read final question images (link and bytes, for the browser-built PDF), search over the legacy-text projection, import converted to documents, legacy rows converted on read with the old renderer's behaviour and backfilled without blocking start-up. Browser 2026-11-21 on a seeded database: the 42 seed questions were converted at start-up and an unedited legacy question saved without a new version; a new question with a formula, a 3×3 table, an uploaded image and a solid was created in the form (desktop and 375 px), previewed, saved, reopened, shown to a student in a running subtest and printed in the tryout PDF. Not demoed: the review page after completion.
 
 **Decision / verification gate:** D08 resolved 2026-10-28 (confirmed accepted set, atomic commit); D04 resolved. No hardcoded import preview counts as done.
 
@@ -663,7 +663,7 @@ For every slice, use this verification loop:
 
 ### P20 — Tryout PDF
 
-**Status:** done, lean — shared `exports` jobs (migration 000023, queue `exports`, 60-second re-authorized download links; [docs/exports.md](../docs/exports.md)) now carry the P21 result exports only. The tryout PDF was first built server-side with Gotenberg (2026-11-08) and **replaced on 2026-11-21** by an owner decision: the admin's browser lays out answer-free content from `GET /tryouts/{id}/print` as A4 pages and captures them into one PDF ([docs/tryout-pdf.md](../docs/tryout-pdf.md); FR-ADM-TRY-12 superseded, see RECONCILIATION §2); migration 000029 drops the `tryout_pdf` export kind. Browser-checked 2026-11-21 (6-page PDF, light and dark app theme); an image in the PDF and the failure/retry state are not yet demoed. Student and kecermatan PDFs stay out (D11) · **Size:** M · **Depends:** P02, P06, P08
+**Status:** done, lean — shared `exports` jobs (migration 000023, queue `exports`, 60-second re-authorized download links; [docs/exports.md](../docs/exports.md)) now carry the P21 result exports only. The tryout PDF was first built server-side with Gotenberg (2026-11-08) and **replaced on 2026-11-21** by an owner decision: the admin's browser lays out answer-free content from `GET /tryouts/{id}/print` as A4 pages and captures them into one PDF ([docs/tryout-pdf.md](../docs/tryout-pdf.md); FR-ADM-TRY-12 superseded, see RECONCILIATION §2); migration 000029 drops the `tryout_pdf` export kind. Browser-checked 2026-11-21 (6-page PDF, light and dark app theme); the failure/retry state is not yet demoed. Student and kecermatan PDFs stay out (D11) · **Size:** M · **Depends:** P02, P06, P08
 
 **Outcome:** Authorized staff download a printable tryout with rendered math/images and no answers.
 
@@ -675,14 +675,14 @@ For every slice, use this verification loop:
 
 **Acceptance scenarios:**
 
-- [ ] PDF has title, subtest name/duration, numbering, original option order, images/math and school/date footer.
-  - Browser 2026-11-21, "Tryout UTBK SMA" from the builder: title, both subtests with duration and question count, per-subtest numbering, options in stored order, typeset math and a "Taruna Eduka · 21 November 2026 · Halaman n / 6" footer on white pages, also when the app is in dark mode. Stored order and the frozen stem are asserted by `TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree`. Left open: no question carries an image yet, so an image in the PDF is not demoed.
+- [x] PDF has title, subtest name/duration, numbering, original option order, images/math and school/date footer.
+  - Browser 2026-11-21, "Tryout UTBK SMA" from the builder: title, both subtests with duration and question count, per-subtest numbering, options in stored order, typeset math and a "Taruna Eduka · 21 November 2026 · Halaman n / 6" footer on white pages, also when the app is in dark mode. Stored order and the frozen stem are asserted by `TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree`. An uploaded question image, a table and a solid print in the PDF (browser 2026-11-21, image bytes read through `GET /assets/{id}/content`).
 - [x] Inspect render input and output: no keys/explanations; shuffle settings do not change PDF order.
   - Input: the print read selects type, stem and option labels only; the test runs with both shuffle flags on and asserts stored order and no `correct`, `explanation`, `points`, option ids or their values in the body. Output: the six captured pages of the 2026-11-21 browser run show stems and options only.
 - [x] Print read is staff-only and tenant-scoped.
   - Student `403`, anonymous `401`, other tenant's or unknown id `404` (`TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree`).
 - [ ] Multi-page math/image fixture paginates legibly (no question split, no lone subtest heading); failure is visible with retry.
-  - Browser 2026-11-21: 40 questions paginate into 6 pages with no question split and no lone heading, and math stays legible on every page. Left open: an image fixture and the failure/retry state were not demoed. The worker-restart and ready-notification scenarios no longer apply (no job).
+  - Browser 2026-11-21: 40 questions paginate into 6 pages with no question split and no lone heading, and math stays legible on every page. An image question moved whole to the next page when it did not fit. Left open: the failure/retry state was not demoed. The worker-restart and ready-notification scenarios no longer apply (no job).
 
 **Decision / verification gate:** D11 scope/copy alignment. Student and kecermatan PDFs remain unapproved post-MVP/open requests.
 
