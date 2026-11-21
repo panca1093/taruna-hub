@@ -5759,6 +5759,63 @@ components:
           type: string
           maxLength: 100
 
+    RichDoc:
+      type: object
+      additionalProperties: false
+      required: [type, content]
+      description: |
+        Rich text as a Tiptap (ProseMirror) document. The server validates it against an allow-list
+        of nodes, marks and attributes, drops attributes it does not know and stores the normalised
+        document; no HTML is ever interpreted. An empty document is `{"type":"doc","content":[]}`.
+
+        Blocks: `paragraph`, `bulletList`, `orderedList` (of `listItem`), `table` (of `tableRow` of
+        `tableHeader`/`tableCell`), `shape` (`attrs.kind` one of kubus, balok, tabung, kerucut, bola,
+        limas, prisma; optional `attrs.caption`) and `image` (`attrs.asset_id` of a `question_image`
+        asset; optional `attrs.alt`). Inline: `text` (marks `bold`, `italic`, `underline`),
+        `hardBreak` and `math` (`attrs.latex`).
+      properties:
+        type:
+          type: string
+          enum: [doc]
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/RichNode"
+
+    RichNode:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [paragraph, text, hardBreak, bulletList, orderedList, listItem, table, tableRow,
+                 tableHeader, tableCell, math, shape, image]
+        text:
+          type: string
+          description: Only on a `text` node.
+        marks:
+          type: array
+          description: Only on a `text` node.
+          items:
+            $ref: "#/components/schemas/RichMark"
+        attrs:
+          type: object
+          additionalProperties: true
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/RichNode"
+
+    RichMark:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [bold, italic, underline]
+
     QuestionOption:
       type: object
       additionalProperties: false
@@ -5769,8 +5826,7 @@ components:
           description: |
             Assigned by the server and stable across versions; `benar`/`salah` for `benar_salah`.
         label:
-          type: string
-          maxLength: 500
+          $ref: "#/components/schemas/RichDoc"
         points:
           type: number
           minimum: 0
@@ -5814,13 +5870,12 @@ components:
           type: string
           enum: [pg, pg_multi, isian, benar_salah]
         content:
-          type: string
-          description: Stored verbatim as text; markdown and LaTeX render client-side.
+          $ref: "#/components/schemas/RichDoc"
         difficulty:
           type: string
           enum: [easy, medium, hard]
         explanation:
-          type: string
+          $ref: "#/components/schemas/RichDoc"
         option_weighted:
           type: boolean
           description: Weighted-option mode, `pg` only.
@@ -5867,8 +5922,7 @@ components:
             An option id of this question keeps it; omit it to let the server assign one. A placeholder
             such as `a` may be named in `correct` and is replaced by the assigned id.
         label:
-          type: string
-          maxLength: 500
+          $ref: "#/components/schemas/RichDoc"
         points:
           type: number
           minimum: 0
@@ -5896,15 +5950,12 @@ components:
           type: string
           enum: [pg, pg_multi, isian, benar_salah]
         content:
-          type: string
-          maxLength: 20000
-          description: Trimmed, 1–20000 characters. No HTML; `data:`/`javascript:` images are refused.
+          $ref: "#/components/schemas/RichDoc"
         difficulty:
           type: string
           enum: [easy, medium, hard]
         explanation:
-          type: string
-          maxLength: 20000
+          $ref: "#/components/schemas/RichDoc"
         option_weighted:
           type: boolean
           description: "`pg` only; then `correct` must be empty and every option may carry points."
@@ -5947,14 +5998,12 @@ components:
           type: string
           enum: [pg, pg_multi, isian, benar_salah]
         content:
-          type: string
-          maxLength: 20000
+          $ref: "#/components/schemas/RichDoc"
         difficulty:
           type: string
           enum: [easy, medium, hard]
         explanation:
-          type: string
-          maxLength: 20000
+          $ref: "#/components/schemas/RichDoc"
         option_weighted:
           type: boolean
           description: "`pg` only; then `correct` must be empty and every option may carry points."
@@ -6152,8 +6201,7 @@ components:
           type: string
           enum: [easy, medium, hard]
         content:
-          type: string
-          description: The frozen content, verbatim. Answer keys stay on the question API.
+          $ref: "#/components/schemas/RichDoc"
         position:
           type: integer
 
@@ -7867,7 +7915,7 @@ components:
         id:
           type: string
         label:
-          type: string
+          $ref: "#/components/schemas/RichDoc"
         points:
           type: number
           nullable: true
@@ -7887,7 +7935,7 @@ components:
           type: string
           enum: [pg, pg_multi, isian, benar_salah]
         content:
-          type: string
+          $ref: "#/components/schemas/RichDoc"
         options:
           type: array
           description: In the order this student saw them.
@@ -7908,7 +7956,7 @@ components:
         is_correct:
           type: boolean
         explanation:
-          type: string
+          $ref: "#/components/schemas/RichDoc"
 
     ReviewSubtest:
       type: object
@@ -8444,7 +8492,7 @@ components:
           type: string
           description: Stable across shuffles and attempts; answers refer to it.
         label:
-          type: string
+          $ref: "#/components/schemas/RichDoc"
 
     RuntimeQuestion:
       type: object
@@ -8463,7 +8511,7 @@ components:
           type: string
           enum: [pg, pg_multi, isian, benar_salah]
         content:
-          type: string
+          $ref: "#/components/schemas/RichDoc"
         options:
           type: array
           description: In this session's order; empty for `isian`.

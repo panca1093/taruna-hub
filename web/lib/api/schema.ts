@@ -7489,10 +7489,42 @@ export interface components {
             id?: string;
             name: string;
         };
+        /**
+         * @description Rich text as a Tiptap (ProseMirror) document. The server validates it against an allow-list
+         *     of nodes, marks and attributes, drops attributes it does not know and stores the normalised
+         *     document; no HTML is ever interpreted. An empty document is `{"type":"doc","content":[]}`.
+         *
+         *     Blocks: `paragraph`, `bulletList`, `orderedList` (of `listItem`), `table` (of `tableRow` of
+         *     `tableHeader`/`tableCell`), `shape` (`attrs.kind` one of kubus, balok, tabung, kerucut, bola,
+         *     limas, prisma; optional `attrs.caption`) and `image` (`attrs.asset_id` of a `question_image`
+         *     asset; optional `attrs.alt`). Inline: `text` (marks `bold`, `italic`, `underline`),
+         *     `hardBreak` and `math` (`attrs.latex`).
+         */
+        RichDoc: {
+            /** @enum {string} */
+            type: "doc";
+            content: components["schemas"]["RichNode"][];
+        };
+        RichNode: {
+            /** @enum {string} */
+            type: "paragraph" | "text" | "hardBreak" | "bulletList" | "orderedList" | "listItem" | "table" | "tableRow" | "tableHeader" | "tableCell" | "math" | "shape" | "image";
+            /** @description Only on a `text` node. */
+            text?: string;
+            /** @description Only on a `text` node. */
+            marks?: components["schemas"]["RichMark"][];
+            attrs?: {
+                [key: string]: unknown;
+            };
+            content?: components["schemas"]["RichNode"][];
+        };
+        RichMark: {
+            /** @enum {string} */
+            type: "bold" | "italic" | "underline";
+        };
         QuestionOption: {
             /** @description Assigned by the server and stable across versions; `benar`/`salah` for `benar_salah`. */
             id: string;
-            label: string;
+            label: components["schemas"]["RichDoc"];
             /**
              * @description Only in weighted mode, at most 2 decimals. An option without points counts as 1 at scoring
              *     time (P16).
@@ -7522,11 +7554,10 @@ export interface components {
             chapter_id: string | null;
             /** @enum {string} */
             type: "pg" | "pg_multi" | "isian" | "benar_salah";
-            /** @description Stored verbatim as text; markdown and LaTeX render client-side. */
-            content: string;
+            content: components["schemas"]["RichDoc"];
             /** @enum {string} */
             difficulty: "easy" | "medium" | "hard";
-            explanation: string;
+            explanation: components["schemas"]["RichDoc"];
             /** @description Weighted-option mode, `pg` only. */
             option_weighted: boolean;
             /** @description Short-answer matching, `isian` only. */
@@ -7550,7 +7581,7 @@ export interface components {
              *     such as `a` may be named in `correct` and is replaced by the assigned id.
              */
             id?: string;
-            label: string;
+            label: components["schemas"]["RichDoc"];
             /** @description Weighted mode only, at most 2 decimals. */
             points?: number;
         };
@@ -7569,11 +7600,10 @@ export interface components {
             chapter_id?: string | null;
             /** @enum {string} */
             type: "pg" | "pg_multi" | "isian" | "benar_salah";
-            /** @description Trimmed, 1–20000 characters. No HTML; `data:`/`javascript:` images are refused. */
-            content: string;
+            content: components["schemas"]["RichDoc"];
             /** @enum {string} */
             difficulty: "easy" | "medium" | "hard";
-            explanation?: string;
+            explanation?: components["schemas"]["RichDoc"];
             /** @description `pg` only; then `correct` must be empty and every option may carry points. */
             option_weighted?: boolean;
             /** @description `isian` only. */
@@ -7596,10 +7626,10 @@ export interface components {
             chapter_id?: string | null;
             /** @enum {string} */
             type: "pg" | "pg_multi" | "isian" | "benar_salah";
-            content: string;
+            content: components["schemas"]["RichDoc"];
             /** @enum {string} */
             difficulty: "easy" | "medium" | "hard";
-            explanation?: string;
+            explanation?: components["schemas"]["RichDoc"];
             /** @description `pg` only; then `correct` must be empty and every option may carry points. */
             option_weighted?: boolean;
             /** @description `isian` only. */
@@ -7710,8 +7740,7 @@ export interface components {
             type: "pg" | "pg_multi" | "isian" | "benar_salah";
             /** @enum {string} */
             difficulty: "easy" | "medium" | "hard";
-            /** @description The frozen content, verbatim. Answer keys stay on the question API. */
-            content: string;
+            content: components["schemas"]["RichDoc"];
             position: number;
         };
         Subtest: {
@@ -8614,7 +8643,7 @@ export interface components {
         };
         ReviewOption: {
             id: string;
-            label: string;
+            label: components["schemas"]["RichDoc"];
             /** @description Only on an option-weighted question. */
             points: number | null;
         };
@@ -8624,7 +8653,7 @@ export interface components {
             position: number;
             /** @enum {string} */
             type: "pg" | "pg_multi" | "isian" | "benar_salah";
-            content: string;
+            content: components["schemas"]["RichDoc"];
             /** @description In the order this student saw them. */
             options: components["schemas"]["ReviewOption"][];
             option_weighted: boolean;
@@ -8633,7 +8662,7 @@ export interface components {
             /** @description The key. Empty for an option-weighted question. */
             correct: string[];
             is_correct: boolean;
-            explanation: string;
+            explanation: components["schemas"]["RichDoc"];
         };
         ReviewSubtest: {
             /** Format: uuid */
@@ -8901,7 +8930,7 @@ export interface components {
         RuntimeOption: {
             /** @description Stable across shuffles and attempts; answers refer to it. */
             id: string;
-            label: string;
+            label: components["schemas"]["RichDoc"];
         };
         /** @description A question as a student may see it: no key, no option points, no explanation, no version id. */
         RuntimeQuestion: {
@@ -8911,7 +8940,7 @@ export interface components {
             position: number;
             /** @enum {string} */
             type: "pg" | "pg_multi" | "isian" | "benar_salah";
-            content: string;
+            content: components["schemas"]["RichDoc"];
             /** @description In this session's order; empty for `isian`. */
             options: components["schemas"]["RuntimeOption"][];
             /** @description The accepted answer, as option ids or the typed text for `isian`. Empty when none. */
