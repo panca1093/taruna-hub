@@ -43,13 +43,15 @@ margins and footer. Rules, in the order the code applies them:
 3. A block that exactly fills the remaining height fits (`used + height <= body`); the next block starts a new page.
 4. If a group is taller than a page, it gets its own page: the keep blocks at natural size, and the last block scaled
    down to the height that remains. A lone oversize question is the same case with no keep blocks.
-5. An empty subtest's heading joins the following heading's group, so it travels with the next question.
-6. Trailing keep blocks with no question after them (a last empty subtest) have nothing to stay with and are placed
-   where they fall.
+5. Every subtest after the first starts on a new page (owner decision 2026-11-21); the first subtest stays under the
+   title on page 1. No blank page is emitted when the break arrives on a page that is already empty.
+6. An empty subtest's heading has no question to stay with: it sits alone on its own page, except an empty first
+   subtest, which stays under the title on page 1.
 
-Checked by reading the code against these cases: empty subtest (rule 5, one group), heading plus oversize question
-(rule 4, no orphan heading), title plus heading plus oversize first question (rule 4), exact-fit page (rule 3),
-last heading with no question (rule 6).
+Checked by reading the code and running `paginate` on sample heights: several subtests (each later one opens a page),
+empty subtest in the middle and at the end (alone on its page), heading plus oversize question (rule 4, no orphan
+heading), title plus heading plus oversize first question (rule 4), exact-fit page then a break (rule 3, no blank
+page), one subtest and no subtests (unchanged).
 
 ## Images
 

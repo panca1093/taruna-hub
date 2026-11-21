@@ -682,7 +682,7 @@ For every slice, use this verification loop:
 - [x] Print read is staff-only and tenant-scoped.
   - Student `403`, anonymous `401`, other tenant's or unknown id `404` (`TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree`).
 - [ ] Multi-page math/image fixture paginates legibly (no question split, no lone subtest heading); failure is visible with retry.
-  - Browser 2026-11-21: 40 questions paginate into 6 pages with no question split and no lone heading, and math stays legible on every page. An image question moved whole to the next page when it did not fit. Left open: the failure/retry state was not demoed. The worker-restart and ready-notification scenarios no longer apply (no job).
+  - Browser 2026-11-21: 40 questions paginate into 6 pages with no question split and no lone heading, and math stays legible on every page. An image question moved whole to the next page when it did not fit. Since 2026-11-21 every subtest after the first starts on a new page (owner decision; checked on the pure `paginate` function, not yet in a browser). Left open: the failure/retry state was not demoed. The worker-restart and ready-notification scenarios no longer apply (no job).
 
 **Decision / verification gate:** D11 scope/copy alignment. Student and kecermatan PDFs remain unapproved post-MVP/open requests.
 
