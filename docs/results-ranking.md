@@ -40,4 +40,4 @@ with their subtests. The leaderboard endpoint is staff-only too.
 
 ## Not here
 
-CSV/XLSX export and dashboards (P21), the violation timeline in the result detail (P19), a student-facing leaderboard.
+Dashboards (P21), the violation timeline in the result detail (P19), a student-facing leaderboard.

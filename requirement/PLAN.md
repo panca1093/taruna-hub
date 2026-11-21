@@ -79,7 +79,7 @@ Sizes are relative risk/work (M/L/XL), **not promised days or money**. A slice c
 | [P18](#p18) | Kecermatan attempts, quota and full results | XL | P10, P13 |
 | [P19](#p19) | Monitoring and violation timelines | M | P16, P17 |
 | [P20](#p20) | Asynchronous tryout PDF | M | P02, P06, P08 |
-| [P21](#p21) | Result dashboards and CSV/XLSX exports | M | P02, P06, P17, P18 |
+| [P21](#p21) | Result dashboards and result PDFs | M | P02, P06, P17, P18 |
 | [P22](#p22) | Student operations and platform financial recap | M | P04, P13, P14, P17, P18 |
 | [P23](#p23) | Full-scope certification and release | XL | P00, P01, P02, P03, P04, P05, P06, P07, P08, P09, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20, P21, P22 |
 
@@ -663,7 +663,7 @@ For every slice, use this verification loop:
 
 ### P20 — Tryout PDF
 
-**Status:** done, lean — shared `exports` jobs (migration 000023, queue `exports`, 60-second re-authorized download links; [docs/exports.md](../docs/exports.md)) now carry the P21 result exports only. The tryout PDF was first built server-side with Gotenberg (2026-11-08) and **replaced on 2026-11-21** by an owner decision: the admin's browser lays out answer-free content from `GET /tryouts/{id}/print` as A4 pages and captures them into one PDF ([docs/tryout-pdf.md](../docs/tryout-pdf.md); FR-ADM-TRY-12 superseded, see RECONCILIATION §2); migration 000029 drops the `tryout_pdf` export kind. Browser-checked 2026-11-21 (6-page PDF, light and dark app theme); the failure/retry state is not yet demoed. Student and kecermatan PDFs stay out (D11) · **Size:** M · **Depends:** P02, P06, P08
+**Status:** done, lean — the tryout PDF was first built server-side with Gotenberg (2026-11-08) and **replaced on 2026-11-21** by an owner decision: the admin's browser lays out answer-free content from `GET /tryouts/{id}/print` as A4 pages and captures them into one PDF ([docs/tryout-pdf.md](../docs/tryout-pdf.md); FR-ADM-TRY-12 superseded, see RECONCILIATION §2); migration 000029 dropped the `tryout_pdf` export kind and migration 000031 dropped the `exports` table altogether (results export removed, see P21). Browser-checked 2026-11-21 (6-page PDF, light and dark app theme); the failure/retry state is not yet demoed. Student and kecermatan PDFs stay out (D11) · **Size:** M · **Depends:** P02, P06, P08
 
 **Outcome:** Authorized staff download a printable tryout with rendered math/images and no answers.
 
@@ -688,30 +688,27 @@ For every slice, use this verification loop:
 
 <a id="p21"></a>
 
-### P21 — Result dashboards and CSV/XLSX exports
+### P21 — Result dashboards and result PDFs
 
-**Status:** done, lean — tryout results filter by tryout and program with the IRT flag, kecermatan results gain composites and remaining attempts, and `POST /results/exports` produces CSV/XLSX on the shared export jobs with one cut-off, numeric XLSX cells and formula neutralization ([docs/result-exports.md](../docs/result-exports.md)); driven in the browser on 2026-11-08. No kecermatan spreadsheet export (gate). Open: cross-tenant revoked-link case (D17) · **Size:** M · **Depends:** P02, P06, P17, P18
+**Status:** in progress — tryout results filter by tryout and program with the IRT flag and kecermatan results gain composites and remaining attempts ([docs/result-dashboards.md](../docs/result-dashboards.md)); driven in the browser on 2026-11-08. The server-side CSV/XLSX export built on 2026-11-08 (`POST /results/exports`, `exports` table and queue, `export-ready` email) was **removed on 2026-11-21** by owner decision (RECONCILIATION §2; migration 000031): results are downloaded as browser-built PDFs of the per-student result page. Backend removal done; the PDF UI is pending in the same PR · **Size:** M · **Depends:** P02, P06, P17, P18
 
-**Outcome:** Staff filter results and download real spreadsheet reports for their tenant.
+**Outcome:** Staff filter results and download per-student result PDFs, one or several selected students combined, built in the browser.
 
-**DB / backend / integration:** Snapshot/cut-off export requests, durable report worker, protected artifacts and scoped list/detail filters for both test types.
+**DB / backend / integration:** Scoped list/detail filters for both test types; the per-student detail endpoints feed the browser PDF. No export job, table or endpoint.
 
-**Files / frontend:** Result export files/migrations; web/app/admin/results and kecermatan-results; shared artifact status view.
+**Files / frontend:** web/app/admin/results and kecermatan-results; browser PDF capture.
 
-**Interfaces:** Produces CSV/XLSX tryout exports required by FR-ADM-RES-04 and complete kecermatan dashboard. Kecermatan spreadsheet export can be added only if separately requested.
+**Interfaces:** Replaces the CSV/XLSX export of FR-ADM-RES-04 with browser PDFs (RECONCILIATION §2) and completes the kecermatan dashboard.
 
 **Acceptance scenarios:**
 
 - [x] Filter tryout/program returns expected rows and IRT flag; kecermatan shows counts/composites/final score/date/quota.
-  - `TestResultStaffListFiltersByProgram`, `TestResultExportFiltersByTryoutAndProgramAndFlagsIRT` and the kecermatan staff-list test (counts, composites, final score, date, remaining attempts, test/program filters); the results page and new kecermatan columns render in the browser.
-- [x] CSV/XLSX use same tenant/report cut-off; XLSX numbers are numeric and text cannot execute formulas.
-  - `TestResultExportCutOffExcludesLaterCompletionsAndFormatsAgree`, `TestNeutralizeFormula`; the demo CSV and XLSX hold the same two rows and the XLSX attempt/score/rank columns are numeric cells.
-- [ ] Tenant B cannot request/read A report or reuse A download link endpoint; revoked authorization blocks new link issuance.
-  - A foreign tryout/program answers 404 on request and a foreign export id 404 on read and link; links are re-authorized per call (Student 403). Open: no cross-tenant revoked-authorization fixture, by D17.
-- [x] Worker failure/retry leaves one logical report with visible status; large export does not block API request.
-  - `TestResultExportRendererFailureIsRetriedThenFailed`, `TestResultExportBeyondTheRowCapFailsVisibly` (50,000-row cap, `too_many_rows`); rendering runs in the worker and the API answers 202 at once.
+  - `TestResultStaffListFiltersByProgram` and the kecermatan staff-list test (counts, composites, final score, date, remaining attempts, test/program filters); the results page and new kecermatan columns render in the browser.
+- [ ] Staff download one student's result, or several selected students combined, as a PDF built in the browser.
+  - frontend and browser check pending in the same PR by the main session
+- The former CSV/XLSX, export-link isolation and worker-retry boxes were dropped with the server-side export on 2026-11-21 (RECONCILIATION §2).
 
-**Decision / verification gate:** No additional kecermatan-export feature is inferred from the tryout export requirement.
+**Decision / verification gate:** Owner decision 2026-11-21: results leave as PDFs only; no spreadsheet export of any kind.
 
 <a id="p22"></a>
 

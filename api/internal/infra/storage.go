@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/url"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -22,10 +21,7 @@ type Storage struct {
 	bucket  string
 }
 
-var (
-	_ service.ObjectStore       = (*Storage)(nil)
-	_ service.DispositionSigner = (*Storage)(nil)
-)
+var _ service.ObjectStore = (*Storage)(nil)
 
 func NewStorage(cfg config.S3Config) (*Storage, error) {
 	client, err := minio.New(cfg.Endpoint, &minio.Options{
@@ -97,17 +93,6 @@ func (s *Storage) Delete(ctx context.Context, key string) error {
 
 func (s *Storage) PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	u, err := s.presign.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
-	if err != nil {
-		return "", err
-	}
-	return u.String(), nil
-}
-
-// PresignGetAs makes the browser save the object under fileName instead of its opaque key.
-func (s *Storage) PresignGetAs(ctx context.Context, key string, ttl time.Duration, fileName string) (string, error) {
-	params := url.Values{}
-	params.Set("response-content-disposition", `attachment; filename="`+fileName+`"`)
-	u, err := s.presign.PresignedGetObject(ctx, s.bucket, key, ttl, params)
 	if err != nil {
 		return "", err
 	}

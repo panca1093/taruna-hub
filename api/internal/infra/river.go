@@ -19,10 +19,7 @@ const riverSchema = "river"
 
 const (
 	notificationMaxWorkers = 10
-	exportMaxWorkers       = 2
-	// exportTimeout bounds one render; River's own default would cut a large PDF at a minute.
-	exportTimeout  = service.ExportJobTimeout
-	snoozeDuration = 30 * time.Second
+	snoozeDuration         = 30 * time.Second
 	// hardStopGrace bounds the escalation once the graceful shutdown window is spent.
 	hardStopGrace = 5 * time.Second
 )
@@ -71,27 +68,6 @@ func (i *RiverInserter) InsertNotificationTx(ctx context.Context, tx pgx.Tx, arg
 	return err
 }
 
-func (i *RiverInserter) InsertExportTx(ctx context.Context, tx pgx.Tx, args service.ExportJobArgs) error {
-	_, err := i.client.InsertTx(ctx, tx, args, &river.InsertOpts{
-		Queue:       service.QueueExports,
-		MaxAttempts: service.ExportMaxAttempts,
-	})
-	return err
-}
-
-// exportWorker hands the attempt counters to the service, which owns the retry and failure rules.
-type exportWorker struct {
-	river.WorkerDefaults[service.ExportJobArgs]
-
-	exports *service.ExportService
-}
-
-func (w *exportWorker) Work(ctx context.Context, job *river.Job[service.ExportJobArgs]) error {
-	return w.exports.Run(ctx, job.Args.TenantID, job.Args.ExportID, job.Attempt, job.MaxAttempts)
-}
-
-func (w *exportWorker) Timeout(*river.Job[service.ExportJobArgs]) time.Duration { return exportTimeout }
-
 // notificationWorker maps delivery outcomes onto River's vocabulary; the service never sees River.
 type notificationWorker struct {
 	river.WorkerDefaults[service.NotificationJobArgs]
@@ -122,7 +98,6 @@ func (w *notificationWorker) NextRetry(job *river.Job[service.NotificationJobArg
 
 type riverWorkerConfig struct {
 	maxAttempts int
-	exports     *service.ExportService
 }
 
 // RiverWorkerOption tunes the worker client; production passes none of them.
@@ -131,11 +106,6 @@ type RiverWorkerOption func(*riverWorkerConfig)
 // WithClientMaxAttempts changes the client default, so a test can show the per-job budget wins.
 func WithClientMaxAttempts(n int) RiverWorkerOption {
 	return func(c *riverWorkerConfig) { c.maxAttempts = n }
-}
-
-// WithExports adds the exports queue and its worker; without it the client only delivers notifications.
-func WithExports(svc *service.ExportService) RiverWorkerOption {
-	return func(c *riverWorkerConfig) { c.exports = svc }
 }
 
 // NewRiverWorker builds the starting client: one queue, one worker, the app's logger.
@@ -150,10 +120,6 @@ func NewRiverWorker(pool *pgxpool.Pool, svc *service.NotificationService, retryD
 
 	queues := map[string]river.QueueConfig{
 		service.QueueNotifications: {MaxWorkers: notificationMaxWorkers},
-	}
-	if cfg.exports != nil {
-		river.AddWorker(workers, &exportWorker{exports: cfg.exports})
-		queues[service.QueueExports] = river.QueueConfig{MaxWorkers: exportMaxWorkers}
 	}
 
 	return river.NewClient[pgx.Tx](riverpgxv5.New(pool), &river.Config{

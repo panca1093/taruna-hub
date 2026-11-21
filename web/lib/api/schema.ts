@@ -4406,158 +4406,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/exports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the tenant's exports
-         * @description Admin and Operator only (D02: a role guard). Every export of the configured tenant, newest first. `kind`
-         *     narrows to one kind. The file itself is read through `POST /api/v1/exports/{id}/download-link` once the
-         *     export is `ready`. Exports are created by the endpoint of the slice that owns the kind (results CSV or XLSX), which answers `202` with an `Export`.
-         */
-        get: {
-            parameters: {
-                query?: {
-                    kind?: components["schemas"]["ExportKind"];
-                    /** @description Defaults to 20, at most 50. */
-                    limit?: number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The exports, newest first */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ExportList"];
-                    };
-                };
-                401: components["responses"]["Unauthorized"];
-                403: components["responses"]["Forbidden"];
-                422: components["responses"]["ValidationFailed"];
-                503: components["responses"]["Unavailable"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exports/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * One export and its progress
-         * @description Admin and Operator only. Poll it while `status` is `queued` or `running`. A failed export keeps its
-         *     `error_code`. An id of another tenant, an unknown id and a malformed id all answer the same `404`.
-         */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The export */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Export"];
-                    };
-                };
-                401: components["responses"]["Unauthorized"];
-                403: components["responses"]["Forbidden"];
-                404: components["responses"]["NotFound"];
-                503: components["responses"]["Unavailable"];
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exports/{id}/download-link": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * A short-lived download link for a ready export
-         * @description Admin and Operator only; authorizes on every call. The link is a presigned GET valid for 60 seconds, saving
-         *     the file under `file_name`, so ask again instead of keeping it. The response is `Cache-Control: no-store`.
-         *     An export that is not `ready` answers `409` with code `export_not_ready`. `503` means object storage is not
-         *     configured on this deployment.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The presigned link and when it stops working */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ExportDownloadLink"];
-                    };
-                };
-                401: components["responses"]["Unauthorized"];
-                403: components["responses"]["Forbidden"];
-                404: components["responses"]["NotFound"];
-                /** @description The export is not `ready` (`export_not_ready`). */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                503: components["responses"]["Unavailable"];
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/tryouts/{id}/grace": {
         parameters: {
             query?: never;
@@ -5412,7 +5260,7 @@ export interface paths {
          *     are the student's current standing on that tryout and `average_score` is what ranks them. `irt_warning` is
          *     true when any completed attempt of the student is an IRT-mode attempt that holds a question version answered
          *     (non-blank, in a completed session) by fewer than 30 distinct students; retakes count once and a new
-         *     question version starts at 0. The CSV and XLSX exports stay one row per attempt.
+         *     question version starts at 0.
          */
         get: {
             parameters: {
@@ -5496,59 +5344,6 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/results/exports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request a CSV or XLSX report of tryout results
-         * @description Admin and Operator (D02: a role guard). Records a durable export of the tenant's completed tryout attempts,
-         *     optionally narrowed to one tryout and/or program, and answers `202` with the `Export` to poll through
-         *     `GET /api/v1/exports`. The report holds the results completed at or before the request moment (`cut_off_at`),
-         *     so a CSV and an XLSX requested together describe the same rows and a later completion is not in either. A
-         *     tryout or program that is not the tenant's is `404`. There is no kecermatan report. The body refuses unknown
-         *     fields.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["ResultExportRequest"];
-                };
-            };
-            responses: {
-                /** @description Accepted; the export is queued */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["Export"];
-                    };
-                };
-                401: components["responses"]["Unauthorized"];
-                403: components["responses"]["Forbidden"];
-                404: components["responses"]["NotFound"];
-                422: components["responses"]["ValidationFailed"];
-                503: components["responses"]["Unavailable"];
-            };
-        };
         delete?: never;
         options?: never;
         head?: never;
@@ -8347,65 +8142,13 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
         };
-        ResultExportRequest: {
-            /** @enum {string} */
-            format: "csv" | "xlsx";
-            /** Format: uuid */
-            tryout_id?: string;
-            /** Format: uuid */
-            program_id?: string;
-        };
-        /** @enum {string} */
-        ExportKind: "tryout_results_csv" | "tryout_results_xlsx";
-        /**
-         * @description A durable artifact request. `queued` and `running` are in progress, `ready` has a file, `failed` ends with an
-         *     `error_code`. The storage key is never exposed.
-         */
-        Export: {
-            /** Format: uuid */
-            id: string;
-            kind: components["schemas"]["ExportKind"];
-            /** @enum {string} */
-            status: "queued" | "running" | "ready" | "failed";
-            /** @description What the owning slice asked for; shape depends on `kind`. */
-            params: {
-                [key: string]: unknown;
-            };
-            /** Format: uuid */
-            requested_by: string;
-            /**
-             * Format: date-time
-             * @description The instant the data was fixed; a late render still describes this moment.
-             */
-            cut_off_at: string;
-            /** @description Null until the export is ready. */
-            file_name: string | null;
-            content_type: string | null;
-            /** Format: int64 */
-            size_bytes: number | null;
-            /** @description Empty unless an attempt failed; the last attempt's code stays while it is retried. */
-            error_code: string;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            finished_at: string | null;
-        };
-        ExportList: {
-            exports: components["schemas"]["Export"][];
-        };
-        ExportDownloadLink: {
-            /** @description A presigned GET; it carries its own credentials, so never log or store it. */
-            url: string;
-            /** Format: date-time */
-            expires_at: string;
-        };
         ErrorEnvelope: {
             error: {
                 /**
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready" | "website_not_published" | "website_revision_conflict" | "website_content_invalid" | "export_not_ready" | "last_admin";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready" | "website_not_published" | "website_revision_conflict" | "website_content_invalid" | "last_admin";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */

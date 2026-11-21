@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Nightly off-site backup to Cloudflare R2: a dated Postgres dump plus a sync of the asset bucket.
-# The sync deletes what the app purged (payment proofs, expired exports), so it protects against
+# The sync deletes what the app purged (payment proofs), so it protects against
 # losing the VPS, not against deleting an object by mistake.
 set -euo pipefail
 cd "$(dirname "$0")"

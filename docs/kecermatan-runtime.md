@@ -153,4 +153,4 @@ shows the review, though the `/review` route still exists.
 Image items: `GET /assets/{id}/url` also serves a student an `item_image` asset when their own attempt shows it: in an
 attempt in progress only the running kolom's reference elements, in a completed one any element of the snapshot
 (the review). Emoji and shapes are bundled static assets and need no authorization. The admin CSV
-button exports the rows on screen; the bulk export is P21. The browser-to-API-to-database demo was not run.
+button exports the rows on screen; there is no bulk spreadsheet export (removed 2026-11-21). The browser-to-API-to-database demo was not run.

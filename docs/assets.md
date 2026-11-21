@@ -124,8 +124,8 @@ fresh rows and surviving a failing object delete, and `503` with no storage.
 
 ## What this slice deliberately does not do
 
-No upload or preview controls in the web app, no public branding assets (P04), no cover, export or
-payment-proof screens beyond the two purposes (P13/P15/P21), no signed-URL CDN, no image resizing or
+No upload or preview controls in the web app, no public branding assets (P04), no cover or
+payment-proof screens beyond the two purposes (P13/P15), no signed-URL CDN, no image resizing or
 re-encoding (bytes after a PNG's `IEND` are stored as sent), no virus scanning, no per-tenant quota, and
 no GCS run: **GCS interoperability and staging credentials are unverified** and the PLAN gate stays open.
 A fully decoded 4096 x 4096 image can take tens of MB while it is checked; the two-slot decode limit
