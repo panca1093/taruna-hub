@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -51,6 +52,9 @@ func requireAvatars(t *testing.T, rec *httptest.ResponseRecorder, list, idKey, a
 	}
 	if !avatarKeyPattern.MatchString(got[automatic.String()]) {
 		t.Errorf("%s: automatic %s = %q, want a built-in key", list, avatarKey, got[automatic.String()])
+	}
+	if want := model.DefaultAvatarKey(automatic, nil, nil, time.Now()); got[automatic.String()] != want {
+		t.Errorf("%s: automatic %s = %q, want %q, the same face the profile shows", list, avatarKey, got[automatic.String()], want)
 	}
 }
 
