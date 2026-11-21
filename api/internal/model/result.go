@@ -9,11 +9,14 @@ import (
 // Standing is one student's place among a tryout's participants. Average is the mean of the student's completed-attempt
 // scores rounded to 2 decimals: the value that is displayed and the value ties are judged on.
 type Standing struct {
-	UserID   uuid.UUID
-	Name     string
-	Average  float64
-	Attempts int
-	Rank     int
+	UserID    uuid.UUID
+	Name      string
+	AvatarKey *string
+	Gender    *string
+	BirthDate *time.Time
+	Average   float64
+	Attempts  int
+	Rank      int
 }
 
 // Ranking is the live rank of one student on one tryout. It is computed on every read and never stored.

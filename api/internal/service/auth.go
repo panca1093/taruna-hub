@@ -445,10 +445,7 @@ func principalFor(u model.User, sessionID uuid.UUID) model.Principal {
 }
 
 func avatarOf(u model.User) string {
-	if u.AvatarKey != nil {
-		return *u.AvatarKey
-	}
-	return model.DefaultAvatarKey(u.ID, u.Gender, u.BirthDate, time.Now())
+	return model.ShownAvatar(u.ID, u.AvatarKey, u.Gender, u.BirthDate)
 }
 
 // scopeTenant is the scope as the nullable tenant the database uses; null-tenant (platform) rows never match it.

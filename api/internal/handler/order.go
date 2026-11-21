@@ -48,6 +48,7 @@ type orderResponse struct {
 	PaymentMethod    string              `json:"payment_method"`
 	StudentID        uuid.UUID           `json:"student_id"`
 	StudentName      string              `json:"student_name"`
+	StudentAvatar    string              `json:"student_avatar"`
 	ProductID        uuid.UUID           `json:"product_id"`
 	ProductType      string              `json:"product_type"`
 	ProductTitle     string              `json:"product_title"`
@@ -311,7 +312,7 @@ func checkoutInputOf(req checkoutRequest) (service.CheckoutInput, error) {
 func orderResponseOf(o model.Order) orderResponse {
 	out := orderResponse{
 		ID: o.ID, Code: service.OrderCode(o.Number), Status: o.Status, PaymentMethod: o.PaymentMethod,
-		StudentID: o.UserID, StudentName: o.StudentName, ProductID: o.ProductID, ProductType: o.ProductType,
+		StudentID: o.UserID, StudentName: o.StudentName, StudentAvatar: model.ShownAvatar(o.UserID, o.AvatarKey, o.Gender, o.BirthDate), ProductID: o.ProductID, ProductType: o.ProductType,
 		ProductTitle: o.ProductTitle, Price: o.Price, Items: make([]orderItemResponse, 0, len(o.Items)),
 		ProofAssetID: o.ProofAssetID, CancelReason: o.CancelReason, CreatedAt: o.CreatedAt,
 		ConfirmedAt: o.ConfirmedAt, CancelledAt: o.CancelledAt,

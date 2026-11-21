@@ -35,6 +35,9 @@ type Order struct {
 	TenantID      uuid.UUID
 	UserID        uuid.UUID
 	StudentName   string
+	AvatarKey     *string
+	Gender        *string
+	BirthDate     *time.Time
 	ProductID     uuid.UUID
 	ProductType   string
 	ProductTitle  string

@@ -27,6 +27,9 @@ type Topup struct {
 	TenantID     uuid.UUID
 	UserID       uuid.UUID
 	StudentName  string
+	AvatarKey    *string
+	Gender       *string
+	BirthDate    *time.Time
 	Amount       string
 	Method       string
 	Status       string

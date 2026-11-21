@@ -88,7 +88,7 @@ func (r *MonitoringRepository) ActiveSessions(ctx context.Context, q dbtx, tenan
 		return nil, 0, fmt.Errorf("count active sessions: %w", err)
 	}
 	rows, err := q.Query(ctx, `
-		SELECT s.id, s.user_id, u.name, s.tryout_id, t.title, s.attempt_number, s.started_at,
+		SELECT s.id, s.user_id, u.name, u.avatar_key, u.gender, u.birth_date, s.tryout_id, t.title, s.attempt_number, s.started_at,
 		       p.subtest_id, p.name, p.position, p.started_at,
 		       (SELECT count(*) FROM tryout_session_violations v WHERE v.tenant_id = s.tenant_id AND v.session_id = s.id)
 		  FROM tryout_sessions s
@@ -109,7 +109,7 @@ func (r *MonitoringRepository) ActiveSessions(ctx context.Context, q dbtx, tenan
 		var name *string
 		var position *int
 		var partStarted *time.Time
-		if err := rows.Scan(&a.SessionID, &a.UserID, &a.StudentName, &a.TryoutID, &a.TryoutTitle, &a.AttemptNumber,
+		if err := rows.Scan(&a.SessionID, &a.UserID, &a.StudentName, &a.AvatarKey, &a.Gender, &a.BirthDate, &a.TryoutID, &a.TryoutTitle, &a.AttemptNumber,
 			&a.StartedAt, &subtestID, &name, &position, &partStarted, &a.ViolationCount); err != nil {
 			return nil, 0, fmt.Errorf("scan active session: %w", err)
 		}

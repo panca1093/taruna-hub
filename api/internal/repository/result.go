@@ -87,7 +87,7 @@ func (r *ResultRepository) Leaderboard(ctx context.Context, q dbtx, tenantID, tr
 	}
 	rows, err := q.Query(ctx, `
 		WITH st AS (`+averageSQL+` AND tryout_id = $2)
-		SELECT st.user_id, u.name, st.average::float8, st.result_count, st.rnk, st.participants
+		SELECT st.user_id, u.name, u.avatar_key, u.gender, u.birth_date, st.average::float8, st.result_count, st.rnk, st.participants
 		  FROM st JOIN users u ON u.id = st.user_id AND u.tenant_id = $1
 		 ORDER BY st.rnk, u.name, st.user_id
 		 LIMIT $3 OFFSET $4`, tenantID, tryoutID, limit, offset)
@@ -99,7 +99,7 @@ func (r *ResultRepository) Leaderboard(ctx context.Context, q dbtx, tenantID, tr
 	total := 0
 	for rows.Next() {
 		var s model.Standing
-		if err := rows.Scan(&s.UserID, &s.Name, &s.Average, &s.Attempts, &s.Rank, &total); err != nil {
+		if err := rows.Scan(&s.UserID, &s.Name, &s.AvatarKey, &s.Gender, &s.BirthDate, &s.Average, &s.Attempts, &s.Rank, &total); err != nil {
 			return nil, 0, fmt.Errorf("scan standing: %w", err)
 		}
 		out = append(out, s)

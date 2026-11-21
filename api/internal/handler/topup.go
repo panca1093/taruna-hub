@@ -28,19 +28,20 @@ const (
 )
 
 type topupResponse struct {
-	ID           uuid.UUID  `json:"id"`
-	Code         string     `json:"code"`
-	Status       string     `json:"status"`
-	Method       string     `json:"method"`
-	StudentID    uuid.UUID  `json:"student_id"`
-	StudentName  string     `json:"student_name"`
-	Amount       string     `json:"amount"`
-	ProofAssetID *uuid.UUID `json:"proof_asset_id"`
-	RejectReason string     `json:"reject_reason"`
-	CreatedAt    time.Time  `json:"created_at"`
-	ApprovedAt   *time.Time `json:"approved_at"`
-	RejectedAt   *time.Time `json:"rejected_at"`
-	RedirectURL  *string    `json:"redirect_url"`
+	ID            uuid.UUID  `json:"id"`
+	Code          string     `json:"code"`
+	Status        string     `json:"status"`
+	Method        string     `json:"method"`
+	StudentID     uuid.UUID  `json:"student_id"`
+	StudentName   string     `json:"student_name"`
+	StudentAvatar string     `json:"student_avatar"`
+	Amount        string     `json:"amount"`
+	ProofAssetID  *uuid.UUID `json:"proof_asset_id"`
+	RejectReason  string     `json:"reject_reason"`
+	CreatedAt     time.Time  `json:"created_at"`
+	ApprovedAt    *time.Time `json:"approved_at"`
+	RejectedAt    *time.Time `json:"rejected_at"`
+	RedirectURL   *string    `json:"redirect_url"`
 }
 
 type topupsResponse struct {
@@ -194,7 +195,7 @@ func topupID(c echo.Context) (uuid.UUID, error) {
 func topupResponseOf(t model.Topup) topupResponse {
 	return topupResponse{
 		ID: t.ID, Code: service.TopupCode(t.Number), Status: t.Status, Method: t.Method, StudentID: t.UserID,
-		StudentName: t.StudentName, Amount: t.Amount, ProofAssetID: t.ProofAssetID, RejectReason: t.RejectReason,
+		StudentName: t.StudentName, StudentAvatar: model.ShownAvatar(t.UserID, t.AvatarKey, t.Gender, t.BirthDate), Amount: t.Amount, ProofAssetID: t.ProofAssetID, RejectReason: t.RejectReason,
 		CreatedAt: t.CreatedAt, ApprovedAt: t.ApprovedAt, RejectedAt: t.RejectedAt, RedirectURL: t.RedirectURL,
 	}
 }
