@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LatexText } from "@/components/latex";
+import { inlineImages } from "@/lib/capture-pdf";
 
 export interface PrintQuestionData {
   type: string;
@@ -21,6 +22,7 @@ export interface TryoutPrintLabels {
   answerLine: string;
   trueLabel: string;
   falseLabel: string;
+  imageFailed: string;
 }
 
 interface TryoutPrintProps {
@@ -49,37 +51,48 @@ type Block =
   | { kind: "question"; number: number; question: PrintQuestionData };
 
 interface PageLayout {
-  blocks: number[];
-  scale: number;
+  blocks: { index: number; scale: number }[];
 }
 
-/** Flows measured block heights into pages. A `keep` block stays on the page of the block after it. */
+/**
+ * Flows measured block heights into pages. A `keep` block stays on the page of the block after it; a group whose
+ * keep blocks plus the block after them exceed a page goes on its own page with that last block scaled to fit.
+ */
 export function paginate(heights: number[], keep: boolean[], bodyH: number): PageLayout[] {
   const pages: PageLayout[] = [];
-  let current: number[] = [];
+  let current: PageLayout["blocks"] = [];
   let used = 0;
   const flush = () => {
-    if (current.length > 0) pages.push({ blocks: current, scale: 1 });
+    if (current.length > 0) pages.push({ blocks: current });
     current = [];
     used = 0;
   };
   const place = (i: number) => {
     if (heights[i] > bodyH) {
       flush();
-      pages.push({ blocks: [i], scale: bodyH / heights[i] });
+      pages.push({ blocks: [{ index: i, scale: bodyH / heights[i] }] });
       return;
     }
     if (used + heights[i] > bodyH) flush();
-    current.push(i);
+    current.push({ index: i, scale: 1 });
     used += heights[i];
   };
   let i = 0;
   while (i < heights.length) {
     let end = i;
     while (keep[end] && end + 1 < heights.length) end++;
-    const total = heights.slice(i, end + 1).reduce((sum, h) => sum + h, 0);
-    if (total <= bodyH && used + total > bodyH) flush();
-    for (let j = i; j <= end; j++) place(j);
+    const lead = heights.slice(i, end).reduce((sum, h) => sum + h, 0);
+    const total = lead + heights[end];
+    if (total <= bodyH) {
+      if (used + total > bodyH) flush();
+      for (let j = i; j <= end; j++) place(j);
+    } else if (!keep[end] && lead < bodyH) {
+      flush();
+      const blocks = Array.from({ length: end - i }, (_, k) => ({ index: i + k, scale: 1 }));
+      pages.push({ blocks: [...blocks, { index: end, scale: (bodyH - lead) / heights[end] }] });
+    } else {
+      for (let j = i; j <= end; j++) place(j);
+    }
     i = end + 1;
   }
   flush();
@@ -88,7 +101,7 @@ export function paginate(heights: number[], keep: boolean[], bodyH: number): Pag
 
 function BlockView({ block, labels }: { block: Block; labels: TryoutPrintLabels }) {
   if (block.kind === "title") {
-    return <h1 className="font-display text-heading-lg text-foreground pb-6">{block.title}</h1>;
+    return <h1 className="font-display text-display-sm text-foreground pb-6">{block.title}</h1>;
   }
   if (block.kind === "subtest") {
     return (
@@ -104,7 +117,7 @@ function BlockView({ block, labels }: { block: Block; labels: TryoutPrintLabels 
       ? [{ label: labels.trueLabel }, { label: labels.falseLabel }]
       : question.options;
   return (
-    <div className="flex gap-3 pb-5 text-body text-foreground">
+    <div className="flex gap-3 pb-5 text-small text-foreground">
       <span className="w-7 shrink-0 text-right font-medium">{block.number}.</span>
       <div className="min-w-0 flex-1 space-y-2">
         <div>
@@ -159,7 +172,7 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
       await document.fonts.ready;
       const container = measureRef.current;
       if (!container) return;
-      await Promise.all(Array.from(container.querySelectorAll("img")).map((img) => img.decode().catch(() => undefined)));
+      await inlineImages(container, labels.imageFailed);
       if (cancelled) return;
       const heights = Array.from(container.querySelectorAll<HTMLElement>("[data-block]")).map((el) => el.getBoundingClientRect().height);
       setPages(paginate(heights, keep, BODY_H));
@@ -167,12 +180,19 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
     return () => {
       cancelled = true;
     };
-  }, [keep]);
+  }, [keep, labels.imageFailed]);
 
   useEffect(() => {
-    if (!pages || !rootRef.current) return;
-    onLaidOutRef.current(Array.from(rootRef.current.querySelectorAll<HTMLElement>("[data-print-page]")));
-  }, [pages]);
+    const root = rootRef.current;
+    if (!pages || !root) return;
+    let cancelled = false;
+    void inlineImages(root, labels.imageFailed).then(() => {
+      if (!cancelled) onLaidOutRef.current(Array.from(root.querySelectorAll<HTMLElement>("[data-print-page]")));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pages, labels.imageFailed]);
 
   return (
     <div ref={rootRef} aria-hidden inert data-theme="light" style={{ colorScheme: "light" }} className="fixed top-0 -left-300 text-foreground">
@@ -186,10 +206,10 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
         </div>
       ) : (
         pages.map((page, n) => (
-          <div key={n} data-print-page className="relative overflow-hidden bg-background text-foreground" style={{ width: PAGE_W, height: PAGE_H }}>
+          <div key={n} data-print-page className="relative overflow-hidden bg-white text-foreground" style={{ width: PAGE_W, height: PAGE_H }}>
             <div className="absolute overflow-hidden" style={{ left: PAD_X, top: PAD_TOP, width: BODY_W, height: BODY_H }}>
-              {page.blocks.map((index) => (
-                <div key={index} style={page.scale < 1 ? { width: BODY_W, transform: `scale(${page.scale})`, transformOrigin: "top center" } : undefined}>
+              {page.blocks.map(({ index, scale }) => (
+                <div key={index} style={scale < 1 ? { width: BODY_W, transform: `scale(${scale})`, transformOrigin: "top center" } : undefined}>
                   <BlockView block={blocks[index]} labels={labels} />
                 </div>
               ))}

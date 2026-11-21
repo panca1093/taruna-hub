@@ -1,4 +1,4 @@
-import { toJpeg } from "html-to-image";
+import { getFontEmbedCSS, toJpeg } from "html-to-image";
 
 const A4_WIDTH_PT = 595.28;
 const A4_HEIGHT_PT = 841.89;
@@ -48,8 +48,8 @@ function imagePdf(pages: PdfPage[]): Blob {
   return new Blob(parts as BlobPart[], { type: "application/pdf" });
 }
 
-async function captureJpeg(node: HTMLElement, background: string) {
-  const dataUrl = await toJpeg(node, { quality: 0.95, pixelRatio: 2, backgroundColor: background, cacheBust: true });
+async function captureJpeg(node: HTMLElement, background: string, options: { cacheBust: boolean; fontEmbedCSS?: string }) {
+  const dataUrl = await toJpeg(node, { quality: 0.95, pixelRatio: 2, backgroundColor: background, ...options });
   const jpeg = new Uint8Array(await (await fetch(dataUrl)).arrayBuffer());
   const bitmap = await createImageBitmap(new Blob([jpeg as BlobPart], { type: "image/jpeg" }));
   const { width, height } = bitmap;
@@ -68,22 +68,71 @@ function download(blob: Blob, fileName: string) {
 
 /** Renders the node to one PDF page exactly as it looks and saves it; `background` fills what the node leaves transparent. */
 export async function savePageAsPdf(node: HTMLElement, fileName: string, background: string) {
-  const shot = await captureJpeg(node, background);
+  const shot = await captureJpeg(node, background, { cacheBust: true });
   const pageW = A4_WIDTH_PT;
   const pageH = Math.round(pageW * (shot.imgH / shot.imgW) * 100) / 100;
   download(imagePdf([{ ...shot, pageW, pageH }]), fileName);
 }
 
 /**
- * Captures each element as one A4 portrait page of a single PDF, one after the other so only one bitmap is alive at
- * a time. `onProgress` gets the 1-based page about to be captured and the total.
+ * Captures each element as one A4 portrait page of a single PDF, one after the other so only one bitmap is decoded at
+ * a time (the JPEG bytes of every page are kept until the file is written). `onProgress` gets the 1-based page about
+ * to be captured and the total; an aborted `signal` stops before the next page and before the download.
  */
-export async function savePagesAsPdf(pages: HTMLElement[], fileName: string, background: string, onProgress?: (page: number, total: number) => void) {
+export async function savePagesAsPdf(pages: HTMLElement[], fileName: string, background: string, onProgress?: (page: number, total: number) => void, signal?: AbortSignal) {
   await document.fonts.ready;
+  const fontEmbedCSS = pages.length > 0 ? await getFontEmbedCSS(pages[0]) : "";
   const shots: PdfPage[] = [];
   for (const [i, node] of pages.entries()) {
+    signal?.throwIfAborted();
     onProgress?.(i + 1, pages.length);
-    shots.push({ ...(await captureJpeg(node, background)), pageW: A4_WIDTH_PT, pageH: A4_HEIGHT_PT });
+    shots.push({ ...(await captureJpeg(node, background, { cacheBust: false, fontEmbedCSS })), pageW: A4_WIDTH_PT, pageH: A4_HEIGHT_PT });
   }
+  signal?.throwIfAborted();
   download(imagePdf(shots), fileName);
+}
+
+function readAsDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function loadedOk(img: HTMLImageElement) {
+  if (!img.complete) {
+    await new Promise<void>((resolve) => {
+      img.addEventListener("load", () => resolve(), { once: true });
+      img.addEventListener("error", () => resolve(), { once: true });
+    });
+  }
+  return img.naturalWidth > 0;
+}
+
+/**
+ * Makes every image under `root` self-contained before a capture: loaded images become `data:` URLs, and one that
+ * fails to load or fetch is replaced by a bordered box with its alt text (or `fallback`), so it never prints as a gap.
+ */
+export async function inlineImages(root: HTMLElement, fallback = "") {
+  await Promise.all(
+    Array.from(root.querySelectorAll("img")).map(async (img) => {
+      try {
+        if (!(await loadedOk(img))) throw new Error("image failed to load");
+        const src = img.currentSrc || img.src;
+        if (src.startsWith("data:")) return;
+        const response = await fetch(src);
+        if (!response.ok) throw new Error(`image fetch ${response.status}`);
+        img.removeAttribute("srcset");
+        img.src = await readAsDataUrl(await response.blob());
+        await img.decode();
+      } catch {
+        const box = document.createElement("span");
+        box.className = "inline-block rounded-lg border border-border px-2 py-1 text-caption text-muted";
+        box.textContent = img.alt || fallback;
+        img.replaceWith(box);
+      }
+    }),
+  );
 }

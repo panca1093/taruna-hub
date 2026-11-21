@@ -1,7 +1,7 @@
 # Exports (shared foundation, used by P21)
 
 Durable artifacts rendered by a background job: the tryout results CSV/XLSX (P21). The tryout PDF is not one of them: it is
-generated in the browser ([tryout-pdf.md](tryout-pdf.md)). This page covers the shared parts. Each kind's content, params and create endpoint belong to its own slice.
+generated in the browser ([tryout-pdf.md](tryout-pdf.md)). This page covers the shared parts. Migration 000029 deleted the existing `tryout_pdf` rows; their stored objects stay in the bucket under `<tenant>/export/<id>`, and the down migration restores the CHECK but not the rows. Each kind's content, params and create endpoint belong to its own slice.
 
 ## Data model
 

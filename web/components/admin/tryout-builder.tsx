@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, toast } from "@heroui/react";
 import { ArrowDown, ArrowUp, Clock, FileQuestion, GripVertical, Plus, Trash2 } from "lucide-react";
@@ -122,7 +122,8 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
   const t = useAdminTryoutBuilderT();
   const pdfT = useTryoutPdfT();
   const { locale } = useLocale();
-  const [pdf, setPdf] = useState<{ status: "idle" | "preparing" | "error" | "done"; page: number; total: number; error?: string }>({ status: "idle", page: 0, total: 0 });
+  const [pdf, setPdf] = useState<{ status: "idle" | "preparing" | "error"; page: number; total: number; error?: string }>({ status: "idle", page: 0, total: 0 });
+  const pdfAbort = useRef<AbortController | null>(null);
   const [printData, setPrintData] = useState<{ key: number; data: TryoutPrintData } | null>(null);
   const isEditing = !!tryoutId;
 
@@ -311,6 +312,8 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
     }
   };
 
+  useEffect(() => () => pdfAbort.current?.abort(), []);
+
   const startPdf = async () => {
     if (!tryout) return;
     setPdf({ status: "preparing", page: 0, total: 0 });
@@ -324,13 +327,16 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
   };
 
   const capturePdf = async (pages: HTMLElement[]) => {
+    const controller = new AbortController();
+    pdfAbort.current = controller;
     const slug = (printData?.data.title ?? "tryout").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "tryout";
     try {
       const background = getComputedStyle(pages[0]).backgroundColor;
-      await savePagesAsPdf(pages, `${slug}.pdf`, background, (page, total) => setPdf({ status: "preparing", page, total }));
-      setPdf({ status: "done", page: 0, total: 0 });
+      await savePagesAsPdf(pages, `${slug}.pdf`, background, (page, total) => setPdf({ status: "preparing", page, total }), controller.signal);
+      setPdf({ status: "idle", page: 0, total: 0 });
       toast.success(pdfT.toastDone);
     } catch (err) {
+      if (controller.signal.aborted) return;
       setPdf({ status: "error", page: 0, total: 0, error: errorText(err, pdfT.failedFallback) });
       toast.danger(pdfT.toastFailed, { description: errorText(err, pdfT.failedFallback) });
     } finally {
@@ -361,6 +367,7 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
   }
 
   const dirty = tryout !== null && JSON.stringify(draft) !== JSON.stringify(draftOf(tryout));
+  const pdfBlocked = saving || working || dirty || pdf.status === "preparing";
   const graceDirty = tryout !== null && draft.graceSeconds !== String(tryout.grace_seconds);
   const programOptions = (programs ?? []).map((program) => ({ id: program.id, label: program.name }));
 
@@ -372,7 +379,7 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
       actions={
         <div className="flex gap-2">
           {tryout && (
-            <Button variant="secondary" size="sm" isDisabled={saving || working || dirty || pdf.status === "preparing"} onPress={() => void startPdf()}>
+            <Button variant="secondary" size="sm" isDisabled={pdfBlocked} onPress={() => void startPdf()}>
               {pdf.status !== "preparing" ? pdfT.request : pdf.total > 0 ? pdfT.preparing(pdf.page, pdf.total) : pdfT.preparingStart}
             </Button>
           )}
@@ -405,15 +412,10 @@ export function TryoutBuilder({ tryoutId }: { tryoutId?: string }) {
         {pdf.status === "error" && (
           <div className="flex items-center gap-3 text-small text-danger" role="alert">
             <span>{pdf.error}</span>
-            <Button variant="secondary" size="sm" isDisabled={dirty} onPress={() => void startPdf()}>
+            <Button variant="secondary" size="sm" isDisabled={pdfBlocked} onPress={() => void startPdf()}>
               {pdfT.retry}
             </Button>
           </div>
-        )}
-        {pdf.status === "done" && (
-          <p className="text-small text-success" role="status">
-            {pdfT.toastDone}
-          </p>
         )}
 
         <Panel as="section" className="flex flex-col gap-4">

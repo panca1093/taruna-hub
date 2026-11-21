@@ -34,9 +34,30 @@ or searchable), the admin waits in the tab while it renders, and there is no his
 
 ## Pagination
 
-A question (stem and options) is never split across pages. A subtest heading, and the title before the first heading,
-stay on the page of the block after them. A block taller than a page goes alone on its own page, scaled down to fit.
-`paginate` in `tryout-print.tsx` is a pure function of measured heights.
+`paginate` in `tryout-print.tsx` is a pure function of measured heights; the page body is 794 x 1123 CSS px minus the
+margins and footer. Rules, in the order the code applies them:
+
+1. A question (stem and options) is never split across pages.
+2. A group is the title and subtest headings ("keep" blocks) plus the block after them. If the group fits a page, it
+   moves to a fresh page when the current page cannot hold all of it, so a heading is never the last thing on a page.
+3. A block that exactly fills the remaining height fits (`used + height <= body`); the next block starts a new page.
+4. If a group is taller than a page, it gets its own page: the keep blocks at natural size, and the last block scaled
+   down to the height that remains. A lone oversize question is the same case with no keep blocks.
+5. An empty subtest's heading joins the following heading's group, so it travels with the next question.
+6. Trailing keep blocks with no question after them (a last empty subtest) have nothing to stay with and are placed
+   where they fall.
+
+Checked by reading the code against these cases: empty subtest (rule 5, one group), heading plus oversize question
+(rule 4, no orphan heading), title plus heading plus oversize first question (rule 4), exact-fit page (rule 3),
+last heading with no question (rule 6).
+
+## Images
+
+Before blocks are measured, and again after the pages are laid out, `inlineImages` (`web/lib/capture-pdf.ts`) waits for
+every `<img>` to load or fail, fetches its source and swaps in a `data:` URL, so `html-to-image` never has to fetch
+anything (the multi-page capture runs with `cacheBust: false`). An image that fails to load or fetch is replaced by a
+small bordered box with its alt text (or "Gambar tidak dapat dimuat"), never a blank gap. Cross-origin images need CORS
+headers to be fetchable; otherwise they print as the alt-text box.
 
 ## Test
 
