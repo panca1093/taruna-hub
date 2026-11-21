@@ -144,6 +144,7 @@ func (s *TryoutService) Get(ctx context.Context, scope HostScope, principal mode
 	if err != nil {
 		return model.Tryout{}, tryoutError(err)
 	}
+	resolveTryout(&tryout)
 	return tryout, nil
 }
 
@@ -157,6 +158,7 @@ func (s *TryoutService) Print(ctx context.Context, scope HostScope, principal mo
 	if err != nil {
 		return model.PrintTryout{}, tryoutError(err)
 	}
+	resolvePrint(&out)
 	return out, nil
 }
 
@@ -181,6 +183,7 @@ func (s *TryoutService) Create(ctx context.Context, scope HostScope, principal m
 	if err != nil {
 		return model.Tryout{}, tryoutError(err)
 	}
+	resolveTryout(&created)
 	return created, nil
 }
 
@@ -234,6 +237,7 @@ func (s *TryoutService) Update(ctx context.Context, scope HostScope, principal m
 			return tryoutError(err)
 		}
 		out, err = s.repo.FindTx(ctx, tx, tenantID, id)
+		resolveTryout(&out)
 		return tryoutError(err)
 	})
 	if err != nil {
@@ -294,6 +298,7 @@ func (s *TryoutService) setStatus(ctx context.Context, scope HostScope, principa
 			return tryoutError(err)
 		}
 		out, err = s.repo.FindTx(ctx, tx, tenantID, id)
+		resolveTryout(&out)
 		return tryoutError(err)
 	})
 	if err != nil {

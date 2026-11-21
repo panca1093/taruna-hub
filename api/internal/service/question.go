@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"regexp"
 	"strings"
@@ -50,7 +52,8 @@ const (
 	maxOptions           = 8
 	maxContentLen        = 20000
 	maxExplanationLen    = 20000
-	maxOptionLabelLen    = 500
+	maxOptionLabelLen    = 2000
+	backfillBatch        = 500
 	minIsianAnswers      = 1
 	maxIsianAnswers      = 10
 	maxIsianAnswerLen    = 200
@@ -60,12 +63,12 @@ const (
 	maxQuestionLimit     = 100
 )
 
-// markdownImage finds the URL of a markdown image; the slice rejects the schemes it cannot store.
+// markdownImage finds the URL of a markdown image in imported text, which may not carry a data: or javascript: URL.
 var markdownImage = regexp.MustCompile(`!\[[^\]]*\]\(\s*([^)\s]*)`)
 
 type QuestionOptionInput struct {
 	ID     string
-	Label  string
+	Label  model.RichDoc
 	Points *float64
 }
 
@@ -74,15 +77,17 @@ type QuestionInput struct {
 	SubjectID      uuid.UUID
 	ChapterID      *uuid.UUID
 	Type           string
-	Content        string
+	Content        model.RichDoc
 	Difficulty     string
-	Explanation    string
+	Explanation    model.RichDoc
 	OptionWeighted bool
 	CaseSensitive  bool
 	Options        []QuestionOptionInput
 	Correct        []string
 	// BaseVersion is the version the editor started from; a mismatch is a 409, never a silent write.
 	BaseVersion int
+	// docRules is set by the service, never by the transport: what image src the documents may carry.
+	docRules docRules
 }
 
 // QuestionFilter is the validated list query.
@@ -97,12 +102,50 @@ type QuestionFilter struct {
 }
 
 type QuestionService struct {
-	db   *pgxpool.Pool
-	repo *repository.QuestionRepository
+	db     *pgxpool.Pool
+	repo   *repository.QuestionRepository
+	assets *AssetService
 }
 
-func NewQuestionService(db *pgxpool.Pool, repo *repository.QuestionRepository) *QuestionService {
-	return &QuestionService{db: db, repo: repo}
+// NewQuestionService takes the asset service that finalizes the images a question's documents point at.
+func NewQuestionService(db *pgxpool.Pool, repo *repository.QuestionRepository, assets *AssetService) *QuestionService {
+	return &QuestionService{db: db, repo: repo, assets: assets}
+}
+
+// BackfillDocs gives every question version stored as text its documents and returns how many it converted. An
+// instance that cannot take the lock, or a row that cannot be converted, is logged and passed over: reads fall back
+// to the converted text, so neither stops the server from starting.
+func (s *QuestionService) BackfillDocs(ctx context.Context, logger *slog.Logger) (int, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	result, err := s.repo.BackfillDocs(ctx, backfillBatch, convertLegacyVersion)
+	if err != nil {
+		return result.Converted, err
+	}
+	if !result.Locked {
+		logger.Info("question document backfill skipped: another instance is running it")
+	}
+	for _, skipped := range result.Skipped {
+		logger.Error("question version left as text", slog.String("version_id", skipped.ID.String()), slog.String("error", skipped.Err.Error()))
+	}
+	return result.Converted, nil
+}
+
+// convertLegacyVersion is the same conversion a read of that row applies.
+func convertLegacyVersion(l repository.LegacyVersion) (repository.VersionDocs, error) {
+	var options []model.QuestionOption
+	if err := json.Unmarshal(l.Options, &options); err != nil {
+		return repository.VersionDocs{}, fmt.Errorf("decode options: %w", err)
+	}
+	if options == nil {
+		options = []model.QuestionOption{}
+	}
+	model.OptionsWithDocs(options)
+	resolveOptions(options)
+	return repository.VersionDocs{
+		Content: docOfLegacyText(l.Content), Explanation: docOfLegacyText(l.Explanation), Options: options,
+	}, nil
 }
 
 // questionTenant pins every query to the host's tenant and refuses a principal from another one.
@@ -130,6 +173,7 @@ func (s *QuestionService) List(ctx context.Context, scope HostScope, principal m
 	if err != nil {
 		return nil, 0, fmt.Errorf("list questions: %w", err)
 	}
+	resolveQuestions(questions)
 	return questions, total, nil
 }
 
@@ -142,6 +186,7 @@ func (s *QuestionService) Get(ctx context.Context, scope HostScope, principal mo
 	if err != nil {
 		return model.Question{}, questionError(err)
 	}
+	resolveQuestion(&question)
 	return question, nil
 }
 
@@ -158,9 +203,21 @@ func (s *QuestionService) Create(ctx context.Context, scope HostScope, principal
 	if err != nil {
 		return model.Question{}, err
 	}
-	created, err := s.repo.Create(ctx, tenantID, principal.UserID, questionOf(input))
+	var created model.Question
+	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		id, err := s.repo.CreateTx(ctx, tx, tenantID, principal.UserID, questionOf(input))
+		if err != nil {
+			return questionError(err)
+		}
+		if err := s.attachImages(ctx, tx, scope, principal, input); err != nil {
+			return err
+		}
+		created, err = s.repo.FindCurrentTx(ctx, tx, tenantID, id, false)
+		resolveQuestion(&created)
+		return questionError(err)
+	})
 	if err != nil {
-		return model.Question{}, questionError(err)
+		return model.Question{}, err
 	}
 	return created, nil
 }
@@ -173,13 +230,16 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 	if input.BaseVersion < 1 {
 		return model.Question{}, &InputError{Fields: map[string]string{"base_version": ReasonBaseVersion}}
 	}
+	// Look the question up before checking the body so another tenant's id answers 404 and leaks nothing.
+	existing, err := s.repo.Find(ctx, tenantID, id)
+	if err != nil {
+		return model.Question{}, questionError(err)
+	}
+	resolveQuestion(&existing)
+	input.docRules = docRules{srcs: questionSrcs(existing)}
 	input, err = scalarOf(input)
 	if err != nil {
 		return model.Question{}, err
-	}
-	// Look the question up before checking the body so another tenant's id answers 404 and leaks nothing.
-	if _, err := s.repo.Find(ctx, tenantID, id); err != nil {
-		return model.Question{}, questionError(err)
 	}
 	if err := s.checkRefs(ctx, tenantID, input); err != nil {
 		return model.Question{}, err
@@ -194,6 +254,8 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 		if input.BaseVersion != current.Version {
 			return ErrQuestionStale
 		}
+		resolveQuestion(&current)
+		input.docRules = docRules{srcs: questionSrcs(current)}
 		input, err = validatedOptions(input, current.Options)
 		if err != nil {
 			return err
@@ -201,6 +263,9 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 		if sameContent(current, input) {
 			out = current
 			return nil
+		}
+		if err := s.attachImages(ctx, tx, scope, principal, input); err != nil {
+			return err
 		}
 		next := current.Version + 1
 		if err := s.repo.InsertVersionTx(ctx, tx, tenantID, id, next, principal.UserID, questionOf(input)); err != nil {
@@ -210,6 +275,7 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 			return questionError(err)
 		}
 		out, err = s.repo.FindCurrentTx(ctx, tx, tenantID, id, false)
+		resolveQuestion(&out)
 		return questionError(err)
 	})
 	if err != nil {
@@ -275,24 +341,19 @@ func (s *QuestionService) checkRefs(ctx context.Context, tenantID uuid.UUID, inp
 	return nil
 }
 
-// scalarOf trims and checks everything that does not depend on the options.
+// scalarOf normalises the documents and checks everything that does not depend on the options.
 func scalarOf(input QuestionInput) (QuestionInput, error) {
 	fields := map[string]string{}
-	input.Content = strings.TrimSpace(input.Content)
-	input.Explanation = strings.TrimSpace(input.Explanation)
 
 	if !knownType(input.Type) {
 		fields["type"] = ReasonQuestionType
 	}
-	if n := utf8.RuneCountInString(input.Content); n < 1 || n > maxContentLen {
-		fields["content"] = ReasonQuestionContent
-	} else if unsupportedImage(input.Content) {
-		fields["content"] = ReasonQuestionImage
+	var reason string
+	if input.Content, reason = validatedDocWith(input.Content, true, maxContentLen, ReasonQuestionContent, input.docRules); reason != "" {
+		fields["content"] = reason
 	}
-	if utf8.RuneCountInString(input.Explanation) > maxExplanationLen {
-		fields["explanation"] = ReasonQuestionExpl
-	} else if unsupportedImage(input.Explanation) {
-		fields["explanation"] = ReasonQuestionImage
+	if input.Explanation, reason = validatedDocWith(input.Explanation, false, maxExplanationLen, ReasonQuestionExpl, input.docRules); reason != "" {
+		fields["explanation"] = reason
 	}
 	if !knownDifficulty(input.Difficulty) {
 		fields["difficulty"] = ReasonDifficulty
@@ -333,7 +394,10 @@ func validatedOptions(input QuestionInput, existing []model.QuestionOption) (Que
 		}
 		input.Correct = answers
 	case model.QuestionTrueFalse:
-		fixed := []QuestionOptionInput{{ID: "benar", Label: "Benar"}, {ID: "salah", Label: "Salah"}}
+		fixed := []QuestionOptionInput{
+			{ID: "benar", Label: model.DocFromLegacyText("Benar")},
+			{ID: "salah", Label: model.DocFromLegacyText("Salah")},
+		}
 		if len(input.Options) > 0 && !sameTrueFalse(input.Options) {
 			fields["options"] = ReasonOptions
 		}
@@ -345,7 +409,7 @@ func validatedOptions(input QuestionInput, existing []model.QuestionOption) (Que
 			fields["correct"] = ReasonCorrect
 		}
 	default:
-		options, remap, _ := resolvedOptions(input.Options, existing, fields)
+		options, remap, _ := resolvedOptions(input.Options, existing, fields, input.docRules)
 		if len(options) < minOptions || len(options) > maxOptions {
 			fields["options"] = ReasonOptions
 		}
@@ -388,7 +452,7 @@ func validatedOptions(input QuestionInput, existing []model.QuestionOption) (Que
 }
 
 // Placeholder ids are noted so `correct` keeps pointing at the option the editor meant.
-func resolvedOptions(input []QuestionOptionInput, existing []model.QuestionOption, fields map[string]string) ([]QuestionOptionInput, map[string]string, bool) {
+func resolvedOptions(input []QuestionOptionInput, existing []model.QuestionOption, fields map[string]string, rules docRules) ([]QuestionOptionInput, map[string]string, bool) {
 	owned := make(map[string]bool, len(existing))
 	for _, option := range existing {
 		owned[option.ID] = true
@@ -400,11 +464,17 @@ func resolvedOptions(input []QuestionOptionInput, existing []model.QuestionOptio
 	ok := true
 	for i, option := range input {
 		path := fmt.Sprintf("options[%d]", i)
-		option.Label = strings.TrimSpace(option.Label)
-		label := strings.ToLower(option.Label)
+		doc, reason := validatedDocWith(option.Label, true, maxOptionLabelLen, ReasonOptionLabel, rules)
+		option.Label = doc
+		label := strings.ToLower(strings.TrimSpace(model.DocText(doc)))
+		if label == "" {
+			if raw, err := json.Marshal(doc); err == nil {
+				label = strings.ToLower(string(raw))
+			}
+		}
 		switch {
-		case utf8.RuneCountInString(option.Label) < 1 || utf8.RuneCountInString(option.Label) > maxOptionLabelLen:
-			fields[path+".label"] = ReasonOptionLabel
+		case reason != "":
+			fields[path+".label"] = reason
 			ok = false
 		case seenLabels[label]:
 			fields[path+".label"] = ReasonOptionDuplicate
@@ -509,12 +579,21 @@ func sameTrueFalse(options []QuestionOptionInput) bool {
 	want := map[string]string{"benar": "benar", "salah": "salah"}
 	for _, option := range options {
 		label, ok := want[strings.TrimSpace(option.ID)]
-		if !ok || option.Points != nil || !strings.EqualFold(strings.TrimSpace(option.Label), label) {
+		if !ok || option.Points != nil || !strings.EqualFold(model.DocText(option.Label), label) {
 			return false
 		}
 		delete(want, option.ID)
 	}
 	return len(want) == 0
+}
+
+// questionSrcs is every image src the version already holds, which an update may keep.
+func questionSrcs(q model.Question) map[string]bool {
+	docs := []model.RichDoc{q.Content, q.Explanation}
+	for _, option := range q.Options {
+		docs = append(docs, option.Doc)
+	}
+	return docSrcs(docs...)
 }
 
 // sameContent is the "saving an unchanged question writes nothing" rule.
@@ -523,8 +602,8 @@ func sameContent(current model.Question, input QuestionInput) bool {
 		!sameUUID(current.ChapterID, input.ChapterID) {
 		return false
 	}
-	if current.Type != input.Type || current.Content != input.Content || current.Difficulty != input.Difficulty ||
-		current.Explanation != input.Explanation || current.OptionWeighted != input.OptionWeighted ||
+	if current.Type != input.Type || !sameDoc(current.Content, input.Content) || current.Difficulty != input.Difficulty ||
+		!sameDoc(current.Explanation, input.Explanation) || current.OptionWeighted != input.OptionWeighted ||
 		current.CaseSensitive != input.CaseSensitive {
 		return false
 	}
@@ -533,7 +612,7 @@ func sameContent(current model.Question, input QuestionInput) bool {
 	}
 	for i := range current.Options {
 		before, after := current.Options[i], input.Options[i]
-		if before.ID != after.ID || before.Label != after.Label {
+		if before.ID != after.ID || !sameDoc(before.Doc, after.Label) {
 			return false
 		}
 		if (before.Points == nil) != (after.Points == nil) || (before.Points != nil && *before.Points != *after.Points) {
@@ -541,6 +620,13 @@ func sameContent(current model.Question, input QuestionInput) bool {
 		}
 	}
 	return sameSet(current.Correct, input.Correct)
+}
+
+// sameDoc compares canonical JSON, which both normalised and stored documents marshal to identically.
+func sameDoc(a, b model.RichDoc) bool {
+	left, errA := json.Marshal(a)
+	right, errB := json.Marshal(b)
+	return errA == nil && errB == nil && string(left) == string(right)
 }
 
 func sameUUID(a, b *uuid.UUID) bool {
@@ -599,7 +685,9 @@ func questionOf(input QuestionInput) model.Question {
 		Options: make([]model.QuestionOption, 0, len(input.Options)),
 	}
 	for _, option := range input.Options {
-		out.Options = append(out.Options, model.QuestionOption{ID: option.ID, Label: option.Label, Points: option.Points})
+		out.Options = append(out.Options, model.QuestionOption{
+			ID: option.ID, Label: model.DocLegacyText(option.Label), Doc: option.Label, Points: option.Points,
+		})
 	}
 	return out
 }
@@ -647,6 +735,43 @@ func unsupportedImage(text string) bool {
 		}
 	}
 	return false
+}
+
+// attachImages finalizes, in the version's own transaction, every question_image the documents point at; an asset
+// that is unknown, another tenant's or of another purpose names the field that holds it.
+func (s *QuestionService) attachImages(ctx context.Context, tx pgx.Tx, scope HostScope, principal model.Principal, input QuestionInput) error {
+	fields := map[string]string{}
+	attach := func(path string, doc model.RichDoc) error {
+		for _, id := range model.DocAssetIDs(doc) {
+			if s.assets == nil {
+				fields[path] = ReasonDocAsset
+				return nil
+			}
+			if _, err := s.assets.FinalizePurposeTx(ctx, tx, scope, principal, id, model.PurposeQuestionImage); err != nil {
+				if errors.Is(err, ErrAssetNotFound) {
+					fields[path] = ReasonDocAsset
+					return nil
+				}
+				return err
+			}
+		}
+		return nil
+	}
+	if err := attach("content", input.Content); err != nil {
+		return err
+	}
+	if err := attach("explanation", input.Explanation); err != nil {
+		return err
+	}
+	for i, option := range input.Options {
+		if err := attach(fmt.Sprintf("options[%d].label", i), option.Label); err != nil {
+			return err
+		}
+	}
+	if len(fields) > 0 {
+		return &InputError{Fields: fields}
+	}
+	return nil
 }
 
 func (s *QuestionService) inTx(ctx context.Context, fn func(pgx.Tx) error) error {

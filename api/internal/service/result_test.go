@@ -38,7 +38,7 @@ func newResultHarness(t *testing.T) resultHarness {
 func (h resultHarness) question(t *testing.T) model.Question {
 	t.Helper()
 	in := h.q.pgInput(h.tenant())
-	in.Explanation = secretExplanation
+	in.Explanation = d(secretExplanation)
 	return h.q.create(t, h.tenant(), in)
 }
 
@@ -232,7 +232,7 @@ func TestResultReviewIsWithheldUntilTheReleaseTime(t *testing.T) {
 		t.Fatalf("review after release: %v", err)
 	}
 	item := after.Subtests[0].Questions[0]
-	if item.Question.Explanation != secretExplanation || len(item.Question.Correct) != 1 || item.Question.Correct[0] != optID(t, q, "4") {
+	if model.DocText(item.Question.Explanation) != secretExplanation || len(item.Question.Correct) != 1 || item.Question.Correct[0] != optID(t, q, "4") {
 		t.Errorf("review item = %+v, want the explanation and the key after release", item.Question)
 	}
 	if item.Correct || len(item.Answer) != 1 || item.Answer[0] != optID(t, q, "3") {
@@ -311,9 +311,9 @@ func TestResultIRTCountsDistinctStudentsPerQuestionVersion(t *testing.T) {
 
 	// A new version of the same question starts again from zero.
 	updated, err := h.q.update(t, h.tenant(), q.ID, QuestionInput{
-		ProgramID: q.ProgramID, SubjectID: q.SubjectID, Type: q.Type, Content: "Hasil dari 3 + 3 adalah ...",
-		Difficulty: q.Difficulty, Explanation: secretExplanation, BaseVersion: q.Version,
-		Options: []QuestionOptionInput{{ID: "a", Label: "6"}, {ID: "b", Label: "7"}}, Correct: []string{"a"},
+		ProgramID: q.ProgramID, SubjectID: q.SubjectID, Type: q.Type, Content: d("Hasil dari 3 + 3 adalah ..."),
+		Difficulty: q.Difficulty, Explanation: d(secretExplanation), BaseVersion: q.Version,
+		Options: []QuestionOptionInput{{ID: "a", Label: d("6")}, {ID: "b", Label: d("7")}}, Correct: []string{"a"},
 	})
 	if err != nil {
 		t.Fatalf("update question: %v", err)

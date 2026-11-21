@@ -44,14 +44,14 @@ const (
 )
 
 type assignmentResponse struct {
-	QuestionID uuid.UUID `json:"question_id"`
-	VersionID  uuid.UUID `json:"version_id"`
-	Version    int       `json:"version"`
-	Number     int64     `json:"number"`
-	Type       string    `json:"type"`
-	Difficulty string    `json:"difficulty"`
-	Content    string    `json:"content"`
-	Position   int       `json:"position"`
+	QuestionID uuid.UUID     `json:"question_id"`
+	VersionID  uuid.UUID     `json:"version_id"`
+	Version    int           `json:"version"`
+	Number     int64         `json:"number"`
+	Type       string        `json:"type"`
+	Difficulty string        `json:"difficulty"`
+	Content    model.RichDoc `json:"content"`
+	Position   int           `json:"position"`
 }
 
 type subtestResponse struct {
@@ -160,12 +160,12 @@ func (h *Handler) GetTryout(c echo.Context) error {
 }
 
 type printOptionResponse struct {
-	Label string `json:"label"`
+	Label model.RichDoc `json:"label"`
 }
 
 type printQuestionResponse struct {
 	Type    string                `json:"type"`
-	Content string                `json:"content"`
+	Content model.RichDoc         `json:"content"`
 	Options []printOptionResponse `json:"options"`
 }
 

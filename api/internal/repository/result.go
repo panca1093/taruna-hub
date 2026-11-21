@@ -140,7 +140,8 @@ func (r *ResultRepository) ReviewQuestions(ctx context.Context, q dbtx, tenantID
 	}
 	rows, err := q.Query(ctx, `
 		SELECT sq.subtest_id, sq.position, sq.question_id, sq.question_version_id, v.type, v.difficulty, v.content,
-		       v.option_weighted, v.case_sensitive, v.options, v.correct, sq.option_order, v.explanation
+		       v.option_weighted, v.case_sensitive, v.options, v.correct, sq.option_order, v.explanation,
+		       v.content_doc, v.explanation_doc
 		  FROM tryout_session_questions sq
 		  JOIN question_versions v ON v.id = sq.question_version_id AND v.tenant_id = sq.tenant_id
 		  JOIN tryout_session_parts p ON p.session_id = sq.session_id AND p.subtest_id = sq.subtest_id
@@ -154,15 +155,23 @@ func (r *ResultRepository) ReviewQuestions(ctx context.Context, q dbtx, tenantID
 	for rows.Next() {
 		var rq model.ReviewQuestion
 		rq.SessionID = sessionID
-		var options, correct, order []byte
+		var options, correct, order, contentDoc, explanationDoc []byte
+		var content, explanation string
 		if err := rows.Scan(&rq.SubtestID, &rq.Position, &rq.QuestionID, &rq.VersionID, &rq.Type, &rq.Difficulty,
-			&rq.Content, &rq.OptionWeighted, &rq.CaseSensitive, &options, &correct, &order, &rq.Explanation); err != nil {
+			&content, &rq.OptionWeighted, &rq.CaseSensitive, &options, &correct, &order, &explanation,
+			&contentDoc, &explanationDoc); err != nil {
 			return nil, fmt.Errorf("scan review question: %w", err)
 		}
-		var stored []model.QuestionOption
 		var ids []string
-		if err := json.Unmarshal(options, &stored); err != nil {
+		stored, err := decodeOptions(options)
+		if err != nil {
 			return nil, fmt.Errorf("decode review options: %w", err)
+		}
+		if rq.Content, err = model.DocFromColumn(contentDoc, content); err != nil {
+			return nil, fmt.Errorf("decode review content: %w", err)
+		}
+		if rq.Explanation, err = model.DocFromColumn(explanationDoc, explanation); err != nil {
+			return nil, fmt.Errorf("decode review explanation: %w", err)
 		}
 		if err := json.Unmarshal(correct, &rq.Correct); err != nil {
 			return nil, fmt.Errorf("decode review correct: %w", err)

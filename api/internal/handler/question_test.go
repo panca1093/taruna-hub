@@ -61,12 +61,21 @@ func questionCurriculum(t *testing.T, e http.Handler, host, token string) progra
 	return decodeProgram(t, rec)
 }
 
+// d is the document a plain string stands for in fixtures.
+func d(text string) model.RichDoc { return model.DocFromLegacyText(text) }
+
+func sameDocJSON(a, b model.RichDoc) bool {
+	left, _ := json.Marshal(a)
+	right, _ := json.Marshal(b)
+	return string(left) == string(right)
+}
+
 func pgQuestionBody(program programResponse) map[string]any {
 	return map[string]any{
 		"program_id": program.ID.String(), "subject_id": program.Subjects[0].ID.String(),
-		"type": "pg", "content": "Hasil dari 2 + 2 adalah ...", "difficulty": "easy",
-		"explanation": "2 + 2 = 4.",
-		"options":     []any{map[string]any{"id": "a", "label": "3"}, map[string]any{"id": "b", "label": "4"}},
+		"type": "pg", "content": d("Hasil dari 2 + 2 adalah ..."), "difficulty": "easy",
+		"explanation": d("2 + 2 = 4."),
+		"options":     []any{map[string]any{"id": "a", "label": d("3")}, map[string]any{"id": "b", "label": d("4")}},
 		"correct":     []string{"b"},
 	}
 }
@@ -130,7 +139,7 @@ func TestQuestionsIsolatedBetweenTenants(t *testing.T) {
 	}
 
 	still := decodeQuestion(t, getWithToken(e, hostA, path, adminA))
-	if still.ID != mine.ID || still.Content != mine.Content || still.Version != mine.Version {
+	if still.ID != mine.ID || model.DocText(still.Content) != model.DocText(mine.Content) || still.Version != mine.Version {
 		t.Errorf("tenant A question = %+v, want the original untouched", still)
 	}
 }
@@ -204,7 +213,7 @@ func TestQuestionResponsesAreNoStore(t *testing.T) {
 	doomed := decodeQuestion(t, sendQuestionJSON(e, http.MethodPost, host, "/api/v1/questions", pgQuestionBody(program), admin))
 
 	invalid := pgQuestionBody(program)
-	invalid["content"] = ""
+	invalid["content"] = model.EmptyDoc()
 
 	cases := []struct {
 		name string
@@ -238,7 +247,7 @@ func TestQuestionErrorEnvelope(t *testing.T) {
 
 	stale := updateBodyOf(created)
 	stale["base_version"] = created.Version + 3
-	stale["content"] = "Isi yang lebih baru."
+	stale["content"] = d("Isi yang lebih baru.")
 	conflict := sendQuestionJSON(e, http.MethodPut, host, path, stale, admin)
 	wantError(t, "stale base_version", conflict, http.StatusConflict, httpx.CodeConflict)
 	if msg := errorEnvelope(t, conflict).Error.Message; !strings.Contains(msg, "muat ulang") {
@@ -247,7 +256,7 @@ func TestQuestionErrorEnvelope(t *testing.T) {
 
 	duplicateLabels := pgQuestionBody(program)
 	duplicateLabels["options"] = []any{
-		map[string]any{"id": "a", "label": "Empat"}, map[string]any{"id": "b", "label": " empat "},
+		map[string]any{"id": "a", "label": d("Empat")}, map[string]any{"id": "b", "label": d(" empat ")},
 	}
 	wantError(t, "duplicate option labels",
 		sendQuestionJSON(e, http.MethodPost, host, "/api/v1/questions", duplicateLabels, admin),
@@ -260,15 +269,48 @@ func TestQuestionErrorEnvelope(t *testing.T) {
 		http.StatusUnprocessableEntity, httpx.CodeValidation, "correct")
 
 	emptyContent := pgQuestionBody(program)
-	emptyContent["content"] = "   "
+	emptyContent["content"] = d("   ")
 	wantError(t, "empty content",
 		sendQuestionJSON(e, http.MethodPost, host, "/api/v1/questions", emptyContent, admin),
 		http.StatusUnprocessableEntity, httpx.CodeValidation, "content")
 
 	dataImage := pgQuestionBody(program)
-	dataImage["content"] = "Lihat ![x](data:image/png;base64,AAAA)"
+	dataImage["content"] = map[string]any{"type": "doc", "content": []any{
+		map[string]any{"type": "image", "attrs": map[string]any{"src": "data:image/png;base64,AAAA"}},
+	}}
 	wantError(t, "data image",
 		sendQuestionJSON(e, http.MethodPost, host, "/api/v1/questions", dataImage, admin),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "content")
+
+	notADoc := pgQuestionBody(program)
+	notADoc["content"] = "teks biasa"
+	wantError(t, "content that is not a document",
+		sendQuestionJSON(e, http.MethodPost, host, "/api/v1/questions", notADoc, admin),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "content")
+
+	scriptNode := pgQuestionBody(program)
+	scriptNode["explanation"] = map[string]any{"type": "doc", "content": []any{
+		map[string]any{"type": "script", "content": []any{map[string]any{"type": "text", "text": "alert(1)"}}},
+	}}
+	wantError(t, "script-like node",
+		sendQuestionJSON(e, http.MethodPost, host, "/api/v1/questions", scriptNode, admin),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "explanation")
+
+	badOption := pgQuestionBody(program)
+	badOption["options"] = []any{
+		map[string]any{"id": "a", "label": d("3")},
+		map[string]any{"id": "b", "label": map[string]any{"type": "doc", "content": []any{map[string]any{"type": "iframe"}}}},
+	}
+	wantError(t, "unknown node in an option",
+		sendQuestionJSON(e, http.MethodPost, host, "/api/v1/questions", badOption, admin),
+		http.StatusUnprocessableEntity, httpx.CodeValidation, "options[1].label")
+
+	foreignAsset := pgQuestionBody(program)
+	foreignAsset["content"] = map[string]any{"type": "doc", "content": []any{
+		map[string]any{"type": "image", "attrs": map[string]any{"asset_id": uuid.NewString()}},
+	}}
+	wantError(t, "image of an unknown asset",
+		sendQuestionJSON(e, http.MethodPost, host, "/api/v1/questions", foreignAsset, admin),
 		http.StatusUnprocessableEntity, httpx.CodeValidation, "content")
 
 	unknownField := pgQuestionBody(program)

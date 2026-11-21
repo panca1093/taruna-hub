@@ -36,22 +36,22 @@ type resultDetailResponse struct {
 }
 
 type reviewOptionResponse struct {
-	ID     string   `json:"id"`
-	Label  string   `json:"label"`
-	Points *float64 `json:"points"`
+	ID     string        `json:"id"`
+	Label  model.RichDoc `json:"label"`
+	Points *float64      `json:"points"`
 }
 
 type reviewQuestionResponse struct {
 	ID             uuid.UUID              `json:"id"`
 	Position       int                    `json:"position"`
 	Type           string                 `json:"type"`
-	Content        string                 `json:"content"`
+	Content        model.RichDoc          `json:"content"`
 	Options        []reviewOptionResponse `json:"options"`
 	OptionWeighted bool                   `json:"option_weighted"`
 	Answer         []string               `json:"answer"`
 	Correct        []string               `json:"correct"`
 	IsCorrect      bool                   `json:"is_correct"`
-	Explanation    string                 `json:"explanation"`
+	Explanation    model.RichDoc          `json:"explanation"`
 }
 
 type reviewSubtestResponse struct {
@@ -184,7 +184,7 @@ func (h *Handler) TryoutSessionReview(c echo.Context) error {
 				Answer: item.Answer, Correct: []string{}, IsCorrect: item.Correct, Explanation: q.Explanation,
 			}
 			for _, o := range q.Options {
-				ro := reviewOptionResponse{ID: o.ID, Label: o.Label}
+				ro := reviewOptionResponse{ID: o.ID, Label: o.Doc}
 				if q.OptionWeighted {
 					points := 1.0
 					if o.Points != nil {

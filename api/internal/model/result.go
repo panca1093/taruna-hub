@@ -82,5 +82,5 @@ type StaffAttempt struct {
 // leave the service after the tryout's release time.
 type ReviewQuestion struct {
 	AttemptQuestion
-	Explanation string
+	Explanation RichDoc
 }

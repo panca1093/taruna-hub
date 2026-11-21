@@ -10,10 +10,11 @@ import { UnderlineTabs, tabId, tabPanelId } from "@/components/filter-pills";
 import { Icon } from "@/components/icon";
 import { NoteBox, Panel } from "@/components/page-blocks";
 import { StatusChip } from "@/components/status-badge";
-import { LatexText } from "@/components/latex";
+import { RichDoc } from "@/components/rich-doc";
 import { LinkButton } from "@/components/ui/link-button";
 import { api, ApiError, type ReviewQuestion, type StudentTryout, type TryoutResultDetail, type TryoutReview } from "@/lib/api/client";
 import { useLocale } from "@/lib/i18n/locale-context";
+import { docFromText, isDocEmpty } from "@/lib/rich-doc";
 import { useTryoutReviewT } from "@/lib/i18n/dict/tryout-review";
 
 type LoadState = "loading" | "ready" | "failed" | "unavailable" | "notReady" | "held";
@@ -189,16 +190,16 @@ function ReviewItem({
   t: ReturnType<typeof useTryoutReviewT>;
 }) {
   const blank = q.answer.length === 0;
-  const optionLabel = (value: string) => q.options.find((o) => o.id === value)?.label ?? value;
+  const optionLabel = (value: string) => q.options.find((o) => o.id === value)?.label ?? docFromText(value);
   const points = q.option_weighted && !blank ? q.options.find((o) => o.id === q.answer[0])?.points : null;
   const tone = q.is_correct ? "success" : blank ? "neutral" : "accent";
 
   const list = (values: string[]) =>
     values.map((value, i) => (
-      <span key={value}>
+      <div key={value} className="inline">
         {i > 0 && ", "}
-        <LatexText text={optionLabel(value)} />
-      </span>
+        <RichDoc doc={optionLabel(value)} className="inline-block align-top" />
+      </div>
     ));
 
   return (
@@ -206,20 +207,20 @@ function ReviewItem({
       <StatusChip tone={tone} className="mb-3">
         {subtestName} · {q.is_correct ? t.statusCorrect : blank ? t.statusBlank : t.statusWrong}
       </StatusChip>
-      <div className="text-small font-medium leading-relaxed">
-        <span>{index + 1}. </span>
-        <LatexText text={q.content} />
+      <div className="flex gap-1 text-small font-medium leading-relaxed">
+        <span>{index + 1}.</span>
+        <RichDoc doc={q.content} className="min-w-0 flex-1" />
       </div>
-      <p className="mt-3 text-caption leading-loose text-muted">
-        {t.yourAnswerPrefix} <strong className="font-semibold text-foreground">{blank ? t.emptyAnswer : list(q.answer)}</strong>
+      <div className="mt-3 text-caption leading-loose text-muted">
+        {t.yourAnswerPrefix} <div className="inline font-semibold text-foreground">{blank ? t.emptyAnswer : list(q.answer)}</div>
         {points != null && <span className="ml-1">{t.pointsSuffix(points)}</span>}
-      </p>
+      </div>
       {!q.option_weighted && q.correct.length > 0 && (
-        <p className="text-caption leading-loose text-muted">
-          {t.correctAnswerPrefix} <strong className="font-semibold text-foreground">{list(q.correct)}</strong>
-        </p>
+        <div className="text-caption leading-loose text-muted">
+          {t.correctAnswerPrefix} <div className="inline font-semibold text-foreground">{list(q.correct)}</div>
+        </div>
       )}
-      <NoteBox className="mt-4">{q.explanation ? <LatexText text={q.explanation} /> : t.noExplanation}</NoteBox>
+      <NoteBox className="mt-4">{!isDocEmpty(q.explanation) ? <RichDoc doc={q.explanation!} /> : t.noExplanation}</NoteBox>
     </article>
   );
 }

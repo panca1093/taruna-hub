@@ -128,6 +128,10 @@ func (s *ResultService) Review(ctx context.Context, scope HostScope, principal m
 	if err != nil {
 		return Review{}, runtimeError(err)
 	}
+	for i := range questions {
+		resolveAttempt(&questions[i].AttemptQuestion)
+		questions[i].Explanation = resolveDoc(questions[i].Explanation)
+	}
 	saved, err := s.rtRepo.Answers(ctx, s.db, a.TenantID, a.ID, nil)
 	if err != nil {
 		return Review{}, runtimeError(err)

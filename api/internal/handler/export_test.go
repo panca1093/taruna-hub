@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,6 +25,9 @@ type exportStubStore struct{}
 
 func (exportStubStore) Put(context.Context, string, []byte, string) error { return nil }
 func (exportStubStore) Delete(context.Context, string) error              { return nil }
+func (exportStubStore) Get(context.Context, string) (io.ReadCloser, error) {
+	return nil, errors.New("not stored")
+}
 func (exportStubStore) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
 	return "https://storage.test/" + key, nil
 }

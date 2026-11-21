@@ -377,7 +377,7 @@ func (r *TryoutRepository) attachSubtests(ctx context.Context, q queryer, tenant
 	// The version row is joined by id, never by the question's current version: that is the freeze.
 	rows, err = q.Query(ctx, `
 		SELECT tq.subtest_id, tq.position, tq.question_id, tq.question_version_id,
-		       v.version, q.seq, v.type, v.difficulty, v.content
+		       v.version, q.seq, v.type, v.difficulty, v.content, v.content_doc
 		  FROM tryout_questions tq
 		  JOIN question_versions v ON v.id = tq.question_version_id AND v.tenant_id = tq.tenant_id
 		  JOIN questions q ON q.id = tq.question_id AND q.tenant_id = tq.tenant_id
@@ -390,10 +390,16 @@ func (r *TryoutRepository) attachSubtests(ctx context.Context, q queryer, tenant
 	for rows.Next() {
 		var subtestID uuid.UUID
 		var assignment model.Assignment
+		var content string
+		var contentDoc []byte
 		if err := rows.Scan(&subtestID, &assignment.Position, &assignment.QuestionID, &assignment.VersionID,
 			&assignment.Version, &assignment.Number, &assignment.Type, &assignment.Difficulty,
-			&assignment.Content); err != nil {
+			&content, &contentDoc); err != nil {
 			return fmt.Errorf("scan assignment: %w", err)
+		}
+		var err error
+		if assignment.Content, err = model.DocFromColumn(contentDoc, content); err != nil {
+			return fmt.Errorf("decode assignment content: %w", err)
 		}
 		if at, ok := index[subtestID]; ok {
 			tryout.Subtests[at].Questions = append(tryout.Subtests[at].Questions, assignment)

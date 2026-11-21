@@ -366,8 +366,8 @@ func TestImportKeepsFormulasAsText(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get imported question: %v", err)
 		}
-		if question.Content != want[at+1] {
-			t.Errorf("row %d content = %q, want the literal %q", at+1, question.Content, want[at+1])
+		if got := model.DocText(question.Content); got != want[at+1] {
+			t.Errorf("row %d content = %q, want the literal %q", at+1, got, want[at+1])
 		}
 	}
 }
@@ -435,8 +435,8 @@ func TestImportHtmlIsStoredVerbatim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if question.Content != content {
-		t.Errorf("content = %q, want the verbatim %q", question.Content, content)
+	if got := model.DocText(question.Content); got != content {
+		t.Errorf("content = %q, want the verbatim %q", got, content)
 	}
 }
 
@@ -487,7 +487,7 @@ func TestCommitCreatesExactlySelectedRows(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		contents[question.Content] = true
+		contents[model.DocText(question.Content)] = true
 	}
 	if !contents["Satu"] || !contents["Tiga"] || contents["Dua"] {
 		t.Errorf("stored contents = %v, want rows 1 and 3 only", contents)
@@ -673,9 +673,9 @@ func TestImportedQuestionsAreFullQuestions(t *testing.T) {
 	// An imported question is a normal question: the editor's PUT works on it.
 	updated, err := h.update(t, h.a, pg.ID, QuestionInput{
 		ProgramID: pg.ProgramID, SubjectID: pg.SubjectID, ChapterID: pg.ChapterID,
-		Type: pg.Type, Content: "Hasil dari 3 + 3 adalah ...", Difficulty: pg.Difficulty,
+		Type: pg.Type, Content: d("Hasil dari 3 + 3 adalah ..."), Difficulty: pg.Difficulty,
 		BaseVersion: pg.Version,
-		Options:     []QuestionOptionInput{{ID: pg.Options[0].ID, Label: "6"}, {ID: pg.Options[1].ID, Label: "7"}},
+		Options:     []QuestionOptionInput{{ID: pg.Options[0].ID, Label: d("6")}, {ID: pg.Options[1].ID, Label: d("7")}},
 		Correct:     []string{pg.Options[0].ID},
 	})
 	if err != nil {

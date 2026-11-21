@@ -109,12 +109,12 @@ func (h runtimeHarness) fixture(t *testing.T, mutate func(*TryoutInput)) rtFixtu
 	t.Helper()
 	tenant := h.tenant()
 	base := h.q.pgInput(tenant)
-	base.Options = []QuestionOptionInput{{ID: "a", Label: "3"}, {ID: "b", Label: "4"}}
+	base.Options = []QuestionOptionInput{{ID: "a", Label: d("3")}, {ID: "b", Label: d("4")}}
 	base.Correct = []string{"b"}
 
 	multi := base
 	multi.Type, multi.Difficulty = model.QuestionPGMulti, model.DifficultyMedium
-	multi.Options = []QuestionOptionInput{{ID: "a", Label: "A"}, {ID: "b", Label: "B"}, {ID: "c", Label: "C"}}
+	multi.Options = []QuestionOptionInput{{ID: "a", Label: d("A")}, {ID: "b", Label: d("B")}, {ID: "c", Label: d("C")}}
 	multi.Correct = []string{"a", "c"}
 
 	isian := base
@@ -128,7 +128,7 @@ func (h runtimeHarness) fixture(t *testing.T, mutate func(*TryoutInput)) rtFixtu
 	weighted := base
 	weighted.Difficulty, weighted.OptionWeighted = model.DifficultyMedium, true
 	weighted.Options = []QuestionOptionInput{
-		{ID: "a", Label: "A", Points: pts(0.5)}, {ID: "b", Label: "B", Points: pts(3)}, {ID: "c", Label: "C", Points: pts(1)},
+		{ID: "a", Label: d("A"), Points: pts(0.5)}, {ID: "b", Label: d("B"), Points: pts(3)}, {ID: "c", Label: d("C"), Points: pts(1)},
 	}
 	weighted.Correct = nil
 

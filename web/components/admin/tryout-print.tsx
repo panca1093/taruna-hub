@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { LatexText } from "@/components/latex";
+import { RichDoc } from "@/components/rich-doc";
+import { api } from "@/lib/api/client";
 import { inlineImages } from "@/lib/capture-pdf";
+import { docFromText, type RichDoc as RichDocValue } from "@/lib/rich-doc";
 
 export interface PrintQuestionData {
   type: string;
-  content: string;
-  options: { label: string }[];
+  content: RichDocValue;
+  options: { label: RichDocValue }[];
 }
 
 export interface PrintSubtestData {
@@ -114,14 +116,14 @@ function BlockView({ block, labels }: { block: Block; labels: TryoutPrintLabels 
   const { question } = block;
   const options =
     question.type === "benar_salah" && question.options.length === 0
-      ? [{ label: labels.trueLabel }, { label: labels.falseLabel }]
+      ? [{ label: docFromText(labels.trueLabel) }, { label: docFromText(labels.falseLabel) }]
       : question.options;
   return (
     <div className="flex gap-3 pb-5 text-small text-foreground">
       <span className="w-7 shrink-0 text-right font-medium">{block.number}.</span>
       <div className="min-w-0 flex-1 space-y-2">
         <div>
-          <LatexText text={question.content} />
+          <RichDoc doc={question.content} />
         </div>
         {question.type === "isian" ? (
           <p className="border-b border-foreground pt-4 text-small text-muted">{labels.answerLine}</p>
@@ -130,9 +132,7 @@ function BlockView({ block, labels }: { block: Block; labels: TryoutPrintLabels 
             {options.map((option, i) => (
               <li key={i} className="flex gap-2">
                 <span className="w-5 shrink-0">{LETTERS[i] ?? i + 1}.</span>
-                <span className="min-w-0 flex-1">
-                  <LatexText text={option.label} />
-                </span>
+                <RichDoc doc={option.label} className="min-w-0 flex-1" />
               </li>
             ))}
           </ol>
@@ -140,6 +140,16 @@ function BlockView({ block, labels }: { block: Block; labels: TryoutPrintLabels 
       </div>
     </div>
   );
+}
+
+const assetBytes = (img: HTMLImageElement) => (img.dataset.assetId && !img.src.startsWith("data:") ? api.assets.content(img.dataset.assetId) : null);
+
+/** Asset images resolve their link after mount; wait until each has loaded or failed (ten seconds at most). */
+async function richImagesSettled(root: HTMLElement) {
+  const deadline = Date.now() + 10_000;
+  while (root.querySelector("[data-rich-image]:not([data-loaded])") && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }
 
 /**
@@ -174,7 +184,8 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
       await document.fonts.ready;
       const container = measureRef.current;
       if (!container) return;
-      await inlineImages(container, imageFailedRef.current);
+      await richImagesSettled(container);
+      await inlineImages(container, imageFailedRef.current, assetBytes);
       if (cancelled) return;
       const heights = Array.from(container.querySelectorAll<HTMLElement>("[data-block]")).map((el) => el.getBoundingClientRect().height);
       setPages(paginate(heights, keep, BODY_H));
@@ -188,9 +199,11 @@ export function TryoutPrint({ title, tenantName, date, subtests, labels, onLaidO
     const root = rootRef.current;
     if (!pages || !root) return;
     let cancelled = false;
-    void inlineImages(root, imageFailedRef.current).then(() => {
-      if (!cancelled) onLaidOutRef.current(Array.from(root.querySelectorAll<HTMLElement>("[data-print-page]")));
-    });
+    void richImagesSettled(root)
+      .then(() => inlineImages(root, imageFailedRef.current, assetBytes))
+      .then(() => {
+        if (!cancelled) onLaidOutRef.current(Array.from(root.querySelectorAll<HTMLElement>("[data-print-page]")));
+      });
     return () => {
       cancelled = true;
     };

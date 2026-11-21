@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"time"
 
@@ -76,6 +77,18 @@ func (s *Storage) Put(ctx context.Context, key string, data []byte, contentType 
 	_, err := s.client.PutObject(ctx, s.bucket, key, bytes.NewReader(data), int64(len(data)),
 		minio.PutObjectOptions{ContentType: contentType})
 	return err
+}
+
+func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	object, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := object.Stat(); err != nil {
+		_ = object.Close()
+		return nil, err
+	}
+	return object, nil
 }
 
 func (s *Storage) Delete(ctx context.Context, key string) error {

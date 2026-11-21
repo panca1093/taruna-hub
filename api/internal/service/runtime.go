@@ -642,6 +642,9 @@ func (s *RuntimeService) Subtest(ctx context.Context, scope HostScope, principal
 	if err != nil {
 		return SubtestView{}, runtimeError(err)
 	}
+	for i := range questions {
+		resolveAttempt(&questions[i])
+	}
 	saved, err := s.repo.Answers(ctx, s.db, tenantID, sessionID, &subtestID)
 	if err != nil {
 		return SubtestView{}, runtimeError(err)

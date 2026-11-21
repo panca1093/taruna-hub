@@ -115,21 +115,37 @@ async function loadedOk(img: HTMLImageElement) {
   return img.complete && img.naturalWidth > 0;
 }
 
+// html-to-image fetches every <img> src while cloning and rejects the whole capture when one fails, so a replaced image gets a src that never needs fetching.
+const BLANK_PIXEL = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+
+const withTimeout = <T>(promise: Promise<T>) =>
+  Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("image timed out")), IMAGE_TIMEOUT_MS))]);
+
 /**
- * Makes every image under `root` self-contained before a capture: loaded images become `data:` URLs, and one that
- * fails to load or fetch within ten seconds is hidden behind a bordered box with its alt text (or `fallback`), so it never prints as a gap.
+ * Makes every image under `root` self-contained before a capture: images become `data:` URLs, and one that fails
+ * (to load, to fetch, or in `resolve`, which may supply the bytes itself) is hidden behind a bordered box with its
+ * alt text (or `fallback`), so it never prints as a gap. It never rejects.
  */
-export async function inlineImages(root: HTMLElement, fallback = "") {
+export async function inlineImages(root: HTMLElement, fallback = "", resolve?: (img: HTMLImageElement) => Promise<Blob> | null) {
   await Promise.all(
     Array.from(root.querySelectorAll("img")).map(async (img) => {
       try {
-        if (!(await loadedOk(img))) throw new Error("image failed to load");
-        const src = img.currentSrc || img.src;
-        if (src.startsWith("data:")) return;
-        const response = await fetch(src, { signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS) });
-        if (!response.ok) throw new Error(`image fetch ${response.status}`);
+        const supplied = resolve?.(img) ?? null;
+        let blob: Blob;
+        if (supplied) {
+          blob = await withTimeout(supplied);
+        } else {
+          if (!(await loadedOk(img))) throw new Error("image failed to load");
+          const src = img.currentSrc || img.src;
+          if (src.startsWith("data:")) return;
+          const response = await fetch(src, { signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS) });
+          if (!response.ok) throw new Error(`image fetch ${response.status}`);
+          blob = await response.blob();
+        }
+        const dataUrl = await readAsDataUrl(blob);
+        img.dataset.inlined = "1";
         img.removeAttribute("srcset");
-        img.src = await readAsDataUrl(await response.blob());
+        img.src = dataUrl;
         await img.decode();
       } catch {
         const box = document.createElement("span");
@@ -137,6 +153,9 @@ export async function inlineImages(root: HTMLElement, fallback = "") {
         box.textContent = img.alt || fallback;
         // The image stays in the tree, hidden, because React still owns that node.
         img.hidden = true;
+        img.dataset.inlined = "1";
+        img.removeAttribute("srcset");
+        img.src = BLANK_PIXEL;
         img.after(box);
       }
     }),

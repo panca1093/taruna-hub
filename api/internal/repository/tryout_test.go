@@ -62,7 +62,7 @@ func newTryoutFixture(t *testing.T) tryoutFixture {
 
 	f.first = questions.create(t, f.tenant.ID, f.author.ID, samplePG(f.program.ID, f.subject.ID))
 	second := samplePG(f.program.ID, f.subject.ID)
-	second.Content = "Hasil dari 3 + 3 adalah ..."
+	second.Content = d("Hasil dari 3 + 3 adalah ...")
 	f.second = questions.create(t, f.tenant.ID, f.author.ID, second)
 	f.otherQ = questions.create(t, f.other.ID, f.otherBy.ID, samplePG(f.otherProgram.ID, questions.otherSubject.ID))
 	return f
@@ -281,7 +281,7 @@ func TestPositionsReorderWithinOneTransaction(t *testing.T) {
 func (f tryoutFixture) questionOrCreate(t *testing.T) model.Question {
 	t.Helper()
 	question := samplePG(f.program.ID, f.subject.ID)
-	question.Content = "Hasil dari 4 + 4 adalah ..."
+	question.Content = d("Hasil dari 4 + 4 adalah ...")
 	created, err := NewQuestionRepository(f.pool).Create(context.Background(), f.tenant.ID, f.author.ID, question)
 	if err != nil {
 		t.Fatalf("create question: %v", err)

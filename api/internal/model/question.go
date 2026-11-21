@@ -22,9 +22,12 @@ const (
 )
 
 // Points exist only in weighted mode; an option without points counts as 1 at scoring (P16).
+// Label is the plain-text projection of Doc; the stored JSON carries both, and a row written before documents
+// existed has no doc, which the repository fills from Label.
 type QuestionOption struct {
 	ID     string   `json:"id"`
 	Label  string   `json:"label"`
+	Doc    RichDoc  `json:"doc"`
 	Points *float64 `json:"points,omitempty"`
 }
 
@@ -38,9 +41,9 @@ type Question struct {
 	SubjectID      uuid.UUID
 	ChapterID      *uuid.UUID
 	Type           string
-	Content        string
+	Content        RichDoc
 	Difficulty     string
-	Explanation    string
+	Explanation    RichDoc
 	OptionWeighted bool
 	CaseSensitive  bool
 	Options        []QuestionOption

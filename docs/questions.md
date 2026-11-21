@@ -8,7 +8,8 @@ curriculum of P05. A Student never reaches the bank at all: every answer key sta
                          seq    GENERATED ALWAYS AS IDENTITY UNIQUE   -- the number the list shows
     question_versions  id, question_id, tenant_id, version, program_id, subject_id, chapter_id,
                        type, content, difficulty, explanation, option_weighted, case_sensitive,
-                       options jsonb, correct jsonb, created_by, created_at
+                       options jsonb, correct jsonb, created_by, created_at,
+                       content_doc jsonb, explanation_doc jsonb      -- 000030; a `doc` key per option
                          UNIQUE (question_id, version)
 
 The wire form is `Question {id, number, version, version_id, program_id, subject_id, chapter_id,
@@ -53,11 +54,74 @@ always the server's `benar`/`salah`, and sending different ones answers `422`.
 
 ## Rules, and where they live
 
-`content` is trimmed to 1–20000 characters and `explanation` to at most 20000; both are stored
-verbatim as text, because markdown and LaTeX render in the browser and no HTML is ever interpreted.
-A markdown image whose URL starts with `data:` or `javascript:` is refused ("Gambar belum didukung"):
-uploads and assets are deferred (P06), so the editor hides the image button instead of offering
-something the server cannot store.
+`content`, `explanation` and every option `label` are rich documents (`RichDoc`: Tiptap/ProseMirror JSON,
+see `api/internal/model/richdoc.go`), never HTML. `internal/service/richdoc.go` checks them against an
+allow-list (paragraph, lists, table, `shape`, `image`; inline text with bold/italic/underline, `hardBreak`,
+`math`), drops every attribute it does not know, and stores the normalised document. Limits: 2000 nodes,
+depth 12, 100 KB; a table is at most 30 x 12 cells. `content` needs a visible element and at most 20000
+characters of text, an option label the same with 2000, the explanation may be the empty document
+`{"type":"doc","content":[]}`. A bad document answers `422` on its field with one of `doc_invalid`,
+`doc_node`, `doc_mark`, `doc_attr`, `doc_too_large` or `doc_asset`.
+
+Storage: `question_versions.content_doc` and `explanation_doc` (jsonb) and a `doc` key on every `options`
+element hold the documents. The text columns `content`, `explanation` and the option `label` hold the **legacy
+text projection** `model.DocLegacyText`, written on every save: formulas as `$latex$`, `**bold**`, `*italic*`,
+bullet items as `- item` lines, ordered items as `1. item` lines, a legacy URL image as an `![alt](src)` line and
+a table row as its cells joined by ` | `. Shapes and uploaded images have no text form and are omitted;
+underline is dropped. The `q` search runs `ILIKE` on `content`, so words in a table cell, next to a formula or
+in a list are found. Limits, emptiness and the duplicate-label check use the separate plain `model.DocText`
+(formulas as bare LaTeX, no markers). The columns are also the rollback path, and what that path keeps is stated
+plainly: after `000030` down, text, formulas, bold/italic and simple lists survive as the old renderer reads
+them, while **tables are flattened to ` | ` lines, and shapes and uploaded images are lost** (a down migration
+cannot bring them back, and a question that depended on them reads differently). Underline is lost too.
+
+Reads, layering and legacy rows. The repository only selects and updates raw columns: a row whose document
+column is NULL comes back as `model.RichDoc{Legacy: text}` with no `Type` (an option without `doc` the same, from its
+label). The **service** converts, in one place (`resolveDoc` in `service/richdoc.go`), for every reader: question
+list/get/create/update, the tryout assignment read (`TryoutService.Get/Create/Update/Publish/Unpublish`), the print
+read, the student runtime (`RuntimeService.Subtest`) and the review (`ResultService.Review`). The conversion is
+`model.DocFromLegacyText` followed by the same `normalizeDocWith` as client input (trimmed LaTeX, an alt cut to
+200 characters, trailing empty paragraphs dropped, equal neighbouring text merged), so re-saving a legacy question
+the editor did not change passes validation and creates no version. Text that cannot be made valid (more than 2000
+nodes, say) is shown as converted and refused with the usual reason when saved.
+
+What the conversion guarantees is, with the exceptions listed below, the behaviour of the old client renderer (`web/components/latex.tsx` on `main`
+before the rich-document change), and `model/richdoc_test.go` pins it case by case: a line is split on `$...$` first
+and only the pieces between formulas get `**bold**` / `*italic*` (so `*Jika $x=2$ maka*` keeps its stars); a run of
+two or more consecutive list lines is one list of the first line's kind even when bullet and numbered lines mix, and a
+lone list line stays a literal paragraph; `\r\n` and `\r` are line breaks and never reach a text node; a formula whose
+LaTeX is blank (`$ $`) stays literal text.
+
+Known differences from the old renderer:
+
+- An old `![alt](data:...)` line rendered as an image, but the document model refuses `data:` URLs, so it reads as
+  literal text.
+- Text with Windows line endings (`\r\n`) now forms lists and images, where the old renderer showed those lines
+  literally.
+- A lone carriage return (`\r`) is a paragraph break; the old renderer showed a space.
+- A single list-looking line followed by text is its own paragraph.
+- A bare `$$` shows literally.
+
+At API startup `QuestionService.BackfillDocs` writes the converted documents into rows that still have none. It takes
+`pg_try_advisory_lock` on a dedicated connection: a second replica that cannot get the lock logs it, skips the
+backfill and serves (reads fall back), and the lock is always released on the same connection (a connection whose
+unlock fails is closed). Rows are read in keyset order (`content_doc IS NULL AND id > last ORDER BY id`, batches of
+500, one transaction per batch), so a row the converter refuses (for example `options` that is not an array) is logged
+with its version id, left as text and never read twice in a run. The scan walks the primary key once per start; there
+is no partial index because a start-up pass over a table of thousands of versions is cheap and the index would only
+matter at millions. The backfill rewrites immutable version rows on purpose, adding only the document columns and the
+option `doc` keys; the text columns are untouched. "Nothing changed, no new version" compares normalised documents.
+
+Images: an `image` node names a `question_image` asset by `attrs.asset_id`. In the same transaction as the
+version insert, every asset id of the content, explanation and options must be an asset of this tenant with
+that purpose, and is finalized (`AssetService.FinalizePurposeTx`). A `staged` image may be attached only by the
+staff member who uploaded it; one that is already `final` by any staff member of the tenant. An unknown,
+foreign-tenant, wrong-purpose or someone-else's-staged id is the same `doc_asset` on the field that holds it, never
+a `500`, and it never says which. `attrs.src` (an `http(s)` URL) is refused on create (`doc_attr`) and accepted on
+update only when the identical `src` is already in the question's current version (content, explanation or an
+option), so legacy URL images survive a re-save and no new external image can be introduced; spreadsheet import
+and the legacy conversion are the only paths that produce one. A student may read a `final` `question_image` of the
+tenant through `GET /assets/{id}/url` or `GET /assets/{id}/content`; see [assets.md](assets.md) for how open that is.
 
 `pg` takes 2–8 options with unique labels; normally exactly one correct id, and with `option_weighted`
 none at all — every option is valid and may carry 0–100 points with at most 2 decimals. An option
@@ -111,15 +175,18 @@ carry `xl/workbook.xml` or `word/document.xml`; `.csv` must be UTF-8 without NUL
 decompression is bounded by a 50 MB unzip and 20 MB worksheet budget in excelize, and the DOCX reader
 takes only `word/document.xml` through a 20 MB `LimitedReader` with `encoding/xml`, which never
 resolves external entities. A formula stays text: `=1+1` is stored as `=1+1` and never calculated, and
-a formula cell's own text wins over its cached result. Content is stored verbatim, so HTML is data and
-`data:`/`javascript:` image URLs are still refused by the shared rule.
+a formula cell's own text wins over its cached result. The template keeps its text columns: on preview and
+commit each `content`, `explanation` and option cell goes through `DocFromLegacyText` (`$...$` math,
+`**bold**`, `*italic*`, `- `/`1. ` lists, `![alt](http...)` image lines) and then the same validation as the
+create endpoint, so HTML is data. A `data:`/`javascript:` image line in a cell is refused (`question_image`
+reason), and the preview `content` stays the plain cell text.
 
 The two upload routes carry no rate limit: the only throttle in the codebase is the auth service's
 Redis counter inside login/forgot/resend, not a reusable middleware, and no import budget is defined.
 
 ## Not in this slice
 
-Master content and copy-to-own (FR-TEN-09..13), images, and any per-question or per-difficulty weight
+Master content and copy-to-own (FR-TEN-09..13), and any per-question or per-difficulty weight
 (D04 is still open; weights are tenant-level and belong to P08/P16). There is no capability matrix
 either (D02): the guard is by role, and both Admin and Operator write tenant
 content — Operator is content, per `decisions.md`. The page therefore lost its "Bobot" column and the

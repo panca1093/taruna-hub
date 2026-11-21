@@ -340,11 +340,18 @@ func importRowOf(sheet importSheet, refs importRefs, number int, cells []string)
 	}
 	cell := func(name string) string { return strings.TrimSpace(sheet.cell(cells, name)) }
 
+	contentText, explanationText := cell("content"), cell("explanation")
 	input := QuestionInput{
 		Type:        strings.ToLower(cell("type")),
-		Content:     sheet.cell(cells, "content"),
-		Explanation: sheet.cell(cells, "explanation"),
+		Content:     model.DocFromLegacyText(contentText),
+		Explanation: model.DocFromLegacyText(explanationText),
 		Difficulty:  importDifficulty(cell("difficulty")),
+	}
+	if unsupportedImage(contentText) {
+		note("content", ReasonQuestionImage)
+	}
+	if unsupportedImage(explanationText) {
+		note("explanation", ReasonQuestionImage)
 	}
 
 	if programID, ok := refs.program(cell("program")); !ok {
@@ -376,7 +383,7 @@ func importRowOf(sheet importSheet, refs importRefs, number int, cells []string)
 			continue
 		}
 		input.Options = append(input.Options, QuestionOptionInput{
-			ID: strings.TrimPrefix(column, "option_"), Label: label,
+			ID: strings.TrimPrefix(column, "option_"), Label: model.DocFromLegacyText(label),
 		})
 		optionColumns = append(optionColumns, column)
 	}
@@ -396,7 +403,7 @@ func importRowOf(sheet importSheet, refs importRefs, number int, cells []string)
 			Row: number,
 			Preview: &model.ImportRowPreview{
 				Type:       input.Type,
-				Content:    strings.TrimSpace(input.Content),
+				Content:    contentText,
 				Program:    cell("program"),
 				Subject:    cell("subject"),
 				Difficulty: input.Difficulty,
@@ -405,6 +412,7 @@ func importRowOf(sheet importSheet, refs importRefs, number int, cells []string)
 		input: input,
 	}
 
+	input.docRules = docRules{legacy: true}
 	if scalars, err := scalarOf(input); err != nil {
 		importFieldErrors(err, note, optionColumns)
 	} else if validated, err := validatedOptions(scalars, nil); err != nil {

@@ -353,7 +353,7 @@ const kecermatanStudentPath = (studentId: string, testId: string) =>
 const itemPackagePath = (id: string) => `/api/v1/item-packages/${id}` as keyof paths;
 
 /** Multipart upload of one image with its purpose, the way POST /api/v1/assets reads it. */
-function uploadAsset(file: File, purpose: "payment_proof"): Promise<Asset> {
+function uploadAsset(file: File, purpose: "payment_proof" | "question_image"): Promise<Asset> {
   const body = new FormData();
   body.append("purpose", purpose);
   body.append("file", file);
@@ -657,7 +657,10 @@ export const api = {
 
   assets: {
     uploadProof: (file: File) => uploadAsset(file, "payment_proof"),
+    uploadQuestionImage: (file: File) => uploadAsset(file, "question_image"),
     url: (id: string) => authed<AssetLink>(`/api/v1/assets/${id}/url` as keyof paths),
+    /** The raw bytes, for the browser PDF: the storage bucket has no CORS, so the presigned link cannot be fetched. */
+    content: (id: string) => authedBlob(`/api/v1/assets/${id}/content` as keyof paths),
   },
 
   exports: {

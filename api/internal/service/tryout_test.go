@@ -295,12 +295,12 @@ func TestAssignmentFreezesTheQuestionVersion(t *testing.T) {
 	created := h.create(t, tenant, h.tryoutInput(tenant, subtestInput("Subtes", 600, question)))
 
 	frozen := h.get(t, tenant, created.ID).Subtests[0].Questions[0]
-	if frozen.Version != 1 || frozen.Content != question.Content {
-		t.Fatalf("assignment = version %d %q, want version 1 with the original content", frozen.Version, frozen.Content)
+	if frozen.Version != 1 || !sameDoc(frozen.Content, question.Content) {
+		t.Fatalf("assignment = version %d %q, want version 1 with the original content", frozen.Version, model.DocText(frozen.Content))
 	}
 
 	edited := h.q.pgInput(tenant)
-	edited.Content = "Isi soal yang sudah berubah."
+	edited.Content = d("Isi soal yang sudah berubah.")
 	edited.BaseVersion = question.Version
 	updated, err := h.q.update(t, tenant, question.ID, edited)
 	if err != nil {
@@ -311,7 +311,7 @@ func TestAssignmentFreezesTheQuestionVersion(t *testing.T) {
 	}
 
 	reloaded := h.get(t, tenant, created.ID).Subtests[0].Questions[0]
-	if reloaded.Version != 1 || reloaded.VersionID != frozen.VersionID || reloaded.Content != question.Content {
+	if reloaded.Version != 1 || reloaded.VersionID != frozen.VersionID || !sameDoc(reloaded.Content, question.Content) {
 		t.Errorf("assignment after the edit = version %d %q, want the frozen version 1 %q",
 			reloaded.Version, reloaded.Content, question.Content)
 	}
@@ -326,14 +326,14 @@ func TestAssignmentFreezesTheQuestionVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("save the tryout with the frozen version: %v", err)
 	}
-	if got := kept.Subtests[0].Questions[0]; got.Version != 1 || got.VersionID != frozen.VersionID || got.Content != question.Content {
+	if got := kept.Subtests[0].Questions[0]; got.Version != 1 || got.VersionID != frozen.VersionID || !sameDoc(got.Content, question.Content) {
 		t.Errorf("saved assignment = version %d %q, want the kept frozen version", got.Version, got.Content)
 	}
 
 	// A question new to the tryout takes its current version, which is v2 after this edit.
 	fresh := h.question(t, tenant)
 	freshEdit := h.q.pgInput(tenant)
-	freshEdit.Content = "Soal baru yang sudah direvisi."
+	freshEdit.Content = d("Soal baru yang sudah direvisi.")
 	freshEdit.BaseVersion = fresh.Version
 	current, err := h.q.update(t, tenant, fresh.ID, freshEdit)
 	if err != nil {
@@ -352,7 +352,7 @@ func TestAssignmentFreezesTheQuestionVersion(t *testing.T) {
 		t.Fatalf("assign a new question: %v", err)
 	}
 	got := withNew.Subtests[0].Questions[1]
-	if got.Version != 2 || got.VersionID != current.VersionID || got.Content != freshEdit.Content {
+	if got.Version != 2 || got.VersionID != current.VersionID || !sameDoc(got.Content, freshEdit.Content) {
 		t.Errorf("new assignment = version %d %q, want the current version 2 %q", got.Version, got.Content, freshEdit.Content)
 	}
 }
@@ -366,7 +366,7 @@ func TestEditingAFrozenQuestionNeverChangesAssignedContent(t *testing.T) {
 
 	for i := 2; i <= 4; i++ {
 		next := h.q.pgInput(tenant)
-		next.Content = fmt.Sprintf("Revisi ke-%d.", i)
+		next.Content = d(fmt.Sprintf("Revisi ke-%d.", i))
 		next.BaseVersion = i - 1
 		if _, err := h.q.update(t, tenant, question.ID, next); err != nil {
 			t.Fatalf("edit %d: %v", i, err)
@@ -381,7 +381,7 @@ func TestEditingAFrozenQuestionNeverChangesAssignedContent(t *testing.T) {
 	}
 
 	reloaded := h.get(t, tenant, created.ID).Subtests[0].Questions[0]
-	if reloaded.VersionID != frozen.VersionID || reloaded.Version != 1 || reloaded.Content != frozen.Content {
+	if reloaded.VersionID != frozen.VersionID || reloaded.Version != 1 || !sameDoc(reloaded.Content, frozen.Content) {
 		t.Errorf("assignment = %+v, want the untouched frozen version 1", reloaded)
 	}
 

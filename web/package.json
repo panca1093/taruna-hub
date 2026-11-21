@@ -11,6 +11,12 @@
   },
   "dependencies": {
     "@heroui/react": "^3.2.1",
+    "@tiptap/extension-list": "^3.35.0",
+    "@tiptap/extension-table": "^3.35.0",
+    "@tiptap/extensions": "^3.35.0",
+    "@tiptap/pm": "^3.35.0",
+    "@tiptap/react": "^3.35.0",
+    "@tiptap/starter-kit": "^3.35.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "html-to-image": "^1.11.13",
