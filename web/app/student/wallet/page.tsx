@@ -39,7 +39,6 @@ export default function StudentWalletPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
-    setLoadingMore(false);
     Promise.all([api.wallet.get(), api.wallet.entries({ kind, limit: PAGE_SIZE }), api.topups.list({ limit: PAGE_SIZE })])
       .then(([head, page, requests]) => {
         if (cancelled) return;
@@ -98,7 +97,7 @@ export default function StudentWalletPage() {
     } catch (err) {
       if (id === gen.current) setMoreFailed(errorText(err, t.loadErrorDescription));
     } finally {
-      if (id === gen.current) setLoadingMore(false);
+      setLoadingMore(false);
     }
   };
 

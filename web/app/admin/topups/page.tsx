@@ -48,7 +48,6 @@ export default function TopupsPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
-    setLoadingMore(false);
     api.adminTopups
       .list({ ...query, limit: PAGE_SIZE })
       .then((page) => {
@@ -95,7 +94,7 @@ export default function TopupsPage() {
     } catch (err) {
       if (id === gen.current) toast.danger(t.actionFailed, { description: errorText(err, t.loadErrorDescription) });
     } finally {
-      if (id === gen.current) setLoadingMore(false);
+      setLoadingMore(false);
     }
   };
 
