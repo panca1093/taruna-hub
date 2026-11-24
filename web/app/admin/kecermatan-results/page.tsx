@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/empty-state";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
 import { KecermatanResultCaptureSheet } from "@/components/kecermatan-result-capture-sheet";
-import { SelectInput, TextInput } from "@/components/ui/form";
+import { FilterMenu, SearchField, type FilterField, type FilterValue } from "@/components/filter-menu";
 import { api, errorText, type KecermatanStaffStudentRow, type KecermatanTestSummary, type Program } from "@/lib/api/client";
 import { useKecermatanResultsT } from "@/lib/i18n/dict/results";
 
@@ -141,8 +141,19 @@ export default function KecermatanResultsPage() {
     if (saved) toast.success(t.bulkDone(chosen.length));
   };
 
-  const testOptions = [{ id: "all", label: t.allTests }, ...tests.map((test) => ({ id: test.id, label: test.title }))];
-  const programOptions = [{ id: "all", label: t.allPrograms }, ...programs.map((p) => ({ id: p.id, label: p.name }))];
+  const filterFields: FilterField[] = [
+    { key: "test", label: t.fieldTest, allLabel: t.allTests, options: tests.map((test) => ({ id: test.id, label: test.title })) },
+    { key: "program", label: t.fieldProgram, allLabel: t.allPrograms, options: programs.map((p) => ({ id: p.id, label: p.name })) },
+  ];
+  const filterValue = { test: testFilter === "all" ? "" : testFilter, program: programFilter === "all" ? "" : programFilter };
+  const applyFilter = (next: FilterValue) => {
+    setRows(null);
+    setSelected(new Set());
+    setLoadFailed(false);
+    setTestFilter(next.test || "all");
+    setProgramFilter(next.program || "all");
+  };
+  const filtering = search !== "" || testFilter !== "all" || programFilter !== "all";
 
   const columns: Column<KecermatanStaffStudentRow>[] = [
     {
@@ -187,7 +198,7 @@ export default function KecermatanResultsPage() {
   ) : rows === null ? (
     <p className="py-14 text-center text-caption text-muted">{t.loading}</p>
   ) : rows.length === 0 ? (
-    <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
+    <EmptyState icon={BarChart3} title={filtering ? t.noMatchTitle : t.emptyTitle} description={filtering ? t.noMatchDescription : t.emptyDescription} />
   ) : (
     <>
       {bulk.status === "error" && (
@@ -233,43 +244,9 @@ export default function KecermatanResultsPage() {
         </Button>
       }
     >
-      <div className="mb-4 flex flex-wrap gap-3">
-        <div className="w-full max-w-xs">
-          <TextInput
-            label={t.fieldSearch}
-            placeholder={t.searchPlaceholder}
-            type="search"
-            maxLength={100}
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-        </div>
-        <div className="w-full max-w-xs">
-          <SelectInput
-            label={t.fieldTest}
-            options={testOptions}
-            selectedKey={testFilter}
-            onSelectionChange={(k) => {
-              setRows(null);
-              setSelected(new Set());
-              setLoadFailed(false);
-              setTestFilter(k ?? "all");
-            }}
-          />
-        </div>
-        <div className="w-full max-w-xs">
-          <SelectInput
-            label={t.fieldProgram}
-            options={programOptions}
-            selectedKey={programFilter}
-            onSelectionChange={(k) => {
-              setRows(null);
-              setSelected(new Set());
-              setLoadFailed(false);
-              setProgramFilter(k ?? "all");
-            }}
-          />
-        </div>
+      <div className="mb-4 flex items-center gap-2">
+        <SearchField value={searchInput} onChange={(value) => setSearchInput(value.slice(0, 100))} placeholder={t.searchPlaceholder} />
+        <FilterMenu fields={filterFields} value={filterValue} onChange={applyFilter} align="start" />
       </div>
 
       {body}
