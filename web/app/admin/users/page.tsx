@@ -51,7 +51,6 @@ export default function UsersPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
-    setLoadingMore(false);
     api.adminUsers
       .list({ role, q: query, active: activeFilter, limit: PAGE_SIZE })
       .then((page) => {
@@ -107,7 +106,7 @@ export default function UsersPage() {
     } catch (err) {
       if (id === gen.current) setMoreFailed(errorText(err, t.loadErrorDescription));
     } finally {
-      if (id === gen.current) setLoadingMore(false);
+      setLoadingMore(false);
     }
   };
 

@@ -71,7 +71,6 @@ export default function StudentsPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
-    setLoadingMore(false);
     api.adminUsers
       .list({ role: "student", q: query, active: activeFilter, limit: PAGE_SIZE })
       .then((page) => {
@@ -131,7 +130,7 @@ export default function StudentsPage() {
     } catch (err) {
       if (id === gen.current) setMoreFailed(errorText(err, t.loadErrorDescription));
     } finally {
-      if (id === gen.current) setLoadingMore(false);
+      setLoadingMore(false);
     }
   };
 

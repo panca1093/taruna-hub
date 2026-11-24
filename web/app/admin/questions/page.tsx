@@ -170,7 +170,6 @@ export default function QuestionsPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
-    setLoadingMore(false);
     api.questions
       .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
@@ -212,7 +211,7 @@ export default function QuestionsPage() {
     } catch (err) {
       if (id === gen.current) toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
     } finally {
-      if (id === gen.current) setLoadingMore(false);
+      setLoadingMore(false);
     }
   };
 

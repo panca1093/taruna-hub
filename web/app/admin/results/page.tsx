@@ -12,7 +12,7 @@ import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
 import { StatusChip } from "@/components/status-badge";
 import { TryoutResultCaptureSheet } from "@/components/tryout-result-capture-sheet";
-import { SelectInput, TextInput } from "@/components/ui/form";
+import { FilterMenu, SearchField, type FilterField, type FilterValue } from "@/components/filter-menu";
 import { api, errorText, type Leaderboard, type Program, type StaffResultStudentRow, type TryoutSummary } from "@/lib/api/client";
 import { useResultsT } from "@/lib/i18n/dict/results";
 
@@ -173,8 +173,16 @@ export default function ResultsPage() {
     }
   };
 
-  const tryoutOptions = [{ id: "all", label: t.allTryouts }, ...tryouts.map((tr) => ({ id: tr.id, label: tr.title }))];
-  const programOptions = [{ id: "all", label: t.allPrograms }, ...programs.map((p) => ({ id: p.id, label: p.name }))];
+  const filterFields: FilterField[] = [
+    { key: "tryout", label: t.fieldTryout, allLabel: t.allTryouts, options: tryouts.map((tr) => ({ id: tr.id, label: tr.title })) },
+    { key: "program", label: t.fieldProgram, allLabel: t.allPrograms, options: programs.map((p) => ({ id: p.id, label: p.name })) },
+  ];
+  const filterValue = { tryout: tryoutFilter === "all" ? "" : tryoutFilter, program: programFilter === "all" ? "" : programFilter };
+  const filtering = search !== "" || tryoutFilter !== "all" || programFilter !== "all";
+  const applyFilter = (next: FilterValue) => {
+    if ((next.tryout ?? "") !== filterValue.tryout) changeTryout(next.tryout || "all");
+    if ((next.program ?? "") !== filterValue.program) changeProgram(next.program || "all");
+  };
 
   const columns: Column<StaffResultStudentRow>[] = [
     {
@@ -226,23 +234,9 @@ export default function ResultsPage() {
         </Button>
       }
     >
-      <div className="mb-4 flex flex-wrap gap-3">
-        <div className="w-full max-w-xs">
-          <TextInput
-            label={t.fieldSearch}
-            placeholder={t.searchPlaceholder}
-            type="search"
-            maxLength={100}
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-        </div>
-        <div className="w-full max-w-xs">
-          <SelectInput label={t.fieldTryout} options={tryoutOptions} selectedKey={tryoutFilter} onSelectionChange={(k) => changeTryout(k ?? "all")} />
-        </div>
-        <div className="w-full max-w-xs">
-          <SelectInput label={t.fieldProgram} options={programOptions} selectedKey={programFilter} onSelectionChange={(k) => changeProgram(k ?? "all")} />
-        </div>
+      <div className="mb-4 flex items-center gap-2">
+        <SearchField value={searchInput} onChange={(value) => setSearchInput(value.slice(0, 100))} placeholder={t.searchPlaceholder} />
+        <FilterMenu fields={filterFields} value={filterValue} onChange={applyFilter} align="start" />
       </div>
 
       {board && board.entries.length > 0 && (
@@ -282,7 +276,7 @@ export default function ResultsPage() {
       ) : rows === null ? (
         <p className="py-14 text-center text-caption text-muted">{t.loading}</p>
       ) : rows.length === 0 ? (
-        <EmptyState icon={BarChart3} title={t.emptyTitle} description={t.emptyDescription} />
+        <EmptyState icon={BarChart3} title={filtering ? t.noMatchTitle : t.emptyTitle} description={filtering ? t.noMatchDescription : t.emptyDescription} />
       ) : (
         <>
           {bulk.status === "error" && (
