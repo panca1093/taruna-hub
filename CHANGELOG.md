@@ -2,6 +2,14 @@
 
 Notable changes to the Taruna Eduka tryout platform, newest first. Each version is a git tag; pushing a `v*` tag builds the deploy images.
 
+## v0.1.8 — 2026-11-24
+
+### Changed
+
+- **Emails look like Taruna Eduka.** The signup code, password reset, order and top-up emails now show the logo and a clean card layout. The code sits in a large box, and the password reset has a button with the link written underneath in case the button does not work. Email apps that cannot show this still get the plain text version.
+
+> **Deploy note:** emails are sent through Brevo. The `SMTP_*` settings in `.env` must be filled in, or no email goes out.
+
 ## v0.1.7 — 2026-11-24
 
 ### Added
