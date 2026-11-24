@@ -165,6 +165,13 @@ export default function ProductsPage() {
     setModalOpen(true);
   };
 
+  const sameProgram = editing && editing.program_id === form.programId;
+  const tryoutOptions = (choiceTryouts ?? []).map((tryout) => ({ id: tryout.id, label: tryout.title }));
+  if (sameProgram) for (const tryout of editing.tryouts) if (!tryoutOptions.some((o) => o.id === tryout.id)) tryoutOptions.push({ id: tryout.id, label: tryout.title });
+  const kecermatanOptions = (choiceKecermatan ?? []).map((test) => ({ id: test.id, label: test.title }));
+  if (sameProgram && editing.kecermatan_test_id && !kecermatanOptions.some((o) => o.id === editing.kecermatan_test_id))
+    kecermatanOptions.push({ id: editing.kecermatan_test_id, label: editing.kecermatan_test_title ?? "" });
+
   const openEdit = (product: Product) => {
     setEditing(product);
     setFormErrors({});
@@ -481,22 +488,22 @@ export default function ProductsPage() {
                   label={t.fieldKecermatanTest}
                   required
                   placeholder={t.kecermatanPickTitle}
-                  options={(choiceKecermatan ?? []).map((test) => ({ id: test.id, label: test.title }))}
+                  options={kecermatanOptions}
                   selectedKey={form.kecermatanTestId || null}
                   onSelectionChange={(key) => key && setForm((current) => ({ ...current, kecermatanTestId: key }))}
                   error={formErrors.kecermatan_test_id}
-                  description={choiceKecermatan?.length === 0 ? t.kecermatanEmpty : undefined}
+                  description={kecermatanOptions.length === 0 ? t.kecermatanEmpty : undefined}
                 />
               ) : (
                 <SelectInput
                   label={t.fieldTryout}
                   required
                   placeholder={t.tryoutPickSingle}
-                  options={(choiceTryouts ?? []).map((tryout) => ({ id: tryout.id, label: tryout.title }))}
+                  options={tryoutOptions}
                   selectedKey={form.tryoutIds[0] ?? null}
                   onSelectionChange={(key) => key && toggleTryout(key)}
                   error={formErrors.tryout_ids}
-                  description={choiceTryouts?.length === 0 ? t.tryoutEmpty : undefined}
+                  description={tryoutOptions.length === 0 ? t.tryoutEmpty : undefined}
                 />
               )}
             </div>
@@ -508,13 +515,13 @@ export default function ProductsPage() {
             </p>
             <div className="grid max-h-60 gap-1.5 overflow-y-auto sm:grid-cols-2">
               {choiceFailed ? (
-                <p className="text-label text-danger">{t.loadErrorDescription}</p>
+                <p className="text-label text-danger sm:col-span-2">{t.loadErrorDescription}</p>
               ) : choiceTryouts === null ? (
-                <p className="text-label text-muted">{t.tryoutLoading}</p>
-              ) : choiceTryouts.length === 0 ? (
-                <p className="text-label text-muted">{t.tryoutEmpty}</p>
+                <p className="text-label text-muted sm:col-span-2">{t.tryoutLoading}</p>
+              ) : tryoutOptions.length === 0 ? (
+                <p className="text-label text-muted sm:col-span-2">{t.tryoutEmpty}</p>
               ) : (
-                choiceTryouts.map((tryout) => {
+                tryoutOptions.map((tryout) => {
                   const checked = form.tryoutIds.includes(tryout.id);
                   return (
                     <button
@@ -537,7 +544,7 @@ export default function ProductsPage() {
                       >
                         ✓
                       </span>
-                      <span className="truncate">{tryout.title}</span>
+                      <span className="truncate" title={tryout.label}>{tryout.label}</span>
                     </button>
                   );
                 })
