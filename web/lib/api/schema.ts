@@ -8286,6 +8286,12 @@ export interface components {
              */
             price: string;
             items: components["schemas"]["OrderItem"][];
+            /** @description The kecermatan tests of a bundle as named at checkout; empty when the order has none. */
+            kecermatan_items: {
+                /** Format: uuid */
+                test_id: string;
+                title: string;
+            }[];
             /**
              * Format: uuid
              * @description The transfer proof of a `manual` order; read it with `GET /api/v1/assets/{id}/url`.

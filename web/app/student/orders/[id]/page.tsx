@@ -187,6 +187,17 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
 
+          {order.kecermatan_items.length > 0 && (
+            <div className="border-t border-border pt-5">
+              <p className="text-label text-muted">{t.kecermatanItemsTitle(order.kecermatan_items.length)}</p>
+              <ul className="mt-2 space-y-1.5 text-small text-foreground">
+                {order.kecermatan_items.map((item) => (
+                  <li key={item.test_id}>{item.title}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {order.status === "confirmed" && (
             <LinkButton
               href={kecermatan && order.kecermatan_test_id ? `/student/kecermatan/${order.kecermatan_test_id}` : "/student/tryouts"}

@@ -14,6 +14,7 @@ import { emptyQuestionFilter, QuestionFilterMenu, questionFilterQuery } from "@/
 import { QuestionEditor, type QuestionDraft, draftOf, emptyDraft } from "@/components/admin/question-editor";
 import { ImportQuestionsModal } from "@/components/admin/import-questions-modal";
 import { api, ApiError, errorText, type Program, type Question } from "@/lib/api/client";
+import { useDebounced } from "@/lib/use-debounced";
 import { cn } from "@/lib/cn";
 import { isDocEmpty, type RichDoc } from "@/lib/rich-doc";
 import { useAdminQuestionsPageT } from "@/lib/i18n/dict/admin-questions-page";
@@ -121,9 +122,14 @@ export default function QuestionsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const gen = useRef(0);
 
   const [filter, setFilter] = useState(emptyQuestionFilter);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounced(searchInput.trim(), () => {
+    setRows(null);
+    setLoadFailed(false);
+  });
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Question | null>(null);
@@ -163,6 +169,7 @@ export default function QuestionsPage() {
   // Same pattern as app/admin/programs: the promise settles into state, never during the effect body.
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
     api.questions
       .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
@@ -195,8 +202,10 @@ export default function QuestionsPage() {
 
   const loadMore = async () => {
     setLoadingMore(true);
+    const id = gen.current;
     try {
       const page = await api.questions.list({ ...filters, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      if (id !== gen.current) return;
       setRows((prev) => [...(prev ?? []), ...page.questions]);
       setTotal(page.total);
     } catch (err) {
@@ -390,8 +399,8 @@ export default function QuestionsPage() {
           <div className="relative min-w-0 flex-1 sm:max-w-sm">
             <Search className="absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted" />
             <input
-              value={search}
-              onChange={(e) => refilter(() => setSearch(e.target.value))}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder={t.searchPlaceholder}
               aria-label={t.searchPlaceholder}
               className="w-full rounded-full border border-border bg-field py-2 pr-4 pl-10 text-small text-field-foreground outline-none focus:border-accent"

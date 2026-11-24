@@ -62,7 +62,7 @@ export function ProductItemPicker({
   const [tab, setTab] = useState<PickerKind>("tryout");
 
   const byId = new Map(items.map((item) => [item.id, item]));
-  const picked = selectedIds.map((id) => byId.get(id)).filter((item): item is PickerItem => !!item);
+  const picked = selectedIds.map((id) => byId.get(id) ?? { id, label: c.unavailable, kind: null });
   const kindLabel = (kind: PickerKind) => (kind === "tryout" ? c.tryout : c.kecermatan);
 
   const openPicker = () => {
@@ -97,10 +97,10 @@ export function ProductItemPicker({
         <ul className="mb-2 flex flex-col gap-1.5">
           {picked.map((item) => (
             <li key={item.id} className="flex items-center gap-2 rounded-control border border-border px-3 py-2 text-small text-foreground">
-              <span className="min-w-0 flex-1 truncate" title={item.label}>
+              <span className={cn("min-w-0 flex-1 truncate", item.kind === null && "text-danger")} title={item.label}>
                 {item.label}
               </span>
-              {multi && (
+              {multi && item.kind !== null && (
                 <Chip size="sm" variant="secondary" className="border border-border font-medium">
                   {kindLabel(item.kind)}
                 </Chip>
@@ -157,11 +157,13 @@ export function ProductItemPicker({
       >
         <TextInput aria-label={c.search} placeholder={c.search} value={query} onChange={(e) => setQuery(e.target.value)} />
         {multi && (
-          <div className="flex gap-1 rounded-control border border-border bg-surface-secondary p-1 sm:w-fit">
+          <div role="tablist" className="flex gap-1 rounded-control border border-border bg-surface-secondary p-1 sm:w-fit">
             {(["tryout", "kecermatan"] as const).map((kind) => (
               <button
                 key={kind}
                 type="button"
+                role="tab"
+                aria-selected={tab === kind}
                 onClick={() => setTab(kind)}
                 className={cn(
                   "rounded-chip px-4 py-1.5 text-small font-medium transition-colors",
@@ -197,7 +199,7 @@ export function ProductItemPicker({
                     className={cn(
                       "flex size-4 shrink-0 items-center justify-center border-2 text-micro font-bold",
                       multi ? "rounded-chip" : "rounded-full",
-                      checked ? "border-accent bg-accent text-white" : "border-border text-transparent",
+                      checked ? "border-accent bg-accent text-accent-foreground" : "border-border text-transparent",
                     )}
                   >
                     ✓

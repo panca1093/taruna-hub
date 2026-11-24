@@ -13,6 +13,7 @@ const id = {
   selected: (n: number) => `${n} dipilih`,
   rule: (min: number, max: number) => `Pilih ${min} sampai ${max} item (tryout dan tes kecermatan digabung).`,
   remove: (label: string) => `Hapus ${label}`,
+  unavailable: "Item tidak tersedia (mungkin sudah draf)",
 };
 
 const en: typeof id = {
@@ -26,6 +27,7 @@ const en: typeof id = {
   selected: (n: number) => `${n} selected`,
   rule: (min: number, max: number) => `Choose ${min} to ${max} items (tryouts and kecermatan tests combined).`,
   remove: (label: string) => `Remove ${label}`,
+  unavailable: "Item unavailable (may be a draft now)",
 };
 
 export function useProductItemPickerT() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button, Chip } from "@heroui/react";
 import { ArrowDownLeft, ArrowUpRight, CloudOff, Wallet as WalletIcon } from "lucide-react";
@@ -33,15 +33,19 @@ export default function StudentWalletPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [topups, setTopups] = useState<Topup[]>([]);
   const [filter, setFilter] = useState<FilterValue>({});
+  const [hasData, setHasData] = useState(false);
+  const gen = useRef(0);
   const kind = (filter.kind || undefined) as WalletEntry["kind"] | undefined;
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
     Promise.all([api.wallet.get(), api.wallet.entries({ kind, limit: PAGE_SIZE }), api.topups.list({ limit: PAGE_SIZE })])
       .then(([head, page, requests]) => {
         if (cancelled) return;
         setWallet(head);
         setEntries(page.entries);
         setTotal(page.total);
+        if (page.total > 0 || kind) setHasData(true);
         setTopups(requests.topups);
       })
       .catch(() => {
@@ -81,8 +85,10 @@ export default function StudentWalletPage() {
   const loadMore = async () => {
     setLoadingMore(true);
     setMoreFailed("");
+    const id = gen.current;
     try {
       const page = await api.wallet.entries({ kind, limit: PAGE_SIZE, offset: entries?.length ?? 0 });
+      if (id !== gen.current) return;
       setEntries((prev) => {
         const seen = new Set((prev ?? []).map((entry) => entry.id));
         return [...(prev ?? []), ...page.entries.filter((entry) => !seen.has(entry.id))];
@@ -137,6 +143,26 @@ export default function StudentWalletPage() {
             </Panel>
           )}
 
+          {!loadFailed && hasData && (
+            <div className="flex items-center gap-2">
+              <FilterMenu
+                align="start"
+                value={filter}
+                onChange={(next) => {
+                  setEntries(null);
+                  setFilter(next);
+                }}
+                fields={[
+                  {
+                    key: "kind",
+                    label: t.filterType,
+                    options: Object.entries(t.typeLabel).map(([id, label]) => ({ id, label })),
+                  },
+                ]}
+              />
+            </div>
+          )}
+
           {loadFailed ? (
             <EmptyState
               icon={CloudOff}
@@ -154,23 +180,6 @@ export default function StudentWalletPage() {
             <EmptyState icon={WalletIcon} title={t.emptyTitle} description={t.emptyDescription} />
           ) : (
             <>
-              <div className="flex items-center gap-2">
-                <FilterMenu
-                  align="start"
-                  value={filter}
-                  onChange={(next) => {
-                    setEntries(null);
-                    setFilter(next);
-                  }}
-                  fields={[
-                    {
-                      key: "kind",
-                      label: t.filterType,
-                      options: Object.entries(t.typeLabel).map(([id, label]) => ({ id, label })),
-                    },
-                  ]}
-                />
-              </div>
               {entries.length === 0 && <EmptyState icon={WalletIcon} title={t.emptyFilteredTitle} />}
               <div className="overflow-hidden rounded-card border border-border bg-surface">
                 <h2 className="px-6 pt-6 pb-4 font-display text-heading-sm sm:px-7 sm:pt-7">{t.historyTitle}</h2>

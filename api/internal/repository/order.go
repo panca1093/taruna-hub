@@ -201,7 +201,7 @@ func orderWhere(where []string, args []any, filter OrderFilter) ([]string, []any
 	if filter.Search != "" {
 		add(`('ORD-' || lpad(o.number::text, 6, '0') ILIKE $N ESCAPE '\' OR u.name ILIKE $N ESCAPE '\'
 			  OR u.email ILIKE $N ESCAPE '\' OR o.product_title ILIKE $N ESCAPE '\'
-			  OR EXISTS (SELECT 1 FROM payment_attempts a WHERE a.order_id = o.id AND a.provider_order_id ILIKE $N ESCAPE '\'))`,
+			  OR EXISTS (SELECT 1 FROM payment_attempts a WHERE a.order_id = o.id AND a.tenant_id = o.tenant_id AND a.provider_order_id ILIKE $N ESCAPE '\'))`,
 			likePattern(filter.Search))
 	}
 	return where, args

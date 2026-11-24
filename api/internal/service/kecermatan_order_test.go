@@ -259,6 +259,12 @@ func TestMixedBundleCreditsEveryMemberOncePerOrder(t *testing.T) {
 	staff := h.staff(tenant, model.RoleOperator)
 
 	pending := h.manual(t, tenant, p, bundle)
+	if read, err := h.svc.Order(ctx, h.scope(tenant), p, pending.ID); err != nil || len(read.KecermatanItems) != 1 || read.KecermatanItems[0].TestID != test.ID {
+		t.Fatalf("order read kecermatan items = %+v, %v, want the bundle's test", read.KecermatanItems, err)
+	}
+	if rows, _, err := h.svc.Orders(ctx, h.scope(tenant), p, OrderFilter{}); err != nil || len(rows) != 1 || len(rows[0].KecermatanItems) != 1 {
+		t.Fatalf("order list kecermatan items = %+v, %v, want the bundle's test", rows, err)
+	}
 	// A later edit drops the test; the pending order still delivers what was bought.
 	edited := in
 	edited.KecermatanTestIDs = []uuid.UUID{h.testIn(t, tenant).ID}

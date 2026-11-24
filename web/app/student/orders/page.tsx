@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button, toast } from "@heroui/react";
 import { CloudOff, Receipt } from "lucide-react";
@@ -10,6 +10,7 @@ import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-m
 import { Panel } from "@/components/page-blocks";
 import { OrderStatusBadge } from "@/components/status-badge";
 import { api, errorText, type Order } from "@/lib/api/client";
+import { useDebounced } from "@/lib/use-debounced";
 import { formatIDR } from "@/lib/format-money";
 import { useStudentOrdersT } from "@/lib/i18n/dict/student-orders";
 
@@ -24,22 +25,30 @@ export default function StudentOrdersPage() {
   const [moreFailed, setMoreFailed] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [filter, setFilter] = useState<FilterValue>({});
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [hasData, setHasData] = useState(false);
+  const gen = useRef(0);
+  const search = useDebounced(searchInput.trim(), () => {
+    setOrders(null);
+    setLoadFailed(false);
+  });
 
   const query = {
     status: (filter.status || undefined) as Order["status"] | undefined,
-    q: search.trim() || undefined,
+    q: search || undefined,
   };
   const filtered = Object.values(query).some(Boolean);
 
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
     api.orders
       .list({ ...query, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
         setOrders(page.orders);
         setTotal(page.total);
+        if (page.total > 0 || filtered) setHasData(true);
       })
       .catch(() => {
         if (!cancelled) setLoadFailed(true);
@@ -94,15 +103,17 @@ export default function StudentOrdersPage() {
   const loadMore = async () => {
     setLoadingMore(true);
     setMoreFailed("");
+    const id = gen.current;
     try {
       const page = await api.orders.list({ ...query, limit: PAGE_SIZE, offset: orders?.length ?? 0 });
+      if (id !== gen.current) return;
       setOrders((prev) => {
         const seen = new Set((prev ?? []).map((order) => order.id));
         return [...(prev ?? []), ...page.orders.filter((order) => !seen.has(order.id))];
       });
       setTotal(page.total);
     } catch (err) {
-      setMoreFailed(errorText(err, t.loadErrorDescription));
+      if (id === gen.current) setMoreFailed(errorText(err, t.loadErrorDescription));
     } finally {
       setLoadingMore(false);
     }
@@ -115,9 +126,9 @@ export default function StudentOrdersPage() {
       maxWidth="max-w-5xl"
       breadcrumb={[{ label: t.crumbDashboard, href: "/student" }, { label: t.title }]}
     >
-      {!loadFailed && orders !== null && (filtered || orders.length > 0) && (
+      {!loadFailed && hasData && (
         <div className="mb-4 flex items-center gap-2">
-          <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+          <SearchField value={searchInput} onChange={setSearchInput} placeholder={t.searchPlaceholder} />
           <FilterMenu
             align="start"
             value={filter}

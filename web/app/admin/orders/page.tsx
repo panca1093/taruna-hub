@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, toast } from "@heroui/react";
 import { CheckCircle2, ChevronRight, ClipboardList, CloudOff, Undo2, Wallet, XCircle } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -13,6 +13,7 @@ import { Icon } from "@/components/icon";
 import { FormModal } from "@/components/ui/form-modal";
 import { TextareaInput } from "@/components/ui/form";
 import { api, ApiError, errorText, type Order } from "@/lib/api/client";
+import { useDebounced } from "@/lib/use-debounced";
 import { formatIDR } from "@/lib/format-money";
 import { useOrdersT } from "@/lib/i18n/dict/orders";
 import { useSession } from "@/lib/session-context";
@@ -26,10 +27,15 @@ export default function OrdersPage() {
   const [rows, setRows] = useState<Order[] | null>(null);
   const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState<FilterValue>({});
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const gen = useRef(0);
+  const search = useDebounced(searchInput.trim(), () => {
+    setRows(null);
+    setLoadFailed(false);
+  });
   const [detail, setDetail] = useState<Order | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [resolving, setResolving] = useState<"credit" | "refund" | null>(null);
@@ -48,6 +54,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
     api.adminOrders
       .list({ ...query, limit: PAGE_SIZE })
       .then((page) => {
@@ -78,12 +85,14 @@ export default function OrdersPage() {
 
   const loadMore = async () => {
     setLoadingMore(true);
+    const id = gen.current;
     try {
       const page = await api.adminOrders.list({
         ...query,
         limit: PAGE_SIZE,
         offset: rows?.length ?? 0,
       });
+      if (id !== gen.current) return;
       setRows((prev) => {
         const seen = new Set((prev ?? []).map((order) => order.id));
         return [...(prev ?? []), ...page.orders.filter((order) => !seen.has(order.id))];
@@ -204,7 +213,7 @@ export default function OrdersPage() {
     <AppShell title={t.pageTitle} description={t.pageDescription}>
       {role === "admin" && <RevenueRecapSection />}
       <div className="mb-4 flex items-center gap-2">
-        <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+        <SearchField value={searchInput} onChange={setSearchInput} placeholder={t.searchPlaceholder} />
         <FilterMenu
           align="start"
           value={filter}

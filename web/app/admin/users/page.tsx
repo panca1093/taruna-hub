@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
 import { CloudOff, Pencil, Plus, Power, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -35,6 +35,7 @@ export default function UsersPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const gen = useRef(0);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [role, setRole] = useState<RoleFilter>("staff");
   const [search, setSearch] = useState("");
@@ -49,6 +50,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
     api.adminUsers
       .list({ role, q: query, active: activeFilter, limit: PAGE_SIZE })
       .then((page) => {
@@ -86,6 +88,7 @@ export default function UsersPage() {
   const loadMore = async () => {
     setLoadingMore(true);
     setMoreFailed("");
+    const id = gen.current;
     try {
       const page = await api.adminUsers.list({
         role,
@@ -94,6 +97,7 @@ export default function UsersPage() {
         limit: PAGE_SIZE,
         offset: rows?.length ?? 0,
       });
+      if (id !== gen.current) return;
       setRows((prev) => {
         const seen = new Set((prev ?? []).map((row) => row.id));
         return [...(prev ?? []), ...page.users.filter((row) => !seen.has(row.id))];

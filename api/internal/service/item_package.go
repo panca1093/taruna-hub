@@ -29,6 +29,7 @@ var (
 // Item package field reasons; the transport turns each into the copy the page shows.
 const (
 	ReasonPackageType   = "package_type"
+	ReasonPackageQuery  = "package_query"
 	ReasonPackageName   = "package_name"
 	ReasonElementsEmpty = "elements_empty"
 	ReasonElementsKind  = "elements_kind"
@@ -73,7 +74,11 @@ func (s *ItemPackageService) List(ctx context.Context, scope HostScope, principa
 	if kind != "" && !validPackageType(kind) {
 		return nil, &InputError{Fields: map[string]string{"type": ReasonPackageType}}
 	}
-	return s.repo.List(ctx, tenantID, kind, strings.TrimSpace(search))
+	search = strings.TrimSpace(search)
+	if utf8.RuneCountInString(search) > 100 {
+		return nil, &InputError{Fields: map[string]string{"q": ReasonPackageQuery}}
+	}
+	return s.repo.List(ctx, tenantID, kind, search)
 }
 
 // Get reads the current revision, or an older frozen one when revision is positive.

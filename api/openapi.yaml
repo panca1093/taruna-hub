@@ -7380,7 +7380,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, code, status, payment_method, student_id, student_name, student_avatar, product_id, product_type, product_title,
-                 price, items, proof_asset_id, cancel_reason, created_at, confirmed_at, cancelled_at,
+                 price, items, kecermatan_items, proof_asset_id, cancel_reason, created_at, confirmed_at, cancelled_at,
                  kecermatan_test_id, included_attempts, redirect_url, payment_exception]
       description: The checkout snapshot. Editing or deleting the product later changes nothing here.
       properties:
@@ -7450,6 +7450,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OrderItem"
+        kecermatan_items:
+          type: array
+          description: The kecermatan tests of a bundle as named at checkout; empty when the order has none.
+          items:
+            type: object
+            additionalProperties: false
+            required: [test_id, title]
+            properties:
+              test_id:
+                type: string
+                format: uuid
+              title:
+                type: string
         proof_asset_id:
           type: string
           format: uuid

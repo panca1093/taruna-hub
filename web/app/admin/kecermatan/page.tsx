@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, toast } from "@heroui/react";
 import { CloudOff, Gauge, Lock, Pencil, Plus, Trash2 } from "lucide-react";
@@ -12,6 +12,7 @@ import { ProgramBadge } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
 import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-menu";
 import { api, errorText, type KecermatanItemType, type KecermatanTestSummary, type Program } from "@/lib/api/client";
+import { useDebounced } from "@/lib/use-debounced";
 import { useAdminKecermatanListT } from "@/lib/i18n/dict/admin-kecermatan-list";
 import { useAdminKecermatanBuilderT } from "@/lib/i18n/dict/admin-kecermatan-builder";
 
@@ -28,9 +29,14 @@ export default function KecermatanListPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const gen = useRef(0);
   const [deleteTarget, setDeleteTarget] = useState<KecermatanTestSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounced(searchInput.trim(), () => {
+    setRows(null);
+    setLoadFailed(false);
+  });
   const [filter, setFilter] = useState<FilterValue>({});
   const filtered = search.trim() !== "" || !!filter.program_id || !!filter.item_type;
   const filters = {
@@ -56,6 +62,7 @@ export default function KecermatanListPage() {
 
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
     api.kecermatan
       .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
@@ -86,8 +93,10 @@ export default function KecermatanListPage() {
 
   const loadMore = async () => {
     setLoadingMore(true);
+    const id = gen.current;
     try {
       const page = await api.kecermatan.list({ ...filters, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      if (id !== gen.current) return;
       setRows((prev) => [...(prev ?? []), ...page.tests]);
       setTotal(page.total);
     } catch (err) {
@@ -168,7 +177,7 @@ export default function KecermatanListPage() {
       }
     >
       <div className="mb-4 flex items-center gap-2">
-        <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+        <SearchField value={searchInput} onChange={setSearchInput} placeholder={t.searchPlaceholder} />
         <FilterMenu
           align="start"
           value={filter}

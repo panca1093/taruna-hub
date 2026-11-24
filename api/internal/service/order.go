@@ -505,6 +505,9 @@ func checkedOrderFilter(filter OrderFilter) (repository.OrderFilter, error) {
 		} else {
 			next := day.AddDate(0, 0, 1)
 			out.To = &next
+			if out.From != nil && !out.From.Before(next) {
+				fields["to"] = ReasonOrderQuery
+			}
 		}
 	}
 	if len(fields) > 0 {

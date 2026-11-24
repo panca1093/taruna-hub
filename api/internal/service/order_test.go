@@ -997,6 +997,10 @@ func TestOrderListSearchAndFilters(t *testing.T) {
 		return err
 	}(), "from")
 	wantInputField(t, func() error {
+		_, _, err := h.svc.StaffOrders(ctx, scope, admin, OrderFilter{From: "2026-02-02", To: "2026-02-01"})
+		return err
+	}(), "to")
+	wantInputField(t, func() error {
 		_, _, err := h.svc.StaffOrders(ctx, scope, admin, OrderFilter{Method: "cash"})
 		return err
 	}(), "payment_method")

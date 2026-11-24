@@ -479,6 +479,8 @@ func packageReason(reason string) string {
 	switch reason {
 	case service.ReasonPackageType:
 		return packageTypeRule
+	case service.ReasonPackageQuery:
+		return "Kata kunci pencarian paling banyak 100 karakter."
 	case service.ReasonPackageName:
 		return packageNameRule
 	case service.ReasonElementsEmpty:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Chip, Switch, toast } from "@heroui/react";
 import { CloudOff, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -15,6 +15,7 @@ import { ProductItemPicker, type PickerItem } from "@/components/admin/product-i
 import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-menu";
 import { SelectInput, SwitchInput, TextInput, TextareaInput } from "@/components/ui/form";
 import { api, ApiError, errorText, type KecermatanTestSummary, type Product, type ProductFilters, type Program, type TryoutSummary } from "@/lib/api/client";
+import { useDebounced } from "@/lib/use-debounced";
 import { formatIDR } from "@/lib/format-money";
 import { useProductsT } from "@/lib/i18n/dict/products";
 import { cn } from "@/lib/cn";
@@ -63,7 +64,12 @@ export default function ProductsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [search, setSearch] = useState("");
+  const gen = useRef(0);
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounced(searchInput.trim(), () => {
+    setRows(null);
+    setLoadFailed(false);
+  });
   const [filter, setFilter] = useState<FilterValue>({});
   const filtered = search.trim() !== "" || !!filter.program_id || !!filter.type || !!filter.status;
   const filters: ProductFilters = {
@@ -103,6 +109,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
     api.products
       .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
@@ -162,8 +169,10 @@ export default function ProductsPage() {
 
   const loadMore = async () => {
     setLoadingMore(true);
+    const id = gen.current;
     try {
       const page = await api.products.list({ ...filters, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      if (id !== gen.current) return;
       setRows((prev) => [...(prev ?? []), ...page.products]);
       setTotal(page.total);
     } catch (err) {
@@ -378,7 +387,7 @@ export default function ProductsPage() {
         }
       >
         <div className="mb-4 flex items-center gap-2">
-          <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+          <SearchField value={searchInput} onChange={setSearchInput} placeholder={t.searchPlaceholder} />
           <FilterMenu
             align="start"
             value={filter}

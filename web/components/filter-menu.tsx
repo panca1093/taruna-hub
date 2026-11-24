@@ -32,16 +32,28 @@ export function FilterMenu({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const root = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  const close = (restoreFocus: boolean) => {
+    setOpen(false);
+    if (restoreFocus) trigger.current?.focus();
+  };
+
+  useEffect(() => {
+    if (open) panel.current?.querySelector<HTMLElement>("input, button")?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
+    // An open select renders its list outside this panel; its trigger inside the panel reports aria-expanded.
+    const selectOpen = () => !!panel.current?.querySelector('[aria-expanded="true"]');
     const onPointer = (event: PointerEvent) => {
-      // An open select renders its list outside this panel; choosing an option must not close the panel.
-      if (document.querySelector('[role="listbox"]')) return;
+      if (selectOpen()) return;
       if (!root.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !document.querySelector('[role="listbox"]')) setOpen(false);
+      if (event.key === "Escape" && !selectOpen()) close(true);
     };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
@@ -57,6 +69,7 @@ export function FilterMenu({
   return (
     <div ref={root} className="relative shrink-0">
       <Button
+        ref={trigger}
         variant="secondary"
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -70,6 +83,7 @@ export function FilterMenu({
       </Button>
       {open && (
         <div
+          ref={panel}
           role="dialog"
           aria-label={t.filter}
           className={cn("absolute top-full z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-menu border border-border bg-overlay p-4 shadow-menu", align === "end" ? "right-0" : "right-0 sm:right-auto sm:left-0")}
@@ -94,7 +108,7 @@ export function FilterMenu({
             <button type="button" onClick={() => setDraft({})} className="mr-auto text-caption font-medium text-muted hover:text-foreground">
               {t.reset}
             </button>
-            <Button variant="ghost" size="sm" onPress={() => setOpen(false)}>
+            <Button variant="ghost" size="sm" onPress={() => close(true)}>
               {t.cancel}
             </Button>
             <Button
@@ -102,7 +116,7 @@ export function FilterMenu({
               size="sm"
               onPress={() => {
                 onChange(draft);
-                setOpen(false);
+                close(true);
               }}
             >
               {t.apply}

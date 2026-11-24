@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, toast } from "@heroui/react";
 import { ClipboardList, CloudOff, Lock, Pencil, Plus, Trash2 } from "lucide-react";
@@ -13,6 +13,7 @@ import { ProgramBadge, TryoutStatusBadge } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
 import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-menu";
 import { api, errorText, type Program, type TryoutSummary } from "@/lib/api/client";
+import { useDebounced } from "@/lib/use-debounced";
 import { useAdminTryoutsListT } from "@/lib/i18n/dict/admin-tryouts-list";
 import { useStatusBadgeT } from "@/lib/i18n/dict/status-badge";
 
@@ -29,9 +30,14 @@ export default function TryoutsListPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const gen = useRef(0);
   const [deleteTarget, setDeleteTarget] = useState<TryoutSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounced(searchInput.trim(), () => {
+    setRows(null);
+    setLoadFailed(false);
+  });
   const [filter, setFilter] = useState<FilterValue>({});
 
   const filters = {
@@ -58,6 +64,7 @@ export default function TryoutsListPage() {
 
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
     api.tryouts
       .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
@@ -88,8 +95,10 @@ export default function TryoutsListPage() {
 
   const loadMore = async () => {
     setLoadingMore(true);
+    const id = gen.current;
     try {
       const page = await api.tryouts.list({ ...filters, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      if (id !== gen.current) return;
       setRows((prev) => [...(prev ?? []), ...page.tryouts]);
       setTotal(page.total);
     } catch (err) {
@@ -201,7 +210,7 @@ export default function TryoutsListPage() {
         }
       >
         <div className="mb-4 flex items-center gap-2">
-          <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+          <SearchField value={searchInput} onChange={setSearchInput} placeholder={t.searchPlaceholder} />
           <FilterMenu
             align="start"
             value={filter}

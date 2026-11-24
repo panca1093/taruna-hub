@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -150,6 +151,9 @@ func (s *MonitoringService) ActiveSessions(ctx context.Context, scope HostScope,
 	}
 	if filter.Status != "" && filter.Status != "running" && filter.Status != "between" {
 		return nil, 0, &InputError{Fields: map[string]string{"status": ReasonMonitoringFilter}}
+	}
+	if utf8.RuneCountInString(filter.Search) > 100 {
+		return nil, 0, &InputError{Fields: map[string]string{"q": ReasonMonitoringFilter}}
 	}
 	rows, total, err := s.repo.ActiveSessions(ctx, s.rt.db, tenantID, filter, limit, offset)
 	return rows, total, runtimeError(err)

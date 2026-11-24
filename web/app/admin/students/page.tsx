@@ -45,6 +45,7 @@ export default function StudentsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const gen = useRef(0);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -69,6 +70,7 @@ export default function StudentsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
     api.adminUsers
       .list({ role: "student", q: query, active: activeFilter, limit: PAGE_SIZE })
       .then((page) => {
@@ -110,6 +112,7 @@ export default function StudentsPage() {
   const loadMore = async () => {
     setLoadingMore(true);
     setMoreFailed("");
+    const id = gen.current;
     try {
       const page = await api.adminUsers.list({
         role: "student",
@@ -118,6 +121,7 @@ export default function StudentsPage() {
         limit: PAGE_SIZE,
         offset: rows?.length ?? 0,
       });
+      if (id !== gen.current) return;
       setRows((prev) => {
         const seen = new Set((prev ?? []).map((row) => row.id));
         return [...(prev ?? []), ...page.users.filter((row) => !seen.has(row.id))];
