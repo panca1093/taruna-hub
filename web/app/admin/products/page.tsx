@@ -432,7 +432,7 @@ export default function ProductsPage() {
                     ? t.typeIndividual
                     : productType === "kecermatan"
                       ? t.typeKecermatan
-                      : t.typeBundle(form.tryoutIds.length)}
+                      : t.typeBundleTab}
                 </button>
               ))}
             </div>
