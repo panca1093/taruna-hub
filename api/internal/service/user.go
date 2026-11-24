@@ -548,9 +548,9 @@ func (s *UserAdminService) Grant(ctx context.Context, scope HostScope, principal
 		}
 		actor := principal.UserID
 		_, err = s.orders.IssueEnrollmentsTx(ctx, tx, IssueInput{
-			TenantID: tenantID, UserID: studentID, TryoutIDs: tryoutIDs(in.TryoutID),
+			TenantID: tenantID, UserID: studentID, TryoutIDs: idsOf(in.TryoutID),
 			SourceType: model.GrantSourceStaff, SourceID: key, ActorKind: model.ActorStaff, ActorID: &actor,
-			Reason: reason, KecermatanTestID: in.KecermatanTestID, Attempts: in.Attempts,
+			Reason: reason, KecermatanTestIDs: idsOf(in.KecermatanTestID), Attempts: in.Attempts,
 		})
 		if err != nil {
 			return err
@@ -670,7 +670,7 @@ func samePtr(a, b *string) bool {
 	return *a == *b
 }
 
-func tryoutIDs(id *uuid.UUID) []uuid.UUID {
+func idsOf(id *uuid.UUID) []uuid.UUID {
 	if id == nil {
 		return nil
 	}

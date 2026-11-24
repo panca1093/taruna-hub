@@ -220,3 +220,45 @@ func (f kecermatanFixture) tx2(t *testing.T, fn func(tx pgx.Tx)) {
 	defer func() { _ = tx.Rollback(context.Background()) }()
 	fn(tx)
 }
+
+func TestKecermatanListNarrowsBySearchAndItemType(t *testing.T) {
+	f := newKecermatanFixture(t)
+	ctx := context.Background()
+	make := func(title, itemType string) {
+		draft := f.draftTest(f.program.ID)
+		draft.Title, draft.ItemType = title, itemType
+		f.tx(t, func(tx pgx.Tx) {
+			if _, err := f.kec.CreateTx(ctx, tx, f.tenant.ID, f.author.ID, draft); err != nil {
+				t.Fatalf("create %s: %v", title, err)
+			}
+		})
+	}
+	make("Angka 100%", model.KecNumber)
+	make("Huruf Dasar", model.KecChar)
+	make("Angka Lanjut", model.KecNumber)
+
+	list := func(tenant uuid.UUID, filter KecermatanFilter) int {
+		t.Helper()
+		filter.Limit = 10
+		_, total, err := f.kec.List(ctx, tenant, filter)
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		return total
+	}
+	if got := list(f.tenant.ID, KecermatanFilter{Search: "angka"}); got != 2 {
+		t.Errorf("q=angka total = %d, want 2", got)
+	}
+	if got := list(f.tenant.ID, KecermatanFilter{Search: "100%"}); got != 1 {
+		t.Errorf("q=100%% total = %d, want 1 (the percent is literal)", got)
+	}
+	if got := list(f.tenant.ID, KecermatanFilter{ItemType: model.KecChar}); got != 1 {
+		t.Errorf("item_type=char total = %d, want 1", got)
+	}
+	if got := list(f.tenant.ID, KecermatanFilter{Search: "angka", ItemType: model.KecChar}); got != 0 {
+		t.Errorf("q=angka + char total = %d, want 0", got)
+	}
+	if got := list(f.other.ID, KecermatanFilter{Search: "angka"}); got != 0 {
+		t.Errorf("another tenant total = %d, want 0", got)
+	}
+}

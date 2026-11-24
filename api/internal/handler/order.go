@@ -40,26 +40,32 @@ type orderItemResponse struct {
 	Title    string    `json:"title"`
 }
 
+type orderKecermatanItemResponse struct {
+	TestID uuid.UUID `json:"test_id"`
+	Title  string    `json:"title"`
+}
+
 type orderResponse struct {
-	ID               uuid.UUID           `json:"id"`
-	Code             string              `json:"code"`
-	Status           string              `json:"status"`
-	PaymentMethod    string              `json:"payment_method"`
-	StudentID        uuid.UUID           `json:"student_id"`
-	StudentName      string              `json:"student_name"`
-	StudentAvatar    string              `json:"student_avatar"`
-	ProductID        uuid.UUID           `json:"product_id"`
-	ProductType      string              `json:"product_type"`
-	ProductTitle     string              `json:"product_title"`
-	Price            string              `json:"price"`
-	Items            []orderItemResponse `json:"items"`
-	KecermatanTestID *uuid.UUID          `json:"kecermatan_test_id"`
-	IncludedAttempts *int                `json:"included_attempts"`
-	ProofAssetID     *uuid.UUID          `json:"proof_asset_id"`
-	CancelReason     string              `json:"cancel_reason"`
-	CreatedAt        time.Time           `json:"created_at"`
-	ConfirmedAt      *time.Time          `json:"confirmed_at"`
-	CancelledAt      *time.Time          `json:"cancelled_at"`
+	ID               uuid.UUID                     `json:"id"`
+	Code             string                        `json:"code"`
+	Status           string                        `json:"status"`
+	PaymentMethod    string                        `json:"payment_method"`
+	StudentID        uuid.UUID                     `json:"student_id"`
+	StudentName      string                        `json:"student_name"`
+	StudentAvatar    string                        `json:"student_avatar"`
+	ProductID        uuid.UUID                     `json:"product_id"`
+	ProductType      string                        `json:"product_type"`
+	ProductTitle     string                        `json:"product_title"`
+	Price            string                        `json:"price"`
+	Items            []orderItemResponse           `json:"items"`
+	KecermatanItems  []orderKecermatanItemResponse `json:"kecermatan_items"`
+	KecermatanTestID *uuid.UUID                    `json:"kecermatan_test_id"`
+	IncludedAttempts *int                          `json:"included_attempts"`
+	ProofAssetID     *uuid.UUID                    `json:"proof_asset_id"`
+	CancelReason     string                        `json:"cancel_reason"`
+	CreatedAt        time.Time                     `json:"created_at"`
+	ConfirmedAt      *time.Time                    `json:"confirmed_at"`
+	CancelledAt      *time.Time                    `json:"cancelled_at"`
 	// RedirectURL is the Midtrans payment page of a gateway order that is still open.
 	RedirectURL      *string              `json:"redirect_url"`
 	PaymentException *paymentExceptionRef `json:"payment_exception"`
@@ -135,11 +141,11 @@ func (h *Handler) MyOrders(c echo.Context) error {
 	if !ok {
 		return httpx.Unauthorized(sessionInvalid)
 	}
-	limit, offset, err := orderPageOf(c)
+	filter, err := orderFilterOf(c)
 	if err != nil {
 		return err
 	}
-	orders, total, err := h.orders.Orders(c.Request().Context(), scope, principal, limit, offset)
+	orders, total, err := h.orders.Orders(c.Request().Context(), scope, principal, filter)
 	if err != nil {
 		return orderError(err)
 	}
@@ -172,13 +178,11 @@ func (h *Handler) StaffOrders(c echo.Context) error {
 	if !ok {
 		return httpx.Unauthorized(sessionInvalid)
 	}
-	limit, offset, err := orderPageOf(c)
+	filter, err := orderFilterOf(c)
 	if err != nil {
 		return err
 	}
-	orders, total, err := h.orders.StaffOrders(c.Request().Context(), scope, principal, service.OrderFilter{
-		Status: c.QueryParam(orderStatusParam), Search: c.QueryParam("q"), Limit: limit, Offset: offset,
-	})
+	orders, total, err := h.orders.StaffOrders(c.Request().Context(), scope, principal, filter)
 	if err != nil {
 		return orderError(err)
 	}
@@ -265,6 +269,17 @@ func orderID(c echo.Context) (uuid.UUID, error) {
 	return id, nil
 }
 
+func orderFilterOf(c echo.Context) (service.OrderFilter, error) {
+	limit, offset, err := orderPageOf(c)
+	if err != nil {
+		return service.OrderFilter{}, err
+	}
+	return service.OrderFilter{
+		Status: c.QueryParam(orderStatusParam), Method: c.QueryParam("payment_method"), Search: c.QueryParam("q"),
+		From: c.QueryParam("from"), To: c.QueryParam("to"), Limit: limit, Offset: offset,
+	}, nil
+}
+
 func orderPageOf(c echo.Context) (int, int, error) {
 	fields := map[string]string{}
 	limit, offset := 0, 0
@@ -313,12 +328,16 @@ func orderResponseOf(o model.Order) orderResponse {
 		ID: o.ID, Code: service.OrderCode(o.Number), Status: o.Status, PaymentMethod: o.PaymentMethod,
 		StudentID: o.UserID, StudentName: o.StudentName, StudentAvatar: model.ShownAvatar(o.UserID, o.AvatarKey, o.Gender, o.BirthDate), ProductID: o.ProductID, ProductType: o.ProductType,
 		ProductTitle: o.ProductTitle, Price: o.Price, Items: make([]orderItemResponse, 0, len(o.Items)),
-		ProofAssetID: o.ProofAssetID, CancelReason: o.CancelReason, CreatedAt: o.CreatedAt,
+		KecermatanItems: make([]orderKecermatanItemResponse, 0, len(o.KecermatanItems)),
+		ProofAssetID:    o.ProofAssetID, CancelReason: o.CancelReason, CreatedAt: o.CreatedAt,
 		ConfirmedAt: o.ConfirmedAt, CancelledAt: o.CancelledAt,
 		KecermatanTestID: o.KecermatanTestID, IncludedAttempts: o.IncludedAttempts,
 	}
 	for _, item := range o.Items {
 		out.Items = append(out.Items, orderItemResponse{TryoutID: item.TryoutID, Title: item.Title})
+	}
+	for _, item := range o.KecermatanItems {
+		out.KecermatanItems = append(out.KecermatanItems, orderKecermatanItemResponse{TestID: item.TestID, Title: item.Title})
 	}
 	out.RedirectURL = o.RedirectURL
 	if o.ExceptionID != nil && o.ExceptionKind != nil && o.ExceptionAmount != nil {

@@ -453,7 +453,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
               {product.program_name} · {typeLabel}
             </p>
           </div>
-          {product.type === "bundle" && <p className="text-label text-muted">{t.includedTryouts(product.tryouts.length)}</p>}
+          {product.type === "bundle" && <p className="text-label text-muted">{t.includedTryouts(product.tryouts.length + product.kecermatan_tests.length)}</p>}
           {product.included_attempts !== null && (
             <p className="text-label text-muted">{t.includedAttempts(product.included_attempts)}</p>
           )}

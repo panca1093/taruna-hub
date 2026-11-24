@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -23,9 +24,12 @@ var ErrPendingExists = errors.New("pending order already exists for this product
 // OrderFilter is already validated by the service; the repository only turns it into SQL.
 type OrderFilter struct {
 	Status string
+	Method string
 	Search string
-	Limit  int
-	Offset int
+	// From is inclusive and To exclusive, both the start of a Jakarta day.
+	From, To *time.Time
+	Limit    int
+	Offset   int
 }
 
 type OrderRepository struct {
@@ -121,6 +125,13 @@ func (r *OrderRepository) InsertTx(ctx context.Context, tx pgx.Tx, tenantID uuid
 			return model.Order{}, mapOrderError("insert order item", err)
 		}
 	}
+	for i, item := range order.KecermatanItems {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO order_kecermatan_items (order_id, tenant_id, kecermatan_test_id, test_title, position)
+			VALUES ($1, $2, $3, $4, $5)`, id, tenantID, item.TestID, item.Title, i+1); err != nil {
+			return model.Order{}, mapOrderError("insert order kecermatan item", err)
+		}
+	}
 	return r.FindTx(ctx, tx, tenantID, id)
 }
 
@@ -152,30 +163,48 @@ func (r *OrderRepository) transition(ctx context.Context, tx pgx.Tx, tenantID, i
 	return nil
 }
 
-func (r *OrderRepository) ListForUser(ctx context.Context, tenantID, userID uuid.UUID, limit, offset int) ([]model.Order, int, error) {
+func (r *OrderRepository) ListForUser(ctx context.Context, tenantID, userID uuid.UUID, filter OrderFilter) ([]model.Order, int, error) {
 	if tenantID == uuid.Nil {
 		return nil, 0, ErrScopeRequired
 	}
-	return r.list(ctx, []string{"o.tenant_id = $1", "o.user_id = $2"}, []any{tenantID, userID}, limit, offset)
+	where, args := orderWhere([]string{"o.tenant_id = $1", "o.user_id = $2"}, []any{tenantID, userID}, filter)
+	return r.list(ctx, where, args, filter.Limit, filter.Offset)
 }
 
 func (r *OrderRepository) List(ctx context.Context, tenantID uuid.UUID, filter OrderFilter) ([]model.Order, int, error) {
 	if tenantID == uuid.Nil {
 		return nil, 0, ErrScopeRequired
 	}
-	where := []string{"o.tenant_id = $1"}
-	args := []any{tenantID}
+	where, args := orderWhere([]string{"o.tenant_id = $1"}, []any{tenantID}, filter)
+	return r.list(ctx, where, args, filter.Limit, filter.Offset)
+}
+
+// orderWhere appends the optional filters; search covers the order code, the Midtrans merchant reference, the
+// student's name or email and the product title.
+func orderWhere(where []string, args []any, filter OrderFilter) ([]string, []any) {
+	add := func(clause string, value any) {
+		args = append(args, value)
+		where = append(where, strings.ReplaceAll(clause, "$N", fmt.Sprintf("$%d", len(args))))
+	}
 	if filter.Status != "" {
-		args = append(args, filter.Status)
-		where = append(where, fmt.Sprintf("o.status = $%d", len(args)))
+		add("o.status = $N", filter.Status)
+	}
+	if filter.Method != "" {
+		add("o.payment_method = $N", filter.Method)
+	}
+	if filter.From != nil {
+		add("o.created_at >= $N", *filter.From)
+	}
+	if filter.To != nil {
+		add("o.created_at < $N", *filter.To)
 	}
 	if filter.Search != "" {
-		args = append(args, likePattern(filter.Search))
-		where = append(where, fmt.Sprintf(
-			`('ORD-' || lpad(o.number::text, 6, '0') ILIKE $%[1]d ESCAPE '\' OR u.name ILIKE $%[1]d ESCAPE '\'
-			  OR o.product_title ILIKE $%[1]d ESCAPE '\')`, len(args)))
+		add(`('ORD-' || lpad(o.number::text, 6, '0') ILIKE $N ESCAPE '\' OR u.name ILIKE $N ESCAPE '\'
+			  OR u.email ILIKE $N ESCAPE '\' OR o.product_title ILIKE $N ESCAPE '\'
+			  OR EXISTS (SELECT 1 FROM payment_attempts a WHERE a.order_id = o.id AND a.tenant_id = o.tenant_id AND a.provider_order_id ILIKE $N ESCAPE '\'))`,
+			likePattern(filter.Search))
 	}
-	return r.list(ctx, where, args, filter.Limit, filter.Offset)
+	return where, args
 }
 
 func (r *OrderRepository) list(ctx context.Context, where []string, args []any, limit, offset int) ([]model.Order, int, error) {
@@ -250,6 +279,26 @@ func (r *OrderRepository) attachItems(ctx context.Context, q queryer, orders []m
 		}
 		if at, ok := index[orderID]; ok {
 			orders[at].Items = append(orders[at].Items, item)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read order items: %w", err)
+	}
+	rows, err = q.Query(ctx, `
+		SELECT order_id, kecermatan_test_id, test_title FROM order_kecermatan_items
+		 WHERE tenant_id = $1 AND order_id = ANY($2) ORDER BY order_id, position`, orders[0].TenantID, ids)
+	if err != nil {
+		return fmt.Errorf("read order kecermatan items: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var orderID uuid.UUID
+		var item model.OrderKecermatanItem
+		if err := rows.Scan(&orderID, &item.TestID, &item.Title); err != nil {
+			return fmt.Errorf("scan order kecermatan item: %w", err)
+		}
+		if at, ok := index[orderID]; ok {
+			orders[at].KecermatanItems = append(orders[at].KecermatanItems, item)
 		}
 	}
 	return rows.Err()

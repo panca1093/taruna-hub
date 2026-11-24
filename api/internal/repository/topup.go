@@ -177,7 +177,8 @@ func (r *TopupRepository) List(ctx context.Context, tenantID uuid.UUID, filter T
 	if filter.Search != "" {
 		args = append(args, likePattern(filter.Search))
 		where = append(where, fmt.Sprintf(
-			`('TUP-' || lpad(t.number::text, 6, '0') ILIKE $%[1]d ESCAPE '\' OR u.name ILIKE $%[1]d ESCAPE '\')`, len(args)))
+			`('TUP-' || lpad(t.number::text, 6, '0') ILIKE $%[1]d ESCAPE '\' OR u.name ILIKE $%[1]d ESCAPE '\'
+			  OR u.email ILIKE $%[1]d ESCAPE '\')`, len(args)))
 	}
 	return r.list(ctx, where, args, filter.Limit, filter.Offset)
 }

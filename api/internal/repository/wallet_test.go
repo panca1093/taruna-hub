@@ -118,7 +118,7 @@ func TestWalletRequiresScope(t *testing.T) {
 	if _, err := repo.Wallet(ctx, uuid.Nil, uuid.New()); !errors.Is(err, ErrScopeRequired) {
 		t.Errorf("Wallet(Nil): err = %v, want ErrScopeRequired", err)
 	}
-	if _, _, err := repo.Entries(ctx, uuid.Nil, uuid.New(), 10, 0); !errors.Is(err, ErrScopeRequired) {
+	if _, _, err := repo.Entries(ctx, uuid.Nil, uuid.New(), "", 10, 0); !errors.Is(err, ErrScopeRequired) {
 		t.Errorf("Entries(Nil): err = %v, want ErrScopeRequired", err)
 	}
 	if _, err := repo.Student(ctx, uuid.Nil, uuid.New()); !errors.Is(err, ErrScopeRequired) {

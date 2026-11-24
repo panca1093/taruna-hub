@@ -1,29 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
-import { CloudOff, Pencil, Plus, Power, Search, Users } from "lucide-react";
+import { CloudOff, Pencil, Plus, Power, Users } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
 import { DetailGrid, DetailItem } from "@/components/admin-detail";
 import { EmptyState } from "@/components/empty-state";
-import { FilterPills } from "@/components/filter-pills";
+import { FilterMenu, SearchField } from "@/components/filter-menu";
 import { Icon } from "@/components/icon";
 import { NoteBox } from "@/components/page-blocks";
 import { StatusChip } from "@/components/status-badge";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { FormModal } from "@/components/ui/form-modal";
-import { TextInput } from "@/components/ui/form";
 import { api, errorText, type AdminUser } from "@/lib/api/client";
 import { useUser } from "@/lib/session-context";
 import { useUsersT } from "@/lib/i18n/dict/users";
 import { AccountFormModal, AccountStatusModal } from "./account-modals";
 
 const PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 300;
 const STAFF_ROLES: AdminUser["role"][] = ["operator", "admin"];
 
 type StatusFilter = "all" | "active" | "inactive";
+type RoleFilter = "staff" | "operator" | "admin";
 
 export default function UsersPage() {
   const t = useUsersT();
@@ -34,7 +35,9 @@ export default function UsersPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const gen = useRef(0);
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [role, setRole] = useState<RoleFilter>("staff");
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -47,8 +50,10 @@ export default function UsersPage() {
 
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
+    setLoadingMore(false);
     api.adminUsers
-      .list({ role: "staff", q: query, active: activeFilter, limit: PAGE_SIZE })
+      .list({ role, q: query, active: activeFilter, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
         setRows(page.users);
@@ -60,7 +65,19 @@ export default function UsersPage() {
     return () => {
       cancelled = true;
     };
-  }, [query, activeFilter, reloadKey]);
+  }, [query, role, activeFilter, reloadKey]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = search.trim();
+      if (next === query) return;
+      setRows(null);
+      setLoadFailed(false);
+      setMoreFailed("");
+      setQuery(next);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search, query]);
 
   const reload = () => {
     setRows(null);
@@ -72,23 +89,25 @@ export default function UsersPage() {
   const loadMore = async () => {
     setLoadingMore(true);
     setMoreFailed("");
+    const id = gen.current;
     try {
       const page = await api.adminUsers.list({
-        role: "staff",
+        role,
         q: query,
         active: activeFilter,
         limit: PAGE_SIZE,
         offset: rows?.length ?? 0,
       });
+      if (id !== gen.current) return;
       setRows((prev) => {
         const seen = new Set((prev ?? []).map((row) => row.id));
         return [...(prev ?? []), ...page.users.filter((row) => !seen.has(row.id))];
       });
       setTotal(page.total);
     } catch (err) {
-      setMoreFailed(errorText(err, t.loadErrorDescription));
+      if (id === gen.current) setMoreFailed(errorText(err, t.loadErrorDescription));
     } finally {
-      setLoadingMore(false);
+      if (id === gen.current) setLoadingMore(false);
     }
   };
 
@@ -172,51 +191,35 @@ export default function UsersPage() {
           </Button>
         }
       >
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <form
-            className="flex w-full max-w-md flex-wrap items-end gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setRows(null);
-              setLoadFailed(false);
-              setQuery(search.trim());
-            }}
-          >
-            <TextInput
-              className="w-full max-w-sm"
-              placeholder={t.searchPlaceholder}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <Button variant="secondary" size="sm" type="submit">
-              <Icon icon={Search} size="xs" /> {t.searchAction}
-            </Button>
-            {query !== "" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onPress={() => {
-                  setSearch("");
-                  setRows(null);
-                  setQuery("");
-                }}
-              >
-                {t.searchClear}
-              </Button>
-            )}
-          </form>
-          <FilterPills
-            ariaLabel={t.filterLabel}
-            value={status}
+        <div className="mb-4 flex items-center gap-2">
+          <SearchField value={search} onChange={setSearch} placeholder={t.searchPlaceholder} />
+          <FilterMenu
+            value={{ role: role === "staff" ? "" : role, status: status === "all" ? "" : status }}
             onChange={(next) => {
               setRows(null);
               setLoadFailed(false);
-              setStatus(next as StatusFilter);
+              setRole((next.role || "staff") as RoleFilter);
+              setStatus((next.status || "all") as StatusFilter);
             }}
-            options={[
-              { id: "all", label: t.filterAll },
-              { id: "active", label: t.statusActive },
-              { id: "inactive", label: t.statusInactive },
+            fields={[
+              {
+                key: "role",
+                label: t.colRole,
+                half: true,
+                options: [
+                  { id: "operator", label: t.roleOperator },
+                  { id: "admin", label: t.roleAdmin },
+                ],
+              },
+              {
+                key: "status",
+                label: t.colStatus,
+                half: true,
+                options: [
+                  { id: "active", label: t.statusActive },
+                  { id: "inactive", label: t.statusInactive },
+                ],
+              },
             ]}
           />
         </div>
@@ -237,8 +240,8 @@ export default function UsersPage() {
         ) : rows.length === 0 ? (
           <EmptyState
             icon={Users}
-            title={query === "" && status === "all" ? t.emptyTitle : t.noMatchTitle}
-            description={query === "" && status === "all" ? t.emptyDescription : t.noMatchDescription}
+            title={query === "" && status === "all" && role === "staff" ? t.emptyTitle : t.noMatchTitle}
+            description={query === "" && status === "all" && role === "staff" ? t.emptyDescription : t.noMatchDescription}
           />
         ) : (
           <>

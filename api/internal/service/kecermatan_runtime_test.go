@@ -49,6 +49,8 @@ func newKecHarness(t *testing.T) kecHarness {
 		ctx := context.Background()
 		ids := []uuid.UUID{h.t.q.a.ID, h.t.q.b.ID}
 		for _, sql := range []string{
+			`DELETE FROM order_kecermatan_items WHERE tenant_id = ANY($1)`,
+			`DELETE FROM product_kecermatan_tests WHERE tenant_id = ANY($1)`,
 			`DELETE FROM kecermatan_results WHERE tenant_id = ANY($1)`,
 			`DELETE FROM kecermatan_session_answers WHERE tenant_id = ANY($1)`,
 			`DELETE FROM kecermatan_session_kolom WHERE tenant_id = ANY($1)`,
@@ -94,7 +96,7 @@ func (h kecHarness) grant(t *testing.T, tenant model.Tenant, user model.User, te
 	author := h.t.q.author[tenant.ID].ID
 	err := h.inTx(func(tx pgx.Tx) error {
 		_, err := h.svc.IssueEnrollmentsTx(context.Background(), tx, IssueInput{
-			TenantID: tenant.ID, UserID: user.ID, KecermatanTestID: &test.ID, Attempts: credits,
+			TenantID: tenant.ID, UserID: user.ID, KecermatanTestIDs: []uuid.UUID{test.ID}, Attempts: credits,
 			SourceType: model.GrantSourceStaff, SourceID: source, ActorKind: model.ActorStaff,
 			ActorID: &author, Reason: "fixture",
 		})

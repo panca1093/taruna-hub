@@ -22,7 +22,7 @@ const id = {
   emptyTitle: "Belum ada paket yang cocok",
   emptyDescription: "Coba pilih program lain, ubah kata kunci, atau kembali lagi nanti.",
   discountChip: (pct: number) => `Hemat ${pct}%`,
-  bundleSize: (n: number) => `${n} tryout`,
+  bundleSize: (n: number) => `${n} item`,
   viewDetail: "Lihat detail",
 };
 
@@ -46,7 +46,7 @@ const en: typeof id = {
   emptyTitle: "No package matches yet",
   emptyDescription: "Pick another program, change the keyword, or check back later.",
   discountChip: (pct: number) => `Save ${pct}%`,
-  bundleSize: (n: number) => `${n} tryouts`,
+  bundleSize: (n: number) => `${n} items`,
   viewDetail: "View details",
 };
 

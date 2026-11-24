@@ -2354,6 +2354,8 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    /** @description Narrows to one kind of movement. */
+                    kind?: "opening" | "topup" | "spend" | "adjustment";
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
                     offset?: number;
@@ -3012,11 +3014,19 @@ export interface paths {
         };
         /**
          * The signed-in student's own orders
-         * @description Student only. Newest first, at most 100 per page, only the caller's own orders.
+         * @description Student only. Newest first, at most 100 per page, only the caller's own orders. `status`, `payment_method`,
+         *     `from`, `to` and `q` narrow the list as on the staff list.
          */
         get: {
             parameters: {
                 query?: {
+                    status?: "pending" | "confirmed" | "cancelled";
+                    q?: string;
+                    payment_method?: "wallet" | "manual" | "gateway";
+                    /** @description First Jakarta calendar day of `created_at`, `YYYY-MM-DD`, inclusive. */
+                    from?: string;
+                    /** @description Last Jakarta calendar day of `created_at`, `YYYY-MM-DD`, inclusive. */
+                    to?: string;
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
                     offset?: number;
@@ -3640,13 +3650,19 @@ export interface paths {
         /**
          * Every order of the tenant, for review
          * @description Admin and Operator (D02: a role guard). Newest first, at most 100 per page. `status` narrows to one
-         *     state. `q` is a case-insensitive substring of the order code, the student's name or the product title;
-         *     `%` and `_` are literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
+         *     state, `payment_method` to one method, `from`/`to` to a range of creation days. `q` is a case-insensitive
+         *     substring of the order code, the Midtrans merchant reference, the student's name or email, or the product
+         *     title; `%` and `_` are literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
          */
         get: {
             parameters: {
                 query?: {
                     status?: "pending" | "confirmed" | "cancelled";
+                    payment_method?: "wallet" | "manual" | "gateway";
+                    /** @description First Jakarta calendar day of `created_at`, `YYYY-MM-DD`, inclusive. */
+                    from?: string;
+                    /** @description Last Jakarta calendar day of `created_at`, `YYYY-MM-DD`, inclusive. */
+                    to?: string;
                     q?: string;
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
@@ -4037,7 +4053,7 @@ export interface paths {
         /**
          * Every top-up request of the tenant, for review
          * @description Admin and Operator (D02: a role guard). Newest first, at most 100 per page. `status` narrows to one
-         *     state. `q` is a case-insensitive substring of the request code or the student's name; `%` and `_` are
+         *     state. `q` is a case-insensitive substring of the request code or the student's name or email; `%` and `_` are
          *     literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
          */
         get: {
@@ -5159,11 +5175,16 @@ export interface paths {
          * @description Admin and Operator (D02: a role guard). Every in-progress session of the tenant, newest start first, read
          *     from PostgreSQL on each call; the page polls every 30 seconds. `subtest` is the running subtest and is null
          *     between subtests. `violation_count` counts the stored violations of that session. Defaults to 100 per page,
-         *     at most 200.
+         *     at most 200. `q` is a case-insensitive substring of the student name (`%` and `_` are literal);
+         *     `tryout_id` narrows to one tryout; `status` is `running` (a subtest is running) or `between`
+         *     (none is). `total` counts the matches.
          */
         get: {
             parameters: {
                 query?: {
+                    q?: string;
+                    tryout_id?: string;
+                    status?: "running" | "between";
                     limit?: number;
                     offset?: number;
                 };
@@ -5492,6 +5513,8 @@ export interface paths {
             parameters: {
                 query?: {
                     type?: components["schemas"]["ItemPackageType"];
+                    /** @description Case-insensitive substring of the name; `%` and `_` are literal. */
+                    q?: string;
                 };
                 header?: never;
                 path?: never;
@@ -5996,6 +6019,7 @@ export interface paths {
             parameters: {
                 query?: {
                     program_id?: string;
+                    item_type?: components["schemas"]["KecermatanItemType"];
                     q?: string;
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
@@ -7762,6 +7786,13 @@ export interface components {
             subtest_count: number;
             question_count: number;
         };
+        ProductKecermatanTest: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @description The test's own status; a bundle is on sale only while every test in it is published. */
+            status: string;
+        };
         Product: {
             /** Format: uuid */
             id: string;
@@ -7798,6 +7829,8 @@ export interface components {
             /** Format: date-time */
             active_until: string | null;
             tryouts: components["schemas"]["ProductTryout"][];
+            /** @description The kecermatan tests a `bundle` holds, in order; empty for the other types. */
+            kecermatan_tests: components["schemas"]["ProductKecermatanTest"][];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -7838,8 +7871,16 @@ export interface components {
             active_from?: string | null;
             /** Format: date-time */
             active_until?: string | null;
-            /** @description The complete package, in order. One id for `individual`, two to twenty for `bundle`, none for `kecermatan`. */
+            /**
+             * @description The tryouts of the package, in order. One id for `individual`, none for `kecermatan`. For `bundle`,
+             *     `tryout_ids` plus `kecermatan_test_ids` must hold two to twenty items together.
+             */
             tryout_ids: string[];
+            /**
+             * @description `bundle` only (refused for the other types): kecermatan tests of the same program sold with the tryouts.
+             *     Each purchase adds `included_attempts` credits to every tryout and every kecermatan test of the bundle.
+             */
+            kecermatan_test_ids?: string[];
         };
         PublicProductTryout: {
             /** Format: uuid */
@@ -7855,6 +7896,15 @@ export interface components {
             test_id: string;
             item_type: string;
             options_per_soal: number;
+            kolom_count: number;
+            soal_per_kolom: number;
+            kolom_duration_seconds: number;
+        };
+        PublicProductKecermatan: {
+            /** Format: uuid */
+            test_id: string;
+            title: string;
+            item_type: string;
             kolom_count: number;
             soal_per_kolom: number;
             kolom_duration_seconds: number;
@@ -7883,6 +7933,8 @@ export interface components {
             /** Format: date-time */
             active_until: string | null;
             tryouts: components["schemas"]["PublicProductTryout"][];
+            /** @description The kecermatan tests of a `bundle`, in order; empty for the other types. */
+            kecermatan_tests: components["schemas"]["PublicProductKecermatan"][];
         };
         PublicProductList: {
             products: components["schemas"]["PublicProduct"][];
@@ -8234,6 +8286,12 @@ export interface components {
              */
             price: string;
             items: components["schemas"]["OrderItem"][];
+            /** @description The kecermatan tests of a bundle as named at checkout; empty when the order has none. */
+            kecermatan_items: {
+                /** Format: uuid */
+                test_id: string;
+                title: string;
+            }[];
             /**
              * Format: uuid
              * @description The transfer proof of a `manual` order; read it with `GET /api/v1/assets/{id}/url`.

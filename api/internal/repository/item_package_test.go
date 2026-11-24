@@ -69,7 +69,7 @@ func TestItemPackageIsInvisibleToAnotherTenant(t *testing.T) {
 	if _, err := f.repo.Find(ctx, f.repo.db, f.other.ID, pkg.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Find from another tenant: err = %v, want ErrNotFound", err)
 	}
-	if list, err := f.repo.List(ctx, f.other.ID, ""); err != nil || len(list) != 0 {
+	if list, err := f.repo.List(ctx, f.other.ID, "", ""); err != nil || len(list) != 0 {
 		t.Errorf("List from another tenant = %v, %v; want nothing", list, err)
 	}
 	if els, err := f.repo.Elements(ctx, f.repo.db, f.other.ID, pkg.ID, 1); err != nil || len(els) != 0 {
@@ -98,7 +98,7 @@ func TestItemPackageMethodsRefuseANilTenant(t *testing.T) {
 	if _, err := f.repo.Find(ctx, f.repo.db, uuid.Nil, id); !errors.Is(err, ErrScopeRequired) {
 		t.Errorf("Find(Nil): %v", err)
 	}
-	if _, err := f.repo.List(ctx, uuid.Nil, ""); !errors.Is(err, ErrScopeRequired) {
+	if _, err := f.repo.List(ctx, uuid.Nil, "", ""); !errors.Is(err, ErrScopeRequired) {
 		t.Errorf("List(Nil): %v", err)
 	}
 	if _, err := f.repo.Elements(ctx, f.repo.db, uuid.Nil, id, 1); !errors.Is(err, ErrScopeRequired) {
@@ -163,4 +163,31 @@ func TestItemPackageRevisionsAreAppendOnlyAndKeyedByContent(t *testing.T) {
 		t.Errorf("duplicate name: err = %v, want ErrDuplicateName", err)
 	}
 	_ = tx.Rollback(ctx)
+}
+
+func TestItemPackageListSearchAndType(t *testing.T) {
+	f := newItemPackageFixture(t)
+	ctx := context.Background()
+	f.create(t, "Panah 100% biru")
+	f.create(t, "Panah hijau")
+	f.create(t, "Bunga")
+
+	count := func(tenant uuid.UUID, kind, search string) int {
+		list, err := f.repo.List(ctx, tenant, kind, search)
+		if err != nil {
+			t.Fatalf("List(%q, %q): %v", kind, search, err)
+		}
+		return len(list)
+	}
+	for _, c := range []struct {
+		kind, search string
+		want         int
+	}{{"", "", 3}, {"", "panah", 2}, {"", "100%", 1}, {"", "_", 0}, {"symbol", "bunga", 1}, {"emoji", "bunga", 0}} {
+		if got := count(f.tenant.ID, c.kind, c.search); got != c.want {
+			t.Errorf("List(%q, %q) = %d, want %d", c.kind, c.search, got, c.want)
+		}
+	}
+	if got := count(f.other.ID, "", "panah"); got != 0 {
+		t.Errorf("another tenant sees %d packages, want 0", got)
+	}
 }

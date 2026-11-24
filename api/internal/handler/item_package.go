@@ -166,7 +166,7 @@ func (h *Handler) ListItemPackages(c echo.Context) error {
 	if !ok {
 		return httpx.Unauthorized(sessionInvalid)
 	}
-	packages, err := h.itemPackages.List(c.Request().Context(), scope, principal, c.QueryParam("type"))
+	packages, err := h.itemPackages.List(c.Request().Context(), scope, principal, c.QueryParam("type"), c.QueryParam("q"))
 	if err != nil {
 		return itemPackageHTTPError(err)
 	}
@@ -479,6 +479,8 @@ func packageReason(reason string) string {
 	switch reason {
 	case service.ReasonPackageType:
 		return packageTypeRule
+	case service.ReasonPackageQuery:
+		return "Kata kunci pencarian paling banyak 100 karakter."
 	case service.ReasonPackageName:
 		return packageNameRule
 	case service.ReasonElementsEmpty:

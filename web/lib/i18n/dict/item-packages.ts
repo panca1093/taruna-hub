@@ -15,6 +15,9 @@ const id = {
   retry: "Coba lagi",
   emptyTitle: "Belum ada paket item",
   emptyDescription: "Buat paket pertama untuk dipakai di tes kecermatan.",
+  searchPlaceholder: "Cari nama paket",
+  noMatchTitle: "Tidak ada paket yang cocok",
+  noMatchDescription: "Coba kata kunci atau filter lain.",
   columns: {
     name: "Nama",
     type: "Tipe",
@@ -151,6 +154,9 @@ const en: typeof id = {
   retry: "Try again",
   emptyTitle: "No item packages yet",
   emptyDescription: "Create the first package to use in a kecermatan test.",
+  searchPlaceholder: "Search package name",
+  noMatchTitle: "No matching packages",
+  noMatchDescription: "Try another keyword or filter.",
   columns: {
     name: "Name",
     type: "Type",

@@ -787,7 +787,7 @@ func TestListNeverLeaksStaffContactDetails(t *testing.T) {
 		t.Fatalf("adjustment: %v", err)
 	}
 
-	entries, _, err := h.svc.Entries(context.Background(), h.scope(h.tenant), h.principal(h.tenant, user), 50, 0)
+	entries, _, err := h.svc.Entries(context.Background(), h.scope(h.tenant), h.principal(h.tenant, user), "", 50, 0)
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("entries = %d, %v; want the one adjustment", len(entries), err)
 	}
@@ -867,4 +867,21 @@ func waitForLockWaiter(t *testing.T, pool *pgxpool.Pool) {
 		}
 	}
 	t.Fatal("no insert ever waited on the first transaction's source row")
+}
+
+func TestEntriesFilterByKind(t *testing.T) {
+	h := newWalletHarness(t)
+	user := h.student
+	h.credit(t, user, "5000.00")
+	ctx, scope, p := context.Background(), h.scope(h.tenant), h.principal(h.tenant, user)
+	if _, total, err := h.svc.Entries(ctx, scope, p, model.KindTopup, 50, 0); err != nil || total != 1 {
+		t.Errorf("topup filter total %d err %v, want 1", total, err)
+	}
+	if _, total, err := h.svc.Entries(ctx, scope, p, model.KindSpend, 50, 0); err != nil || total != 0 {
+		t.Errorf("spend filter total %d err %v, want 0", total, err)
+	}
+	wantInputField(t, func() error {
+		_, _, err := h.svc.Entries(ctx, scope, p, "bogus", 50, 0)
+		return err
+	}(), "kind")
 }

@@ -99,7 +99,7 @@ func (h *Handler) WalletEntries(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	entries, total, err := h.wallets.Entries(c.Request().Context(), scope, principal, limit, offset)
+	entries, total, err := h.wallets.Entries(c.Request().Context(), scope, principal, c.QueryParam("kind"), limit, offset)
 	if err != nil {
 		return walletError(err)
 	}

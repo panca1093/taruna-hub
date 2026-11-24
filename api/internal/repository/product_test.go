@@ -123,7 +123,7 @@ func TestProductsRequireScope(t *testing.T) {
 		"FindTx":           func(tx pgx.Tx) error { _, err := repo.FindTx(ctx, tx, uuid.Nil, uuid.New()); return err },
 		"LockTx":           func(tx pgx.Tx) error { _, err := repo.LockTx(ctx, tx, uuid.Nil, uuid.New()); return err },
 		"UpdateHeadTx":     func(tx pgx.Tx) error { return repo.UpdateHeadTx(ctx, tx, uuid.Nil, uuid.New(), model.Product{}) },
-		"ReplaceTryoutsTx": func(tx pgx.Tx) error { return repo.ReplaceTryoutsTx(ctx, tx, uuid.Nil, uuid.New(), nil) },
+		"ReplacePackageTx": func(tx pgx.Tx) error { return repo.ReplacePackageTx(ctx, tx, uuid.Nil, uuid.New(), model.Product{}) },
 		"DeleteTx":         func(tx pgx.Tx) error { return repo.DeleteTx(ctx, tx, uuid.Nil, uuid.New()) },
 	} {
 		if err := inTx(call); !errors.Is(err, ErrScopeRequired) {

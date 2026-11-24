@@ -72,7 +72,7 @@ const id = {
   packagesLoading: "Memuat paket latihan",
   packageTypes: { individual: "Tryout", bundle: "Paket tryout", kecermatan: "Kecermatan" },
   packageAttempts: (count: number) => `${count} attempt`,
-  packageTryouts: (count: number) => `${count} tryout`,
+  packageTryouts: (count: number) => `${count} item`,
 
   workspaceHeading: "Selesai latihan, tahu langkah berikutnya.",
   workspaceBody: "Paket yang kamu miliki, hasil latihan, dan saldo ada dalam satu ruang belajar. Cukup tiga menu utama untuk menemukan yang kamu butuhkan.",
@@ -193,7 +193,7 @@ const en: typeof id = {
   packagesLoading: "Loading practice packages",
   packageTypes: { individual: "Tryout", bundle: "Tryout bundle", kecermatan: "Kecermatan" },
   packageAttempts: (count: number) => `${count} attempts`,
-  packageTryouts: (count: number) => `${count} tryouts`,
+  packageTryouts: (count: number) => `${count} items`,
 
   workspaceHeading: "Finish practice, know what's next.",
   workspaceBody: "The packages you own, your results, and your balance live in one study space. Three main menus are all you need to find what you want.",

@@ -607,14 +607,17 @@ func (r *KecermatanRuntimeRepository) studentTests(ctx context.Context, tenantID
 	return out, rows.Err()
 }
 
-// SellableProduct is the product a student can buy more attempts from, or ErrNotFound.
+// SellableProduct is the product a student can buy more attempts from: the test's own product first, then the
+// smallest bundle holding it, or ErrNotFound.
 func (r *KecermatanRuntimeRepository) SellableProduct(ctx context.Context, tenantID, testID uuid.UUID, now time.Time) (uuid.UUID, error) {
 	if tenantID == uuid.Nil {
 		return uuid.Nil, ErrScopeRequired
 	}
 	var id uuid.UUID
-	err := r.db.QueryRow(ctx, `SELECT p.id FROM products p WHERE p.tenant_id = $1 AND `+publicVisible+
-		` AND p.kecermatan_test_id = $3 ORDER BY p.created_at, p.id LIMIT 1`, tenantID, now, testID).Scan(&id)
+	err := r.db.QueryRow(ctx, `SELECT p.id FROM products p WHERE p.tenant_id = $1 AND `+publicVisible+`
+		AND (p.kecermatan_test_id = $3
+		     OR EXISTS (SELECT 1 FROM product_kecermatan_tests pk WHERE pk.product_id = p.id AND pk.kecermatan_test_id = $3))
+		ORDER BY p.kecermatan_test_id IS NULL, `+productSize+`, p.created_at, p.id LIMIT 1`, tenantID, now, testID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, ErrNotFound
 	}

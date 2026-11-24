@@ -121,7 +121,9 @@ function ProductDetail({ product }: { product: PublicProduct }) {
       cancelled = true;
     };
   }, [role, testId]);
-  const totalSeconds = product.tryouts.reduce((sum, tryout) => sum + tryout.duration_seconds_total, 0);
+  const totalSeconds =
+    product.tryouts.reduce((sum, tryout) => sum + tryout.duration_seconds_total, 0) +
+    product.kecermatan_tests.reduce((sum, test) => sum + test.kolom_count * test.kolom_duration_seconds, 0);
   const totalMinutes = Math.round(totalSeconds / 60);
 
   const facts = kecermatan
@@ -146,7 +148,7 @@ function ProductDetail({ product }: { product: PublicProduct }) {
             <CardKicker icon={kecermatan ? Grid2x2 : BookOpen} className="mb-4.5">
               {kecermatan
                 ? t.chipKecermatan
-                : `${product.program_name} · ${product.type === "bundle" ? t.chipBundle(product.tryouts.length) : t.chipIndividual}`}
+                : `${product.program_name} · ${product.type === "bundle" ? t.chipBundle(product.tryouts.length + product.kecermatan_tests.length) : t.chipIndividual}`}
             </CardKicker>
             <h1 className="font-display mb-3 max-w-2xl text-hero-lg sm:text-display text-foreground">{product.title}</h1>
             <p className="max-w-prose text-small text-muted">{product.description}</p>
@@ -174,7 +176,7 @@ function ProductDetail({ product }: { product: PublicProduct }) {
           ) : (
             <Panel>
               <h2 className="font-display mb-3 text-heading-sm">
-                {product.tryouts.length > 1 ? t.packageMultiHeading(product.tryouts.length) : t.packageSingleHeading}
+                {product.tryouts.length + product.kecermatan_tests.length > 1 ? t.packageMultiHeading(product.tryouts.length + product.kecermatan_tests.length) : t.packageSingleHeading}
               </h2>
               {product.tryouts.map((tryout, index) => (
                 <div key={tryout.id} className="flex items-center gap-4 border-b border-border py-4 last:border-0">
@@ -184,6 +186,17 @@ function ProductDetail({ product }: { product: PublicProduct }) {
                   <p className="min-w-0 flex-1 text-caption font-semibold text-foreground">{tryout.title}</p>
                   <span className="text-label text-muted">
                     {t.subtestStat(tryout.subtest_count, tryout.question_count)} · {t.totalMinStat(Math.round(tryout.duration_seconds_total / 60))}
+                  </span>
+                </div>
+              ))}
+              {product.kecermatan_tests.map((test, index) => (
+                <div key={test.test_id} className="flex items-center gap-4 border-b border-border py-4 last:border-0">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-control bg-background text-label text-muted">
+                    {product.tryouts.length + index + 1}
+                  </span>
+                  <p className="min-w-0 flex-1 text-caption font-semibold text-foreground">{test.title}</p>
+                  <span className="text-label text-muted">
+                    {t.kecermatanInBundle(test.kolom_count, Math.round(test.kolom_duration_seconds / 60))} · {t.itemType[test.item_type] ?? test.item_type}
                   </span>
                 </div>
               ))}

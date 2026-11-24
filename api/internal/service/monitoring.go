@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -14,9 +15,10 @@ import (
 var ErrViolationLimit = errors.New("session violation limit reached")
 
 const (
-	ReasonViolationType  = "violation_type"
-	ReasonViolationEvent = "violation_event_id"
-	ReasonMonitoringPage = "monitoring_query"
+	ReasonViolationType    = "violation_type"
+	ReasonViolationEvent   = "violation_event_id"
+	ReasonMonitoringPage   = "monitoring_query"
+	ReasonMonitoringFilter = "monitoring_filter"
 
 	// MaxViolationsPerSession bounds the rows one session can hold, so a flooding client cannot grow the table.
 	MaxViolationsPerSession = 100
@@ -129,7 +131,7 @@ func (s *MonitoringService) RecordViolation(ctx context.Context, scope HostScope
 }
 
 // ActiveSessions lists the tenant's in-progress sessions for Admin and Operator, straight from PostgreSQL.
-func (s *MonitoringService) ActiveSessions(ctx context.Context, scope HostScope, principal model.Principal, limit, offset int) ([]model.ActiveSession, int, error) {
+func (s *MonitoringService) ActiveSessions(ctx context.Context, scope HostScope, principal model.Principal, filter repository.ActiveSessionFilter, limit, offset int) ([]model.ActiveSession, int, error) {
 	tenantID, err := staffTenant(scope, principal)
 	if err != nil {
 		return nil, 0, err
@@ -147,7 +149,13 @@ func (s *MonitoringService) ActiveSessions(ctx context.Context, scope HostScope,
 		}
 		return nil, 0, &InputError{Fields: fields}
 	}
-	rows, total, err := s.repo.ActiveSessions(ctx, s.rt.db, tenantID, limit, offset)
+	if filter.Status != "" && filter.Status != "running" && filter.Status != "between" {
+		return nil, 0, &InputError{Fields: map[string]string{"status": ReasonMonitoringFilter}}
+	}
+	if utf8.RuneCountInString(filter.Search) > 100 {
+		return nil, 0, &InputError{Fields: map[string]string{"q": ReasonMonitoringFilter}}
+	}
+	rows, total, err := s.repo.ActiveSessions(ctx, s.rt.db, tenantID, filter, limit, offset)
 	return rows, total, runtimeError(err)
 }
 

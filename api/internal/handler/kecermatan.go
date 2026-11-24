@@ -141,7 +141,7 @@ func (h *Handler) ListKecermatanTests(c echo.Context) error {
 	if !ok {
 		return httpx.Unauthorized(sessionInvalid)
 	}
-	filter := service.KecermatanFilter{Search: c.QueryParam("q")}
+	filter := service.KecermatanFilter{Search: c.QueryParam("q"), ItemType: c.QueryParam("item_type")}
 	fields := map[string]string{}
 	if raw := c.QueryParam("program_id"); raw != "" {
 		if id, err := uuid.Parse(raw); err != nil {

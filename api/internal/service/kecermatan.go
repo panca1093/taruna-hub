@@ -82,6 +82,7 @@ type KecermatanInput struct {
 
 type KecermatanFilter struct {
 	ProgramID *uuid.UUID
+	ItemType  string
 	Search    string
 	Limit     int
 	Offset    int
@@ -120,11 +121,16 @@ func (s *KecermatanService) List(ctx context.Context, scope HostScope, principal
 	if filter.Offset < 0 {
 		fields["offset"] = ReasonKecQuery
 	}
+	switch filter.ItemType {
+	case "", model.KecChar, model.KecNumber, model.KecSymbol, model.KecEmoji, model.KecImage, model.KecShape, model.KecMix:
+	default:
+		fields["item_type"] = ReasonKecItemType
+	}
 	if len(fields) > 0 {
 		return nil, 0, &InputError{Fields: fields}
 	}
 	tests, total, err := s.repo.List(ctx, tenantID, repository.KecermatanFilter{
-		ProgramID: filter.ProgramID, Search: filter.Search, Limit: filter.Limit, Offset: filter.Offset,
+		ProgramID: filter.ProgramID, ItemType: filter.ItemType, Search: filter.Search, Limit: filter.Limit, Offset: filter.Offset,
 	})
 	if err != nil {
 		return nil, 0, fmt.Errorf("list kecermatan tests: %w", err)

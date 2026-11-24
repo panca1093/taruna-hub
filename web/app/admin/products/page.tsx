@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Chip, Switch, toast } from "@heroui/react";
 import { CloudOff, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
@@ -11,8 +11,11 @@ import { ProgramBadge } from "@/components/status-badge";
 import { LoadingNote } from "@/components/admin-detail";
 import { Icon } from "@/components/icon";
 import { FormModal } from "@/components/ui/form-modal";
+import { ProductItemPicker, type PickerItem } from "@/components/admin/product-item-picker";
+import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-menu";
 import { SelectInput, SwitchInput, TextInput, TextareaInput } from "@/components/ui/form";
-import { api, ApiError, errorText, type KecermatanTestSummary, type Product, type Program, type TryoutSummary } from "@/lib/api/client";
+import { api, ApiError, errorText, type KecermatanTestSummary, type Product, type ProductFilters, type Program, type TryoutSummary } from "@/lib/api/client";
+import { useDebounced } from "@/lib/use-debounced";
 import { formatIDR } from "@/lib/format-money";
 import { useProductsT } from "@/lib/i18n/dict/products";
 import { cn } from "@/lib/cn";
@@ -26,6 +29,7 @@ interface ProductForm {
   description: string;
   programId: string;
   tryoutIds: string[];
+  kecermatanTestIds: string[];
   kecermatanTestId: string;
   includedAttempts: string;
   price: string;
@@ -41,6 +45,7 @@ const blankForm: ProductForm = {
   description: "",
   programId: "",
   tryoutIds: [],
+  kecermatanTestIds: [],
   kecermatanTestId: "",
   includedAttempts: "1",
   price: "",
@@ -59,6 +64,20 @@ export default function ProductsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const gen = useRef(0);
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounced(searchInput.trim(), () => {
+    setRows(null);
+    setLoadFailed(false);
+  });
+  const [filter, setFilter] = useState<FilterValue>({});
+  const filtered = search.trim() !== "" || !!filter.program_id || !!filter.type || !!filter.status;
+  const filters: ProductFilters = {
+    ...(filter.program_id ? { program_id: filter.program_id } : {}),
+    ...(filter.type ? { type: filter.type as ProductFilters["type"] } : {}),
+    ...(filter.status ? { status: filter.status as ProductFilters["status"] } : {}),
+    ...(search.trim() === "" ? {} : { q: search.trim() }),
+  };
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -90,8 +109,10 @@ export default function ProductsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    gen.current++;
+    setLoadingMore(false);
     api.products
-      .list({ limit: PAGE_SIZE })
+      .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
         setRows(page.products);
@@ -103,13 +124,20 @@ export default function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filter, reloadKey]);
+
+  const refilter = (apply: () => void) => {
+    setRows(null);
+    setLoadFailed(false);
+    apply();
+  };
 
   // Only published tryouts of the chosen program can be attached, so the picker asks the API.
   useEffect(() => {
     if (!modalOpen || form.programId === "") return;
     let cancelled = false;
-    if (form.type === "kecermatan") {
+    if (form.type === "kecermatan" || form.type === "bundle") {
       api.kecermatan
         .list({ program_id: form.programId, limit: 100 })
         .then((page) => {
@@ -118,7 +146,8 @@ export default function ProductsPage() {
         .catch(() => {
           if (!cancelled) setChoiceFailed(true);
         });
-    } else {
+    }
+    if (form.type !== "kecermatan") {
       api.tryouts
         .list({ status: "published", program_id: form.programId, limit: 100 })
         .then((page) => {
@@ -141,14 +170,16 @@ export default function ProductsPage() {
 
   const loadMore = async () => {
     setLoadingMore(true);
+    const id = gen.current;
     try {
-      const page = await api.products.list({ limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      const page = await api.products.list({ ...filters, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      if (id !== gen.current) return;
       setRows((prev) => [...(prev ?? []), ...page.products]);
       setTotal(page.total);
     } catch (err) {
-      toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
+      if (id === gen.current) toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
     } finally {
-      setLoadingMore(false);
+      if (id === gen.current) setLoadingMore(false);
     }
   };
 
@@ -169,6 +200,8 @@ export default function ProductsPage() {
   const tryoutOptions = (choiceTryouts ?? []).map((tryout) => ({ id: tryout.id, label: tryout.title }));
   if (sameProgram) for (const tryout of editing.tryouts) if (!tryoutOptions.some((o) => o.id === tryout.id)) tryoutOptions.push({ id: tryout.id, label: tryout.title });
   const kecermatanOptions = (choiceKecermatan ?? []).map((test) => ({ id: test.id, label: test.title }));
+  if (sameProgram)
+    for (const test of editing.kecermatan_tests) if (!kecermatanOptions.some((o) => o.id === test.id)) kecermatanOptions.push({ id: test.id, label: test.title });
   if (sameProgram && editing.kecermatan_test_id && !kecermatanOptions.some((o) => o.id === editing.kecermatan_test_id))
     kecermatanOptions.push({ id: editing.kecermatan_test_id, label: editing.kecermatan_test_title ?? "" });
 
@@ -181,6 +214,7 @@ export default function ProductsPage() {
       description: product.description,
       programId: product.program_id,
       tryoutIds: product.tryouts.map((tryout) => tryout.id),
+      kecermatanTestIds: product.kecermatan_tests.map((test) => test.id),
       kecermatanTestId: product.kecermatan_test_id ?? "",
       includedAttempts: String(product.included_attempts ?? 1),
       price: product.price,
@@ -206,6 +240,7 @@ export default function ProductsPage() {
     active_from: source.activeFrom === "" ? null : new Date(`${source.activeFrom}T00:00:00`).toISOString(),
     active_until: source.activeUntil === "" ? null : new Date(`${source.activeUntil}T00:00:00`).toISOString(),
     tryout_ids: source.type === "kecermatan" ? [] : source.tryoutIds,
+    ...(source.type === "bundle" ? { kecermatan_test_ids: source.kecermatanTestIds } : {}),
     kecermatan_test_id: source.type === "kecermatan" ? source.kecermatanTestId || null : null,
     included_attempts: Number(source.includedAttempts) || 0,
   });
@@ -229,7 +264,7 @@ export default function ProductsPage() {
       if (err instanceof ApiError && err.fields) {
         const inline: Record<string, string> = {};
         for (const [path, message] of Object.entries(err.fields)) {
-          inline[path.startsWith("tryout_ids") ? "tryout_ids" : path] = message;
+          inline[path.startsWith("tryout_ids") ? "tryout_ids" : path.startsWith("kecermatan_test_ids") ? "kecermatan_test_ids" : path] = message;
         }
         setFormErrors(inline);
       }
@@ -252,6 +287,7 @@ export default function ProductsPage() {
         active_from: product.active_from,
         active_until: product.active_until,
         tryout_ids: product.tryouts.map((tryout) => tryout.id),
+        ...(product.type === "bundle" ? { kecermatan_test_ids: product.kecermatan_tests.map((test) => test.id) } : {}),
         kecermatan_test_id: product.kecermatan_test_id,
         included_attempts: product.included_attempts,
       });
@@ -278,26 +314,15 @@ export default function ProductsPage() {
     }
   };
 
-  const toggleTryout = (id: string) => {
-    setForm((current) => {
-      if (current.type === "individual") return { ...current, tryoutIds: [id] };
-      const checked = current.tryoutIds.includes(id);
-      return {
-        ...current,
-        tryoutIds: checked ? current.tryoutIds.filter((item) => item !== id) : [...current.tryoutIds, id],
-      };
-    });
-  };
-
   const columns: Column<Product>[] = [
     { key: "title", header: t.colProduct, render: (product) => <span className="font-medium">{product.title}</span> },
     {
       key: "type",
       header: t.colType,
       render: (product) => (
-        <Chip size="sm" variant="secondary" className="border border-border font-medium">
+        <Chip size="sm" variant="secondary" className="border border-border font-medium whitespace-nowrap">
           {product.type === "bundle"
-            ? t.typeBundle(product.tryouts.length)
+            ? t.typeBundle(product.tryouts.length + product.kecermatan_tests.length)
             : product.type === "kecermatan"
               ? t.typeKecermatan
               : t.typeIndividual}
@@ -362,6 +387,37 @@ export default function ProductsPage() {
           </Button>
         }
       >
+        <div className="mb-4 flex items-center gap-2">
+          <SearchField value={searchInput} onChange={setSearchInput} placeholder={t.searchPlaceholder} />
+          <FilterMenu
+            align="start"
+            value={filter}
+            onChange={(next) => refilter(() => setFilter(next))}
+            fields={[
+              { key: "program_id", label: t.fieldProgram, options: (programs ?? []).map((p) => ({ id: p.id, label: p.name })) },
+              {
+                key: "type",
+                label: t.colType,
+                half: true,
+                options: [
+                  { id: "individual", label: t.typeIndividual },
+                  { id: "bundle", label: t.typeBundleTab },
+                  { id: "kecermatan", label: t.typeKecermatan },
+                ],
+              },
+              {
+                key: "status",
+                label: t.filterStatus,
+                half: true,
+                options: [
+                  { id: "active", label: t.statusActive },
+                  { id: "inactive", label: t.statusInactive },
+                ],
+              },
+            ]}
+          />
+        </div>
+
         {loadFailed ? (
           <EmptyState
             icon={CloudOff}
@@ -376,7 +432,7 @@ export default function ProductsPage() {
         ) : rows === null ? (
           <LoadingNote>{t.loading}</LoadingNote>
         ) : rows.length === 0 ? (
-          <EmptyState icon={Package} title={t.emptyTitle} description={t.emptyDescription} />
+          <EmptyState icon={Package} title={filtered ? t.noMatchTitle : t.emptyTitle} description={filtered ? t.noMatchDescription : t.emptyDescription} />
         ) : (
           <DataTable
             columns={columns}
@@ -428,6 +484,7 @@ export default function ProductsPage() {
                           : productType === "kecermatan"
                             ? []
                             : current.tryoutIds,
+                      kecermatanTestIds: productType === "bundle" ? current.kecermatanTestIds : [],
                     }))
                   }
                   className={cn(
@@ -461,7 +518,7 @@ export default function ProductsPage() {
             error={formErrors.program_id}
             onSelectionChange={(key) => {
               if (!key) return;
-              setForm((current) => ({ ...current, programId: key, tryoutIds: [], kecermatanTestId: "" }));
+              setForm((current) => ({ ...current, programId: key, tryoutIds: [], kecermatanTestIds: [], kecermatanTestId: "" }));
               setChoiceTryouts(null);
               setChoiceKecermatan(null);
               setChoiceFailed(false);
@@ -477,82 +534,68 @@ export default function ProductsPage() {
             />
           </div>
 
-          {form.type === "kecermatan" || form.type === "individual" ? (
-            <div className="md:col-span-2">
-              {choiceFailed ? (
-                <p className="text-label text-danger">{t.loadErrorDescription}</p>
-              ) : (form.type === "kecermatan" ? choiceKecermatan : choiceTryouts) === null ? (
-                <p className="text-label text-muted">{t.tryoutLoading}</p>
-              ) : form.type === "kecermatan" ? (
-                <SelectInput
-                  label={t.fieldKecermatanTest}
-                  required
-                  placeholder={t.kecermatanPickTitle}
-                  options={kecermatanOptions}
-                  selectedKey={form.kecermatanTestId || null}
-                  onSelectionChange={(key) => key && setForm((current) => ({ ...current, kecermatanTestId: key }))}
-                  error={formErrors.kecermatan_test_id}
-                  description={kecermatanOptions.length === 0 ? t.kecermatanEmpty : undefined}
-                />
-              ) : (
-                <SelectInput
-                  label={t.fieldTryout}
-                  required
-                  placeholder={t.tryoutPickSingle}
-                  options={tryoutOptions}
-                  selectedKey={form.tryoutIds[0] ?? null}
-                  onSelectionChange={(key) => key && toggleTryout(key)}
-                  error={formErrors.tryout_ids}
-                  description={tryoutOptions.length === 0 ? t.tryoutEmpty : undefined}
-                />
-              )}
-            </div>
-          ) : (
           <div className="md:col-span-2">
-            <p className="mb-2 text-small font-medium text-foreground">
-              {t.tryoutPickBundle}
-              {form.tryoutIds.length > 0 && <span className="ml-1.5 text-muted">· {t.tryoutPickedCount(form.tryoutIds.length)}</span>}
-            </p>
-            <div className="grid max-h-60 gap-1.5 overflow-y-auto sm:grid-cols-2">
-              {choiceFailed ? (
-                <p className="text-label text-danger sm:col-span-2">{t.loadErrorDescription}</p>
-              ) : choiceTryouts === null ? (
-                <p className="text-label text-muted sm:col-span-2">{t.tryoutLoading}</p>
-              ) : tryoutOptions.length === 0 ? (
-                <p className="text-label text-muted sm:col-span-2">{t.tryoutEmpty}</p>
-              ) : (
-                tryoutOptions.map((tryout) => {
-                  const checked = form.tryoutIds.includes(tryout.id);
-                  return (
-                    <button
-                      key={tryout.id}
-                      type="button"
-                      aria-pressed={checked}
-                      onClick={() => toggleTryout(tryout.id)}
-                      className={cn(
-                        "flex w-full items-center gap-2.5 rounded-control border px-3 py-2 text-left text-small transition-colors",
-                        checked
-                          ? "border-accent bg-accent-soft text-accent-soft-foreground"
-                          : "border-border text-foreground hover:bg-surface-secondary",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "flex size-4 shrink-0 items-center justify-center rounded-chip border-2 text-micro font-bold",
-                          checked ? "border-accent bg-accent text-white" : "border-border text-transparent",
-                        )}
-                      >
-                        ✓
-                      </span>
-                      <span className="truncate" title={tryout.label}>{tryout.label}</span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-            {formErrors.tryout_ids && <p className="mt-1 text-label text-danger">{formErrors.tryout_ids}</p>}
+            {form.type === "bundle" ? (
+              <ProductItemPicker
+                multi
+                label={t.tryoutPickBundle}
+                buttonLabel={t.pickBundleButton}
+                title={t.pickBundleTitle}
+                items={[
+                  ...tryoutOptions.map((o): PickerItem => ({ ...o, kind: "tryout" })),
+                  ...kecermatanOptions.map((o): PickerItem => ({ ...o, kind: "kecermatan" })),
+                ]}
+                selectedIds={[...form.tryoutIds, ...form.kecermatanTestIds]}
+                onChange={(ids) =>
+                  setForm((current) => ({
+                    ...current,
+                    tryoutIds: ids.filter((id) => tryoutOptions.some((o) => o.id === id)),
+                    kecermatanTestIds: ids.filter((id) => kecermatanOptions.some((o) => o.id === id)),
+                  }))
+                }
+                loading={choiceTryouts === null || choiceKecermatan === null}
+                failed={choiceFailed}
+                loadingText={t.tryoutLoading}
+                failedText={t.loadErrorDescription}
+                emptyText={t.tryoutEmpty}
+                min={2}
+                max={20}
+                error={formErrors.tryout_ids ?? formErrors.kecermatan_test_ids}
+              />
+            ) : form.type === "kecermatan" ? (
+              <ProductItemPicker
+                multi={false}
+                label={t.fieldKecermatanTest}
+                buttonLabel={t.pickKecermatanButton}
+                title={t.pickKecermatanTitle}
+                items={kecermatanOptions.map((o): PickerItem => ({ ...o, kind: "kecermatan" }))}
+                selectedIds={form.kecermatanTestId ? [form.kecermatanTestId] : []}
+                onChange={(ids) => setForm((current) => ({ ...current, kecermatanTestId: ids[0] ?? "" }))}
+                loading={choiceKecermatan === null}
+                failed={choiceFailed}
+                loadingText={t.tryoutLoading}
+                failedText={t.loadErrorDescription}
+                emptyText={t.kecermatanEmpty}
+                error={formErrors.kecermatan_test_id}
+              />
+            ) : (
+              <ProductItemPicker
+                multi={false}
+                label={t.fieldTryout}
+                buttonLabel={t.pickTryoutButton}
+                title={t.pickTryoutTitle}
+                items={tryoutOptions.map((o): PickerItem => ({ ...o, kind: "tryout" }))}
+                selectedIds={form.tryoutIds}
+                onChange={(ids) => setForm((current) => ({ ...current, tryoutIds: ids }))}
+                loading={choiceTryouts === null}
+                failed={choiceFailed}
+                loadingText={t.tryoutLoading}
+                failedText={t.loadErrorDescription}
+                emptyText={t.tryoutEmpty}
+                error={formErrors.tryout_ids}
+              />
+            )}
           </div>
-          )}
 
             <TextInput
               label={t.fieldPrice}

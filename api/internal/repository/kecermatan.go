@@ -17,6 +17,7 @@ import (
 // KecermatanFilter is already validated by the service; the repository only turns it into SQL.
 type KecermatanFilter struct {
 	ProgramID *uuid.UUID
+	ItemType  string
 	Search    string
 	Limit     int
 	Offset    int
@@ -73,6 +74,9 @@ func (r *KecermatanRepository) List(ctx context.Context, tenantID uuid.UUID, fil
 	}
 	if filter.ProgramID != nil {
 		add("t.program_id = $%d", *filter.ProgramID)
+	}
+	if filter.ItemType != "" {
+		add("t.item_type = $%d", filter.ItemType)
 	}
 	if filter.Search != "" {
 		add(`t.title ILIKE $%d ESCAPE '\'`, likePattern(filter.Search))

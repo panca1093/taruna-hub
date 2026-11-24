@@ -28,6 +28,12 @@ type OrderItem struct {
 	Title    string
 }
 
+// OrderKecermatanItem is one kecermatan test of a bundle as it was named at checkout.
+type OrderKecermatanItem struct {
+	TestID uuid.UUID
+	Title  string
+}
+
 // Order is the checkout snapshot: later product edits or deletes never change what was bought.
 type Order struct {
 	ID            uuid.UUID
@@ -51,6 +57,8 @@ type Order struct {
 	ConfirmedAt   *time.Time
 	CancelledAt   *time.Time
 	Items         []OrderItem
+	// KecermatanItems are a bundle's kecermatan tests as named at checkout; each gets IncludedAttempts credits.
+	KecermatanItems []OrderKecermatanItem
 	// A kecermatan order has no items; it snapshots the test and the credits it adds.
 	KecermatanTestID *uuid.UUID
 	IncludedAttempts *int

@@ -393,6 +393,9 @@ func TestTopupVisibilityAndStaffList(t *testing.T) {
 	if found, total, _, err := h.svc.StaffTopups(ctx, scope, admin, TopupFilter{Search: TopupCode(theirs.Number)}); err != nil || total != 1 || found[0].ID != theirs.ID {
 		t.Errorf("search by code = %+v total %d err %v", found, total, err)
 	}
+	if found, total, _, err := h.svc.StaffTopups(ctx, scope, admin, TopupFilter{Search: *h.second.Email}); err != nil || total != 1 || found[0].ID != theirs.ID {
+		t.Errorf("search by email = %+v total %d err %v", found, total, err)
+	}
 	wantInputField(t, func() error {
 		_, _, _, err := h.svc.StaffTopups(ctx, scope, admin, TopupFilter{Status: "paid"})
 		return err

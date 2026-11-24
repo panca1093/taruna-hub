@@ -40,6 +40,22 @@ type PublicProductTryout struct {
 	DurationSecondsTotal int
 }
 
+// ProductKecermatanTest is a kecermatan test a bundle sells next to its tryouts.
+type ProductKecermatanTest struct {
+	ID    uuid.UUID
+	Title string
+}
+
+// PublicProductKecermatan is what the catalog shows of a bundle's kecermatan test; never a seed, key or content.
+type PublicProductKecermatan struct {
+	TestID               uuid.UUID
+	Title                string
+	ItemType             string
+	KolomCount           int
+	SoalPerKolom         int
+	KolomDurationSeconds int
+}
+
 // Price is the canonical decimal string exactly as PostgreSQL stores it, never a float.
 type Product struct {
 	ID            uuid.UUID
@@ -55,6 +71,8 @@ type Product struct {
 	ActiveUntil   *time.Time
 	CreatedBy     uuid.UUID
 	Tryouts       []ProductTryout
+	// KecermatanTests belong to bundles only; a bundle holds 2–20 tryouts and tests together.
+	KecermatanTests []ProductKecermatanTest
 	// Kecermatan products sell included_attempts credits for one test and attach no tryouts.
 	KecermatanTestID    *uuid.UUID
 	KecermatanTestTitle string
@@ -77,6 +95,7 @@ type PublicProduct struct {
 	DiscountPercent  *int
 	ActiveUntil      *time.Time
 	Tryouts          []PublicProductTryout
+	KecermatanTests  []PublicProductKecermatan
 	IncludedAttempts *int
 	Kecermatan       *PublicKecermatan
 }
