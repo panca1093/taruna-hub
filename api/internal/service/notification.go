@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	htmltemplate "html/template"
+	"io"
 	"log/slog"
 	"sort"
 	"strings"
@@ -262,6 +263,10 @@ func (s *NotificationService) RegisterTemplate(name, subject, body, html string)
 		t.html, err = htmltemplate.Must(emailLayout.Clone()).Parse(html)
 		if err != nil {
 			return fmt.Errorf("parse html template %s: %w", name, err)
+		}
+		// A missing block only surfaces at execution, which would fail every send permanently.
+		if err := t.html.Execute(io.Discard, emailPage{}); err != nil {
+			return fmt.Errorf("execute html template %s: %w", name, err)
 		}
 	}
 	s.templates[name] = t

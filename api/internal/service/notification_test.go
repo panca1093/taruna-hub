@@ -130,6 +130,24 @@ func TestTemplateRegistryIsTheSeamForLaterSlices(t *testing.T) {
 	if err := svc.RegisterTemplate("broken-html", "x", "y", "{{define \"content\"}}"); err == nil {
 		t.Error("a malformed HTML template was accepted")
 	}
+	if err := svc.RegisterTemplate("missing-blocks", "x", "y", `{{define "content"}}x{{end}}`); err == nil {
+		t.Error("HTML missing blocks the layout needs was accepted")
+	}
+}
+
+func TestHTMLWithoutAppURLOmitsLogoAndSiteLink(t *testing.T) {
+	svc := newNotificationServiceForTest(t, nil)
+	msg := renderForTest(t, svc, TemplateEmailCode, map[string]string{
+		"tenant_name": "Taruna Eduka", "name": "Panca", "minutes": "10", "code": "561888",
+	})
+	if !strings.Contains(msg.HTML, "561888") {
+		t.Errorf("HTML part lost the code:\n%s", msg.HTML)
+	}
+	for _, unwanted := range []string{"<img", "<a "} {
+		if strings.Contains(msg.HTML, unwanted) {
+			t.Errorf("HTML part without an app URL contains %q:\n%s", unwanted, msg.HTML)
+		}
+	}
 }
 
 func renderForTest(t *testing.T, svc *NotificationService, name string, params map[string]string) Message {

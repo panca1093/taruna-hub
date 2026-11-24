@@ -21,11 +21,11 @@ var emailLayout = htmltemplate.Must(htmltemplate.New("email").Parse(`<!doctype h
 <title>{{.Subject}}</title>
 </head>
 <body style="margin:0;padding:0;background:#f7f2ef;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{{template "preheader" .}}</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">{{template "preheader" .}}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f2ef;">
   <tr>
     <td align="center" style="padding:32px 16px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;">
         {{- with .AppURL}}
         <tr>
           <td align="center" style="padding:0 0 20px;">
@@ -75,8 +75,8 @@ var emailHTML = map[string]string{
 	TemplatePasswordReset: `{{define "preheader"}}Tautan atur ulang kata sandi berlaku {{.Get "minutes"}} menit.{{end}}
 {{define "eyebrow"}}Atur ulang kata sandi{{end}}
 {{define "content"}}<p style="margin:0 0 20px;font-size:16px;line-height:24px;color:#3e3239;">Tekan tombol berikut untuk mengatur ulang kata sandi akun {{.Get "tenant_name"}} Anda.</p>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#6b455d;border-radius:12px;">
-<a href="{{.Get "reset_url"}}" style="display:inline-block;padding:14px 28px;font-size:16px;line-height:20px;font-weight:600;color:#fffdfa;text-decoration:none;border-radius:12px;">Atur ulang kata sandi</a>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#6b455d" style="background:#6b455d;border-radius:12px;padding:14px 28px;">
+<a href="{{.Get "reset_url"}}" style="display:inline-block;font-size:16px;line-height:20px;font-weight:600;color:#fffdfa;text-decoration:none;">Atur ulang kata sandi</a>
 </td></tr></table>
 <p style="margin:20px 0 0;font-size:15px;line-height:22px;color:#3e3239;">Tautan berlaku <strong>{{.Get "minutes"}} menit</strong> dan hanya dapat dipakai sekali.</p>
 <p style="margin:16px 0 0;font-size:13px;line-height:20px;color:#786771;">Jika tombol tidak berfungsi, salin tautan ini ke browser:<br>

@@ -109,6 +109,18 @@ func TestSMTPSenderDeliversMultipartAlternative(t *testing.T) {
 	}
 }
 
+func TestSMTPMultipartMessageUsesCRLFOnly(t *testing.T) {
+	msg := testMessage()
+	msg.HTML = "<p>Halo\nbaris dua\n</p>"
+	raw, err := (&SMTPSender{cfg: config.SMTPConfig{Host: "smtp.example.com", From: "no-reply@tarunaeduka.id"}}).message(msg)
+	if err != nil {
+		t.Fatalf("message: %v", err)
+	}
+	if got := strings.Count(string(raw), "\n") - strings.Count(string(raw), "\r\n"); got != 0 {
+		t.Errorf("%d line(s) end in a bare LF:\n%q", got, raw)
+	}
+}
+
 func TestSMTPSenderRejectsHeaderInjection(t *testing.T) {
 	s := newFakeSMTP(t)
 	ctx := context.Background()
