@@ -127,6 +127,7 @@ export default function QuestionsPage() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Question | null>(null);
+  const editingId = useRef<string | null>(null);
   const [rescoreAttempts, setRescoreAttempts] = useState(0);
   const [draftInitial, setDraftInitial] = useState<QuestionDraft | null>(null);
   const [editorSeq, setEditorSeq] = useState(0);
@@ -221,6 +222,7 @@ export default function QuestionsPage() {
   const openCreate = () => {
     const preferred = filter.programId === "" ? programs?.[0] : programOf(filter.programId);
     setEditing(null);
+    editingId.current = null;
     setFormErrors({});
     setDraftInitial(emptyDraft(preferred?.id ?? "", preferred?.subjects[0]?.id ?? ""));
     setEditorSeq((seq) => seq + 1);
@@ -231,7 +233,11 @@ export default function QuestionsPage() {
     setEditing(question);
     setRescoreAttempts(0);
     // Only the single read counts the taken attempts a save would rescore; a failed read just hides the notice.
-    api.questions.get(question.id).then((full) => setRescoreAttempts(full.rescore_attempts ?? 0), () => {});
+    editingId.current = question.id;
+    api.questions.get(question.id).then(
+      (full) => editingId.current === question.id && setRescoreAttempts(full.rescore_attempts ?? 0),
+      () => {},
+    );
     setFormErrors({});
     setDraftInitial(draftOf(question));
     setEditorSeq((seq) => seq + 1);

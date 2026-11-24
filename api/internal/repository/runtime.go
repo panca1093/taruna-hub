@@ -844,23 +844,49 @@ func (r *RuntimeRepository) TryoutOverview(ctx context.Context, q dbtx, tenantID
 	return out, rows.Err()
 }
 
-// RepointQuestion moves every tryout assignment and every session snapshot of a question onto versionID, and locks
-// and returns those sessions in id order, the order every rescoring writer takes them in.
-func (r *RuntimeRepository) RepointQuestion(ctx context.Context, q dbtx, tenantID, questionID, versionID uuid.UUID) ([]uuid.UUID, error) {
+// LockedSession is a session whose snapshot holds an edited question.
+type LockedSession struct {
+	ID         uuid.UUID
+	InProgress bool
+	// Scored is true when a submitted part exists, so the session has a score to redo.
+	Scored bool
+}
+
+// LockQuestionSessions locks the tryouts using a question, then the sessions holding it in id order. The order
+// (question, tryouts, sessions, totals) matches every other writer; the tryout lock serializes against Start's
+// FOR SHARE, so a session started meanwhile snapshots the version this edit commits.
+func (r *RuntimeRepository) LockQuestionSessions(ctx context.Context, q dbtx, tenantID, questionID uuid.UUID) ([]LockedSession, error) {
 	if tenantID == uuid.Nil {
 		return nil, ErrScopeRequired
 	}
+	if _, err := q.Exec(ctx, `
+		SELECT id FROM tryouts
+		 WHERE tenant_id = $1 AND id IN (SELECT tryout_id FROM tryout_questions WHERE tenant_id = $1 AND question_id = $2)
+		 ORDER BY id FOR UPDATE`, tenantID, questionID); err != nil {
+		return nil, fmt.Errorf("lock tryouts of question: %w", err)
+	}
 	rows, err := q.Query(ctx, `
-		SELECT s.id FROM tryout_sessions s
+		SELECT s.id, s.status = 'in_progress',
+		       EXISTS (SELECT 1 FROM tryout_session_parts p
+		                WHERE p.session_id = s.id AND p.tenant_id = s.tenant_id AND p.status = 'submitted')
+		  FROM tryout_sessions s
 		  JOIN tryout_session_questions sq ON sq.session_id = s.id AND sq.tenant_id = s.tenant_id
 		 WHERE s.tenant_id = $1 AND sq.question_id = $2
 		 ORDER BY s.id FOR UPDATE OF s`, tenantID, questionID)
 	if err != nil {
 		return nil, fmt.Errorf("lock sessions of question: %w", err)
 	}
-	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[LockedSession])
 	if err != nil {
 		return nil, fmt.Errorf("lock sessions of question: %w", err)
+	}
+	return out, nil
+}
+
+// RepointQuestion moves every tryout assignment and every session snapshot of a question onto versionID.
+func (r *RuntimeRepository) RepointQuestion(ctx context.Context, q dbtx, tenantID, questionID, versionID uuid.UUID) error {
+	if tenantID == uuid.Nil {
+		return ErrScopeRequired
 	}
 	for _, sql := range []string{
 		`UPDATE tryout_questions SET question_version_id = $3
@@ -869,22 +895,27 @@ func (r *RuntimeRepository) RepointQuestion(ctx context.Context, q dbtx, tenantI
 		  WHERE tenant_id = $1 AND question_id = $2 AND question_version_id <> $3`,
 	} {
 		if _, err := q.Exec(ctx, sql, tenantID, questionID, versionID); err != nil {
-			return nil, fmt.Errorf("repoint question version: %w", err)
+			return fmt.Errorf("repoint question version: %w", err)
 		}
 	}
-	return ids, nil
+	return nil
 }
 
-// CompletedSessionsWith counts the completed sessions whose snapshot holds the question.
-func (r *RuntimeRepository) CompletedSessionsWith(ctx context.Context, q dbtx, tenantID, questionID uuid.UUID) (int, error) {
+// RescorableSessionsWith counts the sessions an edit of the question rescores: completed, or with a submitted part.
+func (r *RuntimeRepository) RescorableSessionsWith(ctx context.Context, q dbtx, tenantID, questionID uuid.UUID) (int, error) {
 	if tenantID == uuid.Nil {
 		return 0, ErrScopeRequired
 	}
 	var n int
 	err := q.QueryRow(ctx, `
 		SELECT count(*) FROM tryout_sessions s
-		  JOIN tryout_session_questions sq ON sq.session_id = s.id AND sq.tenant_id = s.tenant_id
-		 WHERE s.tenant_id = $1 AND sq.question_id = $2 AND s.status = 'completed'`, tenantID, questionID).Scan(&n)
+		 WHERE s.tenant_id = $1
+		   AND EXISTS (SELECT 1 FROM tryout_session_questions sq
+		                WHERE sq.session_id = s.id AND sq.tenant_id = s.tenant_id AND sq.question_id = $2)
+		   AND (s.status = 'completed'
+		        OR EXISTS (SELECT 1 FROM tryout_session_parts p
+		                    WHERE p.session_id = s.id AND p.tenant_id = s.tenant_id AND p.status = 'submitted'))`,
+		tenantID, questionID).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count sessions of question: %w", err)
 	}

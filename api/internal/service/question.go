@@ -28,6 +28,7 @@ var (
 // Question field reasons; the transport turns each into the copy the editor shows.
 const (
 	ReasonQuestionType    = "question_type"
+	ReasonTypeInUse       = "question_type_in_use"
 	ReasonQuestionContent = "question_content"
 	ReasonQuestionImage   = "question_image"
 	ReasonQuestionExpl    = "question_explanation"
@@ -189,7 +190,7 @@ func (s *QuestionService) Get(ctx context.Context, scope HostScope, principal mo
 		return model.Question{}, questionError(err)
 	}
 	resolveQuestion(&question)
-	if question.RescoreAttempts, err = s.runtime.CompletedSessionsWith(ctx, s.db, tenantID, id); err != nil {
+	if question.RescoreAttempts, err = s.runtime.RescorableSessionsWith(ctx, s.db, tenantID, id); err != nil {
 		return model.Question{}, err
 	}
 	return question, nil
@@ -269,6 +270,17 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 			out = current
 			return nil
 		}
+		locked, err := s.runtime.LockQuestionSessions(ctx, tx, tenantID, id)
+		if err != nil {
+			return err
+		}
+		if current.Type != input.Type {
+			for _, held := range locked {
+				if held.InProgress {
+					return &InputError{Fields: map[string]string{"type": ReasonTypeInUse}}
+				}
+			}
+		}
 		if err := s.attachImages(ctx, tx, scope, principal, input); err != nil {
 			return err
 		}
@@ -285,11 +297,10 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 		}
 		resolveQuestion(&out)
 		// Owner decision 2026-11-24: an edit reaches every tryout and attempt using the question, and taken ones are rescored.
-		sessions, err := s.runtime.RepointQuestion(ctx, tx, tenantID, id, out.VersionID)
-		if err != nil {
+		if err := s.runtime.RepointQuestion(ctx, tx, tenantID, id, out.VersionID); err != nil {
 			return err
 		}
-		return rescoreSessions(ctx, tx, s.runtime, tenantID, sessions)
+		return rescoreSessions(ctx, tx, s.runtime, tenantID, locked)
 	})
 	if err != nil {
 		return model.Question{}, err

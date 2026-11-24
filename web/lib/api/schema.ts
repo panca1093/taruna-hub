@@ -1674,10 +1674,8 @@ export interface paths {
          *     `first_attempt_at` is set (stamped by P16's admission transaction under the same row lock) is
          *     locked: every edit answers `409` with "Tryout sudah dikerjakan siswa dan tidak bisa diubah."
          *
-         *     Assignments keep their frozen version: a `version_id` equal to the version this tryout already
-         *     assigned to that question is kept, an absent `version_id` takes the question's current version,
-         *     and any other `version_id` answers `422` on `subtests[i].questions[j].version_id`. A published
-         *     tryout must still pass the publish rules on every save.
+         *     Every assignment follows the question's current version; a `version_id` in the request is
+         *     accepted but ignored. A published tryout must still pass the publish rules on every save.
          */
         put: {
             parameters: {
@@ -7698,8 +7696,7 @@ export interface components {
             question_id: string;
             /**
              * Format: uuid
-             * @description Omit to assign the question's current version. A version this tryout already assigned to
-             *     the question is kept; any other id answers `422` on this path.
+             * @description Ignored: an assignment always takes the question's current version.
              */
             version_id?: string;
         };

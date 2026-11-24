@@ -385,44 +385,23 @@ func TestEditingAQuestionMovesItsAssignmentToTheNewVersion(t *testing.T) {
 	}
 }
 
-func TestAssignmentOfArbitraryVersionIsRejected(t *testing.T) {
+func TestStaleOrArbitraryVersionIDIsIgnored(t *testing.T) {
 	h := newTryoutHarness(t)
-	tenant, other := h.q.a, h.q.b
-	first := h.question(t, tenant)
-	second := h.question(t, tenant)
-	foreign := h.question(t, other)
+	tenant := h.q.a
+	question := h.question(t, tenant)
+	created := h.create(t, tenant, h.tryoutInput(tenant, subtestInput("Satu", 600, question)))
 
-	created := h.create(t, tenant, h.tryoutInput(tenant,
-		subtestInput("Satu", 600, first),
-		subtestInput("Dua", 600, second),
-	))
-	otherTryout := h.create(t, tenant, h.tryoutInput(tenant, subtestInput("Lain", 600, second)))
-
-	cases := []struct {
-		name     string
-		question model.Question
-		version  uuid.UUID
-	}{
-		{"an arbitrary id", first, uuid.New()},
-		{"another question's version", first, second.VersionID},
-		{"a version from another tryout", first, otherTryout.Subtests[0].Questions[0].VersionID},
-		{"a version of another tenant", first, foreign.VersionID},
+	input := h.tryoutInput(tenant)
+	input.BaseRevision = created.Revision
+	stale := uuid.New()
+	input.Subtests = []TryoutSubtestInput{{Name: "Satu", DurationSeconds: 600,
+		Questions: []TryoutQuestionInput{{QuestionID: question.ID, VersionID: &stale}}}}
+	saved, err := h.update(tenant, created.ID, input)
+	if err != nil {
+		t.Fatalf("save with an unknown version_id: %v", err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			input := h.tryoutInput(tenant)
-			input.BaseRevision = created.Revision
-			versionID := tc.version
-			input.Subtests = []TryoutSubtestInput{{Name: "Satu", DurationSeconds: 600,
-				Questions: []TryoutQuestionInput{{QuestionID: tc.question.ID, VersionID: &versionID}}}}
-			_, err := h.update(tenant, created.ID, input)
-			wantTryoutField(t, err, "subtests[0].questions[0].version_id")
-		})
-	}
-
-	reloaded := h.get(t, tenant, created.ID)
-	if reloaded.Revision != created.Revision || reloaded.QuestionCount != 2 {
-		t.Errorf("tryout = revision %d with %d questions, want the untouched original", reloaded.Revision, reloaded.QuestionCount)
+	if got := saved.Subtests[0].Questions[0].VersionID; got != question.VersionID {
+		t.Errorf("assigned version = %s, want the current %s", got, question.VersionID)
 	}
 }
 

@@ -240,32 +240,6 @@ func (r *TryoutRepository) CurrentQuestions(ctx context.Context, q queryer, tena
 	return out, nil
 }
 
-// AssignedVersions is what "an assignment already in the tryout keeps its version" compares against.
-func (r *TryoutRepository) AssignedVersions(ctx context.Context, q queryer, tenantID, tryoutID uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
-	if tenantID == uuid.Nil {
-		return nil, ErrScopeRequired
-	}
-	rows, err := q.Query(ctx,
-		`SELECT question_id, question_version_id FROM tryout_questions WHERE tenant_id = $1 AND tryout_id = $2`,
-		tenantID, tryoutID)
-	if err != nil {
-		return nil, fmt.Errorf("read assigned versions: %w", err)
-	}
-	defer rows.Close()
-	out := map[uuid.UUID]uuid.UUID{}
-	for rows.Next() {
-		var questionID, versionID uuid.UUID
-		if err := rows.Scan(&questionID, &versionID); err != nil {
-			return nil, fmt.Errorf("scan assigned version: %w", err)
-		}
-		out[questionID] = versionID
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read assigned versions: %w", err)
-	}
-	return out, nil
-}
-
 func (r *TryoutRepository) insertHeadTx(ctx context.Context, tx pgx.Tx, tenantID, createdBy uuid.UUID, tryout model.Tryout) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := tx.QueryRow(ctx, `

@@ -1077,7 +1077,7 @@ func TestRuntimeQuestionEditRepointsAndRescoresTakenTryouts(t *testing.T) {
 		t.Fatalf("results = %d, want 1", n)
 	}
 	if got, err := h.q.svc.Get(ctx, h.scopeA(), h.staff(model.RoleAdmin), f.pg.ID); err != nil || got.RescoreAttempts != 1 {
-		t.Errorf("attempts to rescore = %d (err %v), want 1: the in-progress one is not counted", got.RescoreAttempts, err)
+		t.Errorf("attempts to rescore = %d (err %v), want 1: the in-progress one has no submitted part", got.RescoreAttempts, err)
 	}
 
 	// The key moves from "4" to "3", so the student's pg answer turns wrong: 4.5 - 1 = 3.5 of 10.
@@ -1109,5 +1109,25 @@ func TestRuntimeQuestionEditRepointsAndRescoresTakenTryouts(t *testing.T) {
 	if n := h.count(t, `SELECT count(*) FROM tryout_session_questions WHERE question_id = $1 AND question_version_id = $2 AND session_id = ANY($3)`,
 		f.pg.ID, version, []uuid.UUID{sid, open}); n != 2 {
 		t.Errorf("sessions on the new version = %d, want both", n)
+	}
+}
+
+func TestRuntimeQuestionTypeChangeRefusedWhileSomeoneIsTakingIt(t *testing.T) {
+	h := newRuntimeHarness(t)
+	f := h.fixture(t, nil)
+	_, p := h.enrolledStudent(t, f)
+	sid := h.begin(t, p, f).Attempt.ID
+	h.startPart(t, p, sid, f.sub1())
+	h.submitPart(t, p, sid, f.sub1())
+
+	in := asInput(f.pg)
+	in.Type, in.Options, in.Correct = model.QuestionIsian, nil, []string{"4"}
+	_, err := h.q.update(t, h.tenant(), f.pg.ID, in)
+	var input *InputError
+	if !errors.As(err, &input) || input.Fields["type"] != ReasonTypeInUse {
+		t.Fatalf("type change while in progress: err = %v, want field type = %s", err, ReasonTypeInUse)
+	}
+	if got, err := h.q.svc.Get(context.Background(), h.scopeA(), h.staff(model.RoleAdmin), f.pg.ID); err != nil || got.Type != model.QuestionPG || got.RescoreAttempts != 1 {
+		t.Errorf("question after the refusal = type %s, rescore %d (err %v), want pg and 1: an in-progress session with a submitted part counts", got.Type, got.RescoreAttempts, err)
 	}
 }

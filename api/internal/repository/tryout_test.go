@@ -114,9 +114,6 @@ func TestTryoutsRequireScope(t *testing.T) {
 	if _, err := repo.CurrentQuestions(ctx, pool, uuid.Nil, []uuid.UUID{uuid.New()}); !errors.Is(err, ErrScopeRequired) {
 		t.Errorf("CurrentQuestions(Nil): err = %v, want ErrScopeRequired", err)
 	}
-	if _, err := repo.AssignedVersions(ctx, pool, uuid.Nil, uuid.New()); !errors.Is(err, ErrScopeRequired) {
-		t.Errorf("AssignedVersions(Nil): err = %v, want ErrScopeRequired", err)
-	}
 
 	inTx := func(fn func(pgx.Tx) error) error { return inCurriculumTx(t, pool, fn) }
 	for name, call := range map[string]func(pgx.Tx) error{

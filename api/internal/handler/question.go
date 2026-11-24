@@ -21,6 +21,7 @@ const (
 	questionConflict   = "Soal sudah diubah orang lain, muat ulang."
 	questionReferenced = "Soal masih dipakai konten lain."
 	questionTypeRule   = "Tipe soal tidak dikenal."
+	questionTypeInUse  = "Tipe soal tidak bisa diubah selama ada siswa yang sedang mengerjakan soal ini."
 	questionContentEll = "Konten wajib diisi, maksimal 20000 karakter."
 	questionImageRule  = "Gambar belum didukung."
 	questionExplRule   = "Pembahasan maksimal 20000 karakter."
@@ -350,6 +351,8 @@ func questionReason(reason string) string {
 	switch reason {
 	case service.ReasonQuestionType:
 		return questionTypeRule
+	case service.ReasonTypeInUse:
+		return questionTypeInUse
 	case service.ReasonQuestionContent:
 		return questionContentEll
 	case service.ReasonQuestionImage:

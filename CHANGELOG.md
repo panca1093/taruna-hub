@@ -22,7 +22,7 @@ Notable changes to the Taruna Eduka tryout platform, newest first. Each version 
 - **Wider product form** with fields side by side.
 - Buying a tryout you already have is allowed again; it adds attempts instead of being refused.
 
-> **Deploy note:** run migration `000032_tryout_attempt_credits`. Every existing purchase gets 1 attempt, and students who already took a tryout keep the attempts they used, so they need to buy again for another try.
+> **Deploy note:** run migrations `000032_tryout_attempt_credits` and `000033_question_lookup_indexes`. Every existing purchase gets 1 attempt, and students who already took a tryout keep the attempts they used, so they need to buy again for another try.
 
 ## v0.1.5 — 2026-11-21
 
