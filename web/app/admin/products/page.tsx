@@ -470,53 +470,43 @@ export default function ProductsPage() {
             />
           </div>
 
-          {form.type === "kecermatan" ? (
+          {form.type === "kecermatan" || form.type === "individual" ? (
             <div className="md:col-span-2">
-              <p className="mb-2 text-small font-medium text-foreground">{t.kecermatanPickTitle}</p>
-              <div className="space-y-1.5">
-                {choiceFailed ? (
-                  <p className="text-label text-danger">{t.loadErrorDescription}</p>
-                ) : choiceKecermatan === null ? (
-                  <p className="text-label text-muted">{t.tryoutLoading}</p>
-                ) : choiceKecermatan.length === 0 ? (
-                  <p className="text-label text-muted">{t.kecermatanEmpty}</p>
-                ) : (
-                  choiceKecermatan.map((test) => {
-                    const checked = form.kecermatanTestId === test.id;
-                    return (
-                      <button
-                        key={test.id}
-                        type="button"
-                        onClick={() => setForm((current) => ({ ...current, kecermatanTestId: test.id }))}
-                        className={cn(
-                          "flex w-full items-center gap-2.5 rounded-control border px-3 py-2 text-left text-small transition-colors",
-                          checked
-                            ? "border-accent bg-accent-soft text-accent-soft-foreground"
-                            : "border-border text-foreground hover:bg-surface-secondary",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "flex size-4 items-center justify-center rounded-chip border-2 text-micro font-bold",
-                            checked ? "border-accent bg-accent text-white" : "border-border text-transparent",
-                          )}
-                        >
-                          ✓
-                        </span>
-                        {test.title}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-              {formErrors.kecermatan_test_id && <p className="mt-1 text-label text-danger">{formErrors.kecermatan_test_id}</p>}
+              {choiceFailed ? (
+                <p className="text-label text-danger">{t.loadErrorDescription}</p>
+              ) : (form.type === "kecermatan" ? choiceKecermatan : choiceTryouts) === null ? (
+                <p className="text-label text-muted">{t.tryoutLoading}</p>
+              ) : form.type === "kecermatan" ? (
+                <SelectInput
+                  label={t.fieldKecermatanTest}
+                  required
+                  placeholder={t.kecermatanPickTitle}
+                  options={(choiceKecermatan ?? []).map((test) => ({ id: test.id, label: test.title }))}
+                  selectedKey={form.kecermatanTestId || null}
+                  onSelectionChange={(key) => key && setForm((current) => ({ ...current, kecermatanTestId: key }))}
+                  error={formErrors.kecermatan_test_id}
+                  description={choiceKecermatan?.length === 0 ? t.kecermatanEmpty : undefined}
+                />
+              ) : (
+                <SelectInput
+                  label={t.fieldTryout}
+                  required
+                  placeholder={t.tryoutPickSingle}
+                  options={(choiceTryouts ?? []).map((tryout) => ({ id: tryout.id, label: tryout.title }))}
+                  selectedKey={form.tryoutIds[0] ?? null}
+                  onSelectionChange={(key) => key && toggleTryout(key)}
+                  error={formErrors.tryout_ids}
+                  description={choiceTryouts?.length === 0 ? t.tryoutEmpty : undefined}
+                />
+              )}
             </div>
           ) : (
           <div className="md:col-span-2">
             <p className="mb-2 text-small font-medium text-foreground">
-              {form.type === "bundle" ? t.tryoutPickBundle : t.tryoutPickSingle}
+              {t.tryoutPickBundle}
+              {form.tryoutIds.length > 0 && <span className="ml-1.5 text-muted">· {t.tryoutPickedCount(form.tryoutIds.length)}</span>}
             </p>
-            <div className="space-y-1.5">
+            <div className="grid max-h-60 gap-1.5 overflow-y-auto sm:grid-cols-2">
               {choiceFailed ? (
                 <p className="text-label text-danger">{t.loadErrorDescription}</p>
               ) : choiceTryouts === null ? (
@@ -530,6 +520,7 @@ export default function ProductsPage() {
                     <button
                       key={tryout.id}
                       type="button"
+                      aria-pressed={checked}
                       onClick={() => toggleTryout(tryout.id)}
                       className={cn(
                         "flex w-full items-center gap-2.5 rounded-control border px-3 py-2 text-left text-small transition-colors",
@@ -540,13 +531,13 @@ export default function ProductsPage() {
                     >
                       <span
                         className={cn(
-                          "flex size-4 items-center justify-center rounded-chip border-2 text-micro font-bold",
+                          "flex size-4 shrink-0 items-center justify-center rounded-chip border-2 text-micro font-bold",
                           checked ? "border-accent bg-accent text-white" : "border-border text-transparent",
                         )}
                       >
                         ✓
                       </span>
-                      {tryout.title}
+                      <span className="truncate">{tryout.title}</span>
                     </button>
                   );
                 })
