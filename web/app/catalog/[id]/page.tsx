@@ -121,7 +121,9 @@ function ProductDetail({ product }: { product: PublicProduct }) {
       cancelled = true;
     };
   }, [role, testId]);
-  const totalSeconds = product.tryouts.reduce((sum, tryout) => sum + tryout.duration_seconds_total, 0);
+  const totalSeconds =
+    product.tryouts.reduce((sum, tryout) => sum + tryout.duration_seconds_total, 0) +
+    product.kecermatan_tests.reduce((sum, test) => sum + test.kolom_count * test.kolom_duration_seconds, 0);
   const totalMinutes = Math.round(totalSeconds / 60);
 
   const facts = kecermatan

@@ -310,7 +310,7 @@ export default function ProductsPage() {
       key: "type",
       header: t.colType,
       render: (product) => (
-        <Chip size="sm" variant="secondary" className="border border-border font-medium">
+        <Chip size="sm" variant="secondary" className="border border-border font-medium whitespace-nowrap">
           {product.type === "bundle"
             ? t.typeBundle(product.tryouts.length + product.kecermatan_tests.length)
             : product.type === "kecermatan"

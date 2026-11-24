@@ -96,7 +96,7 @@ export function ProductItemPicker({
       {picked.length > 0 && (
         <ul className="mb-2 flex flex-col gap-1.5">
           {picked.map((item) => (
-            <li key={item.id} className="flex items-center gap-2 rounded-control border border-border px-3 py-2 text-small">
+            <li key={item.id} className="flex items-center gap-2 rounded-control border border-border px-3 py-2 text-small text-foreground">
               <span className="min-w-0 flex-1 truncate" title={item.label}>
                 {item.label}
               </span>
