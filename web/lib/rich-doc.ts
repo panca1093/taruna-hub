@@ -3,7 +3,9 @@ import type { components } from "@/lib/api/schema";
 export type RichDoc = components["schemas"]["RichDoc"];
 export type RichNode = components["schemas"]["RichNode"];
 
-export const SHAPE_KINDS = ["kubus", "balok", "tabung", "kerucut", "bola", "limas", "prisma"] as const;
+export const SOLID_SHAPE_KINDS = ["kubus", "balok", "tabung", "kerucut", "bola", "limas", "prisma"] as const;
+export const FLAT_SHAPE_KINDS = ["persegi", "persegi_panjang", "segitiga", "lingkaran", "trapesium", "jajar_genjang", "belah_ketupat", "layang_layang"] as const;
+export const SHAPE_KINDS = [...SOLID_SHAPE_KINDS, ...FLAT_SHAPE_KINDS] as const;
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
 
 /** Same bounds the API enforces on a formula; keeps a hostile LaTeX string from freezing the page. */

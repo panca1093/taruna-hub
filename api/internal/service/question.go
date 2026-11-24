@@ -103,14 +103,15 @@ type QuestionFilter struct {
 }
 
 type QuestionService struct {
-	db     *pgxpool.Pool
-	repo   *repository.QuestionRepository
-	assets *AssetService
+	db      *pgxpool.Pool
+	repo    *repository.QuestionRepository
+	assets  *AssetService
+	runtime *repository.RuntimeRepository
 }
 
 // NewQuestionService takes the asset service that finalizes the images a question's documents point at.
 func NewQuestionService(db *pgxpool.Pool, repo *repository.QuestionRepository, assets *AssetService) *QuestionService {
-	return &QuestionService{db: db, repo: repo, assets: assets}
+	return &QuestionService{db: db, repo: repo, assets: assets, runtime: repository.NewRuntimeRepository(db)}
 }
 
 // BackfillDocs gives every question version stored as text its documents and returns how many it converted. An
@@ -188,6 +189,9 @@ func (s *QuestionService) Get(ctx context.Context, scope HostScope, principal mo
 		return model.Question{}, questionError(err)
 	}
 	resolveQuestion(&question)
+	if question.RescoreAttempts, err = s.runtime.CompletedSessionsWith(ctx, s.db, tenantID, id); err != nil {
+		return model.Question{}, err
+	}
 	return question, nil
 }
 
@@ -276,8 +280,16 @@ func (s *QuestionService) Update(ctx context.Context, scope HostScope, principal
 			return questionError(err)
 		}
 		out, err = s.repo.FindCurrentTx(ctx, tx, tenantID, id, false)
+		if err != nil {
+			return questionError(err)
+		}
 		resolveQuestion(&out)
-		return questionError(err)
+		// Owner decision 2026-11-24: an edit reaches every tryout and attempt using the question, and taken ones are rescored.
+		sessions, err := s.runtime.RepointQuestion(ctx, tx, tenantID, id, out.VersionID)
+		if err != nil {
+			return err
+		}
+		return rescoreSessions(ctx, tx, s.runtime, tenantID, sessions)
 	})
 	if err != nil {
 		return model.Question{}, err

@@ -488,8 +488,9 @@ func TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree(t *testing.T) {
 			return out
 		}
 		stems := []string{model.DocText(first.Questions[0].Content), model.DocText(first.Questions[1].Content), model.DocText(second.Questions[0].Content)}
-		if stems[0] != "Soal Zulu pertama" || stems[1] != "Soal Alfa kedua" || stems[2] != "Soal Mike ketiga" {
-			t.Errorf("%s stems = %q, want stored order with the frozen (pre-edit) stem", name, stems)
+		// An edit reaches the tryout (2026-11-24), so the print carries the edited stem.
+		if stems[0] != "Soal Zulu SUDAH-DIUBAH" || stems[1] != "Soal Alfa kedua" || stems[2] != "Soal Mike ketiga" {
+			t.Errorf("%s stems = %q, want stored order with the edited stem", name, stems)
 		}
 		if got := strings.Join(labels(first.Questions[0]), ","); got != "Zeta,Alfa,Mu" {
 			t.Errorf("%s options = %s, want stored order Zeta,Alfa,Mu", name, got)
@@ -498,9 +499,6 @@ func TestTryoutPrintIsStaffOnlyTenantScopedAndKeyFree(t *testing.T) {
 			t.Errorf("%s weighted options = %s, want Satu,Dua", name, got)
 		}
 		raw := rec.Body.String()
-		if strings.Contains(raw, "SUDAH-DIUBAH") {
-			t.Errorf("%s body carries the edited stem, want the frozen version", name)
-		}
 		for _, secret := range secrets {
 			if secret != "" && strings.Contains(raw, secret) {
 				t.Errorf("%s body carries %q: %s", name, secret, raw)

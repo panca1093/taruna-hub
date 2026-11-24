@@ -51,9 +51,17 @@ const SHAPES: Record<ShapeKind, ReactNode> = {
       <path d="M14 80l30-18h42M44 62l21-34" style={hidden} />
     </>
   ),
+  persegi: <rect x="20" y="20" width="60" height="60" />,
+  persegi_panjang: <rect x="10" y="29" width="80" height="42" />,
+  segitiga: <path d="M50 16L12 82h76z" />,
+  lingkaran: <circle cx="50" cy="50" r="36" />,
+  trapesium: <path d="M32 24h36l20 54H12z" />,
+  jajar_genjang: <path d="M30 26h58L70 74H12z" />,
+  belah_ketupat: <path d="M50 12l36 38-36 38-36-38z" />,
+  layang_layang: <path d="M50 10l30 32-30 48-30-48z" />,
 };
 
-/** Line drawing of a solid in the current text colour; hidden edges are dashed. */
+/** Line drawing of a solid or flat shape in the current text colour; hidden edges are dashed. */
 export function SolidShape({ kind, className, label }: { kind: ShapeKind; className?: string; label?: string }) {
   return (
     <svg

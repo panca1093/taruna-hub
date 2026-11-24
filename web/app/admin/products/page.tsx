@@ -393,7 +393,7 @@ export default function ProductsPage() {
           isOpen={modalOpen}
           onOpenChange={setModalOpen}
           title={editing ? t.editProduct : t.addProduct}
-          size="lg"
+          size="xl"
           footer={
             <>
               <Button variant="ghost" onPress={() => setModalOpen(false)}>
@@ -439,19 +439,13 @@ export default function ProductsPage() {
             {formErrors.type && <p className="mt-1 text-label text-danger">{formErrors.type}</p>}
           </div>
 
+          <div className="grid gap-4 md:grid-cols-2">
           <TextInput
             label={t.fieldTitle}
             required
             value={form.title}
             error={formErrors.title}
             onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))}
-          />
-          <TextareaInput
-            label={t.fieldDescription}
-            rows={2}
-            value={form.description}
-            error={formErrors.description}
-            onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
           />
           <SelectInput
             label={t.fieldProgram}
@@ -466,9 +460,18 @@ export default function ProductsPage() {
               setChoiceFailed(false);
             }}
           />
+          <div className="md:col-span-2">
+            <TextareaInput
+              label={t.fieldDescription}
+              rows={2}
+              value={form.description}
+              error={formErrors.description}
+              onChange={(e) => setForm((current) => ({ ...current, description: e.target.value }))}
+            />
+          </div>
 
           {form.type === "kecermatan" ? (
-            <div>
+            <div className="md:col-span-2">
               <p className="mb-2 text-small font-medium text-foreground">{t.kecermatanPickTitle}</p>
               <div className="space-y-1.5">
                 {choiceFailed ? (
@@ -509,7 +512,7 @@ export default function ProductsPage() {
               {formErrors.kecermatan_test_id && <p className="mt-1 text-label text-danger">{formErrors.kecermatan_test_id}</p>}
             </div>
           ) : (
-          <div>
+          <div className="md:col-span-2">
             <p className="mb-2 text-small font-medium text-foreground">
               {form.type === "bundle" ? t.tryoutPickBundle : t.tryoutPickSingle}
             </p>
@@ -553,15 +556,6 @@ export default function ProductsPage() {
           </div>
           )}
 
-          <TextInput
-            label={t.fieldIncludedAttempts}
-            inputMode="numeric"
-            value={form.includedAttempts}
-            error={formErrors.included_attempts}
-            description={form.type === "bundle" ? t.includedAttemptsBundleHint : undefined}
-            onChange={(e) => setForm((current) => ({ ...current, includedAttempts: e.target.value }))}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
             <TextInput
               label={t.fieldPrice}
               required
@@ -578,8 +572,6 @@ export default function ProductsPage() {
               error={formErrors.original_price}
               onChange={(e) => setForm((current) => ({ ...current, originalPrice: e.target.value }))}
             />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
             <TextInput
               label={t.fieldActiveFrom}
               type="date"
@@ -594,13 +586,23 @@ export default function ProductsPage() {
               error={formErrors.active_until}
               onChange={(e) => setForm((current) => ({ ...current, activeUntil: e.target.value }))}
             />
-          </div>
-          <SwitchInput
-            label={t.fieldActive}
-            description={t.fieldActiveDescription}
-            isSelected={form.isActive}
-            onChange={(checked) => setForm((current) => ({ ...current, isActive: checked }))}
+          <TextInput
+            label={t.fieldIncludedAttempts}
+            inputMode="numeric"
+            value={form.includedAttempts}
+            error={formErrors.included_attempts}
+            description={form.type === "bundle" ? t.includedAttemptsBundleHint : undefined}
+            onChange={(e) => setForm((current) => ({ ...current, includedAttempts: e.target.value }))}
           />
+          <div className="md:pt-7">
+            <SwitchInput
+              label={t.fieldActive}
+              description={t.fieldActiveDescription}
+              isSelected={form.isActive}
+              onChange={(checked) => setForm((current) => ({ ...current, isActive: checked }))}
+            />
+          </div>
+          </div>
         </FormModal>
 
         <FormModal

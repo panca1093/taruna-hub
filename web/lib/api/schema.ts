@@ -7369,7 +7369,8 @@ export interface components {
          *
          *     Blocks: `paragraph`, `bulletList`, `orderedList` (of `listItem`), `table` (of `tableRow` of
          *     `tableHeader`/`tableCell`), `shape` (`attrs.kind` one of kubus, balok, tabung, kerucut, bola,
-         *     limas, prisma; optional `attrs.caption`) and `image` (`attrs.asset_id` of a `question_image`
+         *     limas, prisma, persegi, persegi_panjang, segitiga, lingkaran, trapesium, jajar_genjang,
+         *     belah_ketupat, layang_layang; optional `attrs.caption`) and `image` (`attrs.asset_id` of a `question_image`
          *     asset; optional `attrs.alt`). Inline: `text` (marks `bold`, `italic`, `underline`),
          *     `hardBreak` and `math` (`attrs.latex`).
          *
@@ -7454,6 +7455,8 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /** @description Only on GET /questions/{id}. Completed tryout attempts that include this question; saving a change moves every tryout and attempt onto the new version and rescores these attempts. */
+            rescore_attempts?: number;
         };
         QuestionList: {
             questions: components["schemas"]["Question"][];

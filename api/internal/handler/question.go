@@ -70,6 +70,8 @@ type questionResponse struct {
 	Correct        []string                 `json:"correct"`
 	CreatedAt      time.Time                `json:"created_at"`
 	UpdatedAt      time.Time                `json:"updated_at"`
+	// Only the single-question read sets it, so the list does not pay a count per row.
+	RescoreAttempts *int `json:"rescore_attempts,omitempty"`
 }
 
 type questionsResponse struct {
@@ -135,7 +137,9 @@ func (h *Handler) GetQuestion(c echo.Context) error {
 	if err != nil {
 		return questionError(err)
 	}
-	return c.JSON(http.StatusOK, questionResponseOf(question))
+	body := questionResponseOf(question)
+	body.RescoreAttempts = &question.RescoreAttempts
+	return c.JSON(http.StatusOK, body)
 }
 
 func (h *Handler) CreateQuestion(c echo.Context) error {
