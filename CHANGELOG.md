@@ -2,16 +2,17 @@
 
 Notable changes to the Taruna Eduka tryout platform, newest first. Each version is a git tag; pushing a `v*` tag builds the deploy images.
 
-## Unreleased
+## v0.1.7 — 2026-11-24
 
 ### Added
 
 - **Packages can mix tryouts and kecermatan tests.** A bundle holds 2 to 20 items of either kind. Each purchase adds the product's attempts to every tryout and every kecermatan test in it, and the catalog lists both with the total time.
 - **Search and filter on every list page.** Tryout, Tes kecermatan, Paket item, Program, Produk, Pesanan, Top-up, Monitoring, Siswa and Pengguna have a search field and a Filter button, as in Bank Soal. Students can filter Pesanan saya by status and Riwayat dompet by type.
+- **Order details list the kecermatan tests of a mixed package,** next to its tryouts, so students see everything a purchase gave them.
 
 ### Changed
 
-- **Choosing what a product sells.** The product form lists the chosen items and opens a separate window with a search box to pick them, instead of a long list.
+- **Choosing what a product sells.** The product form lists the chosen items and opens a separate window with a search box to pick them, instead of a long list or a dropdown. The bundle tab no longer shows a "0x" count.
 - On Pesanan and Top-up the status tabs moved into the Filter panel.
 - The catalog no longer says a tryout can be retaken any number of times; it says every attempt is saved as its own result.
 
