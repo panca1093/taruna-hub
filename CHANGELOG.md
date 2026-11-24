@@ -2,6 +2,24 @@
 
 Notable changes to the Taruna Eduka tryout platform, newest first. Each version is a git tag; pushing a `v*` tag builds the deploy images.
 
+## v0.1.6 — 2026-11-24
+
+### Added
+
+- **Tryouts are sold by attempts.** Each product sets how many times a student can take its tryouts per purchase (1 unless the admin changes it). In a bundle every tryout gets that many attempts. Buying the product again adds more attempts.
+- **Students see their attempts left.** The tryout page shows how many attempts are used. When none are left, the page and the subtest start page show "Beli kesempatan lagi", which opens that tryout's product.
+- **Progress on the tryout result.** Like kecermatan, the result shows the average score of all attempts and the student's rank, next to a chart of the score per attempt. Below the subtest scores, a table lists correct, wrong and blank answers for the last 5 attempts. The score of the attempt being viewed sits under the rank.
+- **Subject and chapter filters in the question bank.** A "Filter" button beside the search box opens program, subject, chapter, question type and difficulty together. The same filter works when picking questions for a tryout.
+- **Question count in the tryout list,** so admins don't have to open a tryout to see how many questions it has.
+
+### Changed
+
+- **Picking questions for a tryout.** The picker has the search and filter side by side, a switch between all and selected questions, "Pilih semua" and "Kosongkan", and shows each question's subject and chapter.
+- **Result page and PDF are simpler.** The separate correct, total and rank cards are gone; the same numbers are in the average panel and the table. The result PDF follows the page.
+- Buying a tryout you already have is allowed again; it adds attempts instead of being refused.
+
+> **Deploy note:** run migration `000032_tryout_attempt_credits`. Every existing purchase gets 1 attempt, and students who already took a tryout keep the attempts they used, so they need to buy again for another try.
+
 ## v0.1.5 — 2026-11-21
 
 ### Added
