@@ -35,6 +35,17 @@ yet, so its adapter reports itself unconfigured; email with `SMTP_HOST` unset do
 the `notifications` queue exists today — PDF, report and import jobs will get their own queues when
 their slices arrive.
 
+## Email format
+
+User-facing emails (signup code, password reset, order and top-up outcomes) go out as
+`multipart/alternative`: the plain-text template first, then a branded HTML version, both
+quoted-printable so no line passes SMTP's 998-octet limit. A template without an HTML version (the
+SMTP test) is sent as plain `text/plain` exactly as before. The HTML is one shared layout
+(`api/internal/service/notification_html.go`: logo, card, footer) with per-template blocks, rendered
+with `html/template`, so every param (names, reasons, product titles) is escaped. The logo
+(`/taruna-eduka-logo.png`) and the footer link come from `APP_URL`, never from a request. No
+tracking pixels, external fonts or scripts; codes stay real text.
+
 ## Transport security
 
 `SMTP_TLS=starttls` refuses to fall back to cleartext: a server that does not offer STARTTLS, or

@@ -4,7 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net"
+	"net/mail"
 	"strings"
 	"syscall"
 	"testing"
@@ -46,6 +50,62 @@ func TestSMTPSenderDeliversPlainMessage(t *testing.T) {
 	}
 	if !strings.Contains(mails[0], "Pesan uji dari Taruna Eduka.") {
 		t.Errorf("body missing:\n%s", mails[0])
+	}
+	if strings.Contains(mails[0], "multipart") || !strings.Contains(mails[0], "Content-Transfer-Encoding: 8bit") {
+		t.Errorf("a message without HTML must stay a single 8bit text/plain body:\n%s", mails[0])
+	}
+}
+
+func TestSMTPSenderDeliversMultipartAlternative(t *testing.T) {
+	s := newFakeSMTP(t)
+	msg := testMessage()
+	// One HTML line far past SMTP's 998-octet limit, with characters quoted-printable must escape.
+	msg.HTML = "<p style=\"color:#3e3239\">Halo Ünal =_ " + strings.Repeat("x", 5000) + "</p>"
+	if err := senderFor(t, s, nil).Send(context.Background(), msg); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	mails := s.messages()
+	if len(mails) != 1 {
+		t.Fatalf("messages = %d, want 1", len(mails))
+	}
+	for _, line := range strings.Split(mails[0], "\n") {
+		if len(strings.TrimRight(line, "\r")) > 998 {
+			t.Fatalf("a line is %d octets, over SMTP's 998 limit", len(line))
+		}
+	}
+
+	parsed, err := mail.ReadMessage(strings.NewReader(mails[0]))
+	if err != nil {
+		t.Fatalf("parse message: %v", err)
+	}
+	mediaType, params, err := mime.ParseMediaType(parsed.Header.Get("Content-Type"))
+	if err != nil || mediaType != "multipart/alternative" {
+		t.Fatalf("Content-Type = %q (%v), want multipart/alternative", parsed.Header.Get("Content-Type"), err)
+	}
+	r := multipart.NewReader(parsed.Body, params["boundary"])
+	var got []string
+	for {
+		part, err := r.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("next part: %v", err)
+		}
+		body, err := io.ReadAll(part)
+		if err != nil {
+			t.Fatalf("read part: %v", err)
+		}
+		got = append(got, part.Header.Get("Content-Type"), string(body))
+	}
+	want := []string{"text/plain; charset=UTF-8", msg.Body, "text/html; charset=UTF-8", msg.HTML}
+	if len(got) != len(want) {
+		t.Fatalf("parts = %d values, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("part value %d = %.80q, want %.80q", i, got[i], want[i])
+		}
 	}
 }
 
