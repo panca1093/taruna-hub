@@ -174,6 +174,7 @@ func newNotifications(cfg config.Config, logger *slog.Logger, pool *pgxpool.Pool
 		infra.NewSenders(cfg.SMTP, logger),
 		cfg.NotificationSealKey,
 		logger,
+		service.WithAppURL(cfg.AppURL),
 	)
 }
 

@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
 )
 
 func newNotificationServiceForTest(t *testing.T, sealKey []byte) *NotificationService {
@@ -106,7 +109,7 @@ func TestEnqueueRejectsInvalidInput(t *testing.T) {
 func TestTemplateRegistryIsTheSeamForLaterSlices(t *testing.T) {
 	svc := newNotificationServiceForTest(t, nil)
 
-	if err := svc.RegisterTemplate("smtp-test", "x", "y"); !errors.Is(err, ErrTemplateExists) {
+	if err := svc.RegisterTemplate("smtp-test", "x", "y", ""); !errors.Is(err, ErrTemplateExists) {
 		t.Errorf("re-registering an existing template: err = %v, want ErrTemplateExists", err)
 	}
 	// The P03b templates come built in, so a later slice's template stands in here.
@@ -115,14 +118,111 @@ func TestTemplateRegistryIsTheSeamForLaterSlices(t *testing.T) {
 			t.Errorf("built-in template %s is missing", name)
 		}
 	}
-	if err := svc.RegisterTemplate("order-created", "Order {{.Get \"subject\"}}", "order: {{.Get \"order\"}}"); err != nil {
+	if err := svc.RegisterTemplate("order-created", "Order {{.Get \"subject\"}}", "order: {{.Get \"order\"}}", ""); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	if _, ok := svc.templates["order-created"]; !ok {
 		t.Error("the registered template is not reachable by name")
 	}
-	if err := svc.RegisterTemplate("broken", "{{", "x"); err == nil {
+	if err := svc.RegisterTemplate("broken", "{{", "x", ""); err == nil {
 		t.Error("a malformed template was accepted")
+	}
+	if err := svc.RegisterTemplate("broken-html", "x", "y", "{{define \"content\"}}"); err == nil {
+		t.Error("a malformed HTML template was accepted")
+	}
+	if err := svc.RegisterTemplate("missing-blocks", "x", "y", `{{define "content"}}x{{end}}`); err == nil {
+		t.Error("HTML missing blocks the layout needs was accepted")
+	}
+}
+
+func TestHTMLWithoutAppURLOmitsLogoAndSiteLink(t *testing.T) {
+	svc := newNotificationServiceForTest(t, nil)
+	msg := renderForTest(t, svc, TemplateEmailCode, map[string]string{
+		"tenant_name": "Taruna Eduka", "name": "Panca", "minutes": "10", "code": "561888",
+	})
+	if !strings.Contains(msg.HTML, "561888") {
+		t.Errorf("HTML part lost the code:\n%s", msg.HTML)
+	}
+	for _, unwanted := range []string{"<img", "<a "} {
+		if strings.Contains(msg.HTML, unwanted) {
+			t.Errorf("HTML part without an app URL contains %q:\n%s", unwanted, msg.HTML)
+		}
+	}
+}
+
+func renderForTest(t *testing.T, svc *NotificationService, name string, params map[string]string) Message {
+	t.Helper()
+	n := model.Notification{ID: uuid.New(), Recipient: "student@example.com", Template: name, Params: params}
+	data, err := svc.renderParams(n)
+	if err != nil {
+		t.Fatalf("%s: params: %v", name, err)
+	}
+	msg, err := svc.render(svc.templates[name], data, n)
+	if err != nil {
+		t.Fatalf("%s: render: %v", name, err)
+	}
+	return msg
+}
+
+func TestUserFacingTemplatesRenderTextAndHTML(t *testing.T) {
+	svc, err := NewNotificationService(nil, nil, nil, nil, nil, WithAppURL("https://tarunaedu.com"))
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	base := map[string]string{"tenant_name": "Taruna Eduka", "name": "Panca", "minutes": "10"}
+	cases := map[string]map[string]string{
+		TemplateEmailCode:      {"code": "561888"},
+		TemplatePasswordReset:  {"reset_url": "https://tarunaedu.com/reset-password#token=abc_-.def"},
+		TemplateOrderConfirmed: {"code": "ORD-00042", "product": "Paket SKD"},
+		TemplateOrderCancelled: {"code": "ORD-00043", "product": "Paket SKD", "reason": "Pembayaran kedaluwarsa"},
+		TemplateTopupApproved:  {"code": "TOP-00007", "amount": "Rp50.000"},
+		TemplateTopupRejected:  {"code": "TOP-00008", "amount": "Rp50.000", "reason": "Bukti transfer tidak terbaca"},
+	}
+	for name, extra := range cases {
+		params := map[string]string{}
+		for k, v := range base {
+			params[k] = v
+		}
+		for k, v := range extra {
+			params[k] = v
+		}
+		msg := renderForTest(t, svc, name, params)
+		if msg.HTML == "" {
+			t.Errorf("%s: no HTML part", name)
+			continue
+		}
+		for _, v := range extra {
+			if !strings.Contains(msg.Body, v) {
+				t.Errorf("%s: text part is missing %q", name, v)
+			}
+			if !strings.Contains(msg.HTML, v) {
+				t.Errorf("%s: HTML part is missing %q", name, v)
+			}
+		}
+		for _, want := range []string{"https://tarunaedu.com/taruna-eduka-logo.png", "Halo Panca,", "mohon tidak dibalas"} {
+			if !strings.Contains(msg.HTML, want) {
+				t.Errorf("%s: HTML part is missing %q", name, want)
+			}
+		}
+	}
+	if msg := renderForTest(t, svc, templateNameSMTPTest, map[string]string{"subject": "x"}); msg.HTML != "" {
+		t.Errorf("smtp-test grew an HTML part: %q", msg.HTML)
+	}
+}
+
+func TestHTMLPartEscapesParams(t *testing.T) {
+	svc := newNotificationServiceForTest(t, nil)
+	msg := renderForTest(t, svc, TemplateOrderCancelled, map[string]string{
+		"tenant_name": "Taruna Eduka", "name": `<script>alert(1)</script>`, "code": "ORD-1",
+		"product": `<img src=x onerror=alert(1)>`, "reason": `"><b>x</b>`,
+	})
+	for _, raw := range []string{"<script>", "<img src=x", "<b>x</b>"} {
+		if strings.Contains(msg.HTML, raw) {
+			t.Errorf("HTML part contains unescaped %q", raw)
+		}
+	}
+	if !strings.Contains(msg.HTML, "&lt;script&gt;") {
+		t.Errorf("HTML part lost the escaped name:\n%s", msg.HTML)
 	}
 }
 

@@ -67,6 +67,7 @@ func run() error {
 		infra.NewSenders(cfg.SMTP, logger),
 		cfg.NotificationSealKey,
 		logger,
+		service.WithAppURL(cfg.AppURL),
 	)
 	if err != nil {
 		return err

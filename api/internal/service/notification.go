@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	htmltemplate "html/template"
+	"io"
 	"log/slog"
 	"sort"
 	"strings"
@@ -97,6 +99,8 @@ type Message struct {
 	Recipient string
 	Subject   string
 	Body      string
+	// HTML is the optional rich alternative to Body; empty means a plain-text message.
+	HTML string
 }
 
 // Sender is one channel's transport; an unconfigured one becomes a terminal unavailable row.
@@ -139,6 +143,7 @@ func (d templateData) Get(key string) string {
 type notificationTemplate struct {
 	subject *template.Template
 	body    *template.Template
+	html    *htmltemplate.Template
 }
 
 type Attempt struct {
@@ -154,6 +159,8 @@ type NotificationService struct {
 	templates map[string]notificationTemplate
 	logger    *slog.Logger
 	now       func() time.Time
+	// appURL is the configured web origin the HTML layout takes the logo and site link from.
+	appURL string
 	// reconcileLimit bounds one maintenance scan; it is a field so a test can lower it.
 	reconcileLimit int
 }
@@ -163,6 +170,11 @@ type Option func(*NotificationService)
 // WithClock replaces the clock; tests use it to move a message past its expiry between checks.
 func WithClock(now func() time.Time) Option {
 	return func(s *NotificationService) { s.now = now }
+}
+
+// WithAppURL sets the web origin; without it the HTML layout omits the logo and site link.
+func WithAppURL(appURL string) Option {
+	return func(s *NotificationService) { s.appURL = appURL }
 }
 
 // WithReconcileLimit lowers the maintenance bound; tests assert only on their own rows.
@@ -201,7 +213,7 @@ func NewNotificationService(repo *repository.NotificationRepository, jobs JobIns
 		{TemplateEmailCode,
 			`Kode verifikasi {{.Get "tenant_name"}}`,
 			"Halo {{.Get \"name\"}},\n\nKode verifikasi email Anda di {{.Get \"tenant_name\"}}: {{.Get \"code\"}}\n\n" +
-				"Kode berlaku {{.Get \"minutes\"}} menit. Jangan bagikan kode ini kepada siapa pun.\n" +
+				"Kode berlaku {{.Get \"minutes\"}} menit. Jangan bagikan kode ini kepada siapa pun, termasuk pihak yang mengaku dari {{.Get \"tenant_name\"}}.\n" +
 				"Abaikan email ini jika Anda tidak merasa mendaftar."},
 		{TemplatePasswordReset,
 			`Atur ulang kata sandi {{.Get "tenant_name"}}`,
@@ -225,7 +237,7 @@ func NewNotificationService(repo *repository.NotificationRepository, jobs JobIns
 			"Halo {{.Get \"name\"}},\n\nTop-up {{.Get \"code\"}} sebesar {{.Get \"amount\"}} ditolak.\n" +
 				"Alasan: {{.Get \"reason\"}}\n\nSaldo dompet tidak berubah. Hubungi admin {{.Get \"tenant_name\"}} jika ada pertanyaan."},
 	} {
-		if err := s.RegisterTemplate(t.name, t.subject, t.body); err != nil {
+		if err := s.RegisterTemplate(t.name, t.subject, t.body, emailHTML[t.name]); err != nil {
 			return nil, err
 		}
 	}
@@ -233,7 +245,8 @@ func NewNotificationService(repo *repository.NotificationRepository, jobs JobIns
 }
 
 // RegisterTemplate is the seam later slices use to add event templates without touching transport.
-func (s *NotificationService) RegisterTemplate(name, subject, body string) error {
+// html, when not empty, fills the blocks of the shared email layout in notification_html.go.
+func (s *NotificationService) RegisterTemplate(name, subject, body, html string) error {
 	if _, ok := s.templates[name]; ok {
 		return fmt.Errorf("%w: %s", ErrTemplateExists, name)
 	}
@@ -245,7 +258,18 @@ func (s *NotificationService) RegisterTemplate(name, subject, body string) error
 	if err != nil {
 		return fmt.Errorf("parse body template %s: %w", name, err)
 	}
-	s.templates[name] = notificationTemplate{subject: subjectTmpl, body: bodyTmpl}
+	t := notificationTemplate{subject: subjectTmpl, body: bodyTmpl}
+	if html != "" {
+		t.html, err = htmltemplate.Must(emailLayout.Clone()).Parse(html)
+		if err != nil {
+			return fmt.Errorf("parse html template %s: %w", name, err)
+		}
+		// A missing block only surfaces at execution, which would fail every send permanently.
+		if err := t.html.Execute(io.Discard, emailPage{}); err != nil {
+			return fmt.Errorf("execute html template %s: %w", name, err)
+		}
+	}
+	s.templates[name] = t
 	return nil
 }
 
@@ -379,7 +403,7 @@ func (s *NotificationService) Deliver(ctx context.Context, id uuid.UUID, a Attem
 		return &DeliveryError{Class: ClassPermanent, Reason: reason}
 	}
 
-	msg, err := render(tmpl, params, claimed)
+	msg, err := s.render(tmpl, params, claimed)
 	if err != nil {
 		reason := "template render failed"
 		if err := s.finish(ctx, scope, claimed.ID, token, model.StatusFailed, outcomeOf(model.OutcomePermanent), &reason, a.N); err != nil {
@@ -481,15 +505,22 @@ func (s *NotificationService) renderParams(n model.Notification) (templateData, 
 	return data, nil
 }
 
-func render(tmpl notificationTemplate, data templateData, n model.Notification) (Message, error) {
-	var subject, body strings.Builder
+func (s *NotificationService) render(tmpl notificationTemplate, data templateData, n model.Notification) (Message, error) {
+	var subject, body, html strings.Builder
 	if err := tmpl.subject.Execute(&subject, data); err != nil {
 		return Message{}, err
 	}
 	if err := tmpl.body.Execute(&body, data); err != nil {
 		return Message{}, err
 	}
-	return Message{Recipient: n.Recipient, Subject: subject.String(), Body: body.String()}, nil
+	if tmpl.html != nil {
+		page := emailPage{templateData: data, Subject: subject.String(), AppURL: s.appURL,
+			Site: strings.TrimPrefix(strings.TrimPrefix(s.appURL, "https://"), "http://")}
+		if err := tmpl.html.Execute(&html, page); err != nil {
+			return Message{}, err
+		}
+	}
+	return Message{Recipient: n.Recipient, Subject: subject.String(), Body: body.String(), HTML: html.String()}, nil
 }
 
 // finish writes a terminal state as the claim owner, detached from ctx cancellation.

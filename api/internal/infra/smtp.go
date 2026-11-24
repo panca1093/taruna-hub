@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
 	"net/smtp"
 	"net/textproto"
@@ -173,9 +175,42 @@ func (s *SMTPSender) message(msg service.Message) ([]byte, error) {
 	// Word-encoding keeps the subject on one header line whatever the template produces.
 	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", msg.Subject))
 	b.WriteString("MIME-Version: 1.0\r\n")
-	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-	b.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
-	b.WriteString(msg.Body)
+	if msg.HTML == "" {
+		b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+		b.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
+		b.WriteString(msg.Body)
+		return []byte(b.String()), nil
+	}
+
+	mw := multipart.NewWriter(&b)
+	// Quoted-printable output never contains "=_", so this boundary cannot collide with a part.
+	if err := mw.SetBoundary("=_" + strings.ReplaceAll(uuid.NewString(), "-", "")); err != nil {
+		return nil, permanent("smtp: invalid message")
+	}
+	fmt.Fprintf(&b, "Content-Type: %s\r\n\r\n", mime.FormatMediaType("multipart/alternative", map[string]string{"boundary": mw.Boundary()}))
+	// Quoted-printable keeps every line under SMTP's 998-octet limit however long the HTML is.
+	for _, part := range []struct{ contentType, body string }{
+		{"text/plain; charset=UTF-8", msg.Body},
+		{"text/html; charset=UTF-8", msg.HTML},
+	} {
+		w, err := mw.CreatePart(textproto.MIMEHeader{
+			"Content-Type":              {part.contentType},
+			"Content-Transfer-Encoding": {"quoted-printable"},
+		})
+		if err != nil {
+			return nil, permanent("smtp: invalid message")
+		}
+		qp := quotedprintable.NewWriter(w)
+		if _, err := qp.Write([]byte(part.body)); err != nil {
+			return nil, permanent("smtp: invalid message")
+		}
+		if err := qp.Close(); err != nil {
+			return nil, permanent("smtp: invalid message")
+		}
+	}
+	if err := mw.Close(); err != nil {
+		return nil, permanent("smtp: invalid message")
+	}
 	return []byte(b.String()), nil
 }
 
