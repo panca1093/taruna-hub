@@ -848,8 +848,6 @@ func (r *RuntimeRepository) TryoutOverview(ctx context.Context, q dbtx, tenantID
 type LockedSession struct {
 	ID         uuid.UUID
 	InProgress bool
-	// Scored is true when a submitted part exists, so the session has a score to redo.
-	Scored bool
 }
 
 // LockQuestionSessions locks the tryouts using a question, then the sessions holding it in id order. The order
@@ -866,9 +864,7 @@ func (r *RuntimeRepository) LockQuestionSessions(ctx context.Context, q dbtx, te
 		return nil, fmt.Errorf("lock tryouts of question: %w", err)
 	}
 	rows, err := q.Query(ctx, `
-		SELECT s.id, s.status = 'in_progress',
-		       EXISTS (SELECT 1 FROM tryout_session_parts p
-		                WHERE p.session_id = s.id AND p.tenant_id = s.tenant_id AND p.status = 'submitted')
+		SELECT s.id, s.status = 'in_progress'
 		  FROM tryout_sessions s
 		  JOIN tryout_session_questions sq ON sq.session_id = s.id AND sq.tenant_id = s.tenant_id
 		 WHERE s.tenant_id = $1 AND sq.question_id = $2

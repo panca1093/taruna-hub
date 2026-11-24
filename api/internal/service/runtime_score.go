@@ -62,13 +62,10 @@ func scoreQuestion(q model.AttemptQuestion, given []string, w model.Weights) (ea
 
 // rescoreSessions re-scores every submitted part of the given locked sessions from their current snapshot, answers
 // and frozen weights, and rewrites the result and running total of the completed ones. Pending and running parts
-// are left alone: they score when they settle, from the same snapshot. Sessions without a submitted part have no
-// score to redo.
+// are left alone: they score when they settle, from the same snapshot. Parts are read after the lock, so a part
+// settled while the edit waited is rescored too.
 func rescoreSessions(ctx context.Context, tx pgx.Tx, repo *repository.RuntimeRepository, tenantID uuid.UUID, locked []repository.LockedSession) error {
 	for _, ls := range locked {
-		if !ls.Scored {
-			continue
-		}
 		id := ls.ID
 		a, err := repo.FindAttempt(ctx, tx, tenantID, uuid.Nil, id, false)
 		if err != nil {
