@@ -102,7 +102,7 @@ function CatalogContent() {
       kecermatan: { glyph: Grid2x2, tone: "bg-success-soft text-success-soft-foreground" },
     }[kind];
     const typeLabel =
-      kind === "bundle" ? t.bundleSize(product.tryouts.length) : kind === "kecermatan" ? t.typeKecermatan : t.typeIndividual;
+      kind === "bundle" ? t.bundleSize(product.tryouts.length + product.kecermatan_tests.length) : kind === "kecermatan" ? t.typeKecermatan : t.typeIndividual;
     return (
       <Link
         key={product.id}

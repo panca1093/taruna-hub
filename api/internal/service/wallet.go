@@ -138,12 +138,12 @@ func (s *WalletService) Wallet(ctx context.Context, scope HostScope, principal m
 	return wallet, nil
 }
 
-func (s *WalletService) Entries(ctx context.Context, scope HostScope, principal model.Principal, limit, offset int) ([]model.WalletEntry, int, error) {
+func (s *WalletService) Entries(ctx context.Context, scope HostScope, principal model.Principal, kind string, limit, offset int) ([]model.WalletEntry, int, error) {
 	tenantID, err := walletTenant(scope, principal)
 	if err != nil {
 		return nil, 0, err
 	}
-	return s.entries(ctx, tenantID, principal.UserID, limit, offset)
+	return s.entries(ctx, tenantID, principal.UserID, kind, limit, offset)
 }
 
 func (s *WalletService) StudentWallet(ctx context.Context, scope HostScope, principal model.Principal, studentID uuid.UUID) (model.Wallet, error) {
@@ -169,7 +169,7 @@ func (s *WalletService) StudentEntries(ctx context.Context, scope HostScope, pri
 	if _, err := s.repo.Student(ctx, tenantID, studentID); err != nil {
 		return nil, 0, walletError(err)
 	}
-	return s.entries(ctx, tenantID, studentID, limit, offset)
+	return s.entries(ctx, tenantID, studentID, "", limit, offset)
 }
 
 func (s *WalletService) Students(ctx context.Context, scope HostScope, principal model.Principal, filter repository.WalletFilter) ([]model.WalletStudent, int, error) {
@@ -223,12 +223,17 @@ func (s *WalletService) Adjust(ctx context.Context, scope HostScope, principal m
 	return entry, replayed, wallet, nil
 }
 
-func (s *WalletService) entries(ctx context.Context, tenantID, userID uuid.UUID, limit, offset int) ([]model.WalletEntry, int, error) {
+func (s *WalletService) entries(ctx context.Context, tenantID, userID uuid.UUID, kind string, limit, offset int) ([]model.WalletEntry, int, error) {
 	limit, offset, err := checkedWalletPage(limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
-	entries, total, err := s.repo.Entries(ctx, tenantID, userID, limit, offset)
+	switch kind {
+	case "", model.KindOpening, model.KindTopup, model.KindSpend, model.KindAdjustment:
+	default:
+		return nil, 0, &InputError{Fields: map[string]string{"kind": ReasonWalletQuery}}
+	}
+	entries, total, err := s.repo.Entries(ctx, tenantID, userID, kind, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list wallet entries: %w", err)
 	}

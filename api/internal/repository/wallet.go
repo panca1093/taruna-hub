@@ -142,17 +142,22 @@ func (r *WalletRepository) Wallet(ctx context.Context, tenantID, userID uuid.UUI
 }
 
 // Entries lists the ledger newest first and counts every row, both scoped to the tenant and user.
-func (r *WalletRepository) Entries(ctx context.Context, tenantID, userID uuid.UUID, limit, offset int) ([]model.WalletEntry, int, error) {
+func (r *WalletRepository) Entries(ctx context.Context, tenantID, userID uuid.UUID, kind string, limit, offset int) ([]model.WalletEntry, int, error) {
 	if tenantID == uuid.Nil {
 		return nil, 0, ErrScopeRequired
 	}
-	const where = ` WHERE w.tenant_id = $1 AND w.user_id = $2`
+	where := ` WHERE w.tenant_id = $1 AND w.user_id = $2`
+	args := []any{tenantID, userID}
+	if kind != "" {
+		where += ` AND w.kind = $3`
+		args = append(args, kind)
+	}
 	var total int
-	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM wallet_entries w`+where, tenantID, userID).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM wallet_entries w`+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count wallet entries: %w", err)
 	}
 	rows, err := r.db.Query(ctx, `SELECT `+walletEntryColumns+walletEntryFrom+where+
-		` ORDER BY w.seq DESC LIMIT $3 OFFSET $4`, tenantID, userID, limit, offset)
+		fmt.Sprintf(` ORDER BY w.seq DESC LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2), append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list wallet entries: %w", err)
 	}

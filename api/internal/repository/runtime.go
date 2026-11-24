@@ -42,7 +42,7 @@ func (r *RuntimeRepository) SellableProduct(ctx context.Context, tenantID, tryou
 	var id uuid.UUID
 	err := r.db.QueryRow(ctx, `SELECT p.id FROM products p WHERE p.tenant_id = $1 AND `+publicVisible+`
 		AND EXISTS (SELECT 1 FROM product_tryouts pt WHERE pt.product_id = p.id AND pt.tryout_id = $3)
-		ORDER BY (SELECT count(*) FROM product_tryouts c WHERE c.product_id = p.id), p.created_at, p.id LIMIT 1`,
+		ORDER BY `+productSize+`, p.created_at, p.id LIMIT 1`,
 		tenantID, now, tryoutID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, ErrNotFound

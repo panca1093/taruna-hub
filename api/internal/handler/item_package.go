@@ -166,7 +166,7 @@ func (h *Handler) ListItemPackages(c echo.Context) error {
 	if !ok {
 		return httpx.Unauthorized(sessionInvalid)
 	}
-	packages, err := h.itemPackages.List(c.Request().Context(), scope, principal, c.QueryParam("type"))
+	packages, err := h.itemPackages.List(c.Request().Context(), scope, principal, c.QueryParam("type"), c.QueryParam("q"))
 	if err != nil {
 		return itemPackageHTTPError(err)
 	}

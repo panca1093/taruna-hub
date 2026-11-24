@@ -8,7 +8,7 @@ import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { OrderStatusBadge, StatusChip } from "@/components/status-badge";
 import { DetailAmount, DetailGrid, DetailItem, LoadingNote, ProofButton } from "@/components/admin-detail";
-import { FilterPills } from "@/components/filter-pills";
+import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-menu";
 import { Icon } from "@/components/icon";
 import { FormModal } from "@/components/ui/form-modal";
 import { TextareaInput } from "@/components/ui/form";
@@ -18,22 +18,15 @@ import { useOrdersT } from "@/lib/i18n/dict/orders";
 import { useSession } from "@/lib/session-context";
 import { RevenueRecapSection } from "./revenue-recap";
 
-type Tab = Order["status"] | "all";
-
 const PAGE_SIZE = 50;
 
 export default function OrdersPage() {
   const t = useOrdersT();
   const { role } = useSession();
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "all", label: t.tabAll },
-    { key: "pending", label: t.tabPending },
-    { key: "confirmed", label: t.tabConfirmed },
-    { key: "cancelled", label: t.tabCancelled },
-  ];
   const [rows, setRows] = useState<Order[] | null>(null);
   const [total, setTotal] = useState(0);
-  const [tab, setTab] = useState<Tab>("all");
+  const [filter, setFilter] = useState<FilterValue>({});
+  const [search, setSearch] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -44,10 +37,19 @@ export default function OrdersPage() {
   const [reasonError, setReasonError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const query = {
+    status: (filter.status || undefined) as Order["status"] | undefined,
+    payment_method: (filter.method || undefined) as Order["payment_method"] | undefined,
+    from: filter.from || undefined,
+    to: filter.to || undefined,
+    q: search.trim() || undefined,
+  };
+  const filtered = Object.values(query).some(Boolean);
+
   useEffect(() => {
     let cancelled = false;
     api.adminOrders
-      .list({ status: tab === "all" ? undefined : tab, limit: PAGE_SIZE })
+      .list({ ...query, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
         setRows(page.orders);
@@ -59,7 +61,8 @@ export default function OrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, reloadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, search, reloadKey]);
 
   const retry = () => {
     setRows(null);
@@ -67,17 +70,17 @@ export default function OrdersPage() {
     setReloadKey((key) => key + 1);
   };
 
-  const switchTab = (next: Tab) => {
+  const refilter = (apply: () => void) => {
     setRows(null);
     setLoadFailed(false);
-    setTab(next);
+    apply();
   };
 
   const loadMore = async () => {
     setLoadingMore(true);
     try {
       const page = await api.adminOrders.list({
-        status: tab === "all" ? undefined : tab,
+        ...query,
         limit: PAGE_SIZE,
         offset: rows?.length ?? 0,
       });
@@ -103,7 +106,7 @@ export default function OrdersPage() {
 
   const settle = (updated: Order) => {
     setRows((prev) =>
-      (prev ?? []).flatMap((o) => (o.id !== updated.id ? [o] : tab === "all" || tab === updated.status ? [updated] : [])),
+      (prev ?? []).flatMap((o) => (o.id !== updated.id ? [o] : !filter.status || filter.status === updated.status ? [updated] : [])),
     );
     toast.success(updated.status === "confirmed" ? t.orderConfirmed : t.orderCancelled, {
       description: updated.status === "confirmed" ? t.confirmNotifDescription : undefined,
@@ -200,13 +203,36 @@ export default function OrdersPage() {
   return (
     <AppShell title={t.pageTitle} description={t.pageDescription}>
       {role === "admin" && <RevenueRecapSection />}
-      <FilterPills
-        className="mb-5"
-        ariaLabel={t.pageTitle}
-        options={tabs.map((item) => ({ id: item.key, label: item.label }))}
-        value={tab}
-        onChange={(id) => switchTab(id as Tab)}
-      />
+      <div className="mb-4 flex items-center gap-2">
+        <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+        <FilterMenu
+          align="start"
+          value={filter}
+          onChange={(next) => refilter(() => setFilter(next))}
+          fields={[
+            {
+              key: "status",
+              label: t.filterStatus,
+              options: [
+                { id: "pending", label: t.tabPending },
+                { id: "confirmed", label: t.tabConfirmed },
+                { id: "cancelled", label: t.tabCancelled },
+              ],
+            },
+            {
+              key: "method",
+              label: t.filterMethod,
+              options: [
+                { id: "wallet", label: t.paymentWalletShort },
+                { id: "manual", label: t.paymentManualShort },
+                { id: "gateway", label: t.paymentGatewayShort },
+              ],
+            },
+            { key: "from", label: t.filterFrom, kind: "date", half: true },
+            { key: "to", label: t.filterTo, kind: "date", half: true },
+          ]}
+        />
+      </div>
 
       {loadFailed ? (
         <EmptyState
@@ -222,7 +248,7 @@ export default function OrdersPage() {
       ) : rows === null ? (
         <LoadingNote>{t.loading}</LoadingNote>
       ) : rows.length === 0 ? (
-        <EmptyState icon={ClipboardList} title={t.emptyTitle} />
+        <EmptyState icon={ClipboardList} title={filtered ? t.emptyFilteredTitle : t.emptyTitle} />
       ) : (
         <DataTable
           columns={columns}

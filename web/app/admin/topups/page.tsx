@@ -8,7 +8,7 @@ import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
 import { TopupStatusBadge } from "@/components/status-badge";
 import { DetailAmount, DetailGrid, DetailItem, LoadingNote, ProofButton } from "@/components/admin-detail";
-import { FilterPills } from "@/components/filter-pills";
+import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-menu";
 import { Icon } from "@/components/icon";
 import { FormModal } from "@/components/ui/form-modal";
 import { TextareaInput } from "@/components/ui/form";
@@ -16,21 +16,14 @@ import { api, ApiError, errorText, type Topup } from "@/lib/api/client";
 import { formatIDR } from "@/lib/format-money";
 import { useTopupsT } from "@/lib/i18n/dict/topups";
 
-type Tab = Topup["status"] | "all";
-
 const PAGE_SIZE = 50;
 
 export default function TopupsPage() {
   const t = useTopupsT();
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "all", label: t.tabAll },
-    { key: "pending", label: t.tabPending },
-    { key: "approved", label: t.tabApproved },
-    { key: "rejected", label: t.tabRejected },
-  ];
   const [rows, setRows] = useState<Topup[] | null>(null);
   const [total, setTotal] = useState(0);
-  const [tab, setTab] = useState<Tab>("all");
+  const [filter, setFilter] = useState<FilterValue>({});
+  const [search, setSearch] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -40,10 +33,16 @@ export default function TopupsPage() {
   const [reasonError, setReasonError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const query = {
+    status: (filter.status || undefined) as Topup["status"] | undefined,
+    q: search.trim() || undefined,
+  };
+  const filtered = Object.values(query).some(Boolean);
+
   useEffect(() => {
     let cancelled = false;
     api.adminTopups
-      .list({ status: tab === "all" ? undefined : tab, limit: PAGE_SIZE })
+      .list({ ...query, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
         setRows(page.topups);
@@ -55,7 +54,8 @@ export default function TopupsPage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, reloadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, search, reloadKey]);
 
   const retry = () => {
     setRows(null);
@@ -63,17 +63,17 @@ export default function TopupsPage() {
     setReloadKey((key) => key + 1);
   };
 
-  const switchTab = (next: Tab) => {
+  const refilter = (apply: () => void) => {
     setRows(null);
     setLoadFailed(false);
-    setTab(next);
+    apply();
   };
 
   const loadMore = async () => {
     setLoadingMore(true);
     try {
       const page = await api.adminTopups.list({
-        status: tab === "all" ? undefined : tab,
+        ...query,
         limit: PAGE_SIZE,
         offset: rows?.length ?? 0,
       });
@@ -98,7 +98,7 @@ export default function TopupsPage() {
 
   const settle = (updated: Topup) => {
     setRows((prev) =>
-      (prev ?? []).flatMap((x) => (x.id !== updated.id ? [x] : tab === "all" || tab === updated.status ? [updated] : [])),
+      (prev ?? []).flatMap((x) => (x.id !== updated.id ? [x] : !filter.status || filter.status === updated.status ? [updated] : [])),
     );
     toast.success(updated.status === "approved" ? t.topupApproved : t.topupRejected, {
       description: updated.status === "approved" ? t.approveNotifDescription : undefined,
@@ -156,13 +156,25 @@ export default function TopupsPage() {
 
   return (
     <AppShell title={t.pageTitle} description={t.pageDescription}>
-      <FilterPills
-        className="mb-5"
-        ariaLabel={t.pageTitle}
-        options={tabs.map((item) => ({ id: item.key, label: item.label }))}
-        value={tab}
-        onChange={(id) => switchTab(id as Tab)}
-      />
+      <div className="mb-4 flex items-center gap-2">
+        <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+        <FilterMenu
+          align="start"
+          value={filter}
+          onChange={(next) => refilter(() => setFilter(next))}
+          fields={[
+            {
+              key: "status",
+              label: t.filterStatus,
+              options: [
+                { id: "pending", label: t.tabPending },
+                { id: "approved", label: t.tabApproved },
+                { id: "rejected", label: t.tabRejected },
+              ],
+            },
+          ]}
+        />
+      </div>
 
       {loadFailed ? (
         <EmptyState
@@ -178,7 +190,7 @@ export default function TopupsPage() {
       ) : rows === null ? (
         <LoadingNote>{t.loading}</LoadingNote>
       ) : rows.length === 0 ? (
-        <EmptyState icon={Banknote} title={t.emptyTitle} />
+        <EmptyState icon={Banknote} title={filtered ? t.emptyFilteredTitle : t.emptyTitle} />
       ) : (
         <DataTable
           columns={columns}

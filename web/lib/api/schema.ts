@@ -2354,6 +2354,8 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    /** @description Narrows to one kind of movement. */
+                    kind?: "opening" | "topup" | "spend" | "adjustment";
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
                     offset?: number;
@@ -3012,11 +3014,19 @@ export interface paths {
         };
         /**
          * The signed-in student's own orders
-         * @description Student only. Newest first, at most 100 per page, only the caller's own orders.
+         * @description Student only. Newest first, at most 100 per page, only the caller's own orders. `status`, `payment_method`,
+         *     `from`, `to` and `q` narrow the list as on the staff list.
          */
         get: {
             parameters: {
                 query?: {
+                    status?: "pending" | "confirmed" | "cancelled";
+                    q?: string;
+                    payment_method?: "wallet" | "manual" | "gateway";
+                    /** @description First Jakarta calendar day of `created_at`, `YYYY-MM-DD`, inclusive. */
+                    from?: string;
+                    /** @description Last Jakarta calendar day of `created_at`, `YYYY-MM-DD`, inclusive. */
+                    to?: string;
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
                     offset?: number;
@@ -3640,13 +3650,19 @@ export interface paths {
         /**
          * Every order of the tenant, for review
          * @description Admin and Operator (D02: a role guard). Newest first, at most 100 per page. `status` narrows to one
-         *     state. `q` is a case-insensitive substring of the order code, the student's name or the product title;
-         *     `%` and `_` are literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
+         *     state, `payment_method` to one method, `from`/`to` to a range of creation days. `q` is a case-insensitive
+         *     substring of the order code, the Midtrans merchant reference, the student's name or email, or the product
+         *     title; `%` and `_` are literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
          */
         get: {
             parameters: {
                 query?: {
                     status?: "pending" | "confirmed" | "cancelled";
+                    payment_method?: "wallet" | "manual" | "gateway";
+                    /** @description First Jakarta calendar day of `created_at`, `YYYY-MM-DD`, inclusive. */
+                    from?: string;
+                    /** @description Last Jakarta calendar day of `created_at`, `YYYY-MM-DD`, inclusive. */
+                    to?: string;
                     q?: string;
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;
@@ -4037,7 +4053,7 @@ export interface paths {
         /**
          * Every top-up request of the tenant, for review
          * @description Admin and Operator (D02: a role guard). Newest first, at most 100 per page. `status` narrows to one
-         *     state. `q` is a case-insensitive substring of the request code or the student's name; `%` and `_` are
+         *     state. `q` is a case-insensitive substring of the request code or the student's name or email; `%` and `_` are
          *     literal. The proof is read through `GET /api/v1/assets/{id}/url` with `proof_asset_id`.
          */
         get: {
@@ -5159,11 +5175,16 @@ export interface paths {
          * @description Admin and Operator (D02: a role guard). Every in-progress session of the tenant, newest start first, read
          *     from PostgreSQL on each call; the page polls every 30 seconds. `subtest` is the running subtest and is null
          *     between subtests. `violation_count` counts the stored violations of that session. Defaults to 100 per page,
-         *     at most 200.
+         *     at most 200. `q` is a case-insensitive substring of the student name (`%` and `_` are literal);
+         *     `tryout_id` narrows to one tryout; `status` is `running` (a subtest is running) or `between`
+         *     (none is). `total` counts the matches.
          */
         get: {
             parameters: {
                 query?: {
+                    q?: string;
+                    tryout_id?: string;
+                    status?: "running" | "between";
                     limit?: number;
                     offset?: number;
                 };
@@ -5492,6 +5513,8 @@ export interface paths {
             parameters: {
                 query?: {
                     type?: components["schemas"]["ItemPackageType"];
+                    /** @description Case-insensitive substring of the name; `%` and `_` are literal. */
+                    q?: string;
                 };
                 header?: never;
                 path?: never;
@@ -5996,6 +6019,7 @@ export interface paths {
             parameters: {
                 query?: {
                     program_id?: string;
+                    item_type?: components["schemas"]["KecermatanItemType"];
                     q?: string;
                     /** @description Defaults to 50, at most 100. */
                     limit?: number;

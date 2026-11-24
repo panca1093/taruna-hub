@@ -64,7 +64,7 @@ type ItemPackageDetail struct {
 	Elements     []model.ItemElement
 }
 
-func (s *ItemPackageService) List(ctx context.Context, scope HostScope, principal model.Principal, kind string) ([]model.ItemPackage, error) {
+func (s *ItemPackageService) List(ctx context.Context, scope HostScope, principal model.Principal, kind, search string) ([]model.ItemPackage, error) {
 	tenantID, err := questionTenant(scope, principal)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (s *ItemPackageService) List(ctx context.Context, scope HostScope, principa
 	if kind != "" && !validPackageType(kind) {
 		return nil, &InputError{Fields: map[string]string{"type": ReasonPackageType}}
 	}
-	return s.repo.List(ctx, tenantID, kind)
+	return s.repo.List(ctx, tenantID, kind, strings.TrimSpace(search))
 }
 
 // Get reads the current revision, or an older frozen one when revision is positive.

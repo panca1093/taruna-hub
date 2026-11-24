@@ -41,7 +41,7 @@ const (
 const (
 	maxProductTitleLen     = 200
 	maxProductDescription  = 4000
-	maxProductTryouts      = 20
+	maxProductItems        = 20
 	maxIncludedAttempts    = 1000
 	defaultProductLimit    = 50
 	maxProductLimit        = 100
@@ -60,6 +60,8 @@ type ProductInput struct {
 	ActiveFrom    *time.Time
 	ActiveUntil   *time.Time
 	TryoutIDs     []uuid.UUID
+	// KecermatanTestIDs belong to bundles only; the bundle holds 2–20 tryouts and tests together.
+	KecermatanTestIDs []uuid.UUID
 	// KecermatanTestID belongs to kecermatan products only; IncludedAttempts defaults to 1 for the other types.
 	KecermatanTestID uuid.UUID
 	IncludedAttempts int
@@ -173,7 +175,7 @@ func (s *ProductService) Update(ctx context.Context, scope HostScope, principal 
 		if err := s.repo.UpdateHeadTx(ctx, tx, tenantID, id, stored); err != nil {
 			return productError(err)
 		}
-		if err := s.repo.ReplaceTryoutsTx(ctx, tx, tenantID, id, stored.Tryouts); err != nil {
+		if err := s.repo.ReplacePackageTx(ctx, tx, tenantID, id, stored); err != nil {
 			return productError(err)
 		}
 		if err := s.checkActivation(ctx, tx, tenantID, id, input.IsActive); err != nil {
@@ -278,6 +280,15 @@ func (s *ProductService) checked(ctx context.Context, tenantID, id uuid.UUID, in
 			fields["kecermatan_test_id"] = ReasonProductKecermatan
 		}
 	}
+	for i, testID := range input.KecermatanTestIDs {
+		testProgram, found, err := s.repo.KecermatanTestProgram(ctx, s.db, tenantID, testID)
+		if err != nil {
+			return ProductInput{}, err
+		}
+		if !found || testProgram != input.ProgramID {
+			fields[fmt.Sprintf("kecermatan_test_ids[%d]", i)] = ReasonProductKecermatan
+		}
+	}
 	for i, tryoutID := range input.TryoutIDs {
 		attach, found := attached[tryoutID]
 		// A foreign, missing, draft or other-program tryout answers the same path and reason.
@@ -358,15 +369,19 @@ func productScalars(input ProductInput) (ProductInput, error) {
 
 	seen := map[uuid.UUID]bool{}
 	for i, tryoutID := range input.TryoutIDs {
-		if tryoutID == uuid.Nil {
+		if tryoutID == uuid.Nil || seen[tryoutID] {
 			fields[fmt.Sprintf("tryout_ids[%d]", i)] = ReasonProductTryout
-			continue
-		}
-		if seen[tryoutID] {
-			fields[fmt.Sprintf("tryout_ids[%d]", i)] = ReasonProductTryout
-			continue
 		}
 		seen[tryoutID] = true
+	}
+	for i, testID := range input.KecermatanTestIDs {
+		if testID == uuid.Nil || seen[testID] {
+			fields[fmt.Sprintf("kecermatan_test_ids[%d]", i)] = ReasonProductKecermatan
+		}
+		seen[testID] = true
+	}
+	if input.Type != model.ProductBundle && len(input.KecermatanTestIDs) > 0 {
+		fields["kecermatan_test_ids"] = ReasonProductTryouts
 	}
 	switch input.Type {
 	case model.ProductIndividual:
@@ -374,7 +389,7 @@ func productScalars(input ProductInput) (ProductInput, error) {
 			fields["tryout_ids"] = ReasonProductTryouts
 		}
 	case model.ProductBundle:
-		if len(input.TryoutIDs) < 2 || len(input.TryoutIDs) > maxProductTryouts {
+		if n := len(input.TryoutIDs) + len(input.KecermatanTestIDs); n < 2 || n > maxProductItems {
 			fields["tryout_ids"] = ReasonProductTryouts
 		}
 	case model.ProductKecermatan:
@@ -476,6 +491,9 @@ func productOf(input ProductInput) model.Product {
 	}
 	for _, id := range input.TryoutIDs {
 		out.Tryouts = append(out.Tryouts, model.ProductTryout{ID: id})
+	}
+	for _, id := range input.KecermatanTestIDs {
+		out.KecermatanTests = append(out.KecermatanTests, model.ProductKecermatanTest{ID: id})
 	}
 	attempts := input.IncludedAttempts
 	out.IncludedAttempts = &attempts

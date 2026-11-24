@@ -11,6 +11,7 @@ import { StatusChip } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
 import { FormModal } from "@/components/ui/form-modal";
 import { SelectInput, TextInput } from "@/components/ui/form";
+import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-menu";
 import { api, ApiError, errorText, type ItemPackage, type ItemPackageType } from "@/lib/api/client";
 import { useItemPackagesT } from "@/lib/i18n/dict/item-packages";
 
@@ -29,11 +30,14 @@ export default function ItemPackagesPage() {
   const [type, setType] = useState<ItemPackageType>("symbol");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterValue>({});
+  const filtered = search.trim() !== "" || filter.type !== undefined && filter.type !== "";
 
   useEffect(() => {
     let cancelled = false;
     api.itemPackages
-      .list()
+      .list({ ...(filter.type ? { type: filter.type as ItemPackageType } : {}), ...(search.trim() === "" ? {} : { q: search.trim() }) })
       .then(({ packages }) => {
         if (cancelled) return;
         setRows(packages);
@@ -45,7 +49,13 @@ export default function ItemPackagesPage() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [search, filter, reloadKey]);
+
+  const refilter = (apply: () => void) => {
+    setRows(null);
+    setLoadFailed(false);
+    apply();
+  };
 
   const retry = () => {
     setRows(null);
@@ -162,6 +172,16 @@ export default function ItemPackagesPage() {
           </Button>
         }
       >
+        <div className="mb-4 flex items-center gap-2">
+          <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+          <FilterMenu
+            align="start"
+            value={filter}
+            onChange={(next) => refilter(() => setFilter(next))}
+            fields={[{ key: "type", label: t.typeLabel, options: packageTypes.map((p) => ({ id: p, label: t.types[p] })) }]}
+          />
+        </div>
+
         {loadFailed ? (
           <EmptyState
             icon={CloudOff}
@@ -174,9 +194,9 @@ export default function ItemPackagesPage() {
         ) : rows.length === 0 ? (
           <EmptyState
             icon={Shapes}
-            title={t.emptyTitle}
-            description={t.emptyDescription}
-            action={<Button variant="primary" size="sm" onPress={openCreate}>{t.addPackage}</Button>}
+            title={filtered ? t.noMatchTitle : t.emptyTitle}
+            description={filtered ? t.noMatchDescription : t.emptyDescription}
+            action={filtered ? undefined : <Button variant="primary" size="sm" onPress={openCreate}>{t.addPackage}</Button>}
           />
         ) : (
           <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} footer={<span>{t.footerCount(rows.length)}</span>} onRowClick={(r) => router.push(`/admin/item-packages/${r.id}`)} />

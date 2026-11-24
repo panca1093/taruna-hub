@@ -39,7 +39,7 @@ func (h monitoringHarness) mustReport(t *testing.T, p model.Principal, session u
 
 func (h monitoringHarness) active(t *testing.T) ([]model.ActiveSession, int) {
 	t.Helper()
-	rows, total, err := h.ms.ActiveSessions(context.Background(), h.scopeA(), h.staff(model.RoleOperator), 0, 0)
+	rows, total, err := h.ms.ActiveSessions(context.Background(), h.scopeA(), h.staff(model.RoleOperator), repository.ActiveSessionFilter{}, 0, 0)
 	if err != nil {
 		t.Fatalf("list active sessions: %v", err)
 	}
@@ -272,13 +272,13 @@ func TestMonitoringPagesTheActiveList(t *testing.T) {
 		h.clock.Advance(time.Second)
 	}
 	ctx, op := context.Background(), h.staff(model.RoleOperator)
-	rows, total, err := h.ms.ActiveSessions(ctx, h.scopeA(), op, 2, 2)
+	rows, total, err := h.ms.ActiveSessions(ctx, h.scopeA(), op, repository.ActiveSessionFilter{}, 2, 2)
 	if err != nil || len(rows) != 1 || total != 3 {
 		t.Fatalf("page 2 of size 2: %d rows, total %d, err %v, want 1 row of 3", len(rows), total, err)
 	}
 	var input *InputError
 	for _, bad := range [][2]int{{201, 0}, {-1, 0}, {10, -1}} {
-		if _, _, err := h.ms.ActiveSessions(ctx, h.scopeA(), op, bad[0], bad[1]); !errors.As(err, &input) {
+		if _, _, err := h.ms.ActiveSessions(ctx, h.scopeA(), op, repository.ActiveSessionFilter{}, bad[0], bad[1]); !errors.As(err, &input) {
 			t.Errorf("limit %d offset %d: %v, want an InputError", bad[0], bad[1], err)
 		}
 	}
@@ -323,7 +323,7 @@ func TestMonitoringIsStaffOnly(t *testing.T) {
 	ctx, scope := context.Background(), h.scopeA()
 
 	for name, p := range map[string]model.Principal{"owner": owner, "other student": other} {
-		if _, _, err := h.ms.ActiveSessions(ctx, scope, p, 0, 0); !errors.Is(err, ErrRuntimeForbidden) {
+		if _, _, err := h.ms.ActiveSessions(ctx, scope, p, repository.ActiveSessionFilter{}, 0, 0); !errors.Is(err, ErrRuntimeForbidden) {
 			t.Errorf("%s listing active sessions: %v, want ErrRuntimeForbidden", name, err)
 		}
 		if _, _, err := h.ms.Timeline(ctx, scope, p, sid); !errors.Is(err, ErrRuntimeForbidden) {
@@ -378,7 +378,7 @@ func TestMonitoringPollingFiftyActiveSessions(t *testing.T) {
 	took := make([]time.Duration, 0, polls)
 	for i := 0; i < polls; i++ {
 		start := time.Now()
-		rows, total, err := h.ms.ActiveSessions(context.Background(), h.scopeA(), h.staff(model.RoleOperator), 0, 0)
+		rows, total, err := h.ms.ActiveSessions(context.Background(), h.scopeA(), h.staff(model.RoleOperator), repository.ActiveSessionFilter{}, 0, 0)
 		took = append(took, time.Since(start))
 		if err != nil || len(rows) != 50 || total != 50 {
 			t.Fatalf("poll %d: %d rows, total %d, err %v, want 50", i, len(rows), total, err)
@@ -389,5 +389,46 @@ func TestMonitoringPollingFiftyActiveSessions(t *testing.T) {
 	t.Logf("polling 50 active sessions x%d: p50 = %s, p95 = %s, max = %s", polls, p50, p95, worst)
 	if p95 > 500*time.Millisecond {
 		t.Errorf("p95 = %s, want <= 500ms", p95)
+	}
+}
+
+func TestMonitoringFiltersBySearchTryoutAndStatus(t *testing.T) {
+	h := newMonitoringHarness(t)
+	f := h.fixture(t, nil)
+	userA, pa := h.enrolledStudent(t, f)
+	ub, pb := h.enrolledStudent(t, f)
+	if _, err := h.pool.Exec(context.Background(), `UPDATE users SET name = 'Budi Lain' WHERE id = $1`, ub.ID); err != nil {
+		t.Fatalf("rename student B: %v", err)
+	}
+	sa := h.begin(t, pa, f).Attempt.ID
+	h.begin(t, pb, f)
+	h.startPart(t, pa, sa, f.sub1())
+
+	ctx, op := context.Background(), h.staff(model.RoleOperator)
+	list := func(scope HostScope, flt repository.ActiveSessionFilter) ([]model.ActiveSession, int, error) {
+		return h.ms.ActiveSessions(ctx, scope, op, flt, 0, 0)
+	}
+	rows, total, err := list(h.scopeA(), repository.ActiveSessionFilter{Search: userA.Name})
+	if err != nil || len(rows) != 1 || total != 1 || rows[0].SessionID != sa {
+		t.Fatalf("search by name: %+v total %d err %v, want only student A", rows, total, err)
+	}
+	if rows, total, _ = list(h.scopeA(), repository.ActiveSessionFilter{Search: "%"}); len(rows) != 0 || total != 0 {
+		t.Errorf("a literal %% matched %d rows", len(rows))
+	}
+	if rows, total, _ = list(h.scopeA(), repository.ActiveSessionFilter{Status: "running"}); len(rows) != 1 || total != 1 || rows[0].SessionID != sa {
+		t.Errorf("status running: %+v total %d, want student A", rows, total)
+	}
+	if rows, total, _ = list(h.scopeA(), repository.ActiveSessionFilter{Status: "between"}); len(rows) != 1 || total != 1 || rows[0].SessionID == sa {
+		t.Errorf("status between: %+v total %d, want student B", rows, total)
+	}
+	if rows, _, _ = list(h.scopeA(), repository.ActiveSessionFilter{TryoutID: f.tryout.ID}); len(rows) != 2 {
+		t.Errorf("own tryout: %d rows, want 2", len(rows))
+	}
+	if rows, _, _ = list(h.scopeA(), repository.ActiveSessionFilter{TryoutID: uuid.New()}); len(rows) != 0 {
+		t.Errorf("other tryout: %d rows, want 0", len(rows))
+	}
+	var input *InputError
+	if _, _, err = list(h.scopeA(), repository.ActiveSessionFilter{Status: "bogus"}); !errors.As(err, &input) {
+		t.Errorf("bad status: %v, want an InputError", err)
 	}
 }

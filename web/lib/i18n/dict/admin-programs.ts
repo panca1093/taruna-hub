@@ -9,6 +9,9 @@ const id = {
   description: "Kelola jenjang / program tryout",
   addProgram: "Tambah Program",
   emptyTitle: "Belum ada program",
+  searchPlaceholder: "Cari nama atau kode program",
+  noMatchTitle: "Tidak ada program yang cocok",
+  noMatchDescription: "Coba kata kunci lain.",
   columns: {
     code: "Kode",
     name: "Nama",
@@ -52,6 +55,9 @@ const en: typeof id = {
   description: "Manage tryout levels / programs",
   addProgram: "Add Program",
   emptyTitle: "No programs yet",
+  searchPlaceholder: "Search program name or code",
+  noMatchTitle: "No matching programs",
+  noMatchDescription: "Try another keyword.",
   columns: {
     code: "Code",
     name: "Name",

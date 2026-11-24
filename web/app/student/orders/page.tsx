@@ -6,6 +6,7 @@ import { Button, toast } from "@heroui/react";
 import { CloudOff, Receipt } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { EmptyState } from "@/components/empty-state";
+import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-menu";
 import { Panel } from "@/components/page-blocks";
 import { OrderStatusBadge } from "@/components/status-badge";
 import { api, errorText, type Order } from "@/lib/api/client";
@@ -22,11 +23,19 @@ export default function StudentOrdersPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreFailed, setMoreFailed] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [filter, setFilter] = useState<FilterValue>({});
+  const [search, setSearch] = useState("");
+
+  const query = {
+    status: (filter.status || undefined) as Order["status"] | undefined,
+    q: search.trim() || undefined,
+  };
+  const filtered = Object.values(query).some(Boolean);
 
   useEffect(() => {
     let cancelled = false;
     api.orders
-      .list({ limit: PAGE_SIZE })
+      .list({ ...query, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
         setOrders(page.orders);
@@ -38,7 +47,8 @@ export default function StudentOrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, search, reloadKey]);
 
   // Coming back from Midtrans lands here: poll the pending gateway orders until the server confirms or cancels them.
   useEffect(() => {
@@ -69,6 +79,12 @@ export default function StudentOrdersPage() {
     }
   };
 
+  const refilter = (apply: () => void) => {
+    setOrders(null);
+    setLoadFailed(false);
+    apply();
+  };
+
   const retry = () => {
     setOrders(null);
     setLoadFailed(false);
@@ -79,7 +95,7 @@ export default function StudentOrdersPage() {
     setLoadingMore(true);
     setMoreFailed("");
     try {
-      const page = await api.orders.list({ limit: PAGE_SIZE, offset: orders?.length ?? 0 });
+      const page = await api.orders.list({ ...query, limit: PAGE_SIZE, offset: orders?.length ?? 0 });
       setOrders((prev) => {
         const seen = new Set((prev ?? []).map((order) => order.id));
         return [...(prev ?? []), ...page.orders.filter((order) => !seen.has(order.id))];
@@ -99,6 +115,27 @@ export default function StudentOrdersPage() {
       maxWidth="max-w-5xl"
       breadcrumb={[{ label: t.crumbDashboard, href: "/student" }, { label: t.title }]}
     >
+      {!loadFailed && orders !== null && (filtered || orders.length > 0) && (
+        <div className="mb-4 flex items-center gap-2">
+          <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+          <FilterMenu
+            align="start"
+            value={filter}
+            onChange={(next) => refilter(() => setFilter(next))}
+            fields={[
+              {
+                key: "status",
+                label: t.filterStatus,
+                options: [
+                  { id: "pending", label: t.statusPending },
+                  { id: "confirmed", label: t.statusConfirmed },
+                  { id: "cancelled", label: t.statusCancelled },
+                ],
+              },
+            ]}
+          />
+        </div>
+      )}
       {loadFailed ? (
         <EmptyState
           icon={CloudOff}
@@ -113,7 +150,11 @@ export default function StudentOrdersPage() {
       ) : orders === null ? (
         <p className="py-14 text-center text-small text-muted">{t.loading}</p>
       ) : orders.length === 0 ? (
+        filtered ? (
+        <EmptyState icon={Receipt} title={t.emptyFilteredTitle} />
+      ) : (
         <EmptyState icon={Receipt} title={t.emptyTitle} description={t.emptyDescription} />
+      )
       ) : (
         <>
           <Panel padding="none" className="px-6 py-2 sm:px-7 sm:py-3">

@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button, toast } from "@heroui/react";
-import { CloudOff, Pencil, Plus, Power, Search, Users, Wallet } from "lucide-react";
+import { CloudOff, Pencil, Plus, Power, Users, Wallet } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { DataTable, type Column } from "@/components/data-table";
 import { EmptyState } from "@/components/empty-state";
-import { FilterPills } from "@/components/filter-pills";
+import { FilterMenu, SearchField } from "@/components/filter-menu";
 import { GradientAvatar } from "@/components/gradient-avatar";
 import { Icon } from "@/components/icon";
 import { StatusChip } from "@/components/status-badge";
@@ -20,6 +20,7 @@ import { AccountFormModal, AccountStatusModal } from "../users/account-modals";
 import { GrantAccessButton, GrantAccessModal, StudentAccessSection } from "./student-access";
 
 const PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 300;
 const LEDGER_SIZE = 20;
 const STUDENT_ROLES: AdminUser["role"][] = ["student"];
 
@@ -82,6 +83,18 @@ export default function StudentsPage() {
       cancelled = true;
     };
   }, [query, activeFilter, reloadKey]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = search.trim();
+      if (next === query) return;
+      setRows(null);
+      setLoadFailed(false);
+      setMoreFailed("");
+      setQuery(next);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search, query]);
 
   const reload = (next: string) => {
     setRows(null);
@@ -258,50 +271,27 @@ export default function StudentsPage() {
         </Button>
       }
     >
-      <form
-        className="mb-4 flex flex-wrap items-end gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          reload(search.trim());
-        }}
-      >
-        <TextInput
-          className="w-full max-w-sm"
-          placeholder={t.searchPlaceholder}
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <Button variant="secondary" size="sm" type="submit">
-          <Icon icon={Search} size="xs" /> {t.searchAction}
-        </Button>
-        {query !== "" && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onPress={() => {
-              setSearch("");
-              reload("");
-            }}
-          >
-            {t.searchClear}
-          </Button>
-        )}
-        <FilterPills
-          className="ml-auto"
-          ariaLabel={t.filterLabel}
-          value={status}
+      <div className="mb-4 flex items-center gap-2">
+        <SearchField value={search} onChange={setSearch} placeholder={t.searchPlaceholder} />
+        <FilterMenu
+          value={{ status: status === "all" ? "" : status }}
           onChange={(next) => {
             setRows(null);
             setLoadFailed(false);
-            setStatus(next as StatusFilter);
+            setStatus((next.status || "all") as StatusFilter);
           }}
-          options={[
-            { id: "all", label: t.filterAll },
-            { id: "active", label: t.statusActive },
-            { id: "inactive", label: t.statusInactive },
+          fields={[
+            {
+              key: "status",
+              label: t.colStatus,
+              options: [
+                { id: "active", label: t.statusActive },
+                { id: "inactive", label: t.statusInactive },
+              ],
+            },
           ]}
         />
-      </form>
+      </div>
 
       {loadFailed ? (
         <EmptyState

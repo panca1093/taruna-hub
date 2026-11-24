@@ -42,18 +42,23 @@ const productColumns = `p.id, p.tenant_id, p.type, p.title, p.description, p.pro
 	  WHERE kt.id = p.kecermatan_test_id AND kt.tenant_id = p.tenant_id), ''), p.included_attempts`
 
 // A product is public only while it is on sale and every attached tryout is playable ($2 is now). A kecermatan
-// product has no tryouts; it is sold while its test exists.
+// product is sold while its test exists; a bundle's kecermatan tests always exist, the foreign key keeps them.
 const publicVisible = `p.is_active
 	AND (p.active_from IS NULL OR p.active_from <= $2)
 	AND (p.active_until IS NULL OR p.active_until > $2)
 	AND ((p.type <> 'kecermatan'
-	      AND EXISTS (SELECT 1 FROM product_tryouts hp WHERE hp.product_id = p.id)
+	      AND (EXISTS (SELECT 1 FROM product_tryouts hp WHERE hp.product_id = p.id)
+	           OR EXISTS (SELECT 1 FROM product_kecermatan_tests hk WHERE hk.product_id = p.id))
 	      AND NOT EXISTS (
 	        SELECT 1 FROM product_tryouts vp
 	          JOIN tryouts vt ON vt.id = vp.tryout_id AND vt.tenant_id = vp.tenant_id
 	         WHERE vp.product_id = p.id AND (vt.status <> 'published' OR vt.active_until <= $2)))
 	  OR (p.type = 'kecermatan'
 	      AND EXISTS (SELECT 1 FROM kecermatan_tests pk WHERE pk.id = p.kecermatan_test_id AND pk.tenant_id = p.tenant_id)))`
+
+// productSize is how many items a package holds, tryouts and kecermatan tests together.
+const productSize = `((SELECT count(*) FROM product_tryouts c WHERE c.product_id = p.id)
+	+ (SELECT count(*) FROM product_kecermatan_tests ck WHERE ck.product_id = p.id))`
 
 func (r *ProductRepository) List(ctx context.Context, tenantID uuid.UUID, filter ProductFilter) ([]model.Product, int, error) {
 	if tenantID == uuid.Nil {
@@ -163,7 +168,7 @@ func (r *ProductRepository) CreateTx(ctx context.Context, tx pgx.Tx, tenantID, c
 	if err != nil {
 		return model.Product{}, mapProductError("create product", err)
 	}
-	if err := r.replaceTryoutsTx(ctx, tx, tenantID, id, product.Tryouts); err != nil {
+	if err := r.replacePackageTx(ctx, tx, tenantID, id, product); err != nil {
 		return model.Product{}, err
 	}
 	return r.find(ctx, tx, tenantID, id, false)
@@ -191,20 +196,20 @@ func (r *ProductRepository) UpdateHeadTx(ctx context.Context, tx pgx.Tx, tenantI
 	return nil
 }
 
-func (r *ProductRepository) ReplaceTryoutsTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, tryouts []model.ProductTryout) error {
+// ReplacePackageTx rewrites the product's tryouts and kecermatan tests to exactly the given ones.
+func (r *ProductRepository) ReplacePackageTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, product model.Product) error {
 	if tenantID == uuid.Nil {
 		return ErrScopeRequired
 	}
-	return r.replaceTryoutsTx(ctx, tx, tenantID, id, tryouts)
+	return r.replacePackageTx(ctx, tx, tenantID, id, product)
 }
 
 func (r *ProductRepository) DeleteTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID) error {
 	if tenantID == uuid.Nil {
 		return ErrScopeRequired
 	}
-	if _, err := tx.Exec(ctx,
-		`DELETE FROM product_tryouts WHERE tenant_id = $1 AND product_id = $2`, tenantID, id); err != nil {
-		return mapProductError("delete product tryouts", err)
+	if err := r.replacePackageTx(ctx, tx, tenantID, id, model.Product{}); err != nil {
+		return err
 	}
 	tag, err := tx.Exec(ctx, `DELETE FROM products WHERE tenant_id = $1 AND id = $2`, tenantID, id)
 	if err != nil {
@@ -469,6 +474,29 @@ func (r *ProductRepository) attachTryouts(ctx context.Context, q queryer, tenant
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("read product package: %w", err)
 	}
+	rows, err = q.Query(ctx, `
+		SELECT pk.product_id, k.id, k.title
+		  FROM product_kecermatan_tests pk
+		  JOIN kecermatan_tests k ON k.id = pk.kecermatan_test_id AND k.tenant_id = pk.tenant_id
+		 WHERE pk.tenant_id = $1 AND pk.product_id = ANY($2)
+		 ORDER BY pk.product_id, pk.position`, tenantID, ids)
+	if err != nil {
+		return fmt.Errorf("read product kecermatan tests: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var productID uuid.UUID
+		var item model.ProductKecermatanTest
+		if err := rows.Scan(&productID, &item.ID, &item.Title); err != nil {
+			return fmt.Errorf("scan product kecermatan test: %w", err)
+		}
+		if at, ok := index[productID]; ok {
+			products[at].KecermatanTests = append(products[at].KecermatanTests, item)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read product kecermatan tests: %w", err)
+	}
 	return nil
 }
 
@@ -522,19 +550,54 @@ func (r *ProductRepository) attachPublicTryouts(ctx context.Context, tenantID uu
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("read catalog package: %w", err)
 	}
+	rows, err = r.db.Query(ctx, `
+		SELECT pk.product_id, k.id, k.title, k.item_type, k.kolom_count, k.soal_per_kolom, k.kolom_duration_seconds
+		  FROM product_kecermatan_tests pk
+		  JOIN kecermatan_tests k ON k.id = pk.kecermatan_test_id AND k.tenant_id = pk.tenant_id
+		 WHERE pk.tenant_id = $1 AND pk.product_id = ANY($2)
+		 ORDER BY pk.product_id, pk.position`, tenantID, ids)
+	if err != nil {
+		return fmt.Errorf("read catalog kecermatan tests: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var productID uuid.UUID
+		var item model.PublicProductKecermatan
+		if err := rows.Scan(&productID, &item.TestID, &item.Title, &item.ItemType, &item.KolomCount,
+			&item.SoalPerKolom, &item.KolomDurationSeconds); err != nil {
+			return fmt.Errorf("scan catalog kecermatan test: %w", err)
+		}
+		if at, ok := index[productID]; ok {
+			products[at].KecermatanTests = append(products[at].KecermatanTests, item)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read catalog kecermatan tests: %w", err)
+	}
 	return nil
 }
 
-func (r *ProductRepository) replaceTryoutsTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, tryouts []model.ProductTryout) error {
+func (r *ProductRepository) replacePackageTx(ctx context.Context, tx pgx.Tx, tenantID, id uuid.UUID, product model.Product) error {
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM product_tryouts WHERE tenant_id = $1 AND product_id = $2`, tenantID, id); err != nil {
 		return mapProductError("replace product tryouts", err)
 	}
-	for i, tryout := range tryouts {
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM product_kecermatan_tests WHERE tenant_id = $1 AND product_id = $2`, tenantID, id); err != nil {
+		return mapProductError("replace product kecermatan tests", err)
+	}
+	for i, tryout := range product.Tryouts {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO product_tryouts (product_id, tryout_id, tenant_id, position)
 			VALUES ($1, $2, $3, $4)`, id, tryout.ID, tenantID, i+1); err != nil {
 			return mapProductError("insert product tryout", err)
+		}
+	}
+	for i, test := range product.KecermatanTests {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO product_kecermatan_tests (product_id, kecermatan_test_id, tenant_id, position)
+			VALUES ($1, $2, $3, $4)`, id, test.ID, tenantID, i+1); err != nil {
+			return mapProductError("insert product kecermatan test", err)
 		}
 	}
 	return nil
@@ -572,6 +635,7 @@ func scanPublicProduct(row pgx.Row) (model.PublicProduct, error) {
 	}
 	out.OriginalPrice, out.ActiveUntil = original, activeUntil
 	out.Tryouts = []model.PublicProductTryout{}
+	out.KecermatanTests = []model.PublicProductKecermatan{}
 	if testID != nil {
 		out.Kecermatan = &model.PublicKecermatan{TestID: *testID}
 	}

@@ -186,3 +186,96 @@ func TestKecermatanManualOrderAddsCreditsOnConfirmOnly(t *testing.T) {
 		t.Errorf("grants = %d, want one per confirmed order", g)
 	}
 }
+
+func TestMixedBundleValidationAndCatalog(t *testing.T) {
+	h := newKecHarness(t)
+	tenant := h.t.q.a
+	ctx := context.Background()
+	tryout := h.tryout(t, tenant, model.TryoutPublished)
+	test, other := h.testIn(t, tenant), h.testIn(t, tenant)
+	foreign := h.testIn(t, h.t.q.b)
+
+	many := make([]uuid.UUID, 0, 20)
+	for range 20 {
+		many = append(many, uuid.New())
+	}
+	cases := []struct {
+		name   string
+		mutate func(*ProductInput)
+		field  string
+	}{
+		{"one item", func(in *ProductInput) { in.TryoutIDs = nil }, "tryout_ids"},
+		{"21 items", func(in *ProductInput) { in.TryoutIDs = many }, "tryout_ids"},
+		{"duplicate test", func(in *ProductInput) { in.KecermatanTestIDs = []uuid.UUID{test.ID, test.ID} }, "kecermatan_test_ids[1]"},
+		{"another tenant's test", func(in *ProductInput) { in.KecermatanTestIDs = []uuid.UUID{foreign.ID} }, "kecermatan_test_ids[0]"},
+		{"tests on an individual product", func(in *ProductInput) { in.Type = model.ProductIndividual }, "kecermatan_test_ids"},
+	}
+	for _, tc := range cases {
+		in := h.input(tenant, tryout)
+		in.Type, in.KecermatanTestIDs = model.ProductBundle, []uuid.UUID{test.ID}
+		tc.mutate(&in)
+		_, err := h.productHarness.svc.Create(ctx, h.scope(tenant), h.admin(tenant), in)
+		wantProductField(t, err, tc.field)
+	}
+
+	in := h.input(tenant, tryout)
+	in.Type, in.KecermatanTestIDs = model.ProductBundle, []uuid.UUID{test.ID, other.ID}
+	mixed := h.create(t, tenant, in)
+	if len(mixed.Tryouts) != 1 || len(mixed.KecermatanTests) != 2 || mixed.KecermatanTests[0].Title != test.Title {
+		t.Fatalf("mixed bundle = %+v, want one tryout and both tests in order", mixed)
+	}
+	onlyTests := h.input(tenant)
+	onlyTests.Type, onlyTests.KecermatanTestIDs = model.ProductBundle, []uuid.UUID{test.ID, other.ID}
+	testsBundle := h.create(t, tenant, onlyTests)
+
+	got, err := h.productHarness.svc.CatalogProduct(ctx, h.scope(tenant), testsBundle.ID)
+	if err != nil || len(got.KecermatanTests) != 2 || got.KecermatanTests[1].TestID != other.ID || got.KecermatanTests[1].KolomCount != kecKolomCount {
+		t.Fatalf("catalog of a tests-only bundle = %+v, %v, want it on sale with both tests", got, err)
+	}
+	if err := h.kec.Delete(ctx, h.scope(tenant), h.staff(tenant, model.RoleAdmin), test.ID); !errors.Is(err, ErrKecermatanLocked) {
+		t.Errorf("delete a test that a bundle sells: err = %v, want ErrKecermatanLocked", err)
+	}
+
+	// Buy-more prefers the test's own product, then the smallest bundle holding it.
+	if id, err := h.repo.SellableProduct(ctx, tenant.ID, other.ID, h.clock.Now()); err != nil || id != testsBundle.ID {
+		t.Errorf("sellable for a bundled test = %v, %v, want the smaller tests-only bundle", id, err)
+	}
+	own := h.kecProduct(t, tenant, other, "20000", 3)
+	if id, err := h.repo.SellableProduct(ctx, tenant.ID, other.ID, h.clock.Now()); err != nil || id != own.ID {
+		t.Errorf("sellable = %v, %v, want the test's own product first", id, err)
+	}
+}
+
+func TestMixedBundleCreditsEveryMemberOncePerOrder(t *testing.T) {
+	h := newKecHarness(t)
+	tenant := h.t.q.a
+	ctx := context.Background()
+	tryout := h.tryout(t, tenant, model.TryoutPublished)
+	test := h.testIn(t, tenant)
+	in := h.input(tenant, tryout)
+	in.Type, in.KecermatanTestIDs, in.IncludedAttempts, in.Price = model.ProductBundle, []uuid.UUID{test.ID}, 2, "30000"
+	bundle := h.create(t, tenant, in)
+	user, p := h.student(t, tenant, "")
+	staff := h.staff(tenant, model.RoleOperator)
+
+	pending := h.manual(t, tenant, p, bundle)
+	// A later edit drops the test; the pending order still delivers what was bought.
+	edited := in
+	edited.KecermatanTestIDs = []uuid.UUID{h.testIn(t, tenant).ID}
+	h.update(t, tenant, bundle.ID, edited)
+
+	for range 2 {
+		if _, err := h.svc.Confirm(ctx, h.scope(tenant), staff, pending.ID); err != nil {
+			t.Fatalf("confirm: %v", err)
+		}
+	}
+	if c := h.credit(t, user, test); c.purchased != 2 {
+		t.Errorf("kecermatan credit = %+v, want 2 from one confirmed order", c)
+	}
+	if n := h.count(t, `SELECT attempts_purchased FROM enrollments WHERE user_id = $1 AND tryout_id = $2`, user.ID, tryout.ID); n != 2 {
+		t.Errorf("tryout credit = %d, want 2 from one confirmed order", n)
+	}
+	if g := h.grants(t, user.ID); g != 2 {
+		t.Errorf("grants = %d, want one per member", g)
+	}
+}

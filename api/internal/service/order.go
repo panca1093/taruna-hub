@@ -69,9 +69,12 @@ type CheckoutInput struct {
 
 type OrderFilter struct {
 	Status string
+	Method string
 	Search string
-	Limit  int
-	Offset int
+	// From and To are Jakarta calendar days (YYYY-MM-DD), both inclusive.
+	From, To string
+	Limit    int
+	Offset   int
 }
 
 // IssueInput is one business source asking for access. Order carries the order for an order source.
@@ -85,9 +88,9 @@ type IssueInput struct {
 	ActorKind  string
 	ActorID    *uuid.UUID
 	Reason     string
-	// KecermatanTestID with Attempts adds credits to the user's single enrollment for that test (D05).
-	KecermatanTestID *uuid.UUID
-	Attempts         int
+	// Each kecermatan test gets Attempts credits on the user's single enrollment for that test (D05).
+	KecermatanTestIDs []uuid.UUID
+	Attempts          int
 }
 
 type OrderOption func(*OrderService)
@@ -175,6 +178,10 @@ func (s *OrderService) Checkout(ctx context.Context, scope HostScope, principal 
 			items = append(items, model.OrderItem{TryoutID: t.ID, Title: t.Title})
 			tryoutIDs = append(tryoutIDs, t.ID)
 		}
+		kecItems := make([]model.OrderKecermatanItem, 0, len(product.KecermatanTests))
+		for _, k := range product.KecermatanTests {
+			kecItems = append(kecItems, model.OrderKecermatanItem{TestID: k.ID, Title: k.Title})
+		}
 		if in.Method == model.PaymentGateway && !strings.HasSuffix(product.Price, ".00") {
 			return &InputError{Fields: map[string]string{"payment_method": ReasonOrderMethod}}
 		}
@@ -194,7 +201,7 @@ func (s *OrderService) Checkout(ctx context.Context, scope HostScope, principal 
 		order, err := s.repo.InsertTx(ctx, tx, tenantID, model.Order{
 			UserID: principal.UserID, ProductID: product.ID, ProductType: product.Type,
 			ProductTitle: product.Title, Price: product.Price, PaymentMethod: in.Method,
-			Key: in.Key, ProofAssetID: in.ProofAssetID, Items: items,
+			Key: in.Key, ProofAssetID: in.ProofAssetID, Items: items, KecermatanItems: kecItems,
 			KecermatanTestID: product.KecermatanTestID, IncludedAttempts: product.IncludedAttempts,
 		})
 		if err != nil {
@@ -323,11 +330,15 @@ func (s *OrderService) review(ctx context.Context, scope HostScope, principal mo
 	return out, nil
 }
 
-// grantOrder opens every tryout of the order's snapshot; the order id is the business source.
+// grantOrder credits every tryout and kecermatan test of the order's snapshot; the order id is the business source.
 func (s *OrderService) grantOrder(ctx context.Context, tx pgx.Tx, order model.Order, actorKind string, actor *uuid.UUID) error {
 	ids := make([]uuid.UUID, 0, len(order.Items))
 	for _, item := range order.Items {
 		ids = append(ids, item.TryoutID)
+	}
+	testIDs := idsOf(order.KecermatanTestID)
+	for _, item := range order.KecermatanItems {
+		testIDs = append(testIDs, item.TestID)
 	}
 	orderID := order.ID
 	var attempts int
@@ -335,7 +346,7 @@ func (s *OrderService) grantOrder(ctx context.Context, tx pgx.Tx, order model.Or
 		attempts = *order.IncludedAttempts
 	}
 	_, err := s.IssueEnrollmentsTx(ctx, tx, IssueInput{
-		KecermatanTestID: order.KecermatanTestID, Attempts: attempts,
+		KecermatanTestIDs: testIDs, Attempts: attempts,
 		TenantID: order.TenantID, UserID: order.UserID, TryoutIDs: ids,
 		SourceType: model.GrantSourceOrder, SourceID: order.ID.String(), OrderID: &orderID,
 		ActorKind: actorKind, ActorID: actor,
@@ -350,7 +361,7 @@ func (s *OrderService) IssueEnrollmentsTx(ctx context.Context, tx pgx.Tx, in Iss
 	if in.SourceType == "" || in.SourceID == "" {
 		return nil, ErrEnrollmentSourceRequired
 	}
-	if in.KecermatanTestID != nil && in.Attempts < 1 {
+	if len(in.KecermatanTestIDs) > 0 && in.Attempts < 1 {
 		return nil, ErrEnrollmentSourceRequired
 	}
 	attempts := max(in.Attempts, 1)
@@ -358,9 +369,10 @@ func (s *OrderService) IssueEnrollmentsTx(ctx context.Context, tx pgx.Tx, in Iss
 		OrderID: in.OrderID, SourceType: in.SourceType, SourceID: in.SourceID,
 		ActorKind: in.ActorKind, ActorID: in.ActorID, Reason: in.Reason, Attempts: &attempts,
 	}
-	if in.KecermatanTestID != nil {
-		_, err := s.repo.AddCreditTx(ctx, tx, in.TenantID, grant, in.UserID, nil, in.KecermatanTestID)
-		return nil, err
+	for _, testID := range in.KecermatanTestIDs {
+		if _, err := s.repo.AddCreditTx(ctx, tx, in.TenantID, grant, in.UserID, nil, &testID); err != nil {
+			return nil, err
+		}
 	}
 	var credited []uuid.UUID
 	for _, tryoutID := range in.TryoutIDs {
@@ -403,7 +415,7 @@ func (s *OrderService) notify(ctx context.Context, tx pgx.Tx, scope HostScope, o
 }
 
 // Orders lists the signed-in student's own orders; nobody else's are reachable from here.
-func (s *OrderService) Orders(ctx context.Context, scope HostScope, principal model.Principal, limit, offset int) ([]model.Order, int, error) {
+func (s *OrderService) Orders(ctx context.Context, scope HostScope, principal model.Principal, filter OrderFilter) ([]model.Order, int, error) {
 	tenantID, err := walletTenant(scope, principal)
 	if err != nil {
 		return nil, 0, err
@@ -411,11 +423,11 @@ func (s *OrderService) Orders(ctx context.Context, scope HostScope, principal mo
 	if principal.Role != model.RoleStudent {
 		return nil, 0, ErrOrderForbidden
 	}
-	limit, offset, err = checkedOrderPage(limit, offset)
+	checked, err := checkedOrderFilter(filter)
 	if err != nil {
 		return nil, 0, err
 	}
-	return s.repo.ListForUser(ctx, tenantID, principal.UserID, limit, offset)
+	return s.repo.ListForUser(ctx, tenantID, principal.UserID, checked)
 }
 
 // Order answers the same not-found for another student's order as for a missing one.
@@ -452,25 +464,53 @@ func (s *OrderService) StaffOrders(ctx context.Context, scope HostScope, princip
 	if !isStaff(principal.Role) {
 		return nil, 0, ErrOrderForbidden
 	}
-	fields := map[string]string{}
-	filter.Limit, filter.Offset, err = checkedOrderPage(filter.Limit, filter.Offset)
+	checked, err := checkedOrderFilter(filter)
 	if err != nil {
 		return nil, 0, err
+	}
+	return s.repo.List(ctx, tenantID, checked)
+}
+
+func checkedOrderFilter(filter OrderFilter) (repository.OrderFilter, error) {
+	out := repository.OrderFilter{Status: filter.Status, Method: filter.Method, Search: filter.Search}
+	fields := map[string]string{}
+	var err error
+	out.Limit, out.Offset, err = checkedOrderPage(filter.Limit, filter.Offset)
+	if err != nil {
+		return out, err
 	}
 	switch filter.Status {
 	case "", model.OrderPending, model.OrderConfirmed, model.OrderCancelled:
 	default:
 		fields["status"] = ReasonOrderQuery
 	}
+	switch filter.Method {
+	case "", model.PaymentManual, model.PaymentWallet, model.PaymentGateway:
+	default:
+		fields["payment_method"] = ReasonOrderQuery
+	}
 	if utf8.RuneCountInString(filter.Search) > 100 {
 		fields["q"] = ReasonOrderQuery
 	}
-	if len(fields) > 0 {
-		return nil, 0, &InputError{Fields: fields}
+	if filter.From != "" {
+		if day, err := time.ParseInLocation(reportDateLayout, filter.From, wib); err != nil {
+			fields["from"] = ReasonOrderQuery
+		} else {
+			out.From = &day
+		}
 	}
-	return s.repo.List(ctx, tenantID, repository.OrderFilter{
-		Status: filter.Status, Search: filter.Search, Limit: filter.Limit, Offset: filter.Offset,
-	})
+	if filter.To != "" {
+		if day, err := time.ParseInLocation(reportDateLayout, filter.To, wib); err != nil {
+			fields["to"] = ReasonOrderQuery
+		} else {
+			next := day.AddDate(0, 0, 1)
+			out.To = &next
+		}
+	}
+	if len(fields) > 0 {
+		return out, &InputError{Fields: fields}
+	}
+	return out, nil
 }
 
 // Enrollments is "Paket Belajar Saya": what the signed-in student holds.

@@ -11,6 +11,7 @@ import { Icon } from "@/components/icon";
 import { EmptyState } from "@/components/empty-state";
 import { FormModal } from "@/components/ui/form-modal";
 import { TextInput, TextareaInput } from "@/components/ui/form";
+import { SearchField } from "@/components/filter-menu";
 import { api, ApiError, errorText, type Program } from "@/lib/api/client";
 import { useAdminProgramsT } from "@/lib/i18n/dict/admin-programs";
 
@@ -60,6 +61,7 @@ export default function ProgramsPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [search, setSearch] = useState("");
 
   // Same pattern as app/dev/api-check: the promise settles into state, never during the effect body.
   useEffect(() => {
@@ -78,6 +80,10 @@ export default function ProgramsPage() {
       cancelled = true;
     };
   }, [reloadKey]);
+
+  // The list is the full unpaginated curriculum tree (a handful of programs), so it filters in the browser.
+  const needle = search.trim().toLowerCase();
+  const visible = (rows ?? []).filter((row) => needle === "" || row.name.toLowerCase().includes(needle) || row.code.toLowerCase().includes(needle));
 
   const retry = () => {
     setRows(null);
@@ -239,6 +245,10 @@ export default function ProgramsPage() {
         </Button>
       }
     >
+      <div className="mb-4 flex items-center gap-2">
+        <SearchField value={search} onChange={setSearch} placeholder={t.searchPlaceholder} />
+      </div>
+
       {loadFailed ? (
         <EmptyState
           icon={CloudOff}
@@ -250,8 +260,10 @@ export default function ProgramsPage() {
         <LoadingNote>{t.loading}</LoadingNote>
       ) : rows.length === 0 ? (
         <EmptyState icon={School} title={t.emptyTitle} action={<Button variant="primary" size="sm" onPress={openCreate}>{t.addProgram}</Button>} />
+      ) : visible.length === 0 ? (
+        <EmptyState icon={School} title={t.noMatchTitle} description={t.noMatchDescription} />
       ) : (
-        <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={openEdit} />
+        <DataTable columns={columns} rows={visible} rowKey={(r) => r.id} onRowClick={openEdit} />
       )}
 
       <FormModal

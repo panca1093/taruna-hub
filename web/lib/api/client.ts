@@ -569,7 +569,7 @@ export const api = {
   /** Checkout and the signed-in student's own orders and access. */
   orders: {
     checkout: (body: CheckoutBody) => mutate<Order>("POST", "/api/v1/orders", body),
-    list: (filters: Pick<OrderFilters, "limit" | "offset"> = {}) =>
+    list: (filters: OrderFilters = {}) =>
       authed<OrderList>(`/api/v1/orders${queryOf(filters)}` as keyof paths),
     enrollments: () => authed<EnrollmentList>("/api/v1/enrollments"),
     bankTransfer: () => authed<BankTransfer>("/api/v1/payments/bank-transfer"),
@@ -618,8 +618,8 @@ export const api = {
 
   /** Kecermatan item packages: Admin and Operator. */
   itemPackages: {
-    list: (type?: ItemPackageType) =>
-      authed<ItemPackageList>(`/api/v1/item-packages${queryOf({ type })}` as keyof paths),
+    list: (filters: { type?: ItemPackageType; q?: string } = {}) =>
+      authed<ItemPackageList>(`/api/v1/item-packages${queryOf(filters)}` as keyof paths),
     create: (body: CreateItemPackageBody) => mutate<ItemPackage>("POST", "/api/v1/item-packages", body),
     get: (id: string, revision?: number) =>
       authed<ItemPackageDetail>(`${itemPackagePath(id)}${queryOf({ revision })}` as keyof paths),
@@ -640,7 +640,7 @@ export const api = {
 
   /** Kecermatan test builder (Admin and Operator): the frozen generation configuration, never the seed. */
   kecermatan: {
-    list: (filters: { program_id?: string; q?: string; limit?: number; offset?: number } = {}) =>
+    list: (filters: { program_id?: string; item_type?: KecermatanItemType; q?: string; limit?: number; offset?: number } = {}) =>
       authed<KecermatanTestList>(`/api/v1/kecermatan-tests${queryOf(filters)}` as keyof paths),
     get: (id: string) => authed<KecermatanTest>(kecermatanPath(id)),
     create: (body: KecermatanTestBody) => mutate<KecermatanTest>("POST", "/api/v1/kecermatan-tests", body),
@@ -720,7 +720,7 @@ export const api = {
 
   /** Staff monitoring: tryout sessions in progress, and any session's violation timeline (also after it ended). */
   monitoring: {
-    active: (filters: { limit?: number; offset?: number } = {}) =>
+    active: (filters: { q?: string; tryout_id?: string; status?: "running" | "between"; limit?: number; offset?: number } = {}) =>
       authed<ActiveSessionList>(`/api/v1/admin/monitoring/sessions${queryOf(filters)}` as keyof paths),
     /** Admin and Operator: adds seconds to the subtest running in this session (D10). */
     extend: (sessionId: string, body: ExtensionBody) =>

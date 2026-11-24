@@ -631,11 +631,11 @@ func TestStudentsSeeOnlyTheirOwnOrders(t *testing.T) {
 	product := h.product(t, tenant, "100000", h.tryout(t, tenant, model.TryoutPublished))
 	orderA := h.manual(t, tenant, a, product)
 
-	own, total, err := h.svc.Orders(context.Background(), h.scope(tenant), a, 0, 0)
+	own, total, err := h.svc.Orders(context.Background(), h.scope(tenant), a, OrderFilter{})
 	if err != nil || total != 1 || len(own) != 1 || own[0].ID != orderA.ID {
 		t.Fatalf("own orders = %d of %d, %v", len(own), total, err)
 	}
-	theirs, total, err := h.svc.Orders(context.Background(), h.scope(tenant), b, 0, 0)
+	theirs, total, err := h.svc.Orders(context.Background(), h.scope(tenant), b, OrderFilter{})
 	if err != nil || total != 0 || len(theirs) != 0 {
 		t.Errorf("another student's list = %d of %d, %v; want none", len(theirs), total, err)
 	}
@@ -962,4 +962,52 @@ func keyOf(t *testing.T, h orderHarness, orderID uuid.UUID) string {
 		t.Fatalf("read key: %v", err)
 	}
 	return key
+}
+
+func TestOrderListSearchAndFilters(t *testing.T) {
+	h := newOrderHarness(t, noJobs{}, testBank)
+	tenant, other := h.t.q.a, h.t.q.b
+	userA, a := h.student(t, tenant, "500000")
+	_, b := h.student(t, tenant, "")
+	product := h.product(t, tenant, "100000", h.tryout(t, tenant, model.TryoutPublished))
+	walletOrder, _, err := h.wallet(t, tenant, a, product)
+	if err != nil {
+		t.Fatalf("wallet checkout: %v", err)
+	}
+	manualOrder := h.manual(t, tenant, b, product)
+	ctx, scope, admin := context.Background(), h.scope(tenant), h.staff(tenant, model.RoleAdmin)
+
+	byEmail, total, err := h.svc.StaffOrders(ctx, scope, admin, OrderFilter{Search: *userA.Email})
+	if err != nil || total != 1 || byEmail[0].ID != walletOrder.ID {
+		t.Errorf("search by student email = %d rows total %d err %v, want only the wallet order", len(byEmail), total, err)
+	}
+	byMethod, total, err := h.svc.StaffOrders(ctx, scope, admin, OrderFilter{Method: model.PaymentManual})
+	if err != nil || total != 1 || byMethod[0].ID != manualOrder.ID {
+		t.Errorf("method filter = %d rows total %d err %v, want only the manual order", len(byMethod), total, err)
+	}
+	today := time.Now().In(wib).Format(reportDateLayout)
+	if _, total, err := h.svc.StaffOrders(ctx, scope, admin, OrderFilter{From: today, To: today}); err != nil || total != 2 {
+		t.Errorf("today range total %d err %v, want 2", total, err)
+	}
+	if _, total, err := h.svc.StaffOrders(ctx, scope, admin, OrderFilter{To: "2000-01-01"}); err != nil || total != 0 {
+		t.Errorf("past range total %d err %v, want 0", total, err)
+	}
+	wantInputField(t, func() error {
+		_, _, err := h.svc.StaffOrders(ctx, scope, admin, OrderFilter{From: "nope"})
+		return err
+	}(), "from")
+	wantInputField(t, func() error {
+		_, _, err := h.svc.StaffOrders(ctx, scope, admin, OrderFilter{Method: "cash"})
+		return err
+	}(), "payment_method")
+	if _, total, err := h.svc.StaffOrders(ctx, h.scope(other), h.staff(other, model.RoleAdmin), OrderFilter{Search: *userA.Email}); err != nil || total != 0 {
+		t.Errorf("other tenant sees %d orders, err %v", total, err)
+	}
+	mine, total, err := h.svc.Orders(ctx, scope, a, OrderFilter{Status: model.OrderConfirmed})
+	if err != nil || total != 1 || mine[0].ID != walletOrder.ID {
+		t.Errorf("student confirmed filter = %d rows total %d err %v", len(mine), total, err)
+	}
+	if _, total, _ := h.svc.Orders(ctx, scope, a, OrderFilter{Status: model.OrderPending}); total != 0 {
+		t.Errorf("student pending filter total %d, want 0", total)
+	}
 }

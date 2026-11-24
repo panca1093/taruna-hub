@@ -76,15 +76,38 @@ func (r *MonitoringRepository) InsertViolation(ctx context.Context, q dbtx, tena
 	return r.ViolationByEvent(ctx, q, tenantID, v.SessionID, v.EventID)
 }
 
+// ActiveSessionFilter narrows the active list; Status is "", "running" (a subtest is running) or "between" (none is).
+type ActiveSessionFilter struct {
+	Search   string
+	TryoutID uuid.UUID
+	Status   string
+}
+
 // ActiveSessions lists the in-progress sessions of one tenant, newest first, with the running subtest and the
 // violation count. total counts every in-progress session, not just the page.
-func (r *MonitoringRepository) ActiveSessions(ctx context.Context, q dbtx, tenantID uuid.UUID, limit, offset int) ([]model.ActiveSession, int, error) {
+func (r *MonitoringRepository) ActiveSessions(ctx context.Context, q dbtx, tenantID uuid.UUID, f ActiveSessionFilter, limit, offset int) ([]model.ActiveSession, int, error) {
 	if tenantID == uuid.Nil {
 		return nil, 0, ErrScopeRequired
 	}
+	where, args := `s.tenant_id = $1 AND s.status = 'in_progress'`, []any{tenantID}
+	if f.Search != "" {
+		args = append(args, likePattern(f.Search))
+		where += fmt.Sprintf(` AND u.name ILIKE $%d ESCAPE '\'`, len(args))
+	}
+	if f.TryoutID != uuid.Nil {
+		args = append(args, f.TryoutID)
+		where += fmt.Sprintf(` AND s.tryout_id = $%d`, len(args))
+	}
+	running := `EXISTS (SELECT 1 FROM tryout_session_parts rp WHERE rp.session_id = s.id AND rp.tenant_id = s.tenant_id AND rp.status = 'running')`
+	switch f.Status {
+	case "running":
+		where += ` AND ` + running
+	case "between":
+		where += ` AND NOT ` + running
+	}
 	var total int
-	if err := q.QueryRow(ctx, `SELECT count(*) FROM tryout_sessions WHERE tenant_id = $1 AND status = 'in_progress'`,
-		tenantID).Scan(&total); err != nil {
+	if err := q.QueryRow(ctx, `SELECT count(*) FROM tryout_sessions s JOIN users u ON u.id = s.user_id AND u.tenant_id = s.tenant_id WHERE `+where,
+		args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count active sessions: %w", err)
 	}
 	rows, err := q.Query(ctx, `
@@ -95,9 +118,9 @@ func (r *MonitoringRepository) ActiveSessions(ctx context.Context, q dbtx, tenan
 		  JOIN users u ON u.id = s.user_id AND u.tenant_id = s.tenant_id
 		  JOIN tryouts t ON t.id = s.tryout_id AND t.tenant_id = s.tenant_id
 		  LEFT JOIN tryout_session_parts p ON p.session_id = s.id AND p.tenant_id = s.tenant_id AND p.status = 'running'
-		 WHERE s.tenant_id = $1 AND s.status = 'in_progress'
+		 WHERE `+where+fmt.Sprintf(`
 		 ORDER BY s.started_at DESC, s.id
-		 LIMIT $2 OFFSET $3`, tenantID, limit, offset)
+		 LIMIT $%d OFFSET $%d`, len(args)+1, len(args)+2), append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list active sessions: %w", err)
 	}

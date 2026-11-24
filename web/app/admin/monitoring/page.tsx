@@ -11,10 +11,12 @@ import { Icon } from "@/components/icon";
 import { StatusChip } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
 import { TextInput, TextareaInput } from "@/components/ui/form";
-import { api, ApiError, errorText, type ActiveSession, type ViolationTimeline } from "@/lib/api/client";
+import { FilterMenu, SearchField } from "@/components/filter-menu";
+import { api, ApiError, errorText, type ActiveSession, type TryoutSummary, type ViolationTimeline } from "@/lib/api/client";
 import { useMonitoringT } from "@/lib/i18n/dict/monitoring";
 
 const POLL_MS = 30_000;
+const SEARCH_DEBOUNCE_MS = 300;
 const PAGE_SIZE = 200;
 
 const formatDateTime = (iso: string) =>
@@ -43,12 +45,47 @@ export default function MonitoringPage() {
   const [saving, setSaving] = useState(false);
 
   const [reloadKey, setReloadKey] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Record<string, string>>({});
+  const [tryouts, setTryouts] = useState<TryoutSummary[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.tryouts
+      .list({ limit: 100 })
+      .then((page) => {
+        if (!cancelled) setTryouts(page.tryouts);
+      })
+      .catch(() => {
+        // The filter is a convenience; the sessions list reports its own failure.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = searchInput.trim();
+      if (next === search) return;
+      setSessions(null);
+      setLoadFailed(false);
+      setSearch(next);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, search]);
 
   useEffect(() => {
     let cancelled = false;
     const poll = () =>
       api.monitoring
-        .active({ limit: PAGE_SIZE })
+        .active({
+          q: search,
+          tryout_id: filter.tryout,
+          status: filter.status as "running" | "between" | undefined,
+          limit: PAGE_SIZE,
+        })
         .then((page) => {
           if (cancelled) return;
           setSessions(page.sessions);
@@ -66,7 +103,7 @@ export default function MonitoringPage() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [reloadKey]);
+  }, [reloadKey, search, filter]);
 
   useEffect(() => {
     if (!detail) return;
@@ -174,6 +211,30 @@ export default function MonitoringPage() {
         )
       }
     >
+      <div className="mb-4 flex items-center gap-2">
+        <SearchField value={searchInput} onChange={setSearchInput} placeholder={t.searchPlaceholder} />
+        <FilterMenu
+          align="start"
+          value={filter}
+          onChange={(next) => {
+            setSessions(null);
+            setLoadFailed(false);
+            setFilter(next);
+          }}
+          fields={[
+            { key: "tryout", label: t.filterTryout, options: tryouts.map((tryout) => ({ id: tryout.id, label: tryout.title })) },
+            {
+              key: "status",
+              label: t.filterStatus,
+              options: [
+                { id: "running", label: t.statusRunning },
+                { id: "between", label: t.statusBetween },
+              ],
+            },
+          ]}
+        />
+      </div>
+
       {sessions === null && loadFailed ? (
         <EmptyState
           icon={CloudOff}
@@ -199,7 +260,11 @@ export default function MonitoringPage() {
           </div>
 
           {sessions.length === 0 ? (
-            <EmptyState icon={Radio} title={t.emptyTitle} description={t.emptyDescription} />
+            <EmptyState
+              icon={Radio}
+              title={search === "" && !filter.tryout && !filter.status ? t.emptyTitle : t.noMatchTitle}
+              description={search === "" && !filter.tryout && !filter.status ? t.emptyDescription : t.noMatchDescription}
+            />
           ) : (
             <DataTable
               columns={columns}

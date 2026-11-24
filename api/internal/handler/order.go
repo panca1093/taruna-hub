@@ -135,11 +135,11 @@ func (h *Handler) MyOrders(c echo.Context) error {
 	if !ok {
 		return httpx.Unauthorized(sessionInvalid)
 	}
-	limit, offset, err := orderPageOf(c)
+	filter, err := orderFilterOf(c)
 	if err != nil {
 		return err
 	}
-	orders, total, err := h.orders.Orders(c.Request().Context(), scope, principal, limit, offset)
+	orders, total, err := h.orders.Orders(c.Request().Context(), scope, principal, filter)
 	if err != nil {
 		return orderError(err)
 	}
@@ -172,13 +172,11 @@ func (h *Handler) StaffOrders(c echo.Context) error {
 	if !ok {
 		return httpx.Unauthorized(sessionInvalid)
 	}
-	limit, offset, err := orderPageOf(c)
+	filter, err := orderFilterOf(c)
 	if err != nil {
 		return err
 	}
-	orders, total, err := h.orders.StaffOrders(c.Request().Context(), scope, principal, service.OrderFilter{
-		Status: c.QueryParam(orderStatusParam), Search: c.QueryParam("q"), Limit: limit, Offset: offset,
-	})
+	orders, total, err := h.orders.StaffOrders(c.Request().Context(), scope, principal, filter)
 	if err != nil {
 		return orderError(err)
 	}
@@ -263,6 +261,17 @@ func orderID(c echo.Context) (uuid.UUID, error) {
 		return uuid.Nil, httpx.NotFound(orderNotFound)
 	}
 	return id, nil
+}
+
+func orderFilterOf(c echo.Context) (service.OrderFilter, error) {
+	limit, offset, err := orderPageOf(c)
+	if err != nil {
+		return service.OrderFilter{}, err
+	}
+	return service.OrderFilter{
+		Status: c.QueryParam(orderStatusParam), Method: c.QueryParam("payment_method"), Search: c.QueryParam("q"),
+		From: c.QueryParam("from"), To: c.QueryParam("to"), Limit: limit, Offset: offset,
+	}, nil
 }
 
 func orderPageOf(c echo.Context) (int, int, error) {

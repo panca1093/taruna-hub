@@ -10,14 +10,18 @@ import { EmptyState } from "@/components/empty-state";
 import { LinkButton } from "@/components/ui/link-button";
 import { ProgramBadge } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
-import { api, errorText, type KecermatanTestSummary, type Program } from "@/lib/api/client";
+import { FilterMenu, SearchField, type FilterValue } from "@/components/filter-menu";
+import { api, errorText, type KecermatanItemType, type KecermatanTestSummary, type Program } from "@/lib/api/client";
 import { useAdminKecermatanListT } from "@/lib/i18n/dict/admin-kecermatan-list";
+import { useAdminKecermatanBuilderT } from "@/lib/i18n/dict/admin-kecermatan-builder";
 
 const PAGE_SIZE = 50;
+const itemTypes: KecermatanItemType[] = ["char", "number", "symbol", "emoji", "image", "shape", "mix"];
 
 export default function KecermatanListPage() {
   const router = useRouter();
   const t = useAdminKecermatanListT();
+  const builder = useAdminKecermatanBuilderT();
   const [programs, setPrograms] = useState<Program[] | null>(null);
   const [rows, setRows] = useState<KecermatanTestSummary[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -26,6 +30,14 @@ export default function KecermatanListPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState<KecermatanTestSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterValue>({});
+  const filtered = search.trim() !== "" || !!filter.program_id || !!filter.item_type;
+  const filters = {
+    ...(filter.program_id ? { program_id: filter.program_id } : {}),
+    ...(filter.item_type ? { item_type: filter.item_type as KecermatanItemType } : {}),
+    ...(search.trim() === "" ? {} : { q: search.trim() }),
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +57,7 @@ export default function KecermatanListPage() {
   useEffect(() => {
     let cancelled = false;
     api.kecermatan
-      .list({ limit: PAGE_SIZE })
+      .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
         if (cancelled) return;
         setRows(page.tests);
@@ -57,7 +69,14 @@ export default function KecermatanListPage() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filter, reloadKey]);
+
+  const refilter = (apply: () => void) => {
+    setRows(null);
+    setLoadFailed(false);
+    apply();
+  };
 
   const retry = () => {
     setRows(null);
@@ -68,7 +87,7 @@ export default function KecermatanListPage() {
   const loadMore = async () => {
     setLoadingMore(true);
     try {
-      const page = await api.kecermatan.list({ limit: PAGE_SIZE, offset: rows?.length ?? 0 });
+      const page = await api.kecermatan.list({ ...filters, limit: PAGE_SIZE, offset: rows?.length ?? 0 });
       setRows((prev) => [...(prev ?? []), ...page.tests]);
       setTotal(page.total);
     } catch (err) {
@@ -148,6 +167,19 @@ export default function KecermatanListPage() {
         </LinkButton>
       }
     >
+      <div className="mb-4 flex items-center gap-2">
+        <SearchField value={search} onChange={(value) => refilter(() => setSearch(value))} placeholder={t.searchPlaceholder} />
+        <FilterMenu
+          align="start"
+          value={filter}
+          onChange={(next) => refilter(() => setFilter(next))}
+          fields={[
+            { key: "program_id", label: t.columns.program, options: (programs ?? []).map((p) => ({ id: p.id, label: p.name })) },
+            { key: "item_type", label: builder.itemTypeLabel, options: itemTypes.map((type) => ({ id: type, label: builder.itemType[type] })) },
+          ]}
+        />
+      </div>
+
       {loadFailed ? (
         <EmptyState
           icon={CloudOff}
@@ -158,7 +190,7 @@ export default function KecermatanListPage() {
       ) : rows === null ? (
         <p className="py-14 text-center text-small text-muted">{t.loading}</p>
       ) : rows.length === 0 ? (
-        <EmptyState icon={Gauge} title={t.emptyTitle} description={t.emptyDescription} />
+        <EmptyState icon={Gauge} title={filtered ? t.noMatchTitle : t.emptyTitle} description={filtered ? t.noMatchDescription : t.emptyDescription} />
       ) : (
         <>
           <DataTable columns={columns} rows={rows} rowKey={(row) => row.id} footer={<span>{t.footerCount(rows.length, total)}</span>} onRowClick={(row) => router.push(`/admin/kecermatan/${row.id}`)} />

@@ -367,8 +367,8 @@ function Packages({ state, t, onRetry }: { state: Remote<PublicProduct[]>; t: La
         const detail =
           product.type === "kecermatan" && product.included_attempts != null
             ? t.packageAttempts(product.included_attempts)
-            : product.tryouts.length > 0
-              ? t.packageTryouts(product.tryouts.length)
+            : product.tryouts.length + product.kecermatan_tests.length > 0
+              ? t.packageTryouts(product.tryouts.length + product.kecermatan_tests.length)
               : null;
         return (
           <li key={product.id}>

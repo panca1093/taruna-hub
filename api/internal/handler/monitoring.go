@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/httpx"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/service"
 )
 
@@ -18,6 +20,7 @@ const (
 	violationTypeMsg = "Jenis pelanggaran tidak dikenal."
 	violationEvent   = "ID kejadian wajib berupa UUID."
 	monitoringPage   = "Parameter halaman tidak valid (limit 1–200, offset 0 atau lebih)."
+	monitoringStatus = "Status sesi harus running atau between."
 )
 
 const maxViolationBody = 1 << 10
@@ -116,7 +119,15 @@ func (h *Handler) ActiveSessions(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, total, err := h.monitoring.ActiveSessions(c.Request().Context(), scope, principal, limit, offset)
+	filter := repository.ActiveSessionFilter{Search: strings.TrimSpace(c.QueryParam("q")), Status: c.QueryParam("status")}
+	if raw := c.QueryParam("tryout_id"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			return httpx.Validation(incomplete, map[string]string{"tryout_id": invalidFormat})
+		}
+		filter.TryoutID = id
+	}
+	rows, total, err := h.monitoring.ActiveSessions(c.Request().Context(), scope, principal, filter, limit, offset)
 	if err != nil {
 		return monitoringError(err)
 	}
@@ -168,6 +179,8 @@ func monitoringError(err error) error {
 				fields[path] = violationTypeMsg
 			case service.ReasonViolationEvent:
 				fields[path] = violationEvent
+			case service.ReasonMonitoringFilter:
+				fields[path] = monitoringStatus
 			case service.ReasonMonitoringPage:
 				fields[path] = monitoringPage
 			default:

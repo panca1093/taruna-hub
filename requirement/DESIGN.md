@@ -351,6 +351,8 @@ Guidelines: use a modal for a bounded edit, review, or confirmation; use a full 
 
 Drawer width belongs on `Drawer.Dialog` for HeroUI v3; the navigation drawer follows this and measures 288px when open.
 
+**Item picker (product form).** [ProductItemPicker](../web/components/admin/product-item-picker.tsx) replaces inline dropdowns and grids for choosing what a product sells. The form shows the chosen items as a compact list (title, a Tryout / Kecermatan chip for bundles, a remove button) and one button that opens a second `FormModal` on top: search input, a scrolling list (radio rows for a single choice, checkbox rows for a bundle), and for bundles a Tryout / Tes kecermatan segmented switch with counts over the same search plus a `selected / min-max` counter. The selection is a draft until "Pilih" / "Terapkan"; the apply button is disabled outside the allowed count (bundle 2-20 items in total). Loading, error and empty states render in place of the button.
+
 ### 6.7 Empty states, errors, and feedback
 
 [EmptyState](../web/components/empty-state.tsx): dashed 1px border, 9px radius, 56px vertical padding, centered 12px gap, 44px neutral icon circle, 14px title/description, optional action. Description width is capped at 384px.

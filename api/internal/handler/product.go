@@ -26,7 +26,7 @@ const (
 	productPriceRule      = "Harga harus angka lebih dari 0 dengan maksimal 2 desimal."
 	productOriginalRule   = "Harga coret harus angka dan tidak lebih kecil dari harga."
 	productWindowRule     = "Mulai penjualan harus sebelum akhir penjualan."
-	productTryoutsRule    = "Produk individual butuh 1 tryout dan bundle 2–20 tryout."
+	productTryoutsRule    = "Produk individual butuh 1 tryout; bundle 2–20 tryout dan tes kecermatan, dan hanya bundle yang boleh berisi tes kecermatan."
 	productTryoutRule     = "Tryout tidak ditemukan atau belum dipublikasikan pada program ini."
 	productListRule       = "Batas 1–100."
 	productKecermatanRule = "Tes kecermatan tidak ditemukan pada program ini."
@@ -42,23 +42,30 @@ type productTryoutResponse struct {
 	QuestionCount int       `json:"question_count"`
 }
 
+type productKecermatanTestResponse struct {
+	ID     uuid.UUID `json:"id"`
+	Title  string    `json:"title"`
+	Status string    `json:"status"`
+}
+
 type productResponse struct {
-	ID                  uuid.UUID               `json:"id"`
-	Type                string                  `json:"type"`
-	Title               string                  `json:"title"`
-	Description         string                  `json:"description"`
-	ProgramID           uuid.UUID               `json:"program_id"`
-	Price               string                  `json:"price"`
-	OriginalPrice       *string                 `json:"original_price"`
-	IsActive            bool                    `json:"is_active"`
-	ActiveFrom          *time.Time              `json:"active_from"`
-	ActiveUntil         *time.Time              `json:"active_until"`
-	Tryouts             []productTryoutResponse `json:"tryouts"`
-	KecermatanTestID    *uuid.UUID              `json:"kecermatan_test_id"`
-	KecermatanTestTitle *string                 `json:"kecermatan_test_title"`
-	IncludedAttempts    *int                    `json:"included_attempts"`
-	CreatedAt           time.Time               `json:"created_at"`
-	UpdatedAt           time.Time               `json:"updated_at"`
+	ID                  uuid.UUID                       `json:"id"`
+	Type                string                          `json:"type"`
+	Title               string                          `json:"title"`
+	Description         string                          `json:"description"`
+	ProgramID           uuid.UUID                       `json:"program_id"`
+	Price               string                          `json:"price"`
+	OriginalPrice       *string                         `json:"original_price"`
+	IsActive            bool                            `json:"is_active"`
+	ActiveFrom          *time.Time                      `json:"active_from"`
+	ActiveUntil         *time.Time                      `json:"active_until"`
+	Tryouts             []productTryoutResponse         `json:"tryouts"`
+	KecermatanTests     []productKecermatanTestResponse `json:"kecermatan_tests"`
+	KecermatanTestID    *uuid.UUID                      `json:"kecermatan_test_id"`
+	KecermatanTestTitle *string                         `json:"kecermatan_test_title"`
+	IncludedAttempts    *int                            `json:"included_attempts"`
+	CreatedAt           time.Time                       `json:"created_at"`
+	UpdatedAt           time.Time                       `json:"updated_at"`
 }
 
 type productsResponse struct {
@@ -83,21 +90,31 @@ type publicKecermatanResponse struct {
 	KolomDurationSeconds int       `json:"kolom_duration_seconds"`
 }
 
+type publicProductKecermatanResponse struct {
+	TestID               uuid.UUID `json:"test_id"`
+	Title                string    `json:"title"`
+	ItemType             string    `json:"item_type"`
+	KolomCount           int       `json:"kolom_count"`
+	SoalPerKolom         int       `json:"soal_per_kolom"`
+	KolomDurationSeconds int       `json:"kolom_duration_seconds"`
+}
+
 type publicProductResponse struct {
-	IncludedAttempts *int                      `json:"included_attempts"`
-	Kecermatan       *publicKecermatanResponse `json:"kecermatan"`
-	ID               uuid.UUID                 `json:"id"`
-	Type             string                    `json:"type"`
-	Title            string                    `json:"title"`
-	Description      string                    `json:"description"`
-	ProgramID        uuid.UUID                 `json:"program_id"`
-	ProgramCode      string                    `json:"program_code"`
-	ProgramName      string                    `json:"program_name"`
-	Price            string                    `json:"price"`
-	OriginalPrice    *string                   `json:"original_price"`
-	DiscountPercent  *int                      `json:"discount_percent"`
-	ActiveUntil      *time.Time                `json:"active_until"`
-	Tryouts          []publicTryoutResponse    `json:"tryouts"`
+	IncludedAttempts *int                              `json:"included_attempts"`
+	Kecermatan       *publicKecermatanResponse         `json:"kecermatan"`
+	ID               uuid.UUID                         `json:"id"`
+	Type             string                            `json:"type"`
+	Title            string                            `json:"title"`
+	Description      string                            `json:"description"`
+	ProgramID        uuid.UUID                         `json:"program_id"`
+	ProgramCode      string                            `json:"program_code"`
+	ProgramName      string                            `json:"program_name"`
+	Price            string                            `json:"price"`
+	OriginalPrice    *string                           `json:"original_price"`
+	DiscountPercent  *int                              `json:"discount_percent"`
+	ActiveUntil      *time.Time                        `json:"active_until"`
+	Tryouts          []publicTryoutResponse            `json:"tryouts"`
+	KecermatanTests  []publicProductKecermatanResponse `json:"kecermatan_tests"`
 }
 
 type publicProductsResponse struct {
@@ -112,18 +129,19 @@ type catalogSummaryResponse struct {
 }
 
 type productRequest struct {
-	Type             string   `json:"type"`
-	Title            string   `json:"title"`
-	Description      string   `json:"description"`
-	ProgramID        string   `json:"program_id"`
-	Price            string   `json:"price"`
-	OriginalPrice    *string  `json:"original_price"`
-	IsActive         bool     `json:"is_active"`
-	ActiveFrom       *string  `json:"active_from"`
-	ActiveUntil      *string  `json:"active_until"`
-	TryoutIDs        []string `json:"tryout_ids"`
-	KecermatanTestID *string  `json:"kecermatan_test_id"`
-	IncludedAttempts *int     `json:"included_attempts"`
+	Type              string   `json:"type"`
+	Title             string   `json:"title"`
+	Description       string   `json:"description"`
+	ProgramID         string   `json:"program_id"`
+	Price             string   `json:"price"`
+	OriginalPrice     *string  `json:"original_price"`
+	IsActive          bool     `json:"is_active"`
+	ActiveFrom        *string  `json:"active_from"`
+	ActiveUntil       *string  `json:"active_until"`
+	TryoutIDs         []string `json:"tryout_ids"`
+	KecermatanTestIDs []string `json:"kecermatan_test_ids"`
+	KecermatanTestID  *string  `json:"kecermatan_test_id"`
+	IncludedAttempts  *int     `json:"included_attempts"`
 }
 
 func (h *Handler) ListProducts(c echo.Context) error {
@@ -348,6 +366,14 @@ func productInputOf(req productRequest) (service.ProductInput, error) {
 		}
 		input.TryoutIDs = append(input.TryoutIDs, id)
 	}
+	for i, raw := range req.KecermatanTestIDs {
+		id, err := uuid.Parse(strings.TrimSpace(raw))
+		if err != nil {
+			fields[fmt.Sprintf("kecermatan_test_ids[%d]", i)] = invalidFormat
+			continue
+		}
+		input.KecermatanTestIDs = append(input.KecermatanTestIDs, id)
+	}
 	if req.KecermatanTestID != nil && strings.TrimSpace(*req.KecermatanTestID) != "" {
 		id, err := uuid.Parse(strings.TrimSpace(*req.KecermatanTestID))
 		if err != nil {
@@ -370,8 +396,9 @@ func productResponseOf(product model.Product) productResponse {
 		ID: product.ID, Type: product.Type, Title: product.Title, Description: product.Description,
 		ProgramID: product.ProgramID, Price: product.Price, OriginalPrice: product.OriginalPrice,
 		IsActive: product.IsActive, ActiveFrom: product.ActiveFrom, ActiveUntil: product.ActiveUntil,
-		Tryouts:   make([]productTryoutResponse, 0, len(product.Tryouts)),
-		CreatedAt: product.CreatedAt, UpdatedAt: product.UpdatedAt, IncludedAttempts: product.IncludedAttempts,
+		Tryouts:         make([]productTryoutResponse, 0, len(product.Tryouts)),
+		KecermatanTests: make([]productKecermatanTestResponse, 0, len(product.KecermatanTests)),
+		CreatedAt:       product.CreatedAt, UpdatedAt: product.UpdatedAt, IncludedAttempts: product.IncludedAttempts,
 	}
 	if product.KecermatanTestID != nil {
 		title := product.KecermatanTestTitle
@@ -381,6 +408,12 @@ func productResponseOf(product model.Product) productResponse {
 		out.Tryouts = append(out.Tryouts, productTryoutResponse{
 			ID: tryout.ID, Title: tryout.Title, Status: tryout.Status,
 			SubtestCount: tryout.SubtestCount, QuestionCount: tryout.QuestionCount,
+		})
+	}
+	for _, test := range product.KecermatanTests {
+		// Kecermatan tests have no draft state: one that exists is playable, so it reads as published.
+		out.KecermatanTests = append(out.KecermatanTests, productKecermatanTestResponse{
+			ID: test.ID, Title: test.Title, Status: model.TryoutPublished,
 		})
 	}
 	return out
@@ -393,6 +426,7 @@ func publicProductOf(product model.PublicProduct) publicProductResponse {
 		Price: product.Price, OriginalPrice: product.OriginalPrice,
 		DiscountPercent: product.DiscountPercent, ActiveUntil: product.ActiveUntil,
 		Tryouts:          make([]publicTryoutResponse, 0, len(product.Tryouts)),
+		KecermatanTests:  make([]publicProductKecermatanResponse, 0, len(product.KecermatanTests)),
 		IncludedAttempts: product.IncludedAttempts,
 	}
 	if k := product.Kecermatan; k != nil {
@@ -405,6 +439,12 @@ func publicProductOf(product model.PublicProduct) publicProductResponse {
 		out.Tryouts = append(out.Tryouts, publicTryoutResponse{
 			ID: tryout.ID, Title: tryout.Title, SubtestCount: tryout.SubtestCount,
 			QuestionCount: tryout.QuestionCount, DurationSecondsTotal: tryout.DurationSecondsTotal,
+		})
+	}
+	for _, k := range product.KecermatanTests {
+		out.KecermatanTests = append(out.KecermatanTests, publicProductKecermatanResponse{
+			TestID: k.TestID, Title: k.Title, ItemType: k.ItemType, KolomCount: k.KolomCount,
+			SoalPerKolom: k.SoalPerKolom, KolomDurationSeconds: k.KolomDurationSeconds,
 		})
 	}
 	return out

@@ -103,13 +103,17 @@ func (r *ItemPackageRepository) Lock(ctx context.Context, tx pgx.Tx, tenantID, i
 	return r.Find(ctx, tx, tenantID, id)
 }
 
-func (r *ItemPackageRepository) List(ctx context.Context, tenantID uuid.UUID, kind string) ([]model.ItemPackage, error) {
+func (r *ItemPackageRepository) List(ctx context.Context, tenantID uuid.UUID, kind, search string) ([]model.ItemPackage, error) {
 	if tenantID == uuid.Nil {
 		return nil, ErrScopeRequired
 	}
+	pattern := ""
+	if search != "" {
+		pattern = likePattern(search)
+	}
 	rows, err := r.db.Query(ctx, itemPackageSelect+`
-		WHERE p.tenant_id = $1 AND ($2 = '' OR p.type = $2)
-		ORDER BY lower(p.name), p.id`, tenantID, kind)
+		WHERE p.tenant_id = $1 AND ($2 = '' OR p.type = $2) AND ($3 = '' OR p.name ILIKE $3 ESCAPE '\')
+		ORDER BY lower(p.name), p.id`, tenantID, kind, pattern)
 	if err != nil {
 		return nil, fmt.Errorf("list item packages: %w", err)
 	}
