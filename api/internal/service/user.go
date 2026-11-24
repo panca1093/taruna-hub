@@ -546,15 +546,6 @@ func (s *UserAdminService) Grant(ctx context.Context, scope HostScope, principal
 		if !exists {
 			return ErrGrantTarget
 		}
-		if kind == model.AccessTryout {
-			held, err := s.users.HoldsTryoutTx(ctx, tx, tenantID, studentID, targetID)
-			if err != nil {
-				return err
-			}
-			if held {
-				return ErrAlreadyOwned
-			}
-		}
 		actor := principal.UserID
 		_, err = s.orders.IssueEnrollmentsTx(ctx, tx, IssueInput{
 			TenantID: tenantID, UserID: studentID, TryoutIDs: tryoutIDs(in.TryoutID),

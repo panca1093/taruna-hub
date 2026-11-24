@@ -371,11 +371,11 @@ func productResponseOf(product model.Product) productResponse {
 		ProgramID: product.ProgramID, Price: product.Price, OriginalPrice: product.OriginalPrice,
 		IsActive: product.IsActive, ActiveFrom: product.ActiveFrom, ActiveUntil: product.ActiveUntil,
 		Tryouts:   make([]productTryoutResponse, 0, len(product.Tryouts)),
-		CreatedAt: product.CreatedAt, UpdatedAt: product.UpdatedAt,
+		CreatedAt: product.CreatedAt, UpdatedAt: product.UpdatedAt, IncludedAttempts: product.IncludedAttempts,
 	}
 	if product.KecermatanTestID != nil {
 		title := product.KecermatanTestTitle
-		out.KecermatanTestID, out.KecermatanTestTitle, out.IncludedAttempts = product.KecermatanTestID, &title, product.IncludedAttempts
+		out.KecermatanTestID, out.KecermatanTestTitle = product.KecermatanTestID, &title
 	}
 	for _, tryout := range product.Tryouts {
 		out.Tryouts = append(out.Tryouts, productTryoutResponse{

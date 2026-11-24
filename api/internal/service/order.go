@@ -22,7 +22,6 @@ var (
 	ErrOrderState               = errors.New("order is no longer pending")
 	ErrOrderKeyConflict         = errors.New("idempotency key belongs to a different order")
 	ErrProductUnavailable       = errors.New("product is not for sale")
-	ErrAlreadyOwned             = errors.New("tryout already held")
 	ErrPriceChanged             = errors.New("product price differs from the price shown")
 	ErrOrderPending             = errors.New("a pending order for this product already exists")
 	ErrBankTransferUnavailable  = errors.New("bank transfer account is not configured")
@@ -175,15 +174,6 @@ func (s *OrderService) Checkout(ctx context.Context, scope HostScope, principal 
 		for _, t := range product.Tryouts {
 			items = append(items, model.OrderItem{TryoutID: t.ID, Title: t.Title})
 			tryoutIDs = append(tryoutIDs, t.ID)
-		}
-		if product.Type == model.ProductIndividual {
-			held, err := s.repo.HeldTryouts(ctx, tx, tenantID, principal.UserID, tryoutIDs, s.now())
-			if err != nil {
-				return orderError(err)
-			}
-			if len(held) > 0 {
-				return ErrAlreadyOwned
-			}
 		}
 		if in.Method == model.PaymentGateway && !strings.HasSuffix(product.Price, ".00") {
 			return &InputError{Fields: map[string]string{"payment_method": ReasonOrderMethod}}
@@ -353,45 +343,36 @@ func (s *OrderService) grantOrder(ctx context.Context, tx pgx.Tx, order model.Or
 	return err
 }
 
-// IssueEnrollmentsTx is the one place access is granted: wallet and manual checkout use it now, the gateway
-// and staff grants later. A tryout the user already holds is left untouched (D05b), and the source key makes
-// a repeated call grant nothing twice. It returns the tryouts this call opened.
+// IssueEnrollmentsTx is the one place access is granted: checkout, the gateway and staff grants all use it. Every
+// grant adds attempt credits to the user's enrollment (one credit when the caller names none), and the source key
+// makes a repeated call grant nothing twice. It returns the tryouts this call credited.
 func (s *OrderService) IssueEnrollmentsTx(ctx context.Context, tx pgx.Tx, in IssueInput) ([]uuid.UUID, error) {
 	if in.SourceType == "" || in.SourceID == "" {
 		return nil, ErrEnrollmentSourceRequired
 	}
+	if in.KecermatanTestID != nil && in.Attempts < 1 {
+		return nil, ErrEnrollmentSourceRequired
+	}
+	attempts := max(in.Attempts, 1)
+	grant := model.EnrollmentGrant{
+		OrderID: in.OrderID, SourceType: in.SourceType, SourceID: in.SourceID,
+		ActorKind: in.ActorKind, ActorID: in.ActorID, Reason: in.Reason, Attempts: &attempts,
+	}
 	if in.KecermatanTestID != nil {
-		if in.Attempts < 1 {
-			return nil, ErrEnrollmentSourceRequired
-		}
-		attempts := in.Attempts
-		_, err := s.repo.AddKecermatanCreditTx(ctx, tx, in.TenantID, model.EnrollmentGrant{
-			OrderID: in.OrderID, SourceType: in.SourceType, SourceID: in.SourceID,
-			ActorKind: in.ActorKind, ActorID: in.ActorID, Reason: in.Reason, Attempts: &attempts,
-		}, in.UserID, *in.KecermatanTestID)
+		_, err := s.repo.AddCreditTx(ctx, tx, in.TenantID, grant, in.UserID, nil, in.KecermatanTestID)
 		return nil, err
 	}
-	var opened []uuid.UUID
+	var credited []uuid.UUID
 	for _, tryoutID := range in.TryoutIDs {
-		enrollmentID, created, err := s.repo.InsertEnrollmentTx(ctx, tx, in.TenantID, in.UserID, tryoutID)
-		if err != nil {
-			return nil, err
-		}
-		if !created {
-			continue
-		}
-		granted, err := s.repo.InsertGrantTx(ctx, tx, in.TenantID, model.EnrollmentGrant{
-			EnrollmentID: enrollmentID, OrderID: in.OrderID, SourceType: in.SourceType, SourceID: in.SourceID,
-			ActorKind: in.ActorKind, ActorID: in.ActorID, Reason: in.Reason,
-		})
+		granted, err := s.repo.AddCreditTx(ctx, tx, in.TenantID, grant, in.UserID, &tryoutID, nil)
 		if err != nil {
 			return nil, err
 		}
 		if granted {
-			opened = append(opened, tryoutID)
+			credited = append(credited, tryoutID)
 		}
 	}
-	return opened, nil
+	return credited, nil
 }
 
 // notify queues the student's email and WhatsApp messages in the caller's transaction.

@@ -305,8 +305,6 @@ func userAdminError(err error) error {
 		return httpx.Conflict(userKeyConflict)
 	case errors.Is(err, service.ErrGrantTarget):
 		return httpx.NotFound(grantTargetGone)
-	case errors.Is(err, service.ErrAlreadyOwned):
-		return httpx.New(http.StatusConflict, httpx.CodeAlreadyOwned, grantHeld)
 	}
 	return err
 }

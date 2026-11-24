@@ -19,6 +19,7 @@ const (
 	runtimeForbidden  = "Tindakan ini tidak diizinkan untuk peran kamu."
 	tryoutNotOpen     = "Tryout belum dibuka."
 	tryoutClosed      = "Masa pengerjaan tryout sudah berakhir."
+	noAttemptsLeft    = "Kesempatan mengerjakan sudah habis. Beli lagi untuk menambah kesempatan."
 	sessionCompleted  = "Sesi ini sudah selesai."
 	subtestNotRunning = "Subtes ini tidak sedang berjalan."
 	deadlinePassed    = "Waktu subtes sudah habis."
@@ -39,6 +40,7 @@ const maxAnswerBody = 8 << 10
 const (
 	codeTryoutNotOpen     httpx.Code = "tryout_not_open"
 	codeTryoutClosed      httpx.Code = "tryout_closed"
+	codeNoAttemptsLeft    httpx.Code = "no_attempts_left"
 	codeSessionCompleted  httpx.Code = "session_completed"
 	codeSubtestNotRunning httpx.Code = "subtest_not_running"
 	codeDeadlinePassed    httpx.Code = "deadline_passed"
@@ -103,6 +105,9 @@ type attemptSummaryResponse struct {
 	StartedAt     time.Time  `json:"started_at"`
 	CompletedAt   *time.Time `json:"completed_at"`
 	Score         *float64   `json:"score"`
+	CorrectCount  *int       `json:"correct_count"`
+	WrongCount    *int       `json:"wrong_count"`
+	BlankCount    *int       `json:"blank_count"`
 }
 
 type attemptListResponse struct {
@@ -118,17 +123,19 @@ type overviewSubtestResponse struct {
 }
 
 type studentTryoutResponse struct {
-	ID          uuid.UUID                 `json:"id"`
-	Title       string                    `json:"title"`
-	Description string                    `json:"description"`
-	ScoringMode string                    `json:"scoring_mode"`
-	ProgramCode string                    `json:"program_code"`
-	ProgramName string                    `json:"program_name"`
-	ActiveFrom  *time.Time                `json:"active_from"`
-	ActiveUntil time.Time                 `json:"active_until"`
-	Subtests    []overviewSubtestResponse `json:"subtests"`
-	Current     *sessionResponse          `json:"current"`
-	Attempts    []attemptSummaryResponse  `json:"attempts"`
+	ID                uuid.UUID                 `json:"id"`
+	Title             string                    `json:"title"`
+	Description       string                    `json:"description"`
+	ScoringMode       string                    `json:"scoring_mode"`
+	ProgramCode       string                    `json:"program_code"`
+	ProgramName       string                    `json:"program_name"`
+	ActiveFrom        *time.Time                `json:"active_from"`
+	ActiveUntil       time.Time                 `json:"active_until"`
+	Subtests          []overviewSubtestResponse `json:"subtests"`
+	Current           *sessionResponse          `json:"current"`
+	Attempts          []attemptSummaryResponse  `json:"attempts"`
+	AttemptsPurchased int                       `json:"attempts_purchased"`
+	AttemptsUsed      int                       `json:"attempts_used"`
 }
 
 type runtimeOptionResponse struct {
@@ -211,8 +218,9 @@ func (h *Handler) StudentTryout(c echo.Context) error {
 		ID: overview.Tryout.ID, Title: overview.Tryout.Title, Description: overview.Tryout.Description,
 		ScoringMode: overview.Tryout.ScoringMode, ProgramCode: overview.ProgramCode, ProgramName: overview.ProgramName,
 		ActiveFrom: overview.Tryout.ActiveFrom, ActiveUntil: overview.Tryout.ActiveUntil,
-		Subtests: make([]overviewSubtestResponse, 0, len(overview.Subtests)),
-		Attempts: attemptSummariesOf(overview.Attempts),
+		Subtests:          make([]overviewSubtestResponse, 0, len(overview.Subtests)),
+		Attempts:          attemptSummariesOf(overview.Attempts),
+		AttemptsPurchased: overview.AttemptsPurchased, AttemptsUsed: overview.AttemptsUsed,
 	}
 	for _, st := range overview.Subtests {
 		body.Subtests = append(body.Subtests, overviewSubtestResponse{
@@ -389,10 +397,15 @@ func (h *Handler) ExtendSession(c echo.Context) error {
 func attemptSummariesOf(list []model.AttemptSummary) []attemptSummaryResponse {
 	out := make([]attemptSummaryResponse, 0, len(list))
 	for _, a := range list {
-		out = append(out, attemptSummaryResponse{
+		item := attemptSummaryResponse{
 			SessionID: a.SessionID, TryoutID: a.TryoutID, AttemptNumber: a.AttemptNumber, Status: a.Status,
 			StartedAt: a.StartedAt, CompletedAt: a.CompletedAt, Score: a.Score,
-		})
+		}
+		if a.Score != nil {
+			correct, wrong, blank := a.Correct, a.Wrong(), a.Blank()
+			item.CorrectCount, item.WrongCount, item.BlankCount = &correct, &wrong, &blank
+		}
+		out = append(out, item)
 	}
 	return out
 }
@@ -465,6 +478,8 @@ func runtimeError(err error) error {
 		return httpx.New(http.StatusConflict, codeTryoutNotOpen, tryoutNotOpen)
 	case errors.Is(err, service.ErrTryoutClosed):
 		return httpx.New(http.StatusConflict, codeTryoutClosed, tryoutClosed)
+	case errors.Is(err, service.ErrNoAttemptsLeft):
+		return httpx.New(http.StatusConflict, codeNoAttemptsLeft, noAttemptsLeft)
 	case errors.Is(err, service.ErrSessionClosed):
 		return httpx.New(http.StatusConflict, codeSessionCompleted, sessionCompleted)
 	case errors.Is(err, service.ErrPartNotRunning):

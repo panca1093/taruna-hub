@@ -18,7 +18,6 @@ import (
 const (
 	orderNotFound     = "Pesanan tidak ditemukan."
 	orderProductGone  = "Produk tidak tersedia untuk dibeli."
-	orderAlreadyOwned = "Kamu sudah memiliki tryout ini dan aksesnya masih aktif."
 	orderInsufficient = "Saldo tidak mencukupi untuk paket ini."
 	orderPriceChanged = "Harga paket berubah. Periksa harga terbaru lalu coba lagi."
 	orderPending      = "Kamu masih punya pesanan untuk paket ini yang menunggu konfirmasi."
@@ -354,8 +353,6 @@ func orderError(err error) error {
 		return httpx.Forbidden(roleDenied)
 	case errors.Is(err, service.ErrProductUnavailable):
 		return httpx.NotFound(orderProductGone)
-	case errors.Is(err, service.ErrAlreadyOwned):
-		return httpx.New(http.StatusConflict, httpx.CodeAlreadyOwned, orderAlreadyOwned)
 	case errors.Is(err, service.ErrPriceChanged):
 		return httpx.New(http.StatusConflict, httpx.CodePriceChanged, orderPriceChanged)
 	case errors.Is(err, service.ErrOrderPending):

@@ -155,7 +155,7 @@ func (r *ProductRepository) CreateTx(ctx context.Context, tx pgx.Tx, tenantID, c
 	err := tx.QueryRow(ctx, `
 		INSERT INTO products (tenant_id, type, title, description, program_id, price,
 		        original_price, is_active, active_from, active_until, created_by, kecermatan_test_id, included_attempts)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, COALESCE($13, 1))
 		RETURNING id`,
 		tenantID, product.Type, product.Title, product.Description, product.ProgramID,
 		product.Price, product.OriginalPrice, product.IsActive, product.ActiveFrom, product.ActiveUntil, createdBy,
@@ -177,7 +177,7 @@ func (r *ProductRepository) UpdateHeadTx(ctx context.Context, tx pgx.Tx, tenantI
 		UPDATE products
 		   SET type = $3, title = $4, description = $5, program_id = $6, price = $7,
 		       original_price = $8, is_active = $9, active_from = $10, active_until = $11,
-		       kecermatan_test_id = $12, included_attempts = $13, updated_at = now()
+		       kecermatan_test_id = $12, included_attempts = COALESCE($13, 1), updated_at = now()
 		 WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id, product.Type, product.Title, product.Description, product.ProgramID,
 		product.Price, product.OriginalPrice, product.IsActive, product.ActiveFrom, product.ActiveUntil,

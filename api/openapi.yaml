@@ -744,6 +744,11 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: chapter_id
+          in: query
+          schema:
+            type: string
+            format: uuid
         - name: type
           in: query
           schema:
@@ -2257,8 +2262,8 @@ paths:
 
         `idempotency_key` (8-64 characters, `[A-Za-z0-9_-]`) is the grant source: the same key with the same body
         answers `200` with the original access and grants nothing, and the same key with another student, test or
-        credit answers `409`. The first call answers `201`. A tryout the student already holds answers `409` with
-        code `already_owned`; kecermatan credits always add. An unknown or unpublished tryout, or a test of another
+        credit answers `409`. The first call answers `201`. Credits always add: a tryout grant adds one attempt, a
+        kecermatan grant adds `attempts`. An unknown or unpublished tryout, or a test of another
         tenant, answers `404`.
       security:
         - bearerAuth: []
@@ -2327,8 +2332,8 @@ paths:
         the same key for the same product, method and proof answers `200` with the original order and moves
         nothing; the same key for anything else answers `409`.
 
-        An `individual` product whose tryout the student already holds with active access answers `409` with code
-        `already_owned`. A `bundle` can still be bought: only the tryouts not yet held are granted.
+        Every purchase adds the product's `included_attempts` to the student's enrollment for each of its tryouts
+        (or for its kecermatan test), so a product can be bought again for more attempts.
 
         A student with a `pending` order for the product cannot create another (any method): `409` `order_pending`.
         A price that differs from `expected_price` answers `409` `price_changed` and writes nothing; a replay of an
@@ -2362,7 +2367,7 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: |
-            `already_owned` (an individual product's tryout is already held), `price_changed` (the price differs
+            `price_changed` (the price differs
             from `expected_price`), `order_pending` (a pending order for this product exists) or `conflict` (the
             idempotency key belongs to a different order).
           content:
@@ -3482,7 +3487,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "`tryout_not_open` (draft or before `active_from`) or `tryout_closed` (past `active_until`)"
+          description: "`tryout_not_open` (draft or before `active_from`), `tryout_closed` (past `active_until`) or `no_attempts_left` (every bought attempt is used)"
           content:
             application/json:
               schema:
@@ -6453,7 +6458,7 @@ components:
         included_attempts:
           type: integer
           nullable: true
-          description: Attempt credits one purchase adds to the student's enrollment for the test (1-1000).
+          description: Attempt credits one purchase adds to the student's enrollment for each tryout of the product, or for its kecermatan test (1-1000).
         title:
           type: string
         description:
@@ -6520,7 +6525,7 @@ components:
         included_attempts:
           type: integer
           nullable: true
-          description: Required for `kecermatan`, 1-1000; refused for the other types.
+          description: 1-1000. Required for `kecermatan`; defaults to 1 for the other types, where it applies to every tryout of the product.
         title:
           type: string
           minLength: 1
@@ -7153,7 +7158,7 @@ components:
                 - too_many_requests
                 - internal_error
                 - service_unavailable
-                - already_owned
+                - no_attempts_left
                 - insufficient_balance
                 - price_changed
                 - order_pending
@@ -8133,8 +8138,17 @@ components:
     StaffResultAttempt:
       type: object
       additionalProperties: false
-      required: [session_id, attempt_number, score, completed_at, irt_warning, subtests]
+      required: [session_id, attempt_number, score, completed_at, irt_warning, subtests, correct_count, wrong_count,
+                 blank_count]
       properties:
+        correct_count:
+          type: integer
+        wrong_count:
+          type: integer
+          description: Questions answered but not correct.
+        blank_count:
+          type: integer
+          description: Questions left without an answer.
         session_id:
           type: string
           format: uuid
@@ -8245,8 +8259,21 @@ components:
     AttemptSummary:
       type: object
       additionalProperties: false
-      required: [session_id, tryout_id, attempt_number, status, started_at, completed_at, score]
+      required: [session_id, tryout_id, attempt_number, status, started_at, completed_at, score, correct_count,
+                 wrong_count, blank_count]
       properties:
+        correct_count:
+          type: integer
+          nullable: true
+          description: Questions answered correctly; `null` until the attempt is completed, like `score`.
+        wrong_count:
+          type: integer
+          nullable: true
+          description: Questions answered but not correct.
+        blank_count:
+          type: integer
+          nullable: true
+          description: Questions left without an answer.
         session_id:
           type: string
           format: uuid
@@ -8323,8 +8350,14 @@ components:
       type: object
       additionalProperties: false
       required: [id, title, description, scoring_mode, program_code, program_name, active_from, active_until,
-                 subtests, current, attempts]
+                 subtests, current, attempts, attempts_purchased, attempts_used]
       properties:
+        attempts_purchased:
+          type: integer
+          description: Attempt credits bought or granted for this tryout.
+        attempts_used:
+          type: integer
+          description: Attempts started; each start spends one credit. At `attempts_purchased` a new start answers `409` `no_attempts_left`.
         id:
           type: string
           format: uuid

@@ -238,6 +238,10 @@ function ProductDetail({ product }: { product: PublicProduct }) {
               </>
             ) : (
               <>
+                <div className="flex items-center gap-2">
+                  <Icon icon={RotateCcw} size="xs" className="text-rose" />
+                  {t.attemptsPerPurchase(product.included_attempts ?? 1)}
+                </div>
                 {product.active_until && (
                   <div className="flex items-center gap-2">
                     <Icon icon={CalendarClock} size="xs" className="text-rose" />

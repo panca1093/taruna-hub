@@ -139,7 +139,18 @@ type OverviewSubtest struct {
 }
 
 // AttemptSummary is the history row: the score is nil until the attempt has a result.
+// Tally is how one attempt's questions ended: an answered question that is not correct is wrong.
+type Tally struct {
+	Correct  int
+	Answered int
+	Total    int
+}
+
+func (t Tally) Wrong() int { return max(t.Answered-t.Correct, 0) }
+func (t Tally) Blank() int { return max(t.Total-t.Answered, 0) }
+
 type AttemptSummary struct {
+	Tally
 	SessionID     uuid.UUID
 	TryoutID      uuid.UUID
 	AttemptNumber int

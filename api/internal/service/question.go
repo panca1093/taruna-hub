@@ -94,6 +94,7 @@ type QuestionInput struct {
 type QuestionFilter struct {
 	ProgramID  *uuid.UUID
 	SubjectID  *uuid.UUID
+	ChapterID  *uuid.UUID
 	Type       string
 	Difficulty string
 	Search     string
@@ -166,7 +167,7 @@ func (s *QuestionService) List(ctx context.Context, scope HostScope, principal m
 		return nil, 0, err
 	}
 	questions, total, err := s.repo.List(ctx, tenantID, repository.QuestionFilter{
-		ProgramID: filter.ProgramID, SubjectID: filter.SubjectID,
+		ProgramID: filter.ProgramID, SubjectID: filter.SubjectID, ChapterID: filter.ChapterID,
 		Type: filter.Type, Difficulty: filter.Difficulty, Search: filter.Search,
 		Limit: filter.Limit, Offset: filter.Offset,
 	})

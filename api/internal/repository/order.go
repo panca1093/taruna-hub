@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -256,75 +255,39 @@ func (r *OrderRepository) attachItems(ctx context.Context, q queryer, orders []m
 	return rows.Err()
 }
 
-// HeldTryouts returns the given tryouts the student already holds with access still open (D05b).
-func (r *OrderRepository) HeldTryouts(ctx context.Context, q queryer, tenantID, userID uuid.UUID, tryoutIDs []uuid.UUID, now time.Time) (map[uuid.UUID]bool, error) {
-	if tenantID == uuid.Nil {
-		return nil, ErrScopeRequired
-	}
-	rows, err := q.Query(ctx, `
-		SELECT e.tryout_id FROM enrollments e
-		  JOIN tryouts t ON t.id = e.tryout_id AND t.tenant_id = e.tenant_id
-		 WHERE e.tenant_id = $1 AND e.user_id = $2 AND e.tryout_id = ANY($3) AND t.active_until > $4`,
-		tenantID, userID, tryoutIDs, now)
-	if err != nil {
-		return nil, fmt.Errorf("read held tryouts: %w", err)
-	}
-	defer rows.Close()
-	held := map[uuid.UUID]bool{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan held tryout: %w", err)
-		}
-		held[id] = true
-	}
-	return held, rows.Err()
-}
-
-// InsertEnrollmentTx creates the user's single row for a tryout; created is false when one already existed.
-func (r *OrderRepository) InsertEnrollmentTx(ctx context.Context, tx pgx.Tx, tenantID, userID, tryoutID uuid.UUID) (uuid.UUID, bool, error) {
-	if tenantID == uuid.Nil {
-		return uuid.Nil, false, ErrScopeRequired
-	}
-	var id uuid.UUID
-	err := tx.QueryRow(ctx, `
-		INSERT INTO enrollments (tenant_id, user_id, tryout_id) VALUES ($1, $2, $3)
-		ON CONFLICT (tenant_id, user_id, tryout_id) DO NOTHING
-		RETURNING id`, tenantID, userID, tryoutID).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return uuid.Nil, false, nil
-	}
-	if err != nil {
-		return uuid.Nil, false, mapOrderError("insert enrollment", err)
-	}
-	return id, true, nil
-}
-
-// AddKecermatanCreditTx opens (or finds) the user's single enrollment for a test and adds the credits of one
-// grant source. The enrollment row is locked first, so it serializes with an attempt's completion on the same row;
-// the grant's unique source key makes a retried source add nothing twice. It reports whether credits were added.
-func (r *OrderRepository) AddKecermatanCreditTx(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID, g model.EnrollmentGrant, userID, testID uuid.UUID) (bool, error) {
+// AddCreditTx opens (or finds) the user's single enrollment for a tryout or a kecermatan test and adds the credits
+// of one grant source. The enrollment row is locked first, so it serializes with an attempt's start or completion on
+// the same row; the grant's unique source key makes a retried source add nothing twice. It reports whether credits
+// were added.
+func (r *OrderRepository) AddCreditTx(ctx context.Context, tx pgx.Tx, tenantID uuid.UUID, g model.EnrollmentGrant, userID uuid.UUID, tryoutID, testID *uuid.UUID) (bool, error) {
 	if tenantID == uuid.Nil {
 		return false, ErrScopeRequired
 	}
 	if g.Attempts == nil || *g.Attempts < 1 {
-		return false, fmt.Errorf("kecermatan grant needs a positive credit")
+		return false, fmt.Errorf("grant needs a positive credit")
+	}
+	column, target := "tryout_id", tryoutID
+	if testID != nil {
+		column, target = "kecermatan_test_id", testID
+	}
+	if target == nil {
+		return false, fmt.Errorf("grant needs a tryout or a kecermatan test")
 	}
 	var enrollmentID uuid.UUID
 	created := true
 	err := tx.QueryRow(ctx, `
-		INSERT INTO enrollments (tenant_id, user_id, kecermatan_test_id, attempts_purchased)
+		INSERT INTO enrollments (tenant_id, user_id, `+column+`, attempts_purchased)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (tenant_id, user_id, kecermatan_test_id) DO NOTHING
-		RETURNING id`, tenantID, userID, testID, *g.Attempts).Scan(&enrollmentID)
+		ON CONFLICT (tenant_id, user_id, `+column+`) DO NOTHING
+		RETURNING id`, tenantID, userID, *target, *g.Attempts).Scan(&enrollmentID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		created = false
 		err = tx.QueryRow(ctx, `
-			SELECT id FROM enrollments WHERE tenant_id = $1 AND user_id = $2 AND kecermatan_test_id = $3 FOR UPDATE`,
-			tenantID, userID, testID).Scan(&enrollmentID)
+			SELECT id FROM enrollments WHERE tenant_id = $1 AND user_id = $2 AND `+column+` = $3 FOR UPDATE`,
+			tenantID, userID, *target).Scan(&enrollmentID)
 	}
 	if err != nil {
-		return false, mapOrderError("open kecermatan enrollment", err)
+		return false, mapOrderError("open enrollment", err)
 	}
 	g.EnrollmentID = enrollmentID
 	granted, err := r.InsertGrantTx(ctx, tx, tenantID, g)
@@ -334,7 +297,7 @@ func (r *OrderRepository) AddKecermatanCreditTx(ctx context.Context, tx pgx.Tx, 
 	if !created {
 		if _, err := tx.Exec(ctx, `UPDATE enrollments SET attempts_purchased = attempts_purchased + $3
 			 WHERE tenant_id = $1 AND id = $2`, tenantID, enrollmentID, *g.Attempts); err != nil {
-			return false, mapOrderError("add kecermatan credit", err)
+			return false, mapOrderError("add credit", err)
 		}
 	}
 	return true, nil

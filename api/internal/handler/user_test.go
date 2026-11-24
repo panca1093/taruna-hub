@@ -386,12 +386,8 @@ func TestManualGrantOpensOnlyTheTarget(t *testing.T) {
 	expect(t, "same key, other tryout", f.call(http.MethodPost, path, conflict, f.tokenAdminA), http.StatusConflict)
 	expect(t, "same key, other student", f.call(http.MethodPost, "/api/v1/students/"+f.studentA.ID.String()+"/grants", body, f.tokenAdminA), http.StatusConflict)
 
-	held := map[string]any{"tryout_id": target.String(), "reason": "lagi", "idempotency_key": "held-" + uuid.NewString()[:10]}
-	rec = f.call(http.MethodPost, path, held, f.tokenAdminA)
-	expect(t, "already held", rec, http.StatusConflict)
-	if code := decodeAs[map[string]map[string]any](t, rec)["error"]["code"]; code != "already_owned" {
-		t.Errorf("held code = %v, want already_owned", code)
-	}
+	more := map[string]any{"tryout_id": target.String(), "reason": "lagi", "idempotency_key": "more-" + uuid.NewString()[:10]}
+	expect(t, "second grant adds an attempt", f.call(http.MethodPost, path, more, f.tokenAdminA), http.StatusCreated)
 
 	for name, in := range map[string]map[string]any{
 		"no reason":      {"tryout_id": other.String(), "reason": " ", "idempotency_key": "k-" + uuid.NewString()[:10]},

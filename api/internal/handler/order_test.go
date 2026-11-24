@@ -147,11 +147,6 @@ func TestWalletCheckoutEndpointRolesAndOwnership(t *testing.T) {
 		t.Errorf("balance = %s, want one debit", wallet.Balance)
 	}
 
-	owned := f.post("/api/v1/orders", checkoutBody(productID, "wallet", nil), f.tokenA)
-	if owned.Code != http.StatusConflict || errorBody(t, owned).Code != httpx.CodeAlreadyOwned {
-		t.Errorf("repurchase: status = %d body = %s, want 409 already_owned", owned.Code, owned.Body.String())
-	}
-
 	poor := f.post("/api/v1/orders", checkoutBody(productID, "wallet", nil), f.tokenSecond)
 	if poor.Code != http.StatusUnprocessableEntity || errorBody(t, poor).Code != httpx.CodeInsufficientBalance {
 		t.Errorf("no balance: status = %d body = %s, want 422 insufficient_balance", poor.Code, poor.Body.String())

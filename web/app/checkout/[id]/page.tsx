@@ -209,10 +209,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
       setState("missing");
       return;
     }
-    if (code === "already_owned") {
-      setProblem({ text: t.alreadyOwned, href: "/student/tryouts", hrefLabel: t.alreadyOwnedLink });
-      return;
-    }
     if (code === "order_pending") {
       const pendingId = await findPendingOrder();
       setProblem({
@@ -458,7 +454,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ id: string 
             </p>
           </div>
           {product.type === "bundle" && <p className="text-label text-muted">{t.includedTryouts(product.tryouts.length)}</p>}
-          {product.type === "kecermatan" && product.included_attempts !== null && (
+          {product.included_attempts !== null && (
             <p className="text-label text-muted">{t.includedAttempts(product.included_attempts)}</p>
           )}
           {product.active_until && (

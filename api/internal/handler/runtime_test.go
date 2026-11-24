@@ -121,7 +121,7 @@ func (f runtimeHTTPFixture) call(method, path string, body any, token string) *h
 func (f runtimeHTTPFixture) enroll(t *testing.T, student model.User) {
 	t.Helper()
 	if _, err := f.pool.Exec(context.Background(),
-		`INSERT INTO enrollments (tenant_id, user_id, tryout_id) VALUES ($1, $2, $3)`, f.tenantA.ID, student.ID, f.tryout.ID); err != nil {
+		`INSERT INTO enrollments (tenant_id, user_id, tryout_id, attempts_purchased) VALUES ($1, $2, $3, 100)`, f.tenantA.ID, student.ID, f.tryout.ID); err != nil {
 		t.Fatalf("enroll: %v", err)
 	}
 }

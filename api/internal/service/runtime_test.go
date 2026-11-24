@@ -65,7 +65,7 @@ func (h runtimeHarness) staff(role model.Role) model.Principal { return h.princi
 func (h runtimeHarness) enroll(t *testing.T, user model.User, tryoutID uuid.UUID) {
 	t.Helper()
 	_, err := h.pool.Exec(context.Background(),
-		`INSERT INTO enrollments (tenant_id, user_id, tryout_id) VALUES ($1, $2, $3)`, h.tenant().ID, user.ID, tryoutID)
+		`INSERT INTO enrollments (tenant_id, user_id, tryout_id, attempts_purchased) VALUES ($1, $2, $3, 100)`, h.tenant().ID, user.ID, tryoutID)
 	if err != nil {
 		t.Fatalf("enroll student: %v", err)
 	}
@@ -256,6 +256,11 @@ func TestRuntimeAttemptScoresFromTheFrozenSnapshot(t *testing.T) {
 	sum, count, err := h.repo.ScoreTotal(context.Background(), h.pool, h.tenant().ID, p.UserID, f.tryout.ID)
 	if err != nil || sum != 45 || count != 1 {
 		t.Errorf("score total = %v over %d (err %v), want 45 over 1", sum, count, err)
+	}
+
+	history, err := h.rt.Attempts(context.Background(), h.scopeA(), p)
+	if err != nil || len(history) != 1 || history[0].Correct != 2 || history[0].Wrong() != 3 || history[0].Blank() != 0 {
+		t.Errorf("attempt tally = %+v (err %v), want 2 correct, 3 wrong, 0 blank", history, err)
 	}
 
 	// Changing the setting afterwards moves neither the stored result nor the attempt's frozen weights.
@@ -1011,5 +1016,40 @@ func TestRuntimePutAnswerDBGuardRefusesAnEqualOrOlderSequence(t *testing.T) {
 	}
 	if err := put(4, three); err != nil {
 		t.Errorf("seq 4: %v, want it applied", err)
+	}
+}
+
+func TestRuntimeStartSpendsOneCreditPerAttempt(t *testing.T) {
+	h := newRuntimeHarness(t)
+	f := h.fixture(t, nil)
+	user, p := h.enrolledStudent(t, f)
+	setCredit := func(n int) {
+		t.Helper()
+		if _, err := h.pool.Exec(context.Background(),
+			`UPDATE enrollments SET attempts_purchased = $3 WHERE user_id = $1 AND tryout_id = $2`, user.ID, f.tryout.ID, n); err != nil {
+			t.Fatalf("set credit: %v", err)
+		}
+	}
+	setCredit(1)
+
+	view := h.begin(t, p, f)
+	if again := h.begin(t, p, f); again.Attempt.ID != view.Attempt.ID {
+		t.Fatalf("resume opened session %s, want the running %s", again.Attempt.ID, view.Attempt.ID)
+	}
+	for _, sub := range []uuid.UUID{f.sub1(), f.sub2()} {
+		h.startPart(t, p, view.Attempt.ID, sub)
+		h.submitPart(t, p, view.Attempt.ID, sub)
+	}
+	if _, err := h.rt.Start(context.Background(), h.scopeA(), p, f.tryout.ID); !errors.Is(err, ErrNoAttemptsLeft) {
+		t.Fatalf("second start with one credit: err = %v, want ErrNoAttemptsLeft", err)
+	}
+	overview, err := h.rt.Overview(context.Background(), h.scopeA(), p, f.tryout.ID)
+	if err != nil || overview.AttemptsPurchased != 1 || overview.AttemptsUsed != 1 {
+		t.Errorf("overview credit = %d/%d (err %v), want 1 of 1 used", overview.AttemptsUsed, overview.AttemptsPurchased, err)
+	}
+
+	setCredit(2)
+	if next := h.begin(t, p, f); next.Attempt.AttemptNumber != 2 {
+		t.Errorf("after buying more: attempt %d, want 2", next.Attempt.AttemptNumber)
 	}
 }

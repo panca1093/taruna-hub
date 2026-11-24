@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Drawer, Button, toast } from "@heroui/react";
 import { Search } from "lucide-react";
-import { DifficultyBadge, ProgramBadge, QuestionTypeBadge } from "@/components/status-badge";
-import { SelectInput } from "@/components/ui/form";
+import { emptyQuestionFilter, QuestionFilterMenu, questionFilterQuery, type QuestionFilterValue } from "@/components/admin/question-filter-menu";
 import { api, errorText, type Program, type Question } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { RichDocSummary } from "@/components/rich-doc";
@@ -51,9 +50,8 @@ export function QuestionPickerDrawer({
   const t = useAdminQuestionPickerDrawerT();
   const [draft, setDraft] = useState<string[]>(selectedIds);
   const [search, setSearch] = useState("");
-  const [programFilter, setProgramFilter] = useState(programId === "" ? "all" : programId);
-  const [typeFilter, setTypeFilter] = useState<"all" | Question["type"]>("all");
-  const [difficultyFilter, setDifficultyFilter] = useState<"all" | Question["difficulty"]>("all");
+  const initialFilter: QuestionFilterValue = { ...emptyQuestionFilter, programId };
+  const [filter, setFilter] = useState(initialFilter);
   const [onlySelected, setOnlySelected] = useState(false);
   const [pool, setPool] = useState<Question[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -61,32 +59,7 @@ export function QuestionPickerDrawer({
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const programOptions = [{ id: "all", label: t.filterAllProgram }, ...programs.map((program) => ({ id: program.id, label: program.name }))];
-
-  const typeOptions = [
-    { id: "all", label: t.filterAllType },
-    { id: "pg", label: t.questionType.pg },
-    { id: "pg_multi", label: t.questionType.pg_multi },
-    { id: "isian", label: t.questionType.isian },
-    { id: "benar_salah", label: t.questionType.benar_salah },
-  ];
-
-  const difficultyOptions = [
-    { id: "all", label: t.filterAllDifficulty },
-    { id: "easy", label: t.difficulty.easy },
-    { id: "medium", label: t.difficulty.medium },
-    { id: "hard", label: t.difficulty.hard },
-  ];
-
-  const filters = useCallback(
-    () => ({
-      ...(programFilter === "all" ? {} : { program_id: programFilter }),
-      ...(typeFilter === "all" ? {} : { type: typeFilter }),
-      ...(difficultyFilter === "all" ? {} : { difficulty: difficultyFilter }),
-      ...(search.trim() === "" ? {} : { q: search.trim() }),
-    }),
-    [programFilter, typeFilter, difficultyFilter, search],
-  );
+  const filters = useCallback(() => ({ ...questionFilterQuery(filter), ...(search.trim() === "" ? {} : { q: search.trim() }) }), [filter, search]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -124,9 +97,7 @@ export function QuestionPickerDrawer({
     if (open) {
       setDraft(selectedIds);
       setSearch("");
-      setProgramFilter(programId === "" ? "all" : programId);
-      setTypeFilter("all");
-      setDifficultyFilter("all");
+      setFilter(initialFilter);
       setOnlySelected(false);
       setPool(null);
       setLoadFailed(false);
@@ -142,71 +113,67 @@ export function QuestionPickerDrawer({
   };
 
   const visible = (pool ?? []).filter((question) => !onlySelected || draft.includes(question.id));
-  const programOf = (id: string) => programs.find((program) => program.id === id);
+  const subjects = programs.flatMap((program) => program.subjects);
+  const topicOf = (question: Question) => {
+    const subject = subjects.find((item) => item.id === question.subject_id);
+    const chapter = subject?.chapters.find((item) => item.id === question.chapter_id);
+    return [subject?.name, chapter?.name].filter(Boolean).join(" › ");
+  };
 
   return (
     <Drawer isOpen={isOpen} onOpenChange={resetOnOpen}>
       <Drawer.Backdrop>
         <Drawer.Content placement="right">
           <Drawer.Dialog className="flex h-full w-full max-w-2xl flex-col">
-            <Drawer.Header className="border-b border-border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Drawer.Heading className="font-display text-heading-sm text-foreground">{t.heading}</Drawer.Heading>
-                  <p className="mt-0.5 text-caption text-muted">{t.subtitle(draft.length, visible.length, total)}</p>
-                </div>
-                <div className="flex gap-1.5">
-                  <Button variant="ghost" size="sm" onPress={() => setDraft((d) => Array.from(new Set([...d, ...visible.map((q) => q.id)])))}>
-                    {t.selectVisible}
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-danger" isDisabled={draft.length === 0} onPress={() => setDraft([])}>
-                    {t.clear}
-                  </Button>
-                </div>
+            <Drawer.Header className="px-5 pt-5 pb-3.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <Drawer.Heading className="font-display text-heading-sm text-foreground">{t.heading}</Drawer.Heading>
+                <p className="text-caption text-muted">{pool === null ? "" : t.matching(total)}</p>
               </div>
 
-              <div className="relative mt-3">
-                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
-                <input
-                  value={search}
-                  onChange={(e) => refilter(() => setSearch(e.target.value))}
-                  placeholder={t.searchPlaceholder}
-                  className="w-full rounded-control border border-border bg-field py-2 pr-3 pl-9 text-small text-field-foreground outline-none focus:border-accent"
-                />
-              </div>
-
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                <SelectInput
-                  className="w-40"
-                  options={programOptions}
-                  selectedKey={programFilter}
-                  onSelectionChange={(key) => refilter(() => setProgramFilter(key ?? "all"))}
-                />
-                <SelectInput
-                  className="w-40"
-                  options={typeOptions}
-                  selectedKey={typeFilter}
-                  onSelectionChange={(key) => refilter(() => setTypeFilter((key ?? "all") as "all" | Question["type"]))}
-                />
-                <SelectInput
-                  className="w-40"
-                  options={difficultyOptions}
-                  selectedKey={difficultyFilter}
-                  onSelectionChange={(key) => refilter(() => setDifficultyFilter((key ?? "all") as "all" | Question["difficulty"]))}
-                />
-                <button
-                  type="button"
-                  onClick={() => setOnlySelected((value) => !value)}
-                  className={cn(
-                    "rounded-full border px-3 py-1.5 text-caption font-medium transition-colors",
-                    onlySelected ? "border-accent bg-accent text-accent-foreground" : "border-border text-muted hover:border-accent/40 hover:text-foreground",
-                  )}
-                >
-                  {t.onlySelected}
-                </button>
+              <div className="mt-3 flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted" />
+                  <input
+                    value={search}
+                    onChange={(e) => refilter(() => setSearch(e.target.value))}
+                    placeholder={t.searchPlaceholder}
+                    aria-label={t.searchPlaceholder}
+                    className="w-full rounded-full border border-border bg-field py-2 pr-4 pl-10 text-small text-field-foreground outline-none focus:border-accent"
+                  />
+                </div>
+                <QuestionFilterMenu programs={programs} value={filter} resetTo={initialFilter} onChange={(next) => refilter(() => setFilter(next))} />
               </div>
             </Drawer.Header>
-            <Drawer.Body className="flex-1 space-y-2 overflow-y-auto p-4">
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-y border-border px-5 py-2">
+              <div className="inline-flex rounded-full bg-surface-secondary p-0.5">
+                {([false, true] as const).map((only) => (
+                  <button
+                    key={String(only)}
+                    type="button"
+                    aria-pressed={onlySelected === only}
+                    onClick={() => setOnlySelected(only)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-caption font-medium transition-colors",
+                      onlySelected === only ? "bg-surface text-foreground ring-1 ring-border" : "text-muted hover:text-foreground",
+                    )}
+                  >
+                    {only ? t.showSelected(draft.length) : t.showAll}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onPress={() => setDraft((d) => Array.from(new Set([...d, ...visible.map((q) => q.id)])))}>
+                  {t.selectVisible}
+                </Button>
+                <Button variant="ghost" size="sm" isDisabled={draft.length === 0} onPress={() => setDraft([])}>
+                  {t.clear}
+                </Button>
+              </div>
+            </div>
+
+            <Drawer.Body className="flex-1 overflow-y-auto px-5 py-0">
               {loadFailed ? (
                 <div className="py-8 text-center">
                   <p className="text-small text-muted">{t.loadErrorDescription}</p>
@@ -220,42 +187,27 @@ export function QuestionPickerDrawer({
                 <>
                   {visible.map((question) => {
                     const checked = draft.includes(question.id);
-                    const program = programFilter === "all" ? programOf(question.program_id) : undefined;
+                    const meta = [`#${question.number}`, topicOf(question), t.questionType[question.type], t.difficulty[question.difficulty]].filter(Boolean);
                     return (
-                      <button
-                        key={question.id}
-                        type="button"
-                        onClick={() => setDraft((d) => (checked ? d.filter((id) => id !== question.id) : [...d, question.id]))}
-                        className={cn(
-                          "flex w-full items-start gap-3 rounded-tile border p-4 text-left transition-colors",
-                          checked ? "border-accent bg-accent-soft" : "border-border hover:bg-surface-secondary",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-chip border-2 text-micro font-bold",
-                            checked ? "border-accent bg-accent text-accent-foreground" : "border-border text-transparent",
-                          )}
-                        >
-                          ✓
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 text-small text-foreground">
+                      <label key={question.id} className="flex cursor-pointer items-start gap-3 border-b border-border py-3 last:border-b-0">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => setDraft((d) => (checked ? d.filter((id) => id !== question.id) : [...d, question.id]))}
+                          className="mt-0.5 size-4.5 shrink-0 accent-accent"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="line-clamp-2 text-small text-foreground">
                             <RichDocSummary doc={question.content} />
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            {program && <ProgramBadge code={program.code} />}
-                            <span className="font-mono text-label text-muted">#{question.number}</span>
-                            <QuestionTypeBadge type={question.type} />
-                            <DifficultyBadge difficulty={question.difficulty} />
-                          </div>
-                        </div>
-                      </button>
+                          </span>
+                          <span className="mt-0.5 block text-caption text-muted">{meta.join(" · ")}</span>
+                        </span>
+                      </label>
                     );
                   })}
                   {visible.length === 0 && <p className="py-8 text-center text-small text-muted">{t.emptyText}</p>}
                   {pool.length < total && (
-                    <div className="flex justify-center pt-2">
+                    <div className="flex justify-center py-3">
                       <Button variant="secondary" size="sm" onPress={loadMore} isDisabled={loadingMore}>
                         {loadingMore ? t.loadingMore : t.loadMore}
                       </Button>
@@ -264,7 +216,8 @@ export function QuestionPickerDrawer({
                 </>
               )}
             </Drawer.Body>
-            <Drawer.Footer className="flex justify-end gap-2 border-t border-border p-4">
+            <Drawer.Footer className="flex items-center gap-2 border-t border-border px-5 py-3.5">
+              <p className="mr-auto text-caption text-muted">{t.selectedCount(draft.length)}</p>
               <Button variant="ghost" onPress={() => onOpenChange(false)}>
                 {t.cancel}
               </Button>

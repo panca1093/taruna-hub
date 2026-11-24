@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, toast } from "@heroui/react";
-import { CheckCircle2, CloudOff, Eye, FileQuestion, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { CheckCircle2, CloudOff, Eye, FileQuestion, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { RichDoc as RichDocView, RichDocSummary } from "@/components/rich-doc";
 import { DifficultyBadge, ProgramBadge, QuestionTypeBadge } from "@/components/status-badge";
 import { FormModal } from "@/components/ui/form-modal";
-import { SelectInput } from "@/components/ui/form";
+import { emptyQuestionFilter, QuestionFilterMenu, questionFilterQuery } from "@/components/admin/question-filter-menu";
 import { QuestionEditor, type QuestionDraft, draftOf, emptyDraft } from "@/components/admin/question-editor";
 import { ImportQuestionsModal } from "@/components/admin/import-questions-modal";
 import { api, ApiError, errorText, type Program, type Question } from "@/lib/api/client";
@@ -122,9 +122,8 @@ export default function QuestionsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const [programFilter, setProgramFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState<"all" | Question["type"]>("all");
-  const [difficultyFilter, setDifficultyFilter] = useState<"all" | Question["difficulty"]>("all");
+  const [filter, setFilter] = useState(emptyQuestionFilter);
+  const [search, setSearch] = useState("");
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Question | null>(null);
@@ -142,28 +141,7 @@ export default function QuestionsPage() {
     latestDraft.current = draft;
   }, []);
 
-  const typeOptions = [
-    { id: "all", label: t.filterAllType },
-    { id: "pg", label: t.questionType.pg },
-    { id: "pg_multi", label: t.questionType.pg_multi },
-    { id: "isian", label: t.questionType.isian },
-    { id: "benar_salah", label: t.questionType.benar_salah },
-  ];
-
-  const difficultyOptions = [
-    { id: "all", label: t.filterAllDifficulty },
-    { id: "easy", label: t.difficulty.easy },
-    { id: "medium", label: t.difficulty.medium },
-    { id: "hard", label: t.difficulty.hard },
-  ];
-
-  const programOptions = [{ id: "all", label: t.filterAllProgram }, ...(programs ?? []).map((program) => ({ id: program.id, label: program.name }))];
-
-  const filters = {
-    ...(programFilter === "all" ? {} : { program_id: programFilter }),
-    ...(typeFilter === "all" ? {} : { type: typeFilter }),
-    ...(difficultyFilter === "all" ? {} : { difficulty: difficultyFilter }),
-  };
+  const filters = { ...questionFilterQuery(filter), ...(search.trim() === "" ? {} : { q: search.trim() }) };
 
   useEffect(() => {
     let cancelled = false;
@@ -197,7 +175,7 @@ export default function QuestionsPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [programFilter, typeFilter, difficultyFilter, reloadKey]);
+  }, [filter, search, reloadKey]);
 
   // A new filter starts from the loading state; doing it in the handler keeps the effect free of
   // synchronous state updates.
@@ -240,7 +218,7 @@ export default function QuestionsPage() {
   };
 
   const openCreate = () => {
-    const preferred = programFilter === "all" ? programs?.[0] : programOf(programFilter);
+    const preferred = filter.programId === "" ? programs?.[0] : programOf(filter.programId);
     setEditing(null);
     setFormErrors({});
     setDraftInitial(emptyDraft(preferred?.id ?? "", preferred?.subjects[0]?.id ?? ""));
@@ -398,10 +376,18 @@ export default function QuestionsPage() {
           </div>
         }
       >
-        <div className="mb-4 flex flex-wrap gap-3">
-          <SelectInput className="w-44" options={programOptions} selectedKey={programFilter} onSelectionChange={(key) => refilter(() => setProgramFilter(key ?? "all"))} />
-          <SelectInput className="w-44" options={typeOptions} selectedKey={typeFilter} onSelectionChange={(key) => refilter(() => setTypeFilter((key ?? "all") as "all" | Question["type"]))} />
-          <SelectInput className="w-44" options={difficultyOptions} selectedKey={difficultyFilter} onSelectionChange={(key) => refilter(() => setDifficultyFilter((key ?? "all") as "all" | Question["difficulty"]))} />
+        <div className="mb-4 flex items-center gap-2">
+          <div className="relative min-w-0 flex-1 sm:max-w-sm">
+            <Search className="absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted" />
+            <input
+              value={search}
+              onChange={(e) => refilter(() => setSearch(e.target.value))}
+              placeholder={t.searchPlaceholder}
+              aria-label={t.searchPlaceholder}
+              className="w-full rounded-full border border-border bg-field py-2 pr-4 pl-10 text-small text-field-foreground outline-none focus:border-accent"
+            />
+          </div>
+          <QuestionFilterMenu programs={programs ?? []} value={filter} align="start" onChange={(next) => refilter(() => setFilter(next))} />
         </div>
 
         {loadFailed ? (
