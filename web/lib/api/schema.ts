@@ -7762,6 +7762,13 @@ export interface components {
             subtest_count: number;
             question_count: number;
         };
+        ProductKecermatanTest: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @description The test's own status; a bundle is on sale only while every test in it is published. */
+            status: string;
+        };
         Product: {
             /** Format: uuid */
             id: string;
@@ -7798,6 +7805,8 @@ export interface components {
             /** Format: date-time */
             active_until: string | null;
             tryouts: components["schemas"]["ProductTryout"][];
+            /** @description The kecermatan tests a `bundle` holds, in order; empty for the other types. */
+            kecermatan_tests: components["schemas"]["ProductKecermatanTest"][];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -7838,8 +7847,16 @@ export interface components {
             active_from?: string | null;
             /** Format: date-time */
             active_until?: string | null;
-            /** @description The complete package, in order. One id for `individual`, two to twenty for `bundle`, none for `kecermatan`. */
+            /**
+             * @description The tryouts of the package, in order. One id for `individual`, none for `kecermatan`. For `bundle`,
+             *     `tryout_ids` plus `kecermatan_test_ids` must hold two to twenty items together.
+             */
             tryout_ids: string[];
+            /**
+             * @description `bundle` only (refused for the other types): kecermatan tests of the same program sold with the tryouts.
+             *     Each purchase adds `included_attempts` credits to every tryout and every kecermatan test of the bundle.
+             */
+            kecermatan_test_ids?: string[];
         };
         PublicProductTryout: {
             /** Format: uuid */
@@ -7855,6 +7872,15 @@ export interface components {
             test_id: string;
             item_type: string;
             options_per_soal: number;
+            kolom_count: number;
+            soal_per_kolom: number;
+            kolom_duration_seconds: number;
+        };
+        PublicProductKecermatan: {
+            /** Format: uuid */
+            test_id: string;
+            title: string;
+            item_type: string;
             kolom_count: number;
             soal_per_kolom: number;
             kolom_duration_seconds: number;
@@ -7883,6 +7909,8 @@ export interface components {
             /** Format: date-time */
             active_until: string | null;
             tryouts: components["schemas"]["PublicProductTryout"][];
+            /** @description The kecermatan tests of a `bundle`, in order; empty for the other types. */
+            kecermatan_tests: components["schemas"]["PublicProductKecermatan"][];
         };
         PublicProductList: {
             products: components["schemas"]["PublicProduct"][];

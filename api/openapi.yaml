@@ -6439,11 +6439,25 @@ components:
         question_count:
           type: integer
 
+    ProductKecermatanTest:
+      type: object
+      additionalProperties: false
+      required: [id, title, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        status:
+          type: string
+          description: The test's own status; a bundle is on sale only while every test in it is published.
+
     Product:
       type: object
       additionalProperties: false
       required: [id, type, title, description, program_id, price, original_price, is_active, active_from, active_until,
-                 tryouts, kecermatan_test_id, kecermatan_test_title, included_attempts, created_at, updated_at]
+                 tryouts, kecermatan_tests, kecermatan_test_id, kecermatan_test_title, included_attempts, created_at, updated_at]
       properties:
         id:
           type: string
@@ -6494,6 +6508,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProductTryout"
+        kecermatan_tests:
+          type: array
+          description: The kecermatan tests a `bundle` holds, in order; empty for the other types.
+          items:
+            $ref: "#/components/schemas/ProductKecermatanTest"
         created_at:
           type: string
           format: date-time
@@ -6566,7 +6585,17 @@ components:
           nullable: true
         tryout_ids:
           type: array
-          description: The complete package, in order. One id for `individual`, two to twenty for `bundle`, none for `kecermatan`.
+          description: |
+            The tryouts of the package, in order. One id for `individual`, none for `kecermatan`. For `bundle`,
+            `tryout_ids` plus `kecermatan_test_ids` must hold two to twenty items together.
+          items:
+            type: string
+            format: uuid
+        kecermatan_test_ids:
+          type: array
+          description: |
+            `bundle` only (refused for the other types): kecermatan tests of the same program sold with the tryouts.
+            Each purchase adds `included_attempts` credits to every tryout and every kecermatan test of the bundle.
           items:
             type: string
             format: uuid
@@ -6608,11 +6637,30 @@ components:
         kolom_duration_seconds:
           type: integer
 
+    PublicProductKecermatan:
+      type: object
+      additionalProperties: false
+      required: [test_id, title, item_type, kolom_count, soal_per_kolom, kolom_duration_seconds]
+      properties:
+        test_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        item_type:
+          type: string
+        kolom_count:
+          type: integer
+        soal_per_kolom:
+          type: integer
+        kolom_duration_seconds:
+          type: integer
+
     PublicProduct:
       type: object
       additionalProperties: false
       required: [id, type, title, description, program_id, program_code, program_name, price, original_price,
-                 discount_percent, active_until, tryouts, included_attempts, kecermatan]
+                 discount_percent, active_until, tryouts, kecermatan_tests, included_attempts, kecermatan]
       properties:
         id:
           type: string
@@ -6657,6 +6705,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PublicProductTryout"
+        kecermatan_tests:
+          type: array
+          description: The kecermatan tests of a `bundle`, in order; empty for the other types.
+          items:
+            $ref: "#/components/schemas/PublicProductKecermatan"
 
     PublicProductList:
       type: object
