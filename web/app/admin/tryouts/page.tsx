@@ -65,6 +65,7 @@ export default function TryoutsListPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
+    setLoadingMore(false);
     api.tryouts
       .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
@@ -102,9 +103,9 @@ export default function TryoutsListPage() {
       setRows((prev) => [...(prev ?? []), ...page.tryouts]);
       setTotal(page.total);
     } catch (err) {
-      toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
+      if (id === gen.current) toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
     } finally {
-      setLoadingMore(false);
+      if (id === gen.current) setLoadingMore(false);
     }
   };
 

@@ -63,6 +63,7 @@ export default function KecermatanListPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
+    setLoadingMore(false);
     api.kecermatan
       .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
@@ -100,9 +101,9 @@ export default function KecermatanListPage() {
       setRows((prev) => [...(prev ?? []), ...page.tests]);
       setTotal(page.total);
     } catch (err) {
-      toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
+      if (id === gen.current) toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
     } finally {
-      setLoadingMore(false);
+      if (id === gen.current) setLoadingMore(false);
     }
   };
 

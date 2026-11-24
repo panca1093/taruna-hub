@@ -110,6 +110,7 @@ export default function ProductsPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
+    setLoadingMore(false);
     api.products
       .list({ ...filters, limit: PAGE_SIZE })
       .then((page) => {
@@ -176,9 +177,9 @@ export default function ProductsPage() {
       setRows((prev) => [...(prev ?? []), ...page.products]);
       setTotal(page.total);
     } catch (err) {
-      toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
+      if (id === gen.current) toast.danger(t.loadErrorTitle, { description: errorText(err, t.loadErrorDescription) });
     } finally {
-      setLoadingMore(false);
+      if (id === gen.current) setLoadingMore(false);
     }
   };
 

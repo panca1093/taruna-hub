@@ -42,6 +42,7 @@ export default function StudentOrdersPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
+    setLoadingMore(false);
     api.orders
       .list({ ...query, limit: PAGE_SIZE })
       .then((page) => {
@@ -115,7 +116,7 @@ export default function StudentOrdersPage() {
     } catch (err) {
       if (id === gen.current) setMoreFailed(errorText(err, t.loadErrorDescription));
     } finally {
-      setLoadingMore(false);
+      if (id === gen.current) setLoadingMore(false);
     }
   };
 

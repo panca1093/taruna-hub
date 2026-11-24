@@ -115,7 +115,7 @@ export function FilterMenu({
               variant="primary"
               size="sm"
               onPress={() => {
-                onChange(draft);
+                if (fields.some((field) => (draft[field.key] ?? "") !== (value[field.key] ?? ""))) onChange(draft);
                 close(true);
               }}
             >

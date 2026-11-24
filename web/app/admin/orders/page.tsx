@@ -55,6 +55,7 @@ export default function OrdersPage() {
   useEffect(() => {
     let cancelled = false;
     gen.current++;
+    setLoadingMore(false);
     api.adminOrders
       .list({ ...query, limit: PAGE_SIZE })
       .then((page) => {
@@ -99,9 +100,9 @@ export default function OrdersPage() {
       });
       setTotal(page.total);
     } catch (err) {
-      toast.danger(t.actionFailed, { description: errorText(err, t.loadErrorDescription) });
+      if (id === gen.current) toast.danger(t.actionFailed, { description: errorText(err, t.loadErrorDescription) });
     } finally {
-      setLoadingMore(false);
+      if (id === gen.current) setLoadingMore(false);
     }
   };
 
