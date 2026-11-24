@@ -26,7 +26,7 @@ const attemptLinkClass = "rounded-chip font-medium outline-none hover:text-accen
 
 /**
  * One tryout attempt in the context of the student's progress: the average over all attempts beside the score-per-attempt
- * chart, this attempt's tiles and subtest scores, then the correct/wrong table of the last five attempts. `aside` is
+ * chart, this attempt's subtest scores, then the correct/wrong table of the last five attempts. `aside` is
  * the student's explanation panel. Attempts switch through `attemptHref` (links) or `onSelectAttempt` (buttons).
  */
 export function TryoutResultView({
@@ -55,6 +55,7 @@ export function TryoutResultView({
   const router = useRouter();
   const scored = attempts.filter((attempt) => attempt.score !== null).sort((a, b) => a.attempt_number - b.attempt_number);
 
+  const currentAttempt = scored.find((attempt) => attempt.session_id === currentSessionId);
   const recent = [...scored].reverse().slice(0, RECENT);
   const select = (sessionId: string) => (attemptHref ? router.push(attemptHref(sessionId)) : onSelectAttempt?.(sessionId));
   const cell = "border-b border-border px-2.5 py-3";
@@ -67,6 +68,9 @@ export function TryoutResultView({
           <p className="font-display my-5 text-score tabular-nums">{ranking.average_score}</p>
           <p className="text-label text-foreground/80">{t.scoreOutOf}</p>
           <p className="mt-5 rounded-full bg-surface/60 px-3 py-1 text-label font-medium">{t.rankLine(ranking.rank, ranking.participant_count)}</p>
+          {currentAttempt && (
+            <p className="mt-2 rounded-full bg-surface/60 px-3 py-1 text-label font-medium">{t.currentAttemptScore(currentAttempt.attempt_number, currentAttempt.score ?? 0)}</p>
+          )}
         </Panel>
         <Panel as="section">
           <h2 className="font-display text-heading-sm">{t.progressTitle}</h2>

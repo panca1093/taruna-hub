@@ -10,6 +10,7 @@ import { Icon } from "@/components/icon";
 import { NoteBox, Panel, TextLink } from "@/components/page-blocks";
 import { LinkButton } from "@/components/ui/link-button";
 import { api, ApiError, errorText, type StudentTryout } from "@/lib/api/client";
+import { useTryoutOverviewT } from "@/lib/i18n/dict/tryout-overview";
 import { useTryoutPrepareT } from "@/lib/i18n/dict/tryout-prepare";
 
 type LoadState = "loading" | "ready" | "noAccess" | "failed";
@@ -17,6 +18,7 @@ type LoadState = "loading" | "ready" | "noAccess" | "failed";
 function PrepareContent({ tryoutId, subtestId }: { tryoutId: string; subtestId: string }) {
   const router = useRouter();
   const t = useTryoutPrepareT();
+  const overviewT = useTryoutOverviewT();
   const afterId = useSearchParams().get("after");
   const [overview, setOverview] = useState<StudentTryout | null>(null);
   const [state, setState] = useState<LoadState>("loading");
@@ -92,6 +94,20 @@ function PrepareContent({ tryoutId, subtestId }: { tryoutId: string; subtestId: 
     return shell(<EmptyState icon={Lock} title={t.unavailableTitle} description={t.unavailableDescription} action={backLink} />);
   }
 
+  if (!current && overview.attempts_used >= overview.attempts_purchased) {
+    return shell(
+      <EmptyState
+        icon={Lock}
+        title={overviewT.noAttemptsNote}
+        action={
+          <LinkButton href="/catalog" variant="primary" size="sm">
+            {overviewT.ctaBuyMore}
+          </LinkButton>
+        }
+      />,
+    );
+  }
+
   const justFinished = afterId ? overview.subtests.find((st) => st.id === afterId && statusOf(st.id) === "submitted") : undefined;
   const heading = justFinished ? t.nextHeading : current ? t.heading : t.firstHeading;
   const rules = [t.rule1, t.rule2, t.rule3, t.rule4, t.rule5];
@@ -115,7 +131,7 @@ function PrepareContent({ tryoutId, subtestId }: { tryoutId: string; subtestId: 
       } catch {
         // Keep the original failure.
       }
-      toast.danger(t.startFailed, { description: errorText(err, t.loadErrorDescription) });
+      toast.danger(t.startFailed, { description: err instanceof ApiError && err.code === "no_attempts_left" ? overviewT.noAttemptsNote : errorText(err, t.loadErrorDescription) });
       setStarting(false);
     }
   };
