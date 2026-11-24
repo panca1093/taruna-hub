@@ -51,6 +51,8 @@ type Question struct {
 	CreatedBy      uuid.UUID
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	// RescoreAttempts is how many completed attempts an edit would rescore; only a single-question read fills it.
+	RescoreAttempts int
 }
 
 // ImportRowError names the spreadsheet column a row failed on, with the service's reason code.

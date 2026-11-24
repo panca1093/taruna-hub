@@ -39,6 +39,8 @@ const id = {
     difficulty: "Kesulitan",
   },
   editTitle: "Edit Soal",
+  rescoreNotice: (n: number) =>
+    `Soal ini ada di ${n} pengerjaan tryout yang sudah selesai. Perubahan langsung dipakai di tryout tersebut, dan nilai ${n} pengerjaan itu dihitung ulang saat disimpan.`,
   createTitle: "Tambah Soal",
   cancel: "Batal",
   saveQuestion: "Simpan Soal",
@@ -102,6 +104,8 @@ const en: typeof id = {
     difficulty: "Difficulty",
   },
   editTitle: "Edit Question",
+  rescoreNotice: (n: number) =>
+    `This question is in ${n} finished tryout attempt${n === 1 ? "" : "s"}. Your change applies to those tryouts, and saving rescores ${n === 1 ? "that attempt" : `those ${n} attempts`}.`,
   createTitle: "Add Question",
   cancel: "Cancel",
   saveQuestion: "Save Question",

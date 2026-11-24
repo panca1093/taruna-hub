@@ -309,7 +309,7 @@ func TestResultIRTCountsDistinctStudentsPerQuestionVersion(t *testing.T) {
 		t.Error("three distinct students with non-blank answers (right or wrong) reach the threshold; every attempt of the version clears")
 	}
 
-	// A new version of the same question starts again from zero.
+	// Since 2026-11-24 an edit moves every attempt onto the new version, so its respondents carry over.
 	updated, err := h.q.update(t, h.tenant(), q.ID, QuestionInput{
 		ProgramID: q.ProgramID, SubjectID: q.SubjectID, Type: q.Type, Content: d("Hasil dari 3 + 3 adalah ..."),
 		Difficulty: q.Difficulty, Explanation: d(secretExplanation), BaseVersion: q.Version,
@@ -321,11 +321,8 @@ func TestResultIRTCountsDistinctStudentsPerQuestionVersion(t *testing.T) {
 	tr2 := h.tryoutOf(t, irt, updated)
 	_, d := h.enrolledStudentOf(t, tr2)
 	sd := h.take(t, d, tr2, map[uuid.UUID]string{updated.ID: optID(t, updated, "6")})
-	if !warned(sd) {
-		t.Error("version 2 has one respondent and must warn even though version 1 is well calibrated")
-	}
-	if warned(sa) {
-		t.Error("the old attempt on version 1 must not change when version 2 appears")
+	if warned(sd) || warned(sa) {
+		t.Error("the edit carries version 1's respondents to version 2, so no attempt warns")
 	}
 }
 

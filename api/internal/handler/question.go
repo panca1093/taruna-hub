@@ -21,6 +21,7 @@ const (
 	questionConflict   = "Soal sudah diubah orang lain, muat ulang."
 	questionReferenced = "Soal masih dipakai konten lain."
 	questionTypeRule   = "Tipe soal tidak dikenal."
+	questionTypeInUse  = "Tipe soal tidak bisa diubah selama ada siswa yang sedang mengerjakan soal ini."
 	questionContentEll = "Konten wajib diisi, maksimal 20000 karakter."
 	questionImageRule  = "Gambar belum didukung."
 	questionExplRule   = "Pembahasan maksimal 20000 karakter."
@@ -70,6 +71,8 @@ type questionResponse struct {
 	Correct        []string                 `json:"correct"`
 	CreatedAt      time.Time                `json:"created_at"`
 	UpdatedAt      time.Time                `json:"updated_at"`
+	// Only the single-question read sets it, so the list does not pay a count per row.
+	RescoreAttempts *int `json:"rescore_attempts,omitempty"`
 }
 
 type questionsResponse struct {
@@ -135,7 +138,9 @@ func (h *Handler) GetQuestion(c echo.Context) error {
 	if err != nil {
 		return questionError(err)
 	}
-	return c.JSON(http.StatusOK, questionResponseOf(question))
+	body := questionResponseOf(question)
+	body.RescoreAttempts = &question.RescoreAttempts
+	return c.JSON(http.StatusOK, body)
 }
 
 func (h *Handler) CreateQuestion(c echo.Context) error {
@@ -346,6 +351,8 @@ func questionReason(reason string) string {
 	switch reason {
 	case service.ReasonQuestionType:
 		return questionTypeRule
+	case service.ReasonTypeInUse:
+		return questionTypeInUse
 	case service.ReasonQuestionContent:
 		return questionContentEll
 	case service.ReasonQuestionImage:

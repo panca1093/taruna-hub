@@ -11,14 +11,18 @@ Notable changes to the Taruna Eduka tryout platform, newest first. Each version 
 - **Progress on the tryout result.** Like kecermatan, the result shows the average score of all attempts and the student's rank, next to a chart of the score per attempt. Below the subtest scores, a table lists correct, wrong and blank answers for the last 5 attempts. The score of the attempt being viewed sits under the rank.
 - **Subject and chapter filters in the question bank.** A "Filter" button beside the search box opens program, subject, chapter, question type and difficulty together. The same filter works when picking questions for a tryout.
 - **Question count in the tryout list,** so admins don't have to open a tryout to see how many questions it has.
+- **Plane shapes in questions.** Next to the solids, admins can insert persegi, persegi panjang, segitiga, lingkaran, trapesium, jajar genjang, belah ketupat and layang-layang.
 
 ### Changed
 
 - **Picking questions for a tryout.** The picker has the search and filter side by side, a switch between all and selected questions, "Pilih semua" and "Kosongkan", and shows each question's subject and chapter.
 - **Result page and PDF are simpler.** The separate correct, total and rank cards are gone; the same numbers are in the average panel and the table. The result PDF follows the page.
+- **Editing a question updates tryouts already taken.** The change shows in every tryout that uses the question, and finished attempts are scored again, so scores, averages and ranks follow the corrected answer. The edit form says how many finished attempts will be rescored before saving.
+- **Editor toolbar shows icons only,** with the name on hover, so it fits on one line.
+- **Wider product form** with fields side by side.
 - Buying a tryout you already have is allowed again; it adds attempts instead of being refused.
 
-> **Deploy note:** run migration `000032_tryout_attempt_credits`. Every existing purchase gets 1 attempt, and students who already took a tryout keep the attempts they used, so they need to buy again for another try.
+> **Deploy note:** run migrations `000032_tryout_attempt_credits` and `000033_question_lookup_indexes`. Every existing purchase gets 1 attempt, and students who already took a tryout keep the attempts they used, so they need to buy again for another try.
 
 ## v0.1.5 — 2026-11-21
 

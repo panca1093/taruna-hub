@@ -37,8 +37,9 @@ var (
 	docBlocks  = map[string]bool{model.NodeParagraph: true, model.NodeBulletList: true, model.NodeOrderedList: true, model.NodeTable: true, model.NodeShape: true, model.NodeImage: true}
 	itemBlocks = map[string]bool{model.NodeParagraph: true, model.NodeBulletList: true, model.NodeOrderedList: true}
 	cellBlocks = map[string]bool{model.NodeParagraph: true, model.NodeBulletList: true, model.NodeOrderedList: true, model.NodeShape: true, model.NodeImage: true}
-	shapeKinds = map[string]bool{"kubus": true, "balok": true, "tabung": true, "kerucut": true, "bola": true, "limas": true, "prisma": true}
-	markOrder  = []string{model.MarkBold, model.MarkItalic, model.MarkUnderline}
+	shapeKinds = map[string]bool{"kubus": true, "balok": true, "tabung": true, "kerucut": true, "bola": true, "limas": true, "prisma": true,
+		"persegi": true, "persegi_panjang": true, "segitiga": true, "lingkaran": true, "trapesium": true, "jajar_genjang": true, "belah_ketupat": true, "layang_layang": true}
+	markOrder = []string{model.MarkBold, model.MarkItalic, model.MarkUnderline}
 )
 
 // docRules says which `image.attrs.src` a document may carry and how strict the limits are. The zero value is

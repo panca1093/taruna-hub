@@ -1,0 +1,2 @@
+DROP INDEX tryout_session_questions_question_idx;
+DROP INDEX tryout_questions_question_idx;

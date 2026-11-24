@@ -1674,10 +1674,8 @@ export interface paths {
          *     `first_attempt_at` is set (stamped by P16's admission transaction under the same row lock) is
          *     locked: every edit answers `409` with "Tryout sudah dikerjakan siswa dan tidak bisa diubah."
          *
-         *     Assignments keep their frozen version: a `version_id` equal to the version this tryout already
-         *     assigned to that question is kept, an absent `version_id` takes the question's current version,
-         *     and any other `version_id` answers `422` on `subtests[i].questions[j].version_id`. A published
-         *     tryout must still pass the publish rules on every save.
+         *     Every assignment follows the question's current version; a `version_id` in the request is
+         *     accepted but ignored. A published tryout must still pass the publish rules on every save.
          */
         put: {
             parameters: {
@@ -7369,7 +7367,8 @@ export interface components {
          *
          *     Blocks: `paragraph`, `bulletList`, `orderedList` (of `listItem`), `table` (of `tableRow` of
          *     `tableHeader`/`tableCell`), `shape` (`attrs.kind` one of kubus, balok, tabung, kerucut, bola,
-         *     limas, prisma; optional `attrs.caption`) and `image` (`attrs.asset_id` of a `question_image`
+         *     limas, prisma, persegi, persegi_panjang, segitiga, lingkaran, trapesium, jajar_genjang,
+         *     belah_ketupat, layang_layang; optional `attrs.caption`) and `image` (`attrs.asset_id` of a `question_image`
          *     asset; optional `attrs.alt`). Inline: `text` (marks `bold`, `italic`, `underline`),
          *     `hardBreak` and `math` (`attrs.latex`).
          *
@@ -7454,6 +7453,8 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /** @description Only on GET /questions/{id}. Completed tryout attempts that include this question; saving a change moves every tryout and attempt onto the new version and rescores these attempts. */
+            rescore_attempts?: number;
         };
         QuestionList: {
             questions: components["schemas"]["Question"][];
@@ -7695,8 +7696,7 @@ export interface components {
             question_id: string;
             /**
              * Format: uuid
-             * @description Omit to assign the question's current version. A version this tryout already assigned to
-             *     the question is kept; any other id answers `422` on this path.
+             * @description Ignored: an assignment always takes the question's current version.
              */
             version_id?: string;
         };

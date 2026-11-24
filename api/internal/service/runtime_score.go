@@ -1,12 +1,15 @@
 package service
 
 import (
+	"context"
 	"math"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/tarunaeduka/bimbel-tryout/api/internal/model"
+	"github.com/tarunaeduka/bimbel-tryout/api/internal/repository"
 )
 
 type partScore struct {
@@ -55,6 +58,62 @@ func scoreQuestion(q model.AttemptQuestion, given []string, w model.Weights) (ea
 		return maximum, maximum, true
 	}
 	return 0, maximum, false
+}
+
+// rescoreSessions re-scores every submitted part of the given locked sessions from their current snapshot, answers
+// and frozen weights, and rewrites the result and running total of the completed ones. Pending and running parts
+// are left alone: they score when they settle, from the same snapshot. Parts are read after the lock, so a part
+// settled while the edit waited is rescored too.
+func rescoreSessions(ctx context.Context, tx pgx.Tx, repo *repository.RuntimeRepository, tenantID uuid.UUID, locked []repository.LockedSession) error {
+	for _, ls := range locked {
+		id := ls.ID
+		a, err := repo.FindAttempt(ctx, tx, tenantID, uuid.Nil, id, false)
+		if err != nil {
+			return err
+		}
+		parts, err := repo.Parts(ctx, tx, tenantID, id)
+		if err != nil {
+			return err
+		}
+		questions, err := repo.Questions(ctx, tx, tenantID, id, nil)
+		if err != nil {
+			return err
+		}
+		saved, err := repo.Answers(ctx, tx, tenantID, id, nil)
+		if err != nil {
+			return err
+		}
+		answers := make(map[uuid.UUID][]string, len(saved))
+		for _, answer := range saved {
+			answers[answer.QuestionID] = answer.Answer
+		}
+		bySubtest := map[uuid.UUID][]model.AttemptQuestion{}
+		for _, q := range questions {
+			bySubtest[q.SubtestID] = append(bySubtest[q.SubtestID], q)
+		}
+		var earned, maximum float64
+		for _, p := range parts {
+			if p.Status != model.PartSubmitted {
+				continue
+			}
+			score := scorePart(bySubtest[p.SubtestID], answers, a.Weights)
+			partEarned, partMax := round4(score.Earned), round4(score.Max)
+			if err := repo.RescorePart(ctx, tx, tenantID, id, p.SubtestID, partEarned, partMax, score.Correct); err != nil {
+				return err
+			}
+			// Summed from the stored, rounded part scores, as finalize does.
+			earned += partEarned
+			maximum += partMax
+		}
+		if a.Status != model.SessionCompleted {
+			continue
+		}
+		res := model.Result{SessionID: id, TenantID: tenantID, EarnedPoints: round4(earned), MaxPoints: round4(maximum), Score: percent(earned, maximum)}
+		if err := repo.RescoreResult(ctx, tx, res); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func optionPoints(o model.QuestionOption) float64 {

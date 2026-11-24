@@ -34,7 +34,6 @@ const (
 	tryoutDuration        = "Durasi 1–480 menit."
 	tryoutQuestion        = "Soal tidak ditemukan."
 	tryoutDuplicate       = "Soal yang sama tidak boleh muncul dua kali."
-	tryoutVersion         = "Versi soal bukan milik tryout ini."
 	tryoutEmpty           = "Tryout harus punya minimal satu subtes berisi soal."
 	tryoutWindow          = "Tanggal berakhir harus setelah sekarang."
 	tryoutRevision        = "Versi tryout wajib diisi."
@@ -530,8 +529,6 @@ func tryoutReason(reason string) string {
 		return tryoutQuestion
 	case service.ReasonTryoutDuplicate:
 		return tryoutDuplicate
-	case service.ReasonTryoutVersion:
-		return tryoutVersion
 	case service.ReasonTryoutEmpty:
 		return tryoutEmpty
 	case service.ReasonTryoutWindow:

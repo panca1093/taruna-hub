@@ -288,7 +288,7 @@ func TestPublishValidation(t *testing.T) {
 	})
 }
 
-func TestAssignmentFreezesTheQuestionVersion(t *testing.T) {
+func TestAssignmentFollowsTheEditedQuestionVersion(t *testing.T) {
 	h := newTryoutHarness(t)
 	tenant := h.q.a
 	question := h.question(t, tenant)
@@ -310,24 +310,24 @@ func TestAssignmentFreezesTheQuestionVersion(t *testing.T) {
 		t.Fatalf("question version = %d after the edit, want 2", updated.Version)
 	}
 
+	// Since 2026-11-24 an edit moves the assignment onto the new version.
 	reloaded := h.get(t, tenant, created.ID).Subtests[0].Questions[0]
-	if reloaded.Version != 1 || reloaded.VersionID != frozen.VersionID || !sameDoc(reloaded.Content, question.Content) {
-		t.Errorf("assignment after the edit = version %d %q, want the frozen version 1 %q",
-			reloaded.Version, reloaded.Content, question.Content)
+	if reloaded.Version != 2 || reloaded.VersionID != updated.VersionID || !sameDoc(reloaded.Content, edited.Content) {
+		t.Errorf("assignment after the edit = version %d %q, want version 2 %q", reloaded.Version, reloaded.Content, edited.Content)
 	}
 
-	// Saving the tryout again with the version the API returned keeps it, even though v2 is current.
+	// Saving the tryout again with the version the API now returns keeps it.
 	saved := h.tryoutInput(tenant)
 	saved.BaseRevision = created.Revision
-	versionID := frozen.VersionID
+	versionID := reloaded.VersionID
 	saved.Subtests = []TryoutSubtestInput{{Name: "Subtes", DurationSeconds: 600,
 		Questions: []TryoutQuestionInput{{QuestionID: question.ID, VersionID: &versionID}}}}
 	kept, err := h.update(tenant, created.ID, saved)
 	if err != nil {
-		t.Fatalf("save the tryout with the frozen version: %v", err)
+		t.Fatalf("save the tryout with the assigned version: %v", err)
 	}
-	if got := kept.Subtests[0].Questions[0]; got.Version != 1 || got.VersionID != frozen.VersionID || !sameDoc(got.Content, question.Content) {
-		t.Errorf("saved assignment = version %d %q, want the kept frozen version", got.Version, got.Content)
+	if got := kept.Subtests[0].Questions[0]; got.Version != 2 || got.VersionID != updated.VersionID {
+		t.Errorf("saved assignment = version %d, want the kept version 2", got.Version)
 	}
 
 	// A question new to the tryout takes its current version, which is v2 after this edit.
@@ -357,12 +357,11 @@ func TestAssignmentFreezesTheQuestionVersion(t *testing.T) {
 	}
 }
 
-func TestEditingAFrozenQuestionNeverChangesAssignedContent(t *testing.T) {
+func TestEditingAQuestionMovesItsAssignmentToTheNewVersion(t *testing.T) {
 	h := newTryoutHarness(t)
 	tenant := h.q.a
 	question := h.question(t, tenant)
 	created := h.create(t, tenant, h.tryoutInput(tenant, subtestInput("Subtes", 600, question)))
-	frozen := h.get(t, tenant, created.ID).Subtests[0].Questions[0]
 
 	for i := 2; i <= 4; i++ {
 		next := h.q.pgInput(tenant)
@@ -381,59 +380,28 @@ func TestEditingAFrozenQuestionNeverChangesAssignedContent(t *testing.T) {
 	}
 
 	reloaded := h.get(t, tenant, created.ID).Subtests[0].Questions[0]
-	if reloaded.VersionID != frozen.VersionID || reloaded.Version != 1 || !sameDoc(reloaded.Content, frozen.Content) {
-		t.Errorf("assignment = %+v, want the untouched frozen version 1", reloaded)
-	}
-
-	var stored uuid.UUID
-	if err := h.pool.QueryRow(context.Background(),
-		`SELECT question_version_id FROM tryout_questions WHERE tryout_id = $1 AND question_id = $2`,
-		created.ID, question.ID).Scan(&stored); err != nil {
-		t.Fatalf("read the stored assignment: %v", err)
-	}
-	if stored != frozen.VersionID {
-		t.Errorf("stored version = %s, want the frozen %s", stored, frozen.VersionID)
+	if reloaded.VersionID != current.VersionID || reloaded.Version != 4 || !sameDoc(reloaded.Content, current.Content) {
+		t.Errorf("assignment = %+v, want the current version 4", reloaded)
 	}
 }
 
-func TestAssignmentOfArbitraryVersionIsRejected(t *testing.T) {
+func TestStaleOrArbitraryVersionIDIsIgnored(t *testing.T) {
 	h := newTryoutHarness(t)
-	tenant, other := h.q.a, h.q.b
-	first := h.question(t, tenant)
-	second := h.question(t, tenant)
-	foreign := h.question(t, other)
+	tenant := h.q.a
+	question := h.question(t, tenant)
+	created := h.create(t, tenant, h.tryoutInput(tenant, subtestInput("Satu", 600, question)))
 
-	created := h.create(t, tenant, h.tryoutInput(tenant,
-		subtestInput("Satu", 600, first),
-		subtestInput("Dua", 600, second),
-	))
-	otherTryout := h.create(t, tenant, h.tryoutInput(tenant, subtestInput("Lain", 600, second)))
-
-	cases := []struct {
-		name     string
-		question model.Question
-		version  uuid.UUID
-	}{
-		{"an arbitrary id", first, uuid.New()},
-		{"another question's version", first, second.VersionID},
-		{"a version from another tryout", first, otherTryout.Subtests[0].Questions[0].VersionID},
-		{"a version of another tenant", first, foreign.VersionID},
+	input := h.tryoutInput(tenant)
+	input.BaseRevision = created.Revision
+	stale := uuid.New()
+	input.Subtests = []TryoutSubtestInput{{Name: "Satu", DurationSeconds: 600,
+		Questions: []TryoutQuestionInput{{QuestionID: question.ID, VersionID: &stale}}}}
+	saved, err := h.update(tenant, created.ID, input)
+	if err != nil {
+		t.Fatalf("save with an unknown version_id: %v", err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			input := h.tryoutInput(tenant)
-			input.BaseRevision = created.Revision
-			versionID := tc.version
-			input.Subtests = []TryoutSubtestInput{{Name: "Satu", DurationSeconds: 600,
-				Questions: []TryoutQuestionInput{{QuestionID: tc.question.ID, VersionID: &versionID}}}}
-			_, err := h.update(tenant, created.ID, input)
-			wantTryoutField(t, err, "subtests[0].questions[0].version_id")
-		})
-	}
-
-	reloaded := h.get(t, tenant, created.ID)
-	if reloaded.Revision != created.Revision || reloaded.QuestionCount != 2 {
-		t.Errorf("tryout = revision %d with %d questions, want the untouched original", reloaded.Revision, reloaded.QuestionCount)
+	if got := saved.Subtests[0].Questions[0].VersionID; got != question.VersionID {
+		t.Errorf("assigned version = %s, want the current %s", got, question.VersionID)
 	}
 }
 

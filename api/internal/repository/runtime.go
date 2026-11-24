@@ -843,3 +843,117 @@ func (r *RuntimeRepository) TryoutOverview(ctx context.Context, q dbtx, tenantID
 	}
 	return out, rows.Err()
 }
+
+// LockedSession is a session whose snapshot holds an edited question.
+type LockedSession struct {
+	ID         uuid.UUID
+	InProgress bool
+}
+
+// LockQuestionSessions locks the tryouts using a question, then the sessions holding it in id order. The order
+// (question, tryouts, sessions, totals) matches every other writer; the tryout lock serializes against Start's
+// FOR SHARE, so a session started meanwhile snapshots the version this edit commits.
+func (r *RuntimeRepository) LockQuestionSessions(ctx context.Context, q dbtx, tenantID, questionID uuid.UUID) ([]LockedSession, error) {
+	if tenantID == uuid.Nil {
+		return nil, ErrScopeRequired
+	}
+	if _, err := q.Exec(ctx, `
+		SELECT id FROM tryouts
+		 WHERE tenant_id = $1 AND id IN (SELECT tryout_id FROM tryout_questions WHERE tenant_id = $1 AND question_id = $2)
+		 ORDER BY id FOR UPDATE`, tenantID, questionID); err != nil {
+		return nil, fmt.Errorf("lock tryouts of question: %w", err)
+	}
+	rows, err := q.Query(ctx, `
+		SELECT s.id, s.status = 'in_progress'
+		  FROM tryout_sessions s
+		  JOIN tryout_session_questions sq ON sq.session_id = s.id AND sq.tenant_id = s.tenant_id
+		 WHERE s.tenant_id = $1 AND sq.question_id = $2
+		 ORDER BY s.id FOR UPDATE OF s`, tenantID, questionID)
+	if err != nil {
+		return nil, fmt.Errorf("lock sessions of question: %w", err)
+	}
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[LockedSession])
+	if err != nil {
+		return nil, fmt.Errorf("lock sessions of question: %w", err)
+	}
+	return out, nil
+}
+
+// RepointQuestion moves every tryout assignment and every session snapshot of a question onto versionID.
+func (r *RuntimeRepository) RepointQuestion(ctx context.Context, q dbtx, tenantID, questionID, versionID uuid.UUID) error {
+	if tenantID == uuid.Nil {
+		return ErrScopeRequired
+	}
+	for _, sql := range []string{
+		`UPDATE tryout_questions SET question_version_id = $3
+		  WHERE tenant_id = $1 AND question_id = $2 AND question_version_id <> $3`,
+		`UPDATE tryout_session_questions SET question_version_id = $3
+		  WHERE tenant_id = $1 AND question_id = $2 AND question_version_id <> $3`,
+	} {
+		if _, err := q.Exec(ctx, sql, tenantID, questionID, versionID); err != nil {
+			return fmt.Errorf("repoint question version: %w", err)
+		}
+	}
+	return nil
+}
+
+// RescorableSessionsWith counts the sessions an edit of the question rescores: completed, or with a submitted part.
+func (r *RuntimeRepository) RescorableSessionsWith(ctx context.Context, q dbtx, tenantID, questionID uuid.UUID) (int, error) {
+	if tenantID == uuid.Nil {
+		return 0, ErrScopeRequired
+	}
+	var n int
+	err := q.QueryRow(ctx, `
+		SELECT count(*) FROM tryout_sessions s
+		 WHERE s.tenant_id = $1
+		   AND EXISTS (SELECT 1 FROM tryout_session_questions sq
+		                WHERE sq.session_id = s.id AND sq.tenant_id = s.tenant_id AND sq.question_id = $2)
+		   AND (s.status = 'completed'
+		        OR EXISTS (SELECT 1 FROM tryout_session_parts p
+		                    WHERE p.session_id = s.id AND p.tenant_id = s.tenant_id AND p.status = 'submitted'))`,
+		tenantID, questionID).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count sessions of question: %w", err)
+	}
+	return n, nil
+}
+
+// RescorePart overwrites the stored score of an already submitted part.
+func (r *RuntimeRepository) RescorePart(ctx context.Context, q dbtx, tenantID, sessionID, subtestID uuid.UUID, earned, maximum float64, correct int) error {
+	if tenantID == uuid.Nil {
+		return ErrScopeRequired
+	}
+	_, err := q.Exec(ctx, `
+		UPDATE tryout_session_parts SET earned_points = $4, max_points = $5, correct_count = $6
+		 WHERE tenant_id = $1 AND session_id = $2 AND subtest_id = $3 AND status = 'submitted'`,
+		tenantID, sessionID, subtestID, earned, maximum, correct)
+	if err != nil {
+		return fmt.Errorf("rescore part: %w", err)
+	}
+	return nil
+}
+
+// RescoreResult overwrites a stored result and moves the student's running total by the score's change.
+func (r *RuntimeRepository) RescoreResult(ctx context.Context, q dbtx, res model.Result) error {
+	if res.TenantID == uuid.Nil {
+		return ErrScopeRequired
+	}
+	var userID, tryoutID uuid.UUID
+	var old float64
+	err := q.QueryRow(ctx, `
+		UPDATE tryout_results r SET earned_points = $3, max_points = $4, score = $5
+		  FROM tryout_results o
+		 WHERE r.tenant_id = $1 AND r.session_id = $2 AND o.session_id = r.session_id
+		RETURNING r.user_id, r.tryout_id, o.score::float8`,
+		res.TenantID, res.SessionID, res.EarnedPoints, res.MaxPoints, res.Score).Scan(&userID, &tryoutID, &old)
+	if err != nil {
+		return fmt.Errorf("rescore result: %w", err)
+	}
+	if _, err := q.Exec(ctx, `
+		UPDATE tryout_score_totals SET score_sum = score_sum + $4::numeric - $5::numeric, updated_at = now()
+		 WHERE tenant_id = $1 AND user_id = $2 AND tryout_id = $3`,
+		res.TenantID, userID, tryoutID, res.Score, old); err != nil {
+		return fmt.Errorf("rescore score total: %w", err)
+	}
+	return nil
+}

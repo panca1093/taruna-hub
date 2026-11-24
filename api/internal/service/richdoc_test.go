@@ -117,7 +117,7 @@ func TestNormalizeDocRejects(t *testing.T) {
 		{"math without latex", wrap(`{"type":"paragraph","content":[{"type":"math","attrs":{}}]}`), ReasonDocAttr},
 		{"math blank latex", wrap(`{"type":"paragraph","content":[{"type":"math","attrs":{"latex":"  "}}]}`), ReasonDocAttr},
 		{"math long latex", wrap(`{"type":"paragraph","content":[{"type":"math","attrs":{"latex":"` + strings.Repeat("x", 2001) + `"}}]}`), ReasonDocAttr},
-		{"unknown shape kind", wrap(`{"type":"shape","attrs":{"kind":"segitiga"}}`), ReasonDocAttr},
+		{"unknown shape kind", wrap(`{"type":"shape","attrs":{"kind":"segilima"}}`), ReasonDocAttr},
 		{"long caption", wrap(`{"type":"shape","attrs":{"kind":"bola","caption":"` + strings.Repeat("c", 201) + `"}}`), ReasonDocAttr},
 		{"image without source", wrap(`{"type":"image","attrs":{}}`), ReasonDocAttr},
 		{"image with both sources", wrap(`{"type":"image","attrs":{"asset_id":"` + id + `","src":"https://x.test/a.png"}}`), ReasonDocAttr},

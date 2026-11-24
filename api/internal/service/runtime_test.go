@@ -1053,3 +1053,81 @@ func TestRuntimeStartSpendsOneCreditPerAttempt(t *testing.T) {
 		t.Errorf("after buying more: attempt %d, want 2", next.Attempt.AttemptNumber)
 	}
 }
+
+func TestRuntimeQuestionEditRepointsAndRescoresTakenTryouts(t *testing.T) {
+	h := newRuntimeHarness(t)
+	f := h.fixture(t, nil)
+	_, p := h.enrolledStudent(t, f)
+	ctx := context.Background()
+
+	sid := h.begin(t, p, f).Attempt.ID
+	h.startPart(t, p, sid, f.sub1())
+	h.mustAnswer(t, p, sid, f.pg.ID, 1, optID(t, f.pg, "4"))
+	h.mustAnswer(t, p, sid, f.isian.ID, 1, "jakarta")
+	h.submitPart(t, p, sid, f.sub1())
+	h.startPart(t, p, sid, f.sub2())
+	h.mustAnswer(t, p, sid, f.weighted.ID, 1, optID(t, f.weighted, "A"))
+	if done := h.submitPart(t, p, sid, f.sub2()); done.Result == nil || done.Result.Score != 45 {
+		t.Fatalf("result before the edit = %+v, want 45", done.Result)
+	}
+	_, other := h.enrolledStudent(t, f)
+	open := h.begin(t, other, f).Attempt.ID
+
+	if n := h.count(t, `SELECT count(*) FROM tryout_results WHERE session_id = $1`, sid); n != 1 {
+		t.Fatalf("results = %d, want 1", n)
+	}
+	if got, err := h.q.svc.Get(ctx, h.scopeA(), h.staff(model.RoleAdmin), f.pg.ID); err != nil || got.RescoreAttempts != 1 {
+		t.Errorf("attempts to rescore = %d (err %v), want 1: the in-progress one has no submitted part", got.RescoreAttempts, err)
+	}
+
+	// The key moves from "4" to "3", so the student's pg answer turns wrong: 4.5 - 1 = 3.5 of 10.
+	in := asInput(f.pg)
+	in.Correct = []string{optID(t, f.pg, "3")}
+	edited, err := h.q.update(t, h.tenant(), f.pg.ID, in)
+	if err != nil {
+		t.Fatalf("edit question: %v", err)
+	}
+
+	res, err := h.rt.Result(ctx, h.scopeA(), p, sid)
+	if err != nil || res.EarnedPoints != 3.5 || res.MaxPoints != 10 || res.Score != 35 {
+		t.Fatalf("result after the edit = %+v (err %v), want 3.5 of 10, score 35", res, err)
+	}
+	if res.Parts[0].CorrectCount != 1 || res.Parts[0].EarnedPoints != 3 {
+		t.Errorf("subtest 1 = %+v, want 1 correct and 3 points", res.Parts[0])
+	}
+	if sum, count, err := h.repo.ScoreTotal(ctx, h.pool, h.tenant().ID, p.UserID, f.tryout.ID); err != nil || sum != 35 || count != 1 {
+		t.Errorf("score total = %v over %d (err %v), want 35 over 1", sum, count, err)
+	}
+	var version uuid.UUID
+	if err := h.pool.QueryRow(ctx, `SELECT id FROM question_versions WHERE question_id = $1 AND version = $2`,
+		f.pg.ID, edited.Version).Scan(&version); err != nil {
+		t.Fatalf("read new version: %v", err)
+	}
+	if n := h.count(t, `SELECT count(*) FROM tryout_questions WHERE question_id = $1 AND question_version_id <> $2`, f.pg.ID, version); n != 0 {
+		t.Errorf("tryout rows on an old version = %d, want 0", n)
+	}
+	if n := h.count(t, `SELECT count(*) FROM tryout_session_questions WHERE question_id = $1 AND question_version_id = $2 AND session_id = ANY($3)`,
+		f.pg.ID, version, []uuid.UUID{sid, open}); n != 2 {
+		t.Errorf("sessions on the new version = %d, want both", n)
+	}
+}
+
+func TestRuntimeQuestionTypeChangeRefusedWhileSomeoneIsTakingIt(t *testing.T) {
+	h := newRuntimeHarness(t)
+	f := h.fixture(t, nil)
+	_, p := h.enrolledStudent(t, f)
+	sid := h.begin(t, p, f).Attempt.ID
+	h.startPart(t, p, sid, f.sub1())
+	h.submitPart(t, p, sid, f.sub1())
+
+	in := asInput(f.pg)
+	in.Type, in.Options, in.Correct = model.QuestionIsian, nil, []string{"4"}
+	_, err := h.q.update(t, h.tenant(), f.pg.ID, in)
+	var input *InputError
+	if !errors.As(err, &input) || input.Fields["type"] != ReasonTypeInUse {
+		t.Fatalf("type change while in progress: err = %v, want field type = %s", err, ReasonTypeInUse)
+	}
+	if got, err := h.q.svc.Get(context.Background(), h.scopeA(), h.staff(model.RoleAdmin), f.pg.ID); err != nil || got.Type != model.QuestionPG || got.RescoreAttempts != 1 {
+		t.Errorf("question after the refusal = type %s, rescore %d (err %v), want pg and 1: an in-progress session with a submitted part counts", got.Type, got.RescoreAttempts, err)
+	}
+}

@@ -26,7 +26,8 @@ import {
   MAX_SHAPE_CAPTION,
   MAX_TABLE_COLS,
   MAX_TABLE_ROWS,
-  SHAPE_KINDS,
+  FLAT_SHAPE_KINDS,
+  SOLID_SHAPE_KINDS,
   type ShapeKind,
 } from "@/lib/rich-doc";
 import { useAdminRichTextEditorT } from "@/lib/i18n/dict/admin-rich-text-editor";
@@ -122,7 +123,8 @@ function PopoverButton({
             {...props}
             type="button"
             disabled={disabled}
-            title={disabled && hint ? hint : undefined}
+            aria-label={label}
+            title={disabled && hint ? hint : label}
             aria-expanded={open}
             aria-haspopup="dialog"
             className={toolClass(open)}
@@ -130,7 +132,6 @@ function PopoverButton({
         )}
       >
         <Icon className="size-4" />
-        {label}
       </Popover.Trigger>
       <Popover.Content placement="bottom start" className="max-w-popover">
         <Popover.Dialog className="flex w-80 max-w-full flex-col gap-3 p-3.5 outline-none" aria-label={title}>
@@ -318,7 +319,7 @@ function ImageBody({ editor, onDone }: { editor: Editor; onDone: () => void }) {
 
 function ShapeBody({ editor, onDone }: { editor: Editor; onDone: () => void }) {
   const t = useAdminRichTextEditorT();
-  const [kind, setKind] = useState<ShapeKind>(SHAPE_KINDS[0]);
+  const [kind, setKind] = useState<ShapeKind>(SOLID_SHAPE_KINDS[0]);
   const [caption, setCaption] = useState("");
   const submit = () => {
     editor.chain().focus().command(leaveNodeSelection).insertContent({ type: "shape", attrs: { kind, caption: caption.trim() } }).command(leaveNodeSelection).run();
@@ -327,23 +328,31 @@ function ShapeBody({ editor, onDone }: { editor: Editor; onDone: () => void }) {
   return (
     <>
       <PopoverHeading>{t.shapeTitle}</PopoverHeading>
-      <div className="grid grid-cols-4 gap-1.5">
-        {SHAPE_KINDS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            aria-pressed={kind === option}
-            onClick={() => setKind(option)}
-            className={cn(
-              "flex flex-col items-center rounded-chip border px-0.5 pt-1.5 pb-1 text-micro transition-colors",
-              kind === option ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-foreground",
-            )}
-          >
-            <SolidShape kind={option} className="size-9.5" />
-            {t.shapes[option]}
-          </button>
-        ))}
-      </div>
+      {[
+        { heading: t.shapeGroupFlat, kinds: FLAT_SHAPE_KINDS },
+        { heading: t.shapeGroupSolid, kinds: SOLID_SHAPE_KINDS },
+      ].map((group) => (
+        <div key={group.heading} role="group" aria-label={group.heading} className="flex flex-col gap-1">
+          <p className="text-label font-medium text-muted">{group.heading}</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {group.kinds.map((option) => (
+              <button
+                key={option}
+                type="button"
+                aria-pressed={kind === option}
+                onClick={() => setKind(option)}
+                className={cn(
+                  "flex flex-col items-center rounded-chip border px-0.5 pt-1.5 pb-1 text-center text-micro transition-colors",
+                  kind === option ? "border-accent bg-accent-soft text-accent" : "border-border bg-surface text-foreground",
+                )}
+              >
+                <SolidShape kind={option} className="size-9.5" />
+                {t.shapes[option]}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
       <label className="flex flex-col gap-1 text-label font-medium text-foreground">
         {t.shapeCaptionLabel}
         <Input

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, toast } from "@heroui/react";
-import { CheckCircle2, CloudOff, Eye, FileQuestion, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CloudOff, Eye, FileQuestion, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { DataTable, type Column } from "@/components/data-table";
@@ -127,6 +127,8 @@ export default function QuestionsPage() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Question | null>(null);
+  const editingId = useRef<string | null>(null);
+  const [rescoreAttempts, setRescoreAttempts] = useState(0);
   const [draftInitial, setDraftInitial] = useState<QuestionDraft | null>(null);
   const [editorSeq, setEditorSeq] = useState(0);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -220,6 +222,7 @@ export default function QuestionsPage() {
   const openCreate = () => {
     const preferred = filter.programId === "" ? programs?.[0] : programOf(filter.programId);
     setEditing(null);
+    editingId.current = null;
     setFormErrors({});
     setDraftInitial(emptyDraft(preferred?.id ?? "", preferred?.subjects[0]?.id ?? ""));
     setEditorSeq((seq) => seq + 1);
@@ -228,6 +231,13 @@ export default function QuestionsPage() {
 
   const openEdit = (question: Question) => {
     setEditing(question);
+    setRescoreAttempts(0);
+    // Only the single read counts the taken attempts a save would rescore; a failed read just hides the notice.
+    editingId.current = question.id;
+    api.questions.get(question.id).then(
+      (full) => editingId.current === question.id && setRescoreAttempts(full.rescore_attempts ?? 0),
+      () => {},
+    );
     setFormErrors({});
     setDraftInitial(draftOf(question));
     setEditorSeq((seq) => seq + 1);
@@ -433,6 +443,12 @@ export default function QuestionsPage() {
             </div>
           }
         >
+          {editing && rescoreAttempts > 0 && (
+            <div role="status" className="mb-4 flex items-start gap-2.5 rounded-tile border border-warning/30 bg-warning-soft px-4 py-2.5 text-small text-warning-soft-foreground">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span>{t.rescoreNotice(rescoreAttempts)}</span>
+            </div>
+          )}
           {draftInitial && (
             <QuestionEditor
               key={`${editing?.id ?? "new"}-${editorSeq}`}

@@ -39,7 +39,6 @@ const (
 	ReasonTryoutQuestionMax = "tryout_question_max"
 	ReasonTryoutQuestion    = "tryout_question"
 	ReasonTryoutDuplicate   = "tryout_question_duplicate"
-	ReasonTryoutVersion     = "tryout_version"
 	ReasonTryoutEmpty       = "tryout_empty"
 	ReasonTryoutWindow      = "tryout_window"
 	ReasonTryoutRevision    = "tryout_base_revision"
@@ -60,7 +59,7 @@ const (
 	maxTryoutLimit         = 100
 )
 
-// TryoutQuestionInput carries an optional version: only a version already assigned to this tryout is kept.
+// TryoutQuestionInput accepts a version only for wire compatibility: assignments always take the question's current version.
 type TryoutQuestionInput struct {
 	QuestionID uuid.UUID
 	VersionID  *uuid.UUID
@@ -175,7 +174,7 @@ func (s *TryoutService) Create(ctx context.Context, scope HostScope, principal m
 	if err := s.checkProgram(ctx, tenantID, input.ProgramID); err != nil {
 		return model.Tryout{}, err
 	}
-	subtests, err := s.resolve(ctx, s.db, tenantID, uuid.Nil, input)
+	subtests, err := s.resolve(ctx, s.db, tenantID, input)
 	if err != nil {
 		return model.Tryout{}, err
 	}
@@ -217,7 +216,7 @@ func (s *TryoutService) Update(ctx context.Context, scope HostScope, principal m
 		if current.Revision != input.BaseRevision {
 			return ErrTryoutStale
 		}
-		subtests, err := s.resolve(ctx, tx, tenantID, id, input)
+		subtests, err := s.resolve(ctx, tx, tenantID, input)
 		if err != nil {
 			return err
 		}
@@ -337,11 +336,11 @@ func (s *TryoutService) checkProgram(ctx context.Context, tenantID, programID uu
 	return nil
 }
 
-// An existing assignment keeps its version, a new one takes the question's current version.
+// Every assignment takes the question's current version.
 func (s *TryoutService) resolve(ctx context.Context, q interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
-}, tenantID, tryoutID uuid.UUID, input TryoutInput) ([]model.Subtest, error) {
+}, tenantID uuid.UUID, input TryoutInput) ([]model.Subtest, error) {
 	fields := map[string]string{}
 	ids := make([]uuid.UUID, 0, len(input.Subtests))
 	seen := map[uuid.UUID]bool{}
@@ -368,12 +367,6 @@ func (s *TryoutService) resolve(ctx context.Context, q interface {
 	if err != nil {
 		return nil, err
 	}
-	assigned := map[uuid.UUID]uuid.UUID{}
-	if tryoutID != uuid.Nil {
-		if assigned, err = s.repo.AssignedVersions(ctx, q, tenantID, tryoutID); err != nil {
-			return nil, err
-		}
-	}
 
 	out := make([]model.Subtest, 0, len(input.Subtests))
 	for i, subtest := range input.Subtests {
@@ -384,17 +377,8 @@ func (s *TryoutService) resolve(ctx context.Context, q interface {
 				fields[fmt.Sprintf("subtests[%d].questions[%d].question_id", i, j)] = ReasonTryoutQuestion
 				continue
 			}
-			versionID := key.VersionID
-			if question.VersionID != nil {
-				kept, ok := assigned[question.QuestionID]
-				if !ok || kept != *question.VersionID {
-					fields[fmt.Sprintf("subtests[%d].questions[%d].version_id", i, j)] = ReasonTryoutVersion
-					continue
-				}
-				versionID = kept
-			}
 			resolved.Questions = append(resolved.Questions, model.Assignment{
-				QuestionID: question.QuestionID, VersionID: versionID, Position: j + 1,
+				QuestionID: question.QuestionID, VersionID: key.VersionID, Position: j + 1,
 			})
 		}
 		out = append(out, resolved)
