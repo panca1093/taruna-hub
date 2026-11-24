@@ -122,6 +122,7 @@ type StudentTryout struct {
 	// A started attempt spends a credit; the student buys the product again for more.
 	AttemptsPurchased int
 	AttemptsUsed      int
+	ProductID         *uuid.UUID
 }
 
 type AnswerInput struct {
@@ -227,6 +228,11 @@ func (s *RuntimeService) Overview(ctx context.Context, scope HostScope, principa
 	}
 	overview.Attempts, err = s.repo.Attempts(ctx, s.db, tenantID, principal.UserID, &tryoutID)
 	if err != nil {
+		return StudentTryout{}, runtimeError(err)
+	}
+	if id, err := s.repo.SellableProduct(ctx, tenantID, tryoutID, s.now()); err == nil {
+		overview.ProductID = &id
+	} else if !errors.Is(err, repository.ErrNotFound) {
 		return StudentTryout{}, runtimeError(err)
 	}
 	return overview, nil

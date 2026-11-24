@@ -136,6 +136,7 @@ type studentTryoutResponse struct {
 	Attempts          []attemptSummaryResponse  `json:"attempts"`
 	AttemptsPurchased int                       `json:"attempts_purchased"`
 	AttemptsUsed      int                       `json:"attempts_used"`
+	ProductID         *uuid.UUID                `json:"product_id"`
 }
 
 type runtimeOptionResponse struct {
@@ -221,6 +222,7 @@ func (h *Handler) StudentTryout(c echo.Context) error {
 		Subtests:          make([]overviewSubtestResponse, 0, len(overview.Subtests)),
 		Attempts:          attemptSummariesOf(overview.Attempts),
 		AttemptsPurchased: overview.AttemptsPurchased, AttemptsUsed: overview.AttemptsUsed,
+		ProductID: overview.ProductID,
 	}
 	for _, st := range overview.Subtests {
 		body.Subtests = append(body.Subtests, overviewSubtestResponse{

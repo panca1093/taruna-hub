@@ -14,6 +14,7 @@ import { StatusChip } from "@/components/status-badge";
 import { api, ApiError, type StudentTryout } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { useTryoutOverviewT } from "@/lib/i18n/dict/tryout-overview";
+import { purchaseHref } from "@/lib/kecermatan-session";
 
 export default function TryoutOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -103,7 +104,7 @@ export default function TryoutOverviewPage({ params }: { params: Promise<{ id: s
       : current
         ? { label: t.ctaNextSubtest(upNext.name), href: `/student/tryout/${id}/subtest/${upNext.id}/start` }
         : noAttemptsLeft
-          ? { label: t.ctaBuyMore, href: "/catalog" }
+          ? { label: t.ctaBuyMore, href: purchaseHref(overview.product_id) }
           : {
             label: completedAttempts.length > 0 ? t.ctaRetake : t.ctaStart,
             href: `/student/tryout/${id}/subtest/${upNext.id}/start`,

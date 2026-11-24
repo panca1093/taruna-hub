@@ -8784,6 +8784,11 @@ export interface components {
             attempts_purchased: number;
             /** @description Attempts started; each start spends one credit. At `attempts_purchased` a new start answers `409` `no_attempts_left`. */
             attempts_used: number;
+            /**
+             * Format: uuid
+             * @description The on-sale product holding this tryout (smallest package first) to buy more attempts from; null when none is on sale.
+             */
+            product_id: string | null;
             /** Format: uuid */
             id: string;
             title: string;

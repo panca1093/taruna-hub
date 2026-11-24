@@ -34,6 +34,25 @@ func NewRuntimeRepository(db *pgxpool.Pool) *RuntimeRepository {
 	return &RuntimeRepository{db: db}
 }
 
+// SellableProduct is the on-sale product holding the tryout, smallest package first, or ErrNotFound.
+func (r *RuntimeRepository) SellableProduct(ctx context.Context, tenantID, tryoutID uuid.UUID, now time.Time) (uuid.UUID, error) {
+	if tenantID == uuid.Nil {
+		return uuid.Nil, ErrScopeRequired
+	}
+	var id uuid.UUID
+	err := r.db.QueryRow(ctx, `SELECT p.id FROM products p WHERE p.tenant_id = $1 AND `+publicVisible+`
+		AND EXISTS (SELECT 1 FROM product_tryouts pt WHERE pt.product_id = p.id AND pt.tryout_id = $3)
+		ORDER BY (SELECT count(*) FROM product_tryouts c WHERE c.product_id = p.id), p.created_at, p.id LIMIT 1`,
+		tenantID, now, tryoutID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrNotFound
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("read sellable tryout product: %w", err)
+	}
+	return id, nil
+}
+
 func (r *RuntimeRepository) DB() *pgxpool.Pool { return r.db }
 
 const attemptColumns = `s.id, s.tenant_id, s.user_id, s.tryout_id, s.attempt_number, s.status, s.scoring_mode,

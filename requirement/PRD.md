@@ -145,7 +145,7 @@ Opsi A, Opsi C, dan Saldo **aktif bersamaan** — siswa memilih metode pembayara
 - **FR-TRY-05:** **Blocking time:** setelah subtes di-submit (atau timer habis), tidak bisa kembali ke subtes sebelumnya
 - **FR-TRY-06:** Timer habis → subtes auto-submit otomatis
 - **FR-TRY-07:** Setelah semua subtes selesai → hasil tryout langsung tampil
-- **FR-TRY-08:** **Tryout dapat dikerjakan lebih dari 1 kali** (multiple attempts). Setiap percobaan tersimpan sebagai hasil terpisah (`attempt_number`); siswa dapat melihat riwayat seluruh percobaan pada halaman tryout dan mengulang kapan saja selama enrollment masih aktif
+- **FR-TRY-08:** **Tryout dikerjakan sesuai jumlah kesempatan yang dibeli.** Setiap produk menentukan jumlah kesempatan per pembelian (bawaan 1; pada paket berlaku untuk setiap tryout di dalamnya). Satu kesempatan terpakai saat siswa memulai percobaan; membeli produk lagi menambah kesempatan. Bila kesempatan habis, siswa tidak dapat memulai percobaan baru dan diarahkan untuk membeli lagi. Setiap percobaan tersimpan sebagai hasil terpisah (`attempt_number`) dan riwayatnya dapat dilihat pada halaman tryout. Nilai yang ditampilkan dan peringkat memakai rata-rata seluruh percobaan
 - **FR-TRY-09:** Jika siswa keluar di tengah subtes (browser ditutup/koneksi putus), session tetap aktif dan dapat dilanjutkan selama timer belum habis
 - **FR-TRY-10:** Saat siswa memulai subtes, browser otomatis masuk fullscreen mode
 - **FR-TRY-11:** Jika siswa keluar dari fullscreen, sistem mencatat pelanggaran (violation log) dengan timestamp dan menampilkan warning overlay yang meminta siswa kembali ke fullscreen — timer tetap berjalan

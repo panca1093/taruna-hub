@@ -58,7 +58,7 @@ export function TryoutResultView({
   const currentAttempt = scored.find((attempt) => attempt.session_id === currentSessionId);
   const recent = [...scored].reverse().slice(0, RECENT);
   const select = (sessionId: string) => (attemptHref ? router.push(attemptHref(sessionId)) : onSelectAttempt?.(sessionId));
-  const cell = "border-b border-border px-2.5 py-3";
+  const cell = "border-b border-border px-1.5 py-3 sm:px-2.5";
 
   return (
     <div className="space-y-6">
@@ -104,7 +104,7 @@ export function TryoutResultView({
         <Panel as="section">
           <h2 className="font-display text-heading-sm">{t.recentTitle(recent.length)}</h2>
           <div className="mt-2 overflow-x-auto">
-            <table className="w-full min-w-96 border-collapse text-caption">
+            <table className="w-full border-collapse text-caption">
               <thead>
                 <tr className="text-micro font-medium text-muted">
                   <th className={cn(cell, "text-left font-medium")}>{t.colAttempt}</th>
@@ -144,6 +144,7 @@ export function TryoutResultView({
               </tbody>
             </table>
           </div>
+          <p className="mt-3 text-micro text-muted">{t.correctNote}</p>
         </Panel>
       )}
     </div>

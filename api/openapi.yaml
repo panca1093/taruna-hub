@@ -8350,7 +8350,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, title, description, scoring_mode, program_code, program_name, active_from, active_until,
-                 subtests, current, attempts, attempts_purchased, attempts_used]
+                 subtests, current, attempts, attempts_purchased, attempts_used, product_id]
       properties:
         attempts_purchased:
           type: integer
@@ -8358,6 +8358,11 @@ components:
         attempts_used:
           type: integer
           description: Attempts started; each start spends one credit. At `attempts_purchased` a new start answers `409` `no_attempts_left`.
+        product_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The on-sale product holding this tryout (smallest package first) to buy more attempts from; null when none is on sale.
         id:
           type: string
           format: uuid

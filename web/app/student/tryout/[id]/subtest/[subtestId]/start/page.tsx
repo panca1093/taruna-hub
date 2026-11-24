@@ -12,6 +12,7 @@ import { LinkButton } from "@/components/ui/link-button";
 import { api, ApiError, errorText, type StudentTryout } from "@/lib/api/client";
 import { useTryoutOverviewT } from "@/lib/i18n/dict/tryout-overview";
 import { useTryoutPrepareT } from "@/lib/i18n/dict/tryout-prepare";
+import { purchaseHref } from "@/lib/kecermatan-session";
 
 type LoadState = "loading" | "ready" | "noAccess" | "failed";
 
@@ -100,7 +101,7 @@ function PrepareContent({ tryoutId, subtestId }: { tryoutId: string; subtestId: 
         icon={Lock}
         title={overviewT.noAttemptsNote}
         action={
-          <LinkButton href="/catalog" variant="primary" size="sm">
+          <LinkButton href={purchaseHref(overview.product_id)} variant="primary" size="sm">
             {overviewT.ctaBuyMore}
           </LinkButton>
         }
