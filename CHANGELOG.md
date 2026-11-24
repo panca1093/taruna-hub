@@ -7,7 +7,7 @@ Notable changes to the Taruna Eduka tryout platform, newest first. Each version 
 ### Added
 
 - **Packages can mix tryouts and kecermatan tests.** A bundle holds 2 to 20 items of either kind. Each purchase adds the product's attempts to every tryout and every kecermatan test in it, and the catalog lists both with the total time.
-- **Search and filter on every list page.** Tryout, Tes kecermatan, Paket item, Program, Produk, Pesanan, Top-up, Monitoring, Siswa and Pengguna have a search field and a Filter button, as in Bank Soal. Students can filter Pesanan saya by status and Riwayat dompet by type.
+- **Search and filter on every list page.** Tryout, Tes kecermatan, Paket item, Program, Produk, Pesanan, Top-up, Monitoring, Siswa, Pengguna, Hasil and Hasil Kecermatan have the same search field and Filter button as Bank Soal. Students can filter Pesanan saya by status and Riwayat dompet by type.
 - **Order details list the kecermatan tests of a mixed package,** next to its tryouts, so students see everything a purchase gave them.
 
 ### Changed
