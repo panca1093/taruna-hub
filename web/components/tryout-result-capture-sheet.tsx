@@ -7,7 +7,6 @@ import type { StaffResultAttempt, StaffResultStudentDetail } from "@/lib/api/cli
 import { useResultsT } from "@/lib/i18n/dict/results";
 
 export const viewOf = (detail: StaffResultStudentDetail, attempt: StaffResultAttempt) => ({
-  score: attempt.score,
   subtests: attempt.subtests,
   ranking: detail.ranking,
   attempts: detail.attempts,

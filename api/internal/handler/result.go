@@ -113,6 +113,9 @@ type staffResultAttemptResponse struct {
 	CompletedAt   time.Time               `json:"completed_at"`
 	IRTWarning    bool                    `json:"irt_warning"`
 	Subtests      []resultSubtestResponse `json:"subtests"`
+	CorrectCount  int                     `json:"correct_count"`
+	WrongCount    int                     `json:"wrong_count"`
+	BlankCount    int                     `json:"blank_count"`
 }
 
 type staffResultStudentDetailResponse struct {
@@ -302,6 +305,7 @@ func (h *Handler) StaffStudentResults(c echo.Context) error {
 		item := staffResultAttemptResponse{
 			SessionID: a.SessionID, AttemptNumber: a.AttemptNumber, Score: a.Score, CompletedAt: a.CompletedAt,
 			IRTWarning: a.IRTWarning, Subtests: make([]resultSubtestResponse, 0, len(a.Subtests)),
+			CorrectCount: a.Correct, WrongCount: a.Wrong(), BlankCount: a.Blank(),
 		}
 		for _, p := range a.Subtests {
 			item.Subtests = append(item.Subtests, partResultResponseOf(p))

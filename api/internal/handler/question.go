@@ -230,6 +230,7 @@ func questionFilterOf(c echo.Context) (service.QuestionFilter, error) {
 
 	filter.ProgramID = parseID("program_id")
 	filter.SubjectID = parseID("subject_id")
+	filter.ChapterID = parseID("chapter_id")
 	filter.Type = c.QueryParam("type")
 	filter.Difficulty = c.QueryParam("difficulty")
 	filter.Search = c.QueryParam("q")

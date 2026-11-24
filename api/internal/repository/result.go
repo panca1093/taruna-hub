@@ -260,7 +260,7 @@ func (r *ResultRepository) StaffAttempts(ctx context.Context, q dbtx, tenantID u
 		students[i], tryouts[i] = p.StudentID, p.TryoutID
 	}
 	rows, err := q.Query(ctx, `
-		SELECT r.user_id, r.tryout_id, r.session_id, r.attempt_number, r.score::float8, r.scoring_mode, r.completed_at
+		SELECT r.user_id, r.tryout_id, r.session_id, r.attempt_number, r.score::float8, r.scoring_mode, r.completed_at,`+fmt.Sprintf(tallySQL, "r.session_id")+`
 		  FROM tryout_results r
 		  JOIN unnest($2::uuid[], $3::uuid[]) AS want(user_id, tryout_id) ON want.user_id = r.user_id AND want.tryout_id = r.tryout_id
 		 WHERE r.tenant_id = $1
@@ -273,7 +273,8 @@ func (r *ResultRepository) StaffAttempts(ctx context.Context, q dbtx, tenantID u
 	for rows.Next() {
 		var key StudentTryout
 		var a model.StaffAttempt
-		if err := rows.Scan(&key.StudentID, &key.TryoutID, &a.SessionID, &a.AttemptNumber, &a.Score, &a.ScoringMode, &a.CompletedAt); err != nil {
+		if err := rows.Scan(&key.StudentID, &key.TryoutID, &a.SessionID, &a.AttemptNumber, &a.Score, &a.ScoringMode, &a.CompletedAt,
+			&a.Correct, &a.Answered, &a.Total); err != nil {
 			return nil, fmt.Errorf("scan staff attempt: %w", err)
 		}
 		out[key] = append(out[key], a)

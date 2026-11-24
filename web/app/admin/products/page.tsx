@@ -42,7 +42,7 @@ const blankForm: ProductForm = {
   programId: "",
   tryoutIds: [],
   kecermatanTestId: "",
-  includedAttempts: "3",
+  includedAttempts: "1",
   price: "",
   originalPrice: "",
   activeFrom: "",
@@ -175,7 +175,7 @@ export default function ProductsPage() {
       programId: product.program_id,
       tryoutIds: product.tryouts.map((tryout) => tryout.id),
       kecermatanTestId: product.kecermatan_test_id ?? "",
-      includedAttempts: String(product.included_attempts ?? 3),
+      includedAttempts: String(product.included_attempts ?? 1),
       price: product.price,
       originalPrice: product.original_price ?? "",
       activeFrom: dateInput(product.active_from),
@@ -200,7 +200,7 @@ export default function ProductsPage() {
     active_until: source.activeUntil === "" ? null : new Date(`${source.activeUntil}T00:00:00`).toISOString(),
     tryout_ids: source.type === "kecermatan" ? [] : source.tryoutIds,
     kecermatan_test_id: source.type === "kecermatan" ? source.kecermatanTestId || null : null,
-    included_attempts: source.type === "kecermatan" ? Number(source.includedAttempts) || 0 : null,
+    included_attempts: Number(source.includedAttempts) || 0,
   });
 
   const handleSave = async () => {
@@ -507,15 +507,6 @@ export default function ProductsPage() {
                 )}
               </div>
               {formErrors.kecermatan_test_id && <p className="mt-1 text-label text-danger">{formErrors.kecermatan_test_id}</p>}
-              <div className="mt-4">
-                <TextInput
-                  label={t.fieldIncludedAttempts}
-                  inputMode="numeric"
-                  value={form.includedAttempts}
-                  error={formErrors.included_attempts}
-                  onChange={(e) => setForm((current) => ({ ...current, includedAttempts: e.target.value }))}
-                />
-              </div>
             </div>
           ) : (
           <div>
@@ -562,6 +553,14 @@ export default function ProductsPage() {
           </div>
           )}
 
+          <TextInput
+            label={t.fieldIncludedAttempts}
+            inputMode="numeric"
+            value={form.includedAttempts}
+            error={formErrors.included_attempts}
+            description={form.type === "bundle" ? t.includedAttemptsBundleHint : undefined}
+            onChange={(e) => setForm((current) => ({ ...current, includedAttempts: e.target.value }))}
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <TextInput
               label={t.fieldPrice}

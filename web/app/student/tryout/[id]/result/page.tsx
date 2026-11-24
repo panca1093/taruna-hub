@@ -134,14 +134,13 @@ function ResultContent({ tryoutId, attemptParam }: { tryoutId: string; attemptPa
     >
       <div className="space-y-6">
         <TryoutResultView
-          score={result.score}
           subtests={result.subtests}
           ranking={result.ranking}
           attempts={completed}
           currentSessionId={result.session_id}
           attemptHref={(sessionId) => `/student/tryout/${tryoutId}/result?attempt=${sessionId}`}
           aside={
-            <Panel as="section" radius="card" className="lg:col-span-3">
+            <Panel as="section" radius="card">
               {result.explanations_released ? (
                 <>
                   <h2 className="font-display mb-3 text-heading-sm">{t.learnTitle}</h2>

@@ -26,6 +26,7 @@ var (
 	ErrRuntimeForbidden = errors.New("not allowed on this session")
 	ErrTryoutNotOpen    = errors.New("tryout is not open yet")
 	ErrTryoutClosed     = errors.New("tryout window is closed")
+	ErrNoAttemptsLeft   = errors.New("no tryout attempts left")
 	ErrSessionClosed    = errors.New("session already completed")
 	ErrPartNotRunning   = errors.New("subtest is not running")
 	ErrDeadlinePassed   = errors.New("subtest deadline passed")
@@ -118,6 +119,9 @@ type StudentTryout struct {
 	Subtests    []model.OverviewSubtest
 	Current     *AttemptView
 	Attempts    []model.AttemptSummary
+	// A started attempt spends a credit; the student buys the product again for more.
+	AttemptsPurchased int
+	AttemptsUsed      int
 }
 
 type AnswerInput struct {
@@ -193,12 +197,12 @@ func (s *RuntimeService) Overview(ctx context.Context, scope HostScope, principa
 	if err != nil {
 		return StudentTryout{}, err
 	}
-	ok, err := s.repo.HasEnrollment(ctx, s.db, tenantID, principal.UserID, tryoutID)
+	purchased, used, err := s.repo.Credit(ctx, s.db, tenantID, principal.UserID, tryoutID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return StudentTryout{}, ErrTryoutNotFound
+	}
 	if err != nil {
 		return StudentTryout{}, runtimeError(err)
-	}
-	if !ok {
-		return StudentTryout{}, ErrTryoutNotFound
 	}
 	out, err := s.repo.TryoutOverview(ctx, s.db, tenantID, tryoutID)
 	if err != nil {
@@ -207,7 +211,8 @@ func (s *RuntimeService) Overview(ctx context.Context, scope HostScope, principa
 		}
 		return StudentTryout{}, runtimeError(err)
 	}
-	overview := StudentTryout{Tryout: out.Tryout, ProgramCode: out.ProgramCode, ProgramName: out.ProgramName}
+	overview := StudentTryout{Tryout: out.Tryout, ProgramCode: out.ProgramCode, ProgramName: out.ProgramName,
+		AttemptsPurchased: purchased, AttemptsUsed: used}
 	overview.Subtests = out.Subtests
 	if active, err := s.repo.ActiveAttempt(ctx, s.db, tenantID, principal.UserID, tryoutID, false); err == nil {
 		view, err := s.view(ctx, tenantID, principal.UserID, active.ID)
@@ -279,6 +284,13 @@ func (s *RuntimeService) Start(ctx context.Context, scope HostScope, principal m
 			return ErrTryoutNotOpen
 		case !now.Before(tryout.ActiveUntil):
 			return ErrTryoutClosed
+		}
+		ok, err := s.repo.ConsumeAttempt(ctx, tx, tenantID, principal.UserID, tryoutID)
+		if err != nil {
+			return runtimeError(err)
+		}
+		if !ok {
+			return ErrNoAttemptsLeft
 		}
 		id, err = s.admit(ctx, tx, tenantID, principal.UserID, tryout, now)
 		return err

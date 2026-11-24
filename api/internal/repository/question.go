@@ -19,6 +19,7 @@ import (
 type QuestionFilter struct {
 	ProgramID  *uuid.UUID
 	SubjectID  *uuid.UUID
+	ChapterID  *uuid.UUID
 	Type       string
 	Difficulty string
 	Search     string
@@ -63,6 +64,9 @@ func (r *QuestionRepository) List(ctx context.Context, tenantID uuid.UUID, filte
 	}
 	if filter.SubjectID != nil {
 		add("v.subject_id = $%d", *filter.SubjectID)
+	}
+	if filter.ChapterID != nil {
+		add("v.chapter_id = $%d", *filter.ChapterID)
 	}
 	if filter.Type != "" {
 		add("v.type = $%d", filter.Type)

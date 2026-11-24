@@ -125,6 +125,7 @@ export default function TryoutsListPage() {
       render: (row) => <span className="text-muted">{row.scoring_mode === "irt" ? t.scoringMode.irt : t.scoringMode.weighted}</span>,
     },
     { key: "subtests", header: t.columns.subtests, render: (row) => row.subtest_count },
+    { key: "questions", header: t.columns.questions, render: (row) => row.question_count },
     {
       key: "status",
       header: t.columns.status,

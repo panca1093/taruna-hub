@@ -455,33 +455,34 @@ func TestCancelOpensNoAccessAndNeverReopens(t *testing.T) {
 	}
 }
 
-func TestIndividualProductCannotBeBoughtTwice(t *testing.T) {
+func TestRepurchaseAddsAttemptCredits(t *testing.T) {
 	h := newOrderHarness(t, noJobs{}, testBank)
 	tenant := h.t.q.a
 	user, p := h.student(t, tenant, "500000")
 	tryout := h.tryout(t, tenant, model.TryoutPublished)
 	product := h.product(t, tenant, "100000", tryout)
-	again := h.product(t, tenant, "90000", tryout)
 
-	if _, _, err := h.wallet(t, tenant, p, product); err != nil {
-		t.Fatalf("first purchase: %v", err)
-	}
-	for _, repeat := range []model.Product{product, again} {
-		if _, _, err := h.wallet(t, tenant, p, repeat); !errors.Is(err, ErrAlreadyOwned) {
-			t.Errorf("repurchase of %s: err = %v, want ErrAlreadyOwned", repeat.Title, err)
+	for i := range 2 {
+		if _, _, err := h.wallet(t, tenant, p, product); err != nil {
+			t.Fatalf("purchase %d: %v", i+1, err)
 		}
 	}
-	if _, _, err := h.svc.Checkout(context.Background(), h.scope(tenant), p, CheckoutInput{
-		ProductID: product.ID, ExpectedPrice: product.Price, Method: model.PaymentManual, Key: "manual-key-001", ProofAssetID: refOf(h.proof(t, tenant, p)),
-	}); !errors.Is(err, ErrAlreadyOwned) {
-		t.Errorf("manual repurchase: err = %v, want ErrAlreadyOwned", err)
+	var purchased, used int
+	if err := h.t.pool.QueryRow(context.Background(),
+		`SELECT attempts_purchased, attempts_used FROM enrollments WHERE user_id = $1 AND tryout_id = $2`,
+		user.ID, tryout.ID).Scan(&purchased, &used); err != nil {
+		t.Fatalf("read credit: %v", err)
 	}
-	if got := h.balance(t, user.ID); got != "400000.00" || h.ordersOf(t, user.ID) != 1 {
-		t.Errorf("balance %s orders %d, want one purchase only", got, h.ordersOf(t, user.ID))
+	if purchased != 2 || used != 0 || h.enrollments(t, user.ID) != 1 || h.ordersOf(t, user.ID) != 2 {
+		t.Errorf("purchased %d used %d enrollments %d orders %d, want 2 credits on one enrollment from two orders",
+			purchased, used, h.enrollments(t, user.ID), h.ordersOf(t, user.ID))
+	}
+	if got := h.balance(t, user.ID); got != "300000.00" {
+		t.Errorf("balance = %s, want two debits", got)
 	}
 }
 
-func TestBundleGrantsOnlyTheTryoutsNotYetHeld(t *testing.T) {
+func TestBundleAddsCreditToHeldTryouts(t *testing.T) {
 	h := newOrderHarness(t, noJobs{}, testBank)
 	tenant := h.t.q.a
 	user, p := h.student(t, tenant, "900000")
@@ -501,12 +502,11 @@ func TestBundleGrantsOnlyTheTryoutsNotYetHeld(t *testing.T) {
 	if len(order.Items) != 3 {
 		t.Errorf("snapshot has %d tryouts, want all 3", len(order.Items))
 	}
-	if h.enrollments(t, user.ID) != 3 || h.grants(t, user.ID) != 3 {
-		t.Errorf("enrollments %d grants %d, want 3 and 3 (A once)", h.enrollments(t, user.ID), h.grants(t, user.ID))
+	if h.enrollments(t, user.ID) != 3 || h.grants(t, user.ID) != 4 {
+		t.Errorf("enrollments %d grants %d, want 3 and 4 (A twice)", h.enrollments(t, user.ID), h.grants(t, user.ID))
 	}
-	if got := h.count(t, `SELECT count(*) FROM enrollment_grants g JOIN enrollments e ON e.id = g.enrollment_id
-		WHERE e.user_id = $1 AND g.order_id = $2`, user.ID, order.ID); got != 2 {
-		t.Errorf("the bundle order granted %d tryouts, want 2 (B and C)", got)
+	if got := h.count(t, `SELECT attempts_purchased FROM enrollments WHERE user_id = $1 AND tryout_id = $2`, user.ID, a.ID); got != 2 {
+		t.Errorf("held tryout has %d credits, want 2 (single + bundle)", got)
 	}
 	if got := h.balance(t, user.ID); got != "550000.00" {
 		t.Errorf("balance = %s, want both purchases charged", got)

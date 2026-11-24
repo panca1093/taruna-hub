@@ -1081,6 +1081,7 @@ export interface paths {
                 query?: {
                     program_id?: string;
                     subject_id?: string;
+                    chapter_id?: string;
                     type?: "pg" | "pg_multi" | "isian" | "benar_salah";
                     difficulty?: "easy" | "medium" | "hard";
                     /** @description Case-insensitive substring of the question text (the plain-text projection of the content, so text inside tables, lists and math is searched); `%` and `_` are literal. */
@@ -2954,8 +2955,8 @@ export interface paths {
          *
          *     `idempotency_key` (8-64 characters, `[A-Za-z0-9_-]`) is the grant source: the same key with the same body
          *     answers `200` with the original access and grants nothing, and the same key with another student, test or
-         *     credit answers `409`. The first call answers `201`. A tryout the student already holds answers `409` with
-         *     code `already_owned`; kecermatan credits always add. An unknown or unpublished tryout, or a test of another
+         *     credit answers `409`. The first call answers `201`. Credits always add: a tryout grant adds one attempt, a
+         *     kecermatan grant adds `attempts`. An unknown or unpublished tryout, or a test of another
          *     tenant, answers `404`.
          */
         post: {
@@ -3068,8 +3069,8 @@ export interface paths {
          *     the same key for the same product, method and proof answers `200` with the original order and moves
          *     nothing; the same key for anything else answers `409`.
          *
-         *     An `individual` product whose tryout the student already holds with active access answers `409` with code
-         *     `already_owned`. A `bundle` can still be bought: only the tryouts not yet held are granted.
+         *     Every purchase adds the product's `included_attempts` to the student's enrollment for each of its tryouts
+         *     (or for its kecermatan test), so a product can be bought again for more attempts.
          *
          *     A student with a `pending` order for the product cannot create another (any method): `409` `order_pending`.
          *     A price that differs from `expected_price` answers `409` `price_changed` and writes nothing; a replay of an
@@ -3110,7 +3111,7 @@ export interface paths {
                 403: components["responses"]["Forbidden"];
                 404: components["responses"]["NotFound"];
                 /**
-                 * @description `already_owned` (an individual product's tryout is already held), `price_changed` (the price differs
+                 * @description `price_changed` (the price differs
                  *     from `expected_price`), `order_pending` (a pending order for this product exists) or `conflict` (the
                  *     idempotency key belongs to a different order).
                  */
@@ -4543,7 +4544,7 @@ export interface paths {
                 401: components["responses"]["Unauthorized"];
                 403: components["responses"]["Forbidden"];
                 404: components["responses"]["NotFound"];
-                /** @description `tryout_not_open` (draft or before `active_from`) or `tryout_closed` (past `active_until`) */
+                /** @description `tryout_not_open` (draft or before `active_from`), `tryout_closed` (past `active_until`) or `no_attempts_left` (every bought attempt is used) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -7772,7 +7773,7 @@ export interface components {
              */
             kecermatan_test_id: string | null;
             kecermatan_test_title: string | null;
-            /** @description Attempt credits one purchase adds to the student's enrollment for the test (1-1000). */
+            /** @description Attempt credits one purchase adds to the student's enrollment for each tryout of the product, or for its kecermatan test (1-1000). */
             included_attempts: number | null;
             title: string;
             description: string;
@@ -7814,7 +7815,7 @@ export interface components {
              * @description Required for `kecermatan` (a test of the same program, else `422`), and refused for the other types.
              */
             kecermatan_test_id?: string | null;
-            /** @description Required for `kecermatan`, 1-1000; refused for the other types. */
+            /** @description 1-1000. Required for `kecermatan`; defaults to 1 for the other types, where it applies to every tryout of the product. */
             included_attempts?: number | null;
             title: string;
             description: string;
@@ -8153,7 +8154,7 @@ export interface components {
                  * @description Stable machine-readable identifier. Switch on this, never on `message`.
                  * @enum {string}
                  */
-                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "already_owned" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready" | "website_not_published" | "website_revision_conflict" | "website_content_invalid" | "last_admin";
+                code: "bad_request" | "unauthorized" | "forbidden" | "not_found" | "conflict" | "validation_failed" | "payload_too_large" | "too_many_requests" | "internal_error" | "service_unavailable" | "no_attempts_left" | "insufficient_balance" | "price_changed" | "order_pending" | "gateway_error" | "gateway_managed" | "tryout_not_open" | "tryout_closed" | "session_completed" | "subtest_not_running" | "deadline_passed" | "stale_answer" | "subtest_order" | "result_not_ready" | "explanations_not_released" | "package_in_use" | "package_too_small" | "kecermatan_no_credit" | "kecermatan_session_completed" | "kecermatan_kolom_not_running" | "kecermatan_answer_locked" | "kecermatan_result_not_ready" | "website_not_published" | "website_revision_conflict" | "website_content_invalid" | "last_admin";
                 /** @description Human-readable, Indonesian, safe to show to end users. */
                 message: string;
                 /** @description Present on validation_failed — maps field name to reason. */
@@ -8677,6 +8678,11 @@ export interface components {
             total: number;
         };
         StaffResultAttempt: {
+            correct_count: number;
+            /** @description Questions answered but not correct. */
+            wrong_count: number;
+            /** @description Questions left without an answer. */
+            blank_count: number;
             /** Format: uuid */
             session_id: string;
             attempt_number: number;
@@ -8734,6 +8740,12 @@ export interface components {
             result: components["schemas"]["TryoutResult"] | null;
         };
         AttemptSummary: {
+            /** @description Questions answered correctly; `null` until the attempt is completed, like `score`. */
+            correct_count: number | null;
+            /** @description Questions answered but not correct. */
+            wrong_count: number | null;
+            /** @description Questions left without an answer. */
+            blank_count: number | null;
             /** Format: uuid */
             session_id: string;
             /** Format: uuid */
@@ -8768,6 +8780,10 @@ export interface components {
             question_count: number;
         };
         StudentTryout: {
+            /** @description Attempt credits bought or granted for this tryout. */
+            attempts_purchased: number;
+            /** @description Attempts started; each start spends one credit. At `attempts_purchased` a new start answers `409` `no_attempts_left`. */
+            attempts_used: number;
             /** Format: uuid */
             id: string;
             title: string;

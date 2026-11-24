@@ -434,17 +434,6 @@ func (r *UserRepository) GrantTargetExists(ctx context.Context, tx pgx.Tx, tenan
 	return ok, nil
 }
 
-// HoldsTryoutTx reports whether the student already has an enrollment row for the tryout.
-func (r *UserRepository) HoldsTryoutTx(ctx context.Context, tx pgx.Tx, tenantID, userID, tryoutID uuid.UUID) (bool, error) {
-	var ok bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM enrollments WHERE tenant_id = $1 AND user_id = $2 AND tryout_id = $3)`,
-		tenantID, userID, tryoutID).Scan(&ok)
-	if err != nil {
-		return false, fmt.Errorf("check held tryout: %w", err)
-	}
-	return ok, nil
-}
-
 // Access lists everything one student holds, tryouts and kecermatan credits alike, newest first. The
 // first grant of each enrollment says how access was opened.
 func (r *UserRepository) Access(ctx context.Context, tenantID, userID uuid.UUID, now time.Time, limit, offset int) ([]model.StudentAccess, int, error) {

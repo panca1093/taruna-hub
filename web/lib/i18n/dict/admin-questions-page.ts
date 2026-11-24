@@ -5,9 +5,6 @@ import { useLocale } from "@/lib/i18n/locale-context";
 const id = {
   requireRoleTitle: "Bank Soal",
   requireRoleDenied: "Bank soal hanya bisa dibuka oleh Admin dan Operator.",
-  filterAllType: "Semua tipe",
-  filterAllDifficulty: "Semua kesulitan",
-  filterAllProgram: "Semua program",
   questionType: {
     pg: "Pilihan Ganda",
     pg_multi: "PG Kompleks",
@@ -26,6 +23,7 @@ const id = {
   emptyTitle: "Tidak ada soal yang cocok",
   emptyDescription: "Coba ubah filter atau tambah soal baru.",
   loading: "Memuat soal…",
+  searchPlaceholder: "Cari soal...",
   footerCount: (shown: number, total: number) => `Menampilkan ${shown} dari ${total} soal`,
   loadErrorTitle: "Gagal memuat soal",
   loadErrorDescription: "Periksa koneksi, lalu coba lagi.",
@@ -70,9 +68,6 @@ const id = {
 const en: typeof id = {
   requireRoleTitle: "Question Bank",
   requireRoleDenied: "The question bank is open to Admins and Operators only.",
-  filterAllType: "All types",
-  filterAllDifficulty: "All difficulty",
-  filterAllProgram: "All programs",
   questionType: {
     pg: "Multiple Choice",
     pg_multi: "Complex MC",
@@ -91,6 +86,7 @@ const en: typeof id = {
   emptyTitle: "No matching questions",
   emptyDescription: "Try changing the filters or add a new question.",
   loading: "Loading questions…",
+  searchPlaceholder: "Search questions...",
   footerCount: (shown: number, total: number) => `Showing ${shown} of ${total} questions`,
   loadErrorTitle: "Couldn't load questions",
   loadErrorDescription: "Check your connection, then try again.",

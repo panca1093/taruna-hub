@@ -72,19 +72,37 @@ func (r *RuntimeRepository) LockEnrollment(ctx context.Context, q dbtx, tenantID
 	return nil
 }
 
-// HasEnrollment is the read-only access check the overview uses.
-func (r *RuntimeRepository) HasEnrollment(ctx context.Context, q dbtx, tenantID, userID, tryoutID uuid.UUID) (bool, error) {
+// Credit is the read-only access check the overview uses: the attempts the student bought and started.
+func (r *RuntimeRepository) Credit(ctx context.Context, q dbtx, tenantID, userID, tryoutID uuid.UUID) (purchased, used int, err error) {
+	if tenantID == uuid.Nil {
+		return 0, 0, ErrScopeRequired
+	}
+	err = q.QueryRow(ctx, `
+		SELECT attempts_purchased, attempts_used FROM enrollments WHERE tenant_id = $1 AND user_id = $2 AND tryout_id = $3`,
+		tenantID, userID, tryoutID).Scan(&purchased, &used)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("read enrollment credit: %w", err)
+	}
+	return purchased, used, nil
+}
+
+// ConsumeAttempt spends one credit for a new attempt and reports false when none is left. Only safe under
+// LockEnrollment.
+func (r *RuntimeRepository) ConsumeAttempt(ctx context.Context, q dbtx, tenantID, userID, tryoutID uuid.UUID) (bool, error) {
 	if tenantID == uuid.Nil {
 		return false, ErrScopeRequired
 	}
-	var ok bool
-	err := q.QueryRow(ctx, `
-		SELECT EXISTS (SELECT 1 FROM enrollments WHERE tenant_id = $1 AND user_id = $2 AND tryout_id = $3)`,
-		tenantID, userID, tryoutID).Scan(&ok)
+	tag, err := q.Exec(ctx, `
+		UPDATE enrollments SET attempts_used = attempts_used + 1
+		 WHERE tenant_id = $1 AND user_id = $2 AND tryout_id = $3 AND attempts_used < attempts_purchased`,
+		tenantID, userID, tryoutID)
 	if err != nil {
-		return false, fmt.Errorf("check enrollment: %w", err)
+		return false, fmt.Errorf("consume attempt: %w", err)
 	}
-	return ok, nil
+	return tag.RowsAffected() == 1, nil
 }
 
 // LockTryout takes the row lock P08's edits take. The first attempt stamps first_attempt_at, which needs the
@@ -655,13 +673,19 @@ func (r *RuntimeRepository) Result(ctx context.Context, q dbtx, tenantID, sessio
 	return res, nil
 }
 
+// tallySQL selects one session's correct, answered and total question counts; %s is the session id expression.
+const tallySQL = `
+	(SELECT coalesce(sum(p.correct_count), 0)::int FROM tryout_session_parts p WHERE p.session_id = %[1]s),
+	(SELECT count(*)::int FROM tryout_session_answers a WHERE a.session_id = %[1]s AND jsonb_array_length(a.answer) > 0),
+	(SELECT coalesce(sum(p.question_count), 0)::int FROM tryout_session_parts p WHERE p.session_id = %[1]s)`
+
 // Attempts lists one student's sessions, newest first, optionally for a single tryout.
 func (r *RuntimeRepository) Attempts(ctx context.Context, q dbtx, tenantID, userID uuid.UUID, tryoutID *uuid.UUID) ([]model.AttemptSummary, error) {
 	if tenantID == uuid.Nil {
 		return nil, ErrScopeRequired
 	}
 	rows, err := q.Query(ctx, `
-		SELECT s.id, s.tryout_id, s.attempt_number, s.status, s.started_at, s.completed_at, r.score::float8
+		SELECT s.id, s.tryout_id, s.attempt_number, s.status, s.started_at, s.completed_at, r.score::float8,`+fmt.Sprintf(tallySQL, "s.id")+`
 		  FROM tryout_sessions s
 		  LEFT JOIN tryout_results r ON r.session_id = s.id AND r.tenant_id = s.tenant_id
 		 WHERE s.tenant_id = $1 AND s.user_id = $2 AND ($3::uuid IS NULL OR s.tryout_id = $3)
@@ -673,7 +697,8 @@ func (r *RuntimeRepository) Attempts(ctx context.Context, q dbtx, tenantID, user
 	out := []model.AttemptSummary{}
 	for rows.Next() {
 		var a model.AttemptSummary
-		if err := rows.Scan(&a.SessionID, &a.TryoutID, &a.AttemptNumber, &a.Status, &a.StartedAt, &a.CompletedAt, &a.Score); err != nil {
+		if err := rows.Scan(&a.SessionID, &a.TryoutID, &a.AttemptNumber, &a.Status, &a.StartedAt, &a.CompletedAt, &a.Score,
+			&a.Correct, &a.Answered, &a.Total); err != nil {
 			return nil, fmt.Errorf("scan attempt: %w", err)
 		}
 		out = append(out, a)

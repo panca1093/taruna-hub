@@ -333,6 +333,8 @@ Bulk PDF downloads (staff results lists) render one result sheet at a time throu
 
 Order status filters are rounded-full custom buttons with 14px medium labels, 14px horizontal / 6px vertical padding, accent fill when selected, and neutral border when inactive. For new filter controls, expose the selection state semantically and support keyboard activation.
 
+Question filters use `QuestionFilterMenu` (`components/admin/question-filter-menu.tsx`) on both the question bank and the question picker: a `secondary` "Filter" button placed beside the rounded-full search field, with an accent count badge when filters are active. It opens an anchored panel (`rounded-menu`, `overlay` surface, `shadow-menu`, 320px) holding labelled selects for program, subject and chapter, then type and difficulty side by side. Subject narrows to the chosen program, chapter is disabled until a subject is chosen, and changing a parent clears its children. Changes are a draft until "Terapkan"; "Reset" returns the draft to the starting value, and "Batal", Escape or an outside click close without applying.
+
 Student result rows are bordered 6px-radius links with 14px horizontal / 10px vertical padding, program badge, truncated title, score, and metadata. Dates hide below `sm`; core identity and score stay visible.
 
 ### 6.5 Chips and icons

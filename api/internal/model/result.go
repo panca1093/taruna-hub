@@ -72,6 +72,7 @@ type StaffStudentResult struct {
 // StaffAttempt is one completed attempt as the staff detail lists it. IRTWarning and Subtests are filled in by the
 // service.
 type StaffAttempt struct {
+	Tally
 	SessionID     uuid.UUID
 	AttemptNumber int
 	Score         float64

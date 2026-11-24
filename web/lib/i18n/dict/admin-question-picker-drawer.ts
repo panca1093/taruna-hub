@@ -3,9 +3,6 @@
 import { useLocale } from "@/lib/i18n/locale-context";
 
 const id = {
-  filterAllProgram: "Semua program",
-  filterAllType: "Semua tipe",
-  filterAllDifficulty: "Semua kesulitan",
   questionType: {
     pg: "Pilihan Ganda",
     pg_multi: "PG Kompleks",
@@ -18,11 +15,13 @@ const id = {
     hard: "Sulit",
   },
   heading: "Pilih Soal",
-  subtitle: (selected: number, shown: number, total: number) => `${selected} soal terpilih · ${shown} dari ${total} soal ditampilkan`,
-  selectVisible: "Pilih yang tampil",
+  matching: (n: number) => `${n} soal cocok`,
+  showAll: "Semua",
+  showSelected: (n: number) => `Terpilih · ${n}`,
+  selectedCount: (n: number) => `${n} soal terpilih`,
+  selectVisible: "Pilih semua",
   clear: "Kosongkan",
   searchPlaceholder: "Cari soal...",
-  onlySelected: "Hanya terpilih",
   emptyText: "Tidak ada soal yang cocok dengan filter ini.",
   loading: "Memuat soal...",
   loadingMore: "Memuat...",
@@ -35,9 +34,6 @@ const id = {
 };
 
 const en: typeof id = {
-  filterAllProgram: "All programs",
-  filterAllType: "All types",
-  filterAllDifficulty: "All difficulty",
   questionType: {
     pg: "Multiple Choice",
     pg_multi: "Complex MC",
@@ -50,11 +46,13 @@ const en: typeof id = {
     hard: "Hard",
   },
   heading: "Choose Questions",
-  subtitle: (selected: number, shown: number, total: number) => `${selected} selected · showing ${shown} of ${total} questions`,
-  selectVisible: "Select visible",
+  matching: (n: number) => `${n} matching`,
+  showAll: "All",
+  showSelected: (n: number) => `Selected · ${n}`,
+  selectedCount: (n: number) => `${n} selected`,
+  selectVisible: "Select all",
   clear: "Clear",
   searchPlaceholder: "Search questions...",
-  onlySelected: "Selected only",
   emptyText: "No questions match this filter.",
   loading: "Loading questions...",
   loadingMore: "Loading...",

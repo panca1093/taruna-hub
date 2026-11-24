@@ -95,13 +95,16 @@ export default function TryoutOverviewPage({ params }: { params: Promise<{ id: s
   const totalQuestions = overview.subtests.reduce((sum, st) => sum + st.question_count, 0);
   const totalMinutes = Math.round(overview.subtests.reduce((sum, st) => sum + st.duration_seconds, 0) / 60);
 
+  const noAttemptsLeft = overview.attempts_used >= overview.attempts_purchased;
   const cta = !upNext
     ? null
     : running
       ? { label: t.ctaContinueSubtest(running.name), href: `/student/tryout/${id}/subtest/${running.id}` }
       : current
         ? { label: t.ctaNextSubtest(upNext.name), href: `/student/tryout/${id}/subtest/${upNext.id}/start` }
-        : {
+        : noAttemptsLeft
+          ? { label: t.ctaBuyMore, href: "/catalog" }
+          : {
             label: completedAttempts.length > 0 ? t.ctaRetake : t.ctaStart,
             href: `/student/tryout/${id}/subtest/${upNext.id}/start`,
           };
@@ -211,7 +214,8 @@ export default function TryoutOverviewPage({ params }: { params: Promise<{ id: s
           <Panel as="div" className="lg:sticky lg:top-6">
             <p className="mb-3 text-label text-muted">{t.accessTitle}</p>
             <p className="font-display text-display-sm">{t.accessOwned}</p>
-            <p className="mt-1 mb-5 text-label text-muted">{t.accessUntil(new Date(overview.active_until).toLocaleDateString())}</p>
+            <p className="mt-1 text-label text-muted">{t.accessUntil(new Date(overview.active_until).toLocaleDateString())}</p>
+            <p className="mt-1 mb-5 text-label text-muted">{t.attemptsUsed(overview.attempts_used, overview.attempts_purchased)}</p>
             <div className="flex flex-col gap-2">
               {cta && (
                 <LinkButton href={cta.href} variant="primary" size="md" className="w-full">
@@ -223,6 +227,7 @@ export default function TryoutOverviewPage({ params }: { params: Promise<{ id: s
               </TextLink>
             </div>
             {current && <NoteBox className="mt-5">{t.inProgressNote}</NoteBox>}
+            {!current && noAttemptsLeft && <NoteBox className="mt-5">{t.noAttemptsNote}</NoteBox>}
           </Panel>
         </aside>
       </div>

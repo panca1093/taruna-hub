@@ -60,7 +60,7 @@ type ProductInput struct {
 	ActiveFrom    *time.Time
 	ActiveUntil   *time.Time
 	TryoutIDs     []uuid.UUID
-	// KecermatanTestID and IncludedAttempts belong to kecermatan products only.
+	// KecermatanTestID belongs to kecermatan products only; IncludedAttempts defaults to 1 for the other types.
 	KecermatanTestID uuid.UUID
 	IncludedAttempts int
 }
@@ -324,11 +324,13 @@ func productScalars(input ProductInput) (ProductInput, error) {
 		if input.KecermatanTestID == uuid.Nil {
 			fields["kecermatan_test_id"] = ReasonProductKecermatan
 		}
-		if input.IncludedAttempts < 1 || input.IncludedAttempts > maxIncludedAttempts {
-			fields["included_attempts"] = ReasonProductAttempts
-		}
-	} else if input.KecermatanTestID != uuid.Nil || input.IncludedAttempts != 0 {
+	} else if input.KecermatanTestID != uuid.Nil {
 		fields["type"] = ReasonProductType
+	} else if input.IncludedAttempts == 0 {
+		input.IncludedAttempts = 1
+	}
+	if input.IncludedAttempts < 1 || input.IncludedAttempts > maxIncludedAttempts {
+		fields["included_attempts"] = ReasonProductAttempts
 	}
 	if input.ActiveFrom != nil && input.ActiveUntil != nil && !input.ActiveFrom.Before(*input.ActiveUntil) {
 		fields["active_from"] = ReasonProductWindow
@@ -475,9 +477,11 @@ func productOf(input ProductInput) model.Product {
 	for _, id := range input.TryoutIDs {
 		out.Tryouts = append(out.Tryouts, model.ProductTryout{ID: id})
 	}
+	attempts := input.IncludedAttempts
+	out.IncludedAttempts = &attempts
 	if input.Type == model.ProductKecermatan {
-		testID, attempts := input.KecermatanTestID, input.IncludedAttempts
-		out.KecermatanTestID, out.IncludedAttempts = &testID, &attempts
+		testID := input.KecermatanTestID
+		out.KecermatanTestID = &testID
 	}
 	return out
 }
